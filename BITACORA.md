@@ -38,3 +38,32 @@ solo la bitácora del código.
 
 ### Siguiente
 - Paso 4: piezas paralelizables (comandos, consultas, worker, auth) con subagentes.
+
+### Cimientos compartidos (commit `61b5408`)
+- Migración `0002`: `usuario` (JWT propio, roles múltiples, `sujeto_id` vinculado),
+  `refresh_token` (hash, revocable), `asignacion_supervisor` (pieza del modelo de dominio
+  que 0001 no traía; una vigente por sujeto), `tenant.slug` + función SECURITY DEFINER
+  `resolver_tenant_por_slug` para login sin abrir RLS de `tenant` al rol de app.
+  Aprendizaje: FORCE RLS aplica también al owner → las migraciones no pueden hacer
+  UPDATE de backfill sobre tablas tenant-scoped (se usa DEFAULT en el DDL).
+- `app/api/errores.py`: envelope único `{"error":{codigo,mensaje,detalles}}` + handlers.
+- `app/auth/identidad.py`: `Identidad(tenant_id, usuario_id, roles, sujeto_id)` +
+  `exigir_rol` (matriz 2.2 de no-funcionales).
+- `app/comun/`: `eventos` (event_log síncrono + outbox solo para los 2 eventos a Módulo 2),
+  `idempotencia` (Idempotency-Key en tabla), `reloj` (`hoy_del_tenant`, única forma de
+  obtener "hoy"), `paginacion` (offset/limit).
+- `app/main.py`: `/v1`, monta routers tolerante a módulos aún inexistentes.
+- `tests/conftest.py`: fixture `tenant_de_prueba` (tenant + 4 usuarios, limpieza por RLS)
+  y `cliente_api`; `token_para` firma JWT con el secreto de la app.
+- `docs/BRIEF_SUBAGENTES.md`: contrato común de las 5 piezas paralelas (reglas duras,
+  matriz de permisos, invariantes, catálogo de eventos, reparto de archivos disjunto,
+  interfaz de orquestación).
+
+### Piezas en paralelo (5 subagentes, en curso)
+| Pieza | Archivos | Estado |
+|---|---|---|
+| Auth (JWT, login/refresh/logout, dependency) | `app/auth/*` | en curso |
+| Comandos Evidencia + Requisitos | `app/modules/legajos`, `app/modules/requisitos` | en curso |
+| Comandos Operación + orquestación del motor | `app/modules/operacion`, `app/core/orquestacion.py` | en curso |
+| Consultas + backlog OC | `app/modules/consultas`, `app/modules/oc` | en curso |
+| Worker + storage | `app/worker`, `app/storage` | en curso |
