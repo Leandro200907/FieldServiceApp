@@ -110,7 +110,7 @@ def tenant_de_prueba() -> TenantDePrueba:
                     "e": f"{rol}@{slug}.test",
                     "n": rol,
                     # hash bcrypt de 'secreto' — solo para tests
-                    "h": "$2b$12$C6UzMDM.H6dfI/f/IKcEeO5x0S0m9v8n6k3n4YQ5k6Xy1lM2n3O4a",
+                    "h": "$2b$12$B6psVF.t.UCDfwi1heqT0unV5R.Sh8F.uf/BP5LXjF4UBmmG.O1U2",
                     "r": [rol],
                     "sj": sujeto_tecnico if rol == "tecnico" else None,
                 },
