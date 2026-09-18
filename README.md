@@ -59,9 +59,15 @@ uvicorn app.main:app --reload
 | Pieza | Estado |
 |---|---|
 | Bootstrap del proyecto (estructura, config, conexión con tenant) | Hecho |
-| Migración inicial (schema `modulo1`, RLS, tablas base) | Hecho |
+| Migraciones (0001 schema+RLS, 0002 usuario/supervisor, 0003 x4, 0004 merge) | Hecho y aplicadas |
 | Motor de evaluación puro + casos de oro | Hecho |
-| Endpoints de comandos (9.3) | Pendiente — candidato a subagente en paralelo |
-| Endpoints de consultas (9.4) | Pendiente — candidato a subagente en paralelo |
-| Worker (outbox, notificaciones, storage) | Pendiente — candidato a subagente en paralelo |
-| Auth (JWT, dependency de tenant) | Pendiente |
+| Auth (JWT propio, login/refresh/logout, dependency de tenant) | Hecho |
+| Comandos Evidencia + Requisitos (16 endpoints) | Hecho |
+| Comandos Operación + orquestación `evaluar_compromiso` (7 endpoints) | Hecho |
+| Consultas (8 GET) + backlog de OC (2 comandos) | Hecho |
+| Worker (cola SKIP LOCKED, outbox, procesos de reloj, latidos) + storage local firmado | Hecho |
+| E2E por HTTP (casos de oro 6.1/6.3/6.5 + excepción nunca verde + constancia) | Hecho |
+| Transporte real a Módulo 2 (`Publicador`), handlers qr/score/validación, storage S3 | Pendiente (stubs) |
+
+Suite: `.venv/Scripts/python -m pytest -q` → 96 tests. Worker: `python -m app.worker.main --una-vuelta`.
+Bitácora detallada de sesiones: `BITACORA.md`. Contrato entre piezas: `docs/BRIEF_SUBAGENTES.md`.

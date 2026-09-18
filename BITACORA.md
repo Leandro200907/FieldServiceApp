@@ -62,8 +62,48 @@ solo la bitácora del código.
 ### Piezas en paralelo (5 subagentes, en curso)
 | Pieza | Archivos | Estado |
 |---|---|---|
-| Auth (JWT, login/refresh/logout, dependency) | `app/auth/*` | en curso |
-| Comandos Evidencia + Requisitos | `app/modules/legajos`, `app/modules/requisitos` | en curso |
-| Comandos Operación + orquestación del motor | `app/modules/operacion`, `app/core/orquestacion.py` | en curso |
-| Consultas + backlog OC | `app/modules/consultas`, `app/modules/oc` | en curso |
-| Worker + storage | `app/worker`, `app/storage` | en curso |
+| Auth (JWT, login/refresh/logout, dependency) | `app/auth/*` | hecho (17 tests) |
+| Comandos Evidencia + Requisitos | `app/modules/legajos`, `app/modules/requisitos` | hecho (16 tests) |
+| Comandos Operación + orquestación del motor | `app/modules/operacion`, `app/core/orquestacion.py` | hecho (19 tests) |
+| Consultas + backlog OC | `app/modules/consultas`, `app/modules/oc` | hecho (14 tests) |
+| Worker + storage | `app/worker`, `app/storage` | hecho (21 tests) |
+
+Incidente: 4 de los 5 subagentes se cortaron por límite de uso a mitad de camino; se
+retomaron con su contexto intacto y terminaron. Sin pérdida de trabajo.
+
+### Hallazgos de los subagentes que cambian cosas de los cimientos
+- `resolver_tenant_por_slug` (0002, SECURITY DEFINER) no alcanzaba: FORCE RLS aplica al
+  owner también y el owner no tiene BYPASSRLS. Auth lo resolvió con tabla espejo
+  `tenant_slug` sin RLS sincronizada por trigger (0003_auth). Worker agregó además una
+  policy `tenant_lectura_sistema` FOR SELECT TO modulo1_owner (0003_worker) para
+  `listar_tenants()`. Con esa policy la función original de 0002 también funcionaría —
+  posible simplificación futura, no urgente.
+- `documento.sucede_a` (0003_legajos) para poder restaurar el documento anterior al
+  rechazar una propuesta.
+- `uq_oc_clave_origen` (0003_oc): clave estable única por tenant para carga incremental.
+- Cuatro heads 0003 en paralelo → merge revision `0004_merge` escrita a mano (faltaba
+  `script.py.mako` para `alembic merge`).
+- `app/api/errores.py`: `jsonable_encoder` en el envelope (date/UUID en `detalles` daban 500).
+- `tests/conftest.py`: hash bcrypt real de "secreto".
+
+### Integración (commits `19eb504`, `3fd137d`)
+- `app.storage.router` montado en `main.py`; `.env.example` documenta STORAGE_* y
+  WORKER_POLL_SEG. 40 rutas bajo /v1.
+- `tests/test_e2e_http.py`: flujo completo SOLO por HTTP (alta sujetos → definición →
+  matriz v1 → documento → OC → evaluación) reproduciendo 6.1 (borde inclusive vía dos
+  OCs), excepción que da `puede_asignarse_bajo_excepcion` con veredicto no verde, 6.3
+  (409 en el pasado, autocierre de v1 verificado por `matriz_vigente`), 6.5 (excepción
+  sin efecto tras reclasificar), constancia que sí cubre bloqueante_duro, lectura del
+  técnico y log de auditoría. Pasó al primer intento.
+- Auditoría rápida: ningún endpoint toma tenant_id del request; ninguna sesión fuera de
+  `tenant_session`/`platform_session`; SQL siempre con bind; sin `date.today()`.
+- Suite final: **96 passed**. Worker `--una-vuelta` corre.
+
+### Pendientes conocidos (no bloqueantes para seguir)
+- Transporte real hacia Módulo 2 (implementar `Publicador`); handlers `evidencia_qr`,
+  `score_documental`, `validacion_evidencia` son stubs; storage S3 (hoy solo local).
+- `usuario.activo` no se verifica por request (token de 30 min); rate limiting en login.
+- Universo del supervisor está implementado dos veces (consultas/acceso.py y
+  storage/servicio.py) — unificar en un contrato común.
+- Evento para `CancelarOC` no está en el catálogo (no se emite).
+- Config de storage/worker vía `os.environ`, no en `app/config.py`.
