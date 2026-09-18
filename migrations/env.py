@@ -1,20 +1,41 @@
 """Alembic corre siempre con el rol owner (DATABASE_URL_MIGRATIONS), nunca con el rol
 de aplicación — 8.1 de modulo1-arquitectura-tecnica.md, decisión 2: "El rol de
 migraciones (owner, separado) corre solo desde el pipeline de deploy, nunca desde
-código de aplicación." Este archivo es ese pipeline; app/db.py nunca importa esto.
+código de aplicación." Este archivo es ese pipeline; app/db.py y app/config.py nunca conocen
+esta credencial (A-01 de la auditoría).
 """
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.config import settings
+import os
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class _ConfigMigraciones(BaseSettings):
+    """Configuración propia de Alembic: NO usa app.config, que a propósito no conoce
+    esta credencial. Lee del entorno (o del .env local de desarrollo; ENV_FILE permite
+    apuntar a otro archivo o a uno inexistente)."""
+
+    model_config = SettingsConfigDict(env_file=os.environ.get("ENV_FILE", ".env"), extra="ignore")
+    database_url_migrations: str
+
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.database_url_migrations)
+try:
+    _cfg = _ConfigMigraciones()
+except Exception as exc:  # pragma: no cover - mensaje explícito para el operador
+    raise SystemExit(
+        "Falta DATABASE_URL_MIGRATIONS (rol owner). Alembic corre solo desde el job de "
+        "despliegue con esa variable; ver scripts/crear_roles.sql y README."
+    ) from exc
+
+config.set_main_option("sqlalchemy.url", _cfg.database_url_migrations)
 
 target_metadata = None  # migraciones escritas a mano (SQL explícito), no autogenerate
 

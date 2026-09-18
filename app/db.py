@@ -23,9 +23,8 @@ from app.config import settings
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
-# Motor separado para migraciones, con el rol owner — nunca se importa desde código
-# de aplicación en runtime, solo desde migrations/env.py.
-migrations_engine = create_engine(settings.database_url_migrations, pool_pre_ping=True)
+# No hay engine de migraciones acá: el rol owner vive solo en migrations/env.py, fuera
+# del proceso de la aplicación (A-01 de la auditoría).
 
 
 @contextmanager

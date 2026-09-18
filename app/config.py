@@ -8,11 +8,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Postgres — dos URLs distintas a propósito (8.1, decisión 2): el rol de aplicación
-    # nunca es owner de las tablas ni corre migraciones. DATABASE_URL_MIGRATIONS es el
-    # rol owner, usado solo por Alembic, nunca por el código de la aplicación en runtime.
+    # Postgres — SOLO la URL del rol de aplicación (8.1, decisión 2). La credencial del
+    # owner (DATABASE_URL_MIGRATIONS) no existe en esta configuración a propósito: la lee
+    # únicamente migrations/env.py desde el entorno del job de despliegue. Si la API o
+    # el worker la necesitaran, una toma del proceso anularía la barrera de RLS (A-01).
     database_url: str
-    database_url_migrations: str
 
     # JWT (9.2)
     jwt_secret: str

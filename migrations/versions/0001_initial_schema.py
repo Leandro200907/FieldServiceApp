@@ -510,17 +510,9 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # Roles y permisos (8.1, decisiones 1-2 y 4).
     # ------------------------------------------------------------------
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'modulo1_app') THEN
-                CREATE ROLE modulo1_app LOGIN PASSWORD 'changeme';
-            END IF;
-        END
-        $$;
-        """
-    )
+    # Los roles modulo1_owner / modulo1_app los crea scripts/crear_roles.sql ANTES de
+    # Alembic, con contraseñas provistas por el operador (M-07): acá solo se otorgan
+    # permisos sobre un rol que ya existe.
     op.execute("GRANT USAGE ON SCHEMA modulo1 TO modulo1_app")
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA modulo1 TO modulo1_app")
     op.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA modulo1 TO modulo1_app")
