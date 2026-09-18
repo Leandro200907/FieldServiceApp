@@ -257,9 +257,24 @@ def test_6_4_borde_de_dia_con_zona_horaria_del_tenant(tenant_de_prueba, sesion):
     assert r["veredicto_de_cumplimiento"] == "habilitado"
     assert r["resultado_de_decision"] == "puede_asignarse"
 
-    # Con la fecha UTC (16/9) la matriz ya no estaría vigente: eso es lo que NO tiene que pasar.
-    with pytest.raises(ErrorDeDominio):
-        evaluar_compromiso(sesion, t, "OC-borde", datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc), None)
+    # La versión de matriz se elige a `periodo_desde` de la OC (4.1), no a "hoy": aunque
+    # en UTC ya sea 16/9, la OC ingresa el 15/9 y la matriz que cierra ese día aplica.
+    r2 = evaluar_compromiso(sesion, t, "OC-borde", datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc), None)
+    assert r2["snapshot"]["hoy"] == "2026-09-16"
+    assert r2["veredicto_de_cumplimiento"] == "habilitado"
+
+    # Lo que SÍ depende de "hoy" es el vencimiento de una constancia (hecho del presente):
+    # una constancia con vigencia 15/9 cubre a las 02:30Z del 16/9 (todavía 15/9 en Buenos
+    # Aires) y deja de cubrir a las 12:00Z del 16/9. Con la fecha UTC del servidor, el
+    # primer caso daría no_habilitado — eso es lo que NO tiene que pasar.
+    insertar_legajo(sesion, t, "persona_0043", "persona")
+    insertar_oc(sesion, t, "OC-const", clave, date(2026, 9, 15), date(2026, 9, 15))
+    insertar_constancia(sesion, t, "persona_0043", req, clave["c"], "OC-const", vigencia=date(2026, 9, 15))
+    con = evaluar_compromiso(sesion, t, "OC-const", ahora, None)
+    assert requisitos_de(con, "persona_0043")[req]["constancia_id"] is not None
+    sin = evaluar_compromiso(sesion, t, "OC-const", datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc), None)
+    assert requisitos_de(sin, "persona_0043")[req]["constancia_id"] is None
+    assert requisitos_de(sin, "persona_0043")[req]["veredicto"] == "no_habilitado"
 
 
 def test_6_5_excepcion_deja_de_aplicar_por_reclasificacion_y_ck_nunca_verde(tenant_de_prueba, sesion):

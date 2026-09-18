@@ -107,3 +107,28 @@ retomaron con su contexto intacto y terminaron. Sin pérdida de trabajo.
   storage/servicio.py) — unificar en un contrato común.
 - Evento para `CancelarOC` no está en el catálogo (no se emite).
 - Config de storage/worker vía `os.environ`, no en `app/config.py`.
+
+## 2026-09-18 — Sesión 3: revisión funcional contra la especificación
+
+Cierre de las decisiones ambiguas documentadas en la sesión 2. Detalle, citas y regla
+definitiva de cada una en `docs/DECISIONES_DOMINIO.md`; tests de aceptación en
+`tests/test_reglas_cerradas.py` (14 tests).
+
+- **Propuesta del técnico**: la implementación coincidía con la spec (2.2). Se agregó la
+  restauración por cadena `sucede_a` (antecesor no terminal más cercano) para el caso
+  lote revertido + propuesta rechazada.
+- **Agregación del veredicto**: cuatro diferencias corregidas en `app/core/orquestacion.py`:
+  matriz vigente a `periodo_desde` (no a hoy); `bloqueante_durante_ejecucion` ahora decide
+  si `vence_durante_el_trabajo` bloquea; representante por tipo elegido por asignabilidad
+  antes que por severidad (un sujeto bajo excepción con efecto cubre por delante de uno
+  bloqueado); sin legajo de empresa → `no_habilitado`. El veredicto global sigue siendo el
+  peor de los representantes; `ck_excepcion_nunca_verde` se cumple por construcción.
+- **Lotes**: revertir no pisa una carga manual posterior (coincide con la spec 2.5 +
+  2.12); se implementaron las tres políticas de reimportación de modelo-dominio 2.11
+  (sin cambios / renovación / conflicto con dato verificado).
+- **Universo del supervisor**: unificado en `app/auth/alcance.py`; las dos versiones
+  anteriores eran semánticamente iguales salvo la lista de roles que ven todo, que ahora
+  es un parámetro explícito por capacidad.
+- Test 6.4 de orquestación reescrito: la segunda mitad dependía de que la matriz se
+  eligiera por "hoy"; ahora prueba el borde de día sobre el vencimiento de una constancia.
+- Suite: **110 passed**.

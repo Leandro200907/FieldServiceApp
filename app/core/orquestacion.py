@@ -134,9 +134,11 @@ def lineas_efectivas(
 def clasificacion_vigente(
     session: Session, tenant_id: str, commitment_id: str, requisito_definicion_id: str
 ) -> Clasificacion | None:
-    """Clasificación que rige HOY para un requisito en un compromiso: el requisito
-    particular del commitment si existe; si no, la línea de la matriz vigente para la OC.
-    None si no hay OC, no hay matriz vigente o la matriz no exige ese requisito."""
+    """Clasificación que rige para un requisito en un compromiso: el requisito particular
+    del commitment si existe; si no, la línea de la matriz vigente **al día de ingreso**
+    de la OC (`vigencia_desde`) — regla temporal de 4.1 de especificacion.md: la versión
+    de matriz que aplica es la vigente a `periodo_desde`, nunca la de la fecha en que
+    corre el cálculo. None si no hay OC, no hay matriz vigente o no exige ese requisito."""
     particular = session.execute(
         text(
             "SELECT clasificacion FROM modulo1.requisito_particular "
@@ -149,8 +151,9 @@ def clasificacion_vigente(
     oc = buscar_oc(session, tenant_id, commitment_id)
     if oc is None:
         return None
-    hoy = hoy_del_tenant(session, tenant_id)
-    matriz = matriz_vigente(session, tenant_id, oc["cliente_id"], oc["locacion_id"], oc["tipo_servicio_id"], hoy)
+    matriz = matriz_vigente(
+        session, tenant_id, oc["cliente_id"], oc["locacion_id"], oc["tipo_servicio_id"], oc["vigencia_desde"]
+    )
     if matriz is None:
         return None
     linea = session.execute(
@@ -367,6 +370,7 @@ def _evaluar_requisito(ctx: _Contexto, sujeto_id: str, req_id: str) -> dict[str,
             "constancia_id": None,
             "excepcion_id": None,
             "bajo_excepcion": False,
+            "asignable": False,
         }
     )
 
@@ -400,27 +404,54 @@ def _evaluar_requisito(ctx: _Contexto, sujeto_id: str, req_id: str) -> dict[str,
                     f"{r['motivo']} (excepción {excepcion.excepcion_id} sin efecto: requisito reclasificado "
                     f"a {clasificacion.value})"
                 )
+
+    # Asignabilidad del requisito (1.9 de documentacion-habilitante.md): `habilitado` deja
+    # asignar; `vence_durante_el_trabajo` "avisa siempre; bloquea solo si el requisito está
+    # marcado bloqueante_durante_ejecucion"; lo demás solo pasa bajo excepción con efecto.
+    # El veredicto NO cambia por esto — la asignabilidad es una lectura sobre él.
+    veredicto_final = Veredicto(r["veredicto"])
+    if veredicto_final == Veredicto.HABILITADO:
+        r["asignable"] = True
+    elif veredicto_final == Veredicto.VENCE_DURANTE_EL_TRABAJO and not linea["bloqueante_durante_ejecucion"]:
+        r["asignable"] = True
+        r["motivo"] = f"{r['motivo']} (avisa, no bloquea: no es bloqueante_durante_ejecucion)"
+    else:
+        r["asignable"] = bool(r["bajo_excepcion"])
     return r
 
 
 def _evaluar_sujeto(ctx: _Contexto, sujeto_id: str, tipo_sujeto: str, requisitos: list[str]) -> dict[str, Any]:
     evaluados = [_evaluar_requisito(ctx, sujeto_id, req_id) for req_id in requisitos]
     veredicto = peor([Veredicto(e["veredicto"]) for e in evaluados])
-    no_verdes = [e for e in evaluados if e["veredicto"] != Veredicto.HABILITADO.value]
+    asignable = all(e["asignable"] for e in evaluados)
     return {
         "sujeto_id": sujeto_id,
         "tipo_sujeto": tipo_sujeto,
         "veredicto": veredicto.value,
-        # True cuando todo lo que no está verde está cubierto por una excepción con efecto.
-        "bajo_excepcion": bool(no_verdes) and all(e["bajo_excepcion"] for e in no_verdes),
+        # Un sujeto se asigna solo si CADA requisito es asignable (1.12: "cumpla todos los
+        # requisitos que le aplican"; nunca se compone entre legajos parciales).
+        "asignable": asignable,
+        # True cuando es asignable y al menos un requisito depende de una excepción con
+        # efecto: la OT queda "asignada bajo excepción" (1.6).
+        "bajo_excepcion": asignable and any(e["bajo_excepcion"] for e in evaluados),
         "requisitos": evaluados,
     }
 
 
 def _clave_mejor_sujeto(s: dict[str, Any]) -> tuple[int, int]:
-    """Entre sujetos del mismo tipo, el que cubre mejor la OC: menor severidad y, a
-    igual severidad, el que está bajo excepción con efecto."""
-    return (ORDEN_VEREDICTO[Veredicto(s["veredicto"])], 0 if s["bajo_excepcion"] else 1)
+    """Entre sujetos del mismo tipo, el que cubre mejor la OC (1.12: basta con que exista
+    UN legajo del tipo que cumpla). Primero por asignabilidad — asignable por sí mismo,
+    después asignable solo bajo excepción, después no asignable — y recién dentro de
+    cada clase por menor severidad. Así un sujeto `no_habilitado` bajo excepción con
+    efecto cubre la OC por delante de uno `vence_durante_el_trabajo` bloqueante, y un
+    representante no asignable es siempre el menos grave (para el motivo explicable)."""
+    if s["asignable"] and not s["bajo_excepcion"]:
+        clase = 0
+    elif s["asignable"]:
+        clase = 1
+    else:
+        clase = 2
+    return (clase, ORDEN_VEREDICTO[Veredicto(s["veredicto"])])
 
 
 def _jsonable(valor: Any) -> Any:
@@ -442,11 +473,17 @@ def evaluar_compromiso(
     hoy = hoy_del_tenant(session, tenant_id, ahora_utc)
     zona_horaria = zona_horaria_del_tenant(session, tenant_id)
 
-    matriz = matriz_vigente(session, tenant_id, oc["cliente_id"], oc["locacion_id"], oc["tipo_servicio_id"], hoy)
+    # `version_matriz` es la vigente a `periodo_desde` (día de ingreso), no la de hoy
+    # (4.1 de especificacion.md, regla temporal). `hoy` solo decide vencimientos de
+    # constancias/excepciones, que son hechos del presente, no del período evaluado.
+    periodo_desde: date = oc["vigencia_desde"]
+    matriz = matriz_vigente(
+        session, tenant_id, oc["cliente_id"], oc["locacion_id"], oc["tipo_servicio_id"], periodo_desde
+    )
     if matriz is None:
         raise ErrorDeDominio(
-            "sin matriz vigente para el cliente, locación y tipo de servicio de la OC",
-            {"commitment_id": commitment_id, "hoy": str(hoy)},
+            "sin matriz vigente al día de ingreso de la OC para su cliente, locación y tipo de servicio",
+            {"commitment_id": commitment_id, "periodo_desde": str(periodo_desde)},
             codigo="sin_matriz_vigente",
         )
     lineas = lineas_efectivas(session, tenant_id, commitment_id, str(matriz["matriz_version_id"]))
@@ -490,9 +527,17 @@ def evaluar_compromiso(
             representantes.append(empresa)
             cobertura_por_tipo["empresa"] = empresa["sujeto_id"]
         else:
-            # Sin legajo de empresa no hay a quién evaluar: queda anotado, no decide.
+            # La empresa es *siempre evaluada* (1.8): si la matriz le exige requisitos y no
+            # hay legajo de empresa, no hay evidencia alguna → no_habilitado. Queda anotado
+            # en snapshot para el motivo explicable; nunca se omite del veredicto.
             empresa_sin_evaluar = True
             cobertura_por_tipo["empresa"] = None
+            for req_id in requisitos_por_tipo["empresa"]:
+                requisitos_faltantes.append(
+                    {"tipo_sujeto": "empresa", "sujeto_id": None, "requisito_definicion_id": req_id,
+                     "nombre": definiciones[req_id]["nombre"], "veredicto": Veredicto.NO_HABILITADO.value,
+                     "motivo": "sin legajo de empresa: no hay evidencia que evaluar", "bajo_excepcion": False}
+                )
 
     # Paso 2 — cada tipo de recurso exigido, sujeto por sujeto.
     sujetos = _sujetos_activos(session, tenant_id, tipos_recurso)
@@ -522,7 +567,7 @@ def evaluar_compromiso(
 
     # Agregación: peor entre empresa y el mejor sujeto de cada tipo exigido.
     veredictos_globales = [Veredicto(r["veredicto"]) for r in representantes]
-    if tipo_sin_sujetos:
+    if tipo_sin_sujetos or empresa_sin_evaluar:
         veredictos_globales.append(Veredicto.NO_HABILITADO)
     veredicto_global = peor(veredictos_globales)
 
@@ -541,16 +586,19 @@ def evaluar_compromiso(
                     }
                 )
 
-    if veredicto_global == Veredicto.HABILITADO:
-        resultado = ResultadoDecision.PUEDE_ASIGNARSE
-    elif (
-        veredicto_global in VEREDICTOS_EXCEPCIONABLES
-        and not tipo_sin_sujetos
-        and all(r["veredicto"] == Veredicto.HABILITADO.value or r["bajo_excepcion"] for r in representantes)
-    ):
+    # Decisión (4.1): se asigna solo si la empresa y un representante de cada tipo exigido
+    # son asignables. Si alguno depende de una excepción → bajo_excepcion, y en ese caso
+    # el veredicto global nunca es `habilitado` (ck_excepcion_nunca_verde). El veredicto
+    # global es siempre el peor de los representantes: nunca más favorable que ellos.
+    todos_asignables = (
+        not tipo_sin_sujetos and not empresa_sin_evaluar and all(r["asignable"] for r in representantes)
+    )
+    if not todos_asignables:
+        resultado = ResultadoDecision.NO_PUEDE_ASIGNARSE
+    elif any(r["bajo_excepcion"] for r in representantes):
         resultado = ResultadoDecision.PUEDE_ASIGNARSE_BAJO_EXCEPCION
     else:
-        resultado = ResultadoDecision.NO_PUEDE_ASIGNARSE
+        resultado = ResultadoDecision.PUEDE_ASIGNARSE
 
     # ck_excepcion_nunca_verde, verificado acá antes de tocar la base.
     assert resultado != ResultadoDecision.PUEDE_ASIGNARSE_BAJO_EXCEPCION or veredicto_global in VEREDICTOS_EXCEPCIONABLES
@@ -561,6 +609,7 @@ def evaluar_compromiso(
             "commitment_id": commitment_id,
             "oc": oc,
             "hoy": hoy,
+            "periodo_desde": periodo_desde,
             "ahora_utc": ahora_utc,
             "zona_horaria": zona_horaria,
             "matriz": matriz,

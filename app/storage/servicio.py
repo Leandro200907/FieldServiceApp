@@ -11,7 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
-from app.auth.identidad import Identidad, Rol
+from app.auth.alcance import ROLES_CON_TODO_DESCARGA, sujeto_en_alcance
+from app.auth.identidad import Identidad
 from app.comun.eventos import registrar_evento
 from app.comun.reloj import ahora_utc, hoy_del_tenant
 from app.storage.contrato import Storage
@@ -51,31 +52,12 @@ def preparar_subida(
 
 
 def _autorizar_descarga(session: Session, identidad: Identidad, sujeto_id: str) -> None:
-    """Matriz 2.2: responsable_legajos todo; técnico solo su propio legajo; supervisor su
-    universo (asignacion_supervisor vigente hacia él, o recurso bajo custodia de un
-    sujeto de su universo)."""
-    if identidad.tiene_rol(Rol.RESPONSABLE_LEGAJOS):
+    """Matriz 2.2 para DescargarArchivoDeEvidencia: responsable_legajos todo; técnico solo
+    su propio legajo; supervisor su universo. El universo se resuelve en
+    `app.auth.alcance` (única fuente de verdad), acá solo se fija qué roles ven todo."""
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    if sujeto_en_alcance(session, identidad, sujeto_id, hoy, roles_con_todo=ROLES_CON_TODO_DESCARGA):
         return
-    if identidad.tiene_rol(Rol.TECNICO) and identidad.sujeto_id and identidad.sujeto_id == sujeto_id:
-        return
-    if identidad.tiene_rol(Rol.SUPERVISOR):
-        hoy = hoy_del_tenant(session, identidad.tenant_id)
-        en_universo = session.execute(
-            text(
-                """
-                SELECT 1 FROM modulo1.asignacion_supervisor a
-                WHERE a.supervisor_usuario_id = CAST(:u AS uuid) AND a.estado = 'vigente' AND a.desde <= :hoy
-                  AND (a.sujeto_id = :s OR EXISTS (
-                        SELECT 1 FROM modulo1.custodia_recurso c
-                        JOIN modulo1.periodo_custodia p ON p.custodia_id = c.custodia_id
-                        WHERE c.recurso_id = :s AND p.estado = 'vigente' AND p.custodio_id = a.sujeto_id))
-                LIMIT 1
-                """
-            ),
-            {"u": identidad.usuario_id, "hoy": hoy, "s": sujeto_id},
-        ).first()
-        if en_universo:
-            return
     raise Prohibido("El usuario no puede descargar la evidencia de este sujeto", {"sujeto_id": sujeto_id})
 
 

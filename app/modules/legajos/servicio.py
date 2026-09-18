@@ -349,18 +349,36 @@ def rechazar_propuesta(s: Session, identidad: Identidad, body: e.RechazarPropues
 
 
 def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None:
-    """Vuelve a `vigente` la versión que fue sucedida por la que se está anulando —
-    solo si sigue `sucedida` (si ya fue revertida/rechazada no se resucita)."""
-    if sucede_a is None:
-        return None
-    fila = s.execute(
-        text(
-            "UPDATE modulo1.documento SET estado_version = 'vigente' "
-            "WHERE tenant_id = :t AND documento_id = :d AND estado_version = 'sucedida' RETURNING documento_id"
-        ),
-        {"t": tenant_id, "d": str(sucede_a)},
-    ).first()
-    return str(fila[0]) if fila else None
+    """Vuelve a `vigente` el antecesor no terminal más cercano de la versión que se está
+    anulando, siguiendo la cadena `sucede_a`.
+
+    Regla cerrada (2.2 de especificacion.md: una versión anulada "es como si nunca hubiera
+    llegado a ser candidata"): al anular una versión se vuelve al estado previo a ella. Si
+    su antecesora inmediata ya es terminal (`rechazada` / `revertida_por_lote` — por
+    ejemplo, un lote revertido después de que el técnico propuso sobre él), se sigue
+    subiendo por la cadena hasta encontrar una `sucedida`. Una versión terminal nunca se
+    resucita. Si no queda ninguna, el sujeto se queda sin vigente para ese requisito."""
+    actual = sucede_a
+    visitados: set[str] = set()
+    while actual is not None and str(actual) not in visitados:
+        visitados.add(str(actual))
+        fila = s.execute(
+            text("SELECT estado_version, sucede_a FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"),
+            {"t": tenant_id, "d": str(actual)},
+        ).mappings().first()
+        if fila is None:
+            return None
+        if fila["estado_version"] == "sucedida":
+            s.execute(
+                text("UPDATE modulo1.documento SET estado_version = 'vigente' WHERE tenant_id = :t AND documento_id = :d"),
+                {"t": tenant_id, "d": str(actual)},
+            )
+            return str(actual)
+        if fila["estado_version"] == "vigente":
+            # Ya hay un vigente más nuevo en la cadena: no se toca (uq_documento_vigente).
+            return None
+        actual = fila["sucede_a"]
+    return None
 
 
 # --------------------------------------------------------------------------- competencias / inducciones
@@ -440,6 +458,36 @@ def registrar_induccion(s: Session, identidad: Identidad, body: e.RegistrarInduc
 # --------------------------------------------------------------------------- lotes
 
 
+def _politica_reimportacion(s: Session, tenant_id: str, fila: e.FilaDeLote) -> dict[str, Any]:
+    """Tres casos de 2.11 de modelo-dominio.md contra el documento vigente del mismo
+    (sujeto, requisito), si lo hay. Devuelve {"accion": "crear"|"renovar"|"sin_cambios"}
+    o levanta ErrorDeDominio (rechazo de la fila) por conflicto con un dato verificado."""
+    vigente = s.execute(
+        text(
+            "SELECT documento_id, numero, vigente_desde, vigente_hasta, estado_confirmacion FROM modulo1.documento "
+            "WHERE tenant_id = :t AND sujeto_id = :sj AND requisito_definicion_id = :r AND estado_version = 'vigente'"
+        ),
+        {"t": tenant_id, "sj": fila.sujeto_id, "r": str(fila.requisito_definicion_id)},
+    ).mappings().first()
+    if vigente is None:
+        return {"accion": "crear", "documento_id": None}
+    mismo_numero = fila.numero is None or vigente["numero"] is None or fila.numero == vigente["numero"]
+    if fila.vigente_desde == vigente["vigente_desde"] and fila.vigente_hasta == vigente["vigente_hasta"] and mismo_numero:
+        return {"accion": "sin_cambios", "documento_id": str(vigente["documento_id"])}
+    if fila.vigente_hasta > vigente["vigente_hasta"]:
+        return {"accion": "renovar", "documento_id": str(vigente["documento_id"])}
+    if vigente["estado_confirmacion"] != "declarado":
+        raise ErrorDeDominio(
+            "conflicto con dato verificado: la fila contradice un documento verificado con vigencia no posterior",
+            {"documento_vigente_id": str(vigente["documento_id"]), "vigente_hasta_actual": str(vigente["vigente_hasta"]),
+             "vigente_hasta_fila": str(fila.vigente_hasta), "estado_confirmacion": vigente["estado_confirmacion"]},
+            codigo="conflicto_con_dato_verificado",
+        )
+    # El vigente es solo `declarado` (misma confianza que la planilla): la planilla es el
+    # dato más reciente y entra como versión nueva.
+    return {"accion": "renovar", "documento_id": str(vigente["documento_id"])}
+
+
 def _clave_lote(lote_id: str) -> str:
     return f"lote:{lote_id}"
 
@@ -471,8 +519,13 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
             "ya_aplicado": True,
         }
 
-    # 1) Validación fila por fila, sin escribir todavía.
+    # 1) Validación fila por fila, sin escribir todavía. Incluye las tres políticas de
+    #    "documento existente al reimportar" (2.11 de modelo-dominio.md): vigencia
+    #    posterior → renovación; coincide con lo que ya hay → no hace nada, no duplica;
+    #    contradice un dato ya verificado con vigencia no posterior → rechazada (un dato
+    #    de menor confianza nunca pisa uno de mayor confianza sin confirmación humana).
     validas: list[tuple[int, e.FilaDeLote]] = []
+    sin_cambios: list[dict[str, Any]] = []
     rechazadas: list[dict[str, Any]] = []
     for i, fila in enumerate(body.filas):
         try:
@@ -480,20 +533,27 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
             definicion = _definicion_activa(s, t, str(fila.requisito_definicion_id))
             _exigir_aplicable(definicion, legajo)
             _exigir_vigencia(fila.vigente_desde, fila.vigente_hasta)
+            politica = _politica_reimportacion(s, t, fila)
         except ErrorDeDominio as err:
             rechazadas.append({"fila": i, "sujeto_id": fila.sujeto_id, "requisito_definicion_id": str(fila.requisito_definicion_id),
                                "codigo": err.codigo, "motivo": err.mensaje, "detalles": err.detalles})
             continue
+        if politica["accion"] == "sin_cambios":
+            sin_cambios.append({"fila": i, "sujeto_id": fila.sujeto_id, "requisito_definicion_id": str(fila.requisito_definicion_id),
+                                "documento_id": politica["documento_id"]})
+            continue
         validas.append((i, fila))
 
     # 2) Cabecera del lote (los documentos referencian lote_id por FK).
+    # Una fila "sin cambios" cuenta como aceptada (no es un error) aunque no cree versión.
+    aceptadas = len(validas) + len(sin_cambios)
     s.execute(
         text(
             "INSERT INTO modulo1.lote_importacion (lote_id, tenant_id, origen, entidad, filas_totales, filas_aceptadas, "
             "filas_rechazadas, detalle_filas_rechazadas, estado, hash_archivo) "
             "VALUES (:l, :t, :o, 'legajos', :tot, :ok, :rech, CAST(:det AS jsonb), 'aplicado', :hash)"
         ),
-        {"l": lote_id, "t": t, "o": body.origen, "tot": len(body.filas), "ok": len(validas), "rech": len(rechazadas),
+        {"l": lote_id, "t": t, "o": body.origen, "tot": len(body.filas), "ok": aceptadas, "rech": len(rechazadas),
          "det": json.dumps(rechazadas, default=str, ensure_ascii=False), "hash": body.hash_archivo},
     )
 
@@ -512,14 +572,15 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     registrar_evento(
         s, t, "LoteAplicado",
         {"lote_id": lote_id, "entidad": "legajos", "origen": body.origen, "filas_totales": len(body.filas),
-         "filas_aceptadas": len(validas), "filas_rechazadas": len(rechazadas)},
+         "filas_aceptadas": aceptadas, "filas_rechazadas": len(rechazadas), "filas_sin_cambios": len(sin_cambios)},
         identidad.usuario_id,
     )
     eventos.append("LoteAplicado")
 
     resultado = {
-        "lote_id": lote_id, "estado": "aplicado", "filas_totales": len(body.filas), "filas_aceptadas": len(validas),
+        "lote_id": lote_id, "estado": "aplicado", "filas_totales": len(body.filas), "filas_aceptadas": aceptadas,
         "filas_rechazadas": len(rechazadas), "detalle_filas_rechazadas": rechazadas, "documentos": documentos,
+        "filas_sin_cambios": sin_cambios,
         "eventos": eventos,
     }
     guardar_resultado(s, t, _clave_lote(lote_id), resultado)
