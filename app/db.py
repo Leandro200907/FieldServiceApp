@@ -40,7 +40,13 @@ def tenant_session(tenant_id: str) -> Iterator[Session]:
     """
     session = SessionLocal()
     try:
-        session.execute(text("SET LOCAL app.current_tenant = :tenant_id"), {"tenant_id": tenant_id})
+        # set_config(..., is_local=true) es exactamente SET LOCAL, pero admite parámetro
+        # bind (SET LOCAL no acepta $1 en Postgres) — así el tenant_id nunca se interpola
+        # en el SQL como string.
+        session.execute(
+            text("SELECT set_config('app.current_tenant', :tenant_id, true)"),
+            {"tenant_id": str(tenant_id)},
+        )
         yield session
         session.commit()
     except Exception:
