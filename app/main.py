@@ -21,6 +21,7 @@ ROUTERS = [
     "app.modules.operacion.router",
     "app.modules.oc.router",
     "app.modules.consultas.router",
+    "app.storage.router",
 ]
 
 

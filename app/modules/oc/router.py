@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from app.auth.identidad import Identidad
 from app.comun.idempotencia import buscar_resultado, guardar_resultado
 from app.db import tenant_session
-from app.modules.consultas.acceso import identidad_actual
+from app.auth.dependencies import identidad_actual
 from app.modules.oc import servicio
 
 router = APIRouter()

@@ -1,9 +1,7 @@
 """Acceso compartido por las piezas Consultas y OC: identidad autenticada y "universo"
 del supervisor (2.2 de no-funcionales).
 
-`identidad_actual` se toma de `app.auth.dependencies` (pieza Auth). Mientras esa pieza
-no esté integrada, hay un fallback local mínimo que decodifica el JWT con los claims del
-brief y arma `Identidad`. TODO integración: borrar el fallback y dejar solo el import.
+`identidad_actual` se reexporta desde `app.auth.dependencies` (pieza Auth).
 """
 from __future__ import annotations
 
@@ -12,40 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.identidad import Identidad, Rol
 
-try:  # pragma: no cover - la rama que corre depende de si Auth ya está integrada
-    from app.auth.dependencies import identidad_actual  # noqa: F401
-except ImportError:  # pragma: no cover
-    import jwt as _pyjwt
-    from fastapi import Depends as _Depends
-    from fastapi.security import HTTPAuthorizationCredentials as _Cred
-    from fastapi.security import HTTPBearer as _Bearer
-
-    from app.api.errores import NoAutenticado as _NoAutenticado
-    from app.config import settings as _settings
-
-    _bearer = _Bearer(auto_error=False)
-
-    def identidad_actual(credenciales: _Cred | None = _Depends(_bearer)) -> Identidad:  # type: ignore[misc]
-        """Fallback provisorio — se borra cuando `app.auth.dependencies` exista."""
-        if credenciales is None or not credenciales.credentials:
-            raise _NoAutenticado("Falta el token de acceso")
-        try:
-            claims = _pyjwt.decode(
-                credenciales.credentials,
-                _settings.jwt_secret,
-                algorithms=[_settings.jwt_algorithm],
-                options={"require": ["sub", "tenant_id", "exp"]},
-            )
-            roles = frozenset(Rol(r) for r in claims.get("roles") or [])
-        except (_pyjwt.PyJWTError, ValueError):
-            raise _NoAutenticado("Token inválido")
-        sujeto = claims.get("sujeto_id")
-        return Identidad(
-            tenant_id=str(claims["tenant_id"]),
-            usuario_id=str(claims["sub"]),
-            roles=roles,
-            sujeto_id=str(sujeto) if sujeto is not None else None,
-        )
+from app.auth.dependencies import identidad_actual  # noqa: F401 - reexport para oc/consultas
 
 
 def ve_todo_el_tenant(identidad: Identidad) -> bool:

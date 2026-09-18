@@ -72,7 +72,7 @@ def _exigir_aplicable(definicion: dict[str, Any], legajo: dict[str, Any]) -> Non
 
 def _exigir_vigencia(desde: date, hasta: date) -> None:
     if desde > hasta:
-        raise ErrorDeDominio("vigente_desde no puede ser posterior a vigente_hasta", {"vigente_desde": desde, "vigente_hasta": hasta})
+        raise ErrorDeDominio("vigente_desde no puede ser posterior a vigente_hasta", {"vigente_desde": str(desde), "vigente_hasta": str(hasta)})
 
 
 def _documento(s: Session, tenant_id: str, documento_id: str, *, bloquear: bool = False) -> dict[str, Any]:
@@ -644,7 +644,7 @@ def reasignar_supervisor(s: Session, identidad: Identidad, body: e.ReasignarSupe
     if desde <= actual["desde"]:
         raise ErrorDeDominio(
             "La reasignación debe empezar después del inicio de la asignación vigente",
-            {"desde": desde, "desde_vigente": actual["desde"]},
+            {"desde": str(desde), "desde_vigente": str(actual["desde"])},
         )
     hasta_anterior = desde - timedelta(days=1)
     s.execute(
