@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
@@ -197,53 +197,91 @@ def vencer_excepciones_y_constancias(session: Session, tenant_id: str, ahora_utc
     return resumen
 
 
-# --- 3. retención de archivos ---------------------------------------------------------
-def control_retencion(session: Session, tenant_id: str, storage: Storage, ahora_utc: datetime) -> dict[str, int]:
+# --- 3. retención de archivos (A-05: dos fases, nunca "archivo borrado, base sin enterarse")
+def control_retencion(
+    tenant_id: str, storage: Storage, ahora_utc: datetime, abrir_sesion: Callable[[str], Any] | None = None
+) -> dict[str, int]:
     """Purga el archivo físico de documentos no vigentes cuyo plazo de retención (por
-    definición de requisito) ya pasó. `ArchivoPurgado` SOLO si `storage.borrar` confirmó."""
-    candidatos = _candidatos_retencion(session, ahora_utc)
+    definición de requisito) ya pasó. Maneja sus propias transacciones porque el borrado
+    físico NO puede ir dentro de una transacción SQL (4.4 de no-funcionales + A-05):
+
+      fase 1 (tx)  candidatos `confirmado` con plazo vencido → `purga_pendiente`. Commit.
+      fase 2       por cada `purga_pendiente`: borrado físico FUERA de toda transacción;
+                   si `storage.borrar` confirma (o el archivo ya no existe) → (tx) clave
+                   NULL, `purgado`, evento ArchivoPurgado. Commit por documento.
+                   Si no confirma, queda `purga_pendiente` y se reintenta en la vuelta
+                   siguiente — idempotente por construcción.
+
+    Un corte entre borrar y confirmar deja `purga_pendiente` con archivo ausente: la
+    vuelta siguiente lo detecta (`existe() == False`) y cierra la fase 2. La base nunca
+    apunta a un archivo inexistente como si estuviera `confirmado`."""
+    abrir = abrir_sesion or _sesion_por_defecto
+    with abrir(tenant_id) as s:
+        marcados = _marcar_purga_pendiente(s, ahora_utc)
+    with abrir(tenant_id) as s:
+        pendientes = s.execute(
+            text("SELECT documento_id, clave_storage FROM modulo1.documento WHERE archivo_estado = 'purga_pendiente' "
+                 "ORDER BY creado_en"),
+        ).all()
     purgados = 0
     no_confirmados = 0
-    for documento_id, clave in candidatos:
+    for documento_id, clave in pendientes:
         try:
             borrado = bool(storage.borrar(clave))
         except Exception:
             log.exception("retención: error borrando %s", clave)
             borrado = False
         if not borrado:
+            # Reconciliación: si el archivo ya no está (corte en una vuelta anterior), cerrar.
+            try:
+                borrado = not storage.existe(clave)
+            except Exception:
+                borrado = False
+        if not borrado:
             no_confirmados += 1
             log.warning("retención: borrado NO confirmado para documento %s (%s); se reintenta", documento_id, clave)
             continue
-        session.execute(
-            text("UPDATE modulo1.documento SET clave_storage = NULL WHERE documento_id = :d"), {"d": documento_id}
-        )
-        registrar_evento(
-            session,
-            tenant_id,
-            "ArchivoPurgado",
-            {"documento_id": str(documento_id), "clave_storage": clave, "purgado_en": ahora_utc.isoformat()},
-            usuario_id=None,
-        )
-        purgados += 1
-    resumen = {"candidatos": len(candidatos), "purgados": purgados, "no_confirmados": no_confirmados}
-    latir(session, "control_retencion", tenant_id, True, resumen)
+        with abrir(tenant_id) as s:
+            actualizado = s.execute(
+                text(
+                    "UPDATE modulo1.documento SET clave_storage = NULL, archivo_estado = 'purgado', "
+                    "archivo_purgado_en = :ahora WHERE documento_id = :d AND archivo_estado = 'purga_pendiente'"
+                ),
+                {"d": documento_id, "ahora": ahora_utc},
+            ).rowcount
+            if actualizado:
+                registrar_evento(
+                    s, tenant_id, "ArchivoPurgado",
+                    {"documento_id": str(documento_id), "clave_storage": clave, "purgado_en": ahora_utc.isoformat()},
+                    usuario_id=None,
+                )
+                purgados += 1
+    resumen = {"candidatos": marcados + len(pendientes), "marcados": marcados, "purgados": purgados,
+               "no_confirmados": no_confirmados}
+    with abrir(tenant_id) as s:
+        latir(s, "control_retencion", tenant_id, True, resumen)
     return resumen
 
 
-def _candidatos_retencion(session: Session, ahora_utc: datetime) -> list[tuple[Any, str]]:
+def _sesion_por_defecto(tenant_id: str):
+    from app.db import tenant_session
+
+    return tenant_session(tenant_id)
+
+
+def _marcar_purga_pendiente(session: Session, ahora_utc: datetime) -> int:
+    """Fase 1: decide qué purgar y lo deja escrito antes de tocar el filesystem."""
     return session.execute(
         text(
             """
-            SELECT d.documento_id, d.clave_storage
-            FROM modulo1.documento d
-            JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = d.requisito_definicion_id
-            WHERE d.estado_version IN :estados
-              AND d.clave_storage IS NOT NULL
+            UPDATE modulo1.documento d SET archivo_estado = 'purga_pendiente'
+            FROM modulo1.definicion_requisito r
+            WHERE r.requisito_definicion_id = d.requisito_definicion_id
+              AND d.estado_version IN :estados
+              AND d.archivo_estado = 'confirmado'
               AND r.plazo_retencion_archivo IS NOT NULL
               AND d.creado_en + r.plazo_retencion_archivo < :ahora
-            ORDER BY d.creado_en
-            FOR UPDATE OF d SKIP LOCKED
             """
         ).bindparams(bindparam("estados", expanding=True)),
         {"estados": list(ESTADOS_NO_VIGENTES), "ahora": ahora_utc},
-    ).all()
+    ).rowcount

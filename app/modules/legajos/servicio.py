@@ -127,8 +127,6 @@ def _insertar_version_documento(
     estado_confirmacion: str,
     origen_propuesta: bool = False,
     confianza_extraccion: str | None = None,
-    clave_storage: str | None = None,
-    checksum_archivo: str | None = None,
     lote_id: str | None = None,
     eventos: list[str],
 ) -> dict[str, Any]:
@@ -162,15 +160,15 @@ def _insertar_version_documento(
         text(
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, numero, "
             "vigente_desde, vigente_hasta, estado_confirmacion, estado_version, origen_propuesta, version, origen, "
-            "confianza_extraccion, clave_storage, checksum_archivo, lote_id, sucede_a) "
+            "confianza_extraccion, lote_id, sucede_a) "
             "VALUES (:d, :t, :sj, :r, :num, :desde, :hasta, :conf, 'vigente', :prop, :ver, :origen, "
-            ":confianza, :clave, :checksum, :lote, :sucede_a)"
+            ":confianza, :lote, :sucede_a)"
         ),
         {
             "d": documento_id, "t": t, "sj": sujeto_id, "r": requisito_definicion_id, "num": numero,
             "desde": vigente_desde, "hasta": vigente_hasta, "conf": estado_confirmacion, "prop": origen_propuesta,
-            "ver": version, "origen": origen, "confianza": confianza_extraccion, "clave": clave_storage,
-            "checksum": checksum_archivo, "lote": lote_id, "sucede_a": sucede_a,
+            "ver": version, "origen": origen, "confianza": confianza_extraccion,
+            "lote": lote_id, "sucede_a": sucede_a,
         },
     )
 
@@ -265,8 +263,7 @@ def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) 
         sujeto_id=body.sujeto_id, requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, numero=body.numero,
         origen=body.origen, estado_confirmacion=body.estado_confirmacion,
-        confianza_extraccion=body.confianza_extraccion, clave_storage=body.clave_storage,
-        checksum_archivo=body.checksum_archivo, eventos=eventos,
+        confianza_extraccion=body.confianza_extraccion, eventos=eventos,
     )
     return {**r, "eventos": eventos}
 
@@ -287,7 +284,7 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
         sujeto_id=body.sujeto_id, requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, numero=body.numero,
         origen=body.origen, estado_confirmacion="declarado", origen_propuesta=True,
-        clave_storage=body.clave_storage, checksum_archivo=body.checksum_archivo, eventos=eventos,
+        eventos=eventos,
     )
     return {**r, "eventos": eventos}
 

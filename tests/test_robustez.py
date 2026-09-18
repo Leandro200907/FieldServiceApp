@@ -288,7 +288,8 @@ def _armar_tenant(c, t) -> dict:
     _ok(_post(c, t, "responsable_legajos", "importar_lote_oc", {"lote_id": str(uuid.uuid4()), "origen": "planilla", "filas": [
         {"clave_origen": f"OC-{t.slug}", **clave, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
     with tenant_session(t.tenant_id) as s:
-        s.execute(text("UPDATE modulo1.documento SET clave_storage = :k WHERE documento_id = :d"),
+        s.execute(text("UPDATE modulo1.documento SET clave_storage = :k, archivo_estado = 'confirmado', "
+                       "checksum_archivo = 'ck', archivo_bytes = 1 WHERE documento_id = :d"),
                   {"k": f"{t.tenant_id}/{doc}/apto.pdf", "d": doc})
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                        "VALUES (:t, :sj, :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "sj": persona, "u": t.usuarios["supervisor"]})
@@ -543,7 +544,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     token: sin Authorization responde 401 con envelope, nunca 500 ni 200."""
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}"}
-    assert len(paths) == 40
+    assert len(paths) == 42
     for path, ops in paths.items():
         if path in publicas:
             continue

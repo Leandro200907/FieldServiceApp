@@ -45,11 +45,14 @@ def _documento(s, tenant_id: str, requisito_id: str, vigente_hasta, estado_versi
     s.execute(
         text(
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, "
-            "vigente_hasta, origen, estado_version, clave_storage, creado_en) VALUES (:d, :t, :sj, :r, "
-            ":desde, :hasta, 'carga_manual', :ev, :clave, COALESCE(:creado, now()))"
+            "vigente_hasta, origen, estado_version, clave_storage, archivo_estado, checksum_archivo, archivo_bytes, creado_en) "
+            "VALUES (:d, :t, :sj, :r, :desde, :hasta, 'carga_manual', :ev, :clave, "
+            "CASE WHEN CAST(:clave AS text) IS NULL THEN 'sin_archivo' ELSE 'confirmado' END, "
+            "CASE WHEN CAST(:clave AS text) IS NULL THEN NULL ELSE 'ck' END, CASE WHEN CAST(:clave AS text) IS NULL THEN NULL ELSE 1 END, "
+            "COALESCE(:creado, now()))"
         ),
         {"d": did, "t": tenant_id, "sj": f"persona_{did[:8]}", "r": requisito_id, "desde": vigente_hasta - timedelta(days=365), "hasta": vigente_hasta,
-         "ev": estado_version, "clave": clave, "creado": creado_en},
+         "ev": estado_version, "clave": (clave.replace("{doc}", did) if clave else None), "creado": creado_en},
     )
     return did
 
@@ -221,42 +224,63 @@ def test_vencer_excepciones_y_constancias(tenant_de_prueba):
 
 
 class _StorageFalso:
-    def __init__(self, confirma: bool):
+    """Simula el bucket: `confirma` controla si el borrado físico se confirma; `presentes`
+    dice qué claves existen (para la reconciliación de purgas cortadas)."""
+
+    def __init__(self, confirma: bool, presentes: set[str] | None = None):
         self.confirma = confirma
+        self.presentes = presentes if presentes is not None else None
         self.borradas: list[str] = []
 
     def borrar(self, clave: str) -> bool:
         self.borradas.append(clave)
+        if self.confirma and self.presentes is not None:
+            self.presentes.discard(clave)
         return self.confirma
+
+    def existe(self, clave: str) -> bool:
+        return True if self.presentes is None else clave in self.presentes
 
     def clave_para(self, *a): ...
     def url_prefirmada_put(self, *a): ...
     def url_prefirmada_get(self, *a): ...
-    def existe(self, clave): ...
+    def inspeccionar(self, clave): ...
 
 
 def _preparar_retencion(s, t):
     req = _definicion(s, t, retencion="30 days")
     hace_60 = ahora_utc() - timedelta(days=60)
     hoy = ahora_utc().date()
-    viejo = _documento(s, t, req, hoy, estado_version="sucedida", clave=f"{t}/x/viejo.pdf", creado_en=hace_60)
-    _documento(s, t, req, hoy, estado_version="vigente", clave=f"{t}/x/vigente.pdf", creado_en=hace_60)  # vigente: no
-    _documento(s, t, req, hoy, estado_version="rechazada", clave=f"{t}/x/reciente.pdf")  # dentro del plazo: no
+    viejo = _documento(s, t, req, hoy, estado_version="sucedida", clave=f"{t}/{{doc}}/viejo.pdf", creado_en=hace_60)
+    _documento(s, t, req, hoy, estado_version="vigente", clave=f"{t}/{{doc}}/vigente.pdf", creado_en=hace_60)  # vigente: no
+    _documento(s, t, req, hoy, estado_version="rechazada", clave=f"{t}/{{doc}}/reciente.pdf")  # dentro del plazo: no
     return viejo
 
 
+def _estado_archivo(t, doc) -> tuple[str, str | None]:
+    with tenant_session(t) as s:
+        return s.execute(text("SELECT archivo_estado, clave_storage FROM modulo1.documento WHERE documento_id = :d"),
+                         {"d": doc}).one()
+
+
 def test_control_retencion_no_purga_si_borrado_no_confirmado(tenant_de_prueba):
+    """A-05: si el bucket no confirma, la base queda en `purga_pendiente` (nunca `purgado`
+    ni `confirmado` con archivo dudoso) y se reintenta en la vuelta siguiente."""
     t = tenant_de_prueba.tenant_id
     with tenant_session(t) as s:
         viejo = _preparar_retencion(s, t)
-    storage = _StorageFalso(confirma=False)
-    with tenant_session(t) as s:
-        r = control_retencion(s, t, storage, ahora_utc())
-        assert r["candidatos"] == 1 and r["purgados"] == 0 and r["no_confirmados"] == 1
-    assert storage.borradas == [f"{t}/x/viejo.pdf"]
+    clave = f"{t}/{viejo}/viejo.pdf"
+    storage = _StorageFalso(confirma=False, presentes={clave})
+    r = control_retencion(t, storage, ahora_utc())
+    assert (r["marcados"], r["purgados"], r["no_confirmados"]) == (1, 0, 1)
+    assert storage.borradas == [clave]
+    assert _estado_archivo(t, viejo) == ("purga_pendiente", clave)
     with tenant_session(t) as s:
         assert _contar_eventos(s, "ArchivoPurgado") == 0
-        assert s.execute(text("SELECT clave_storage FROM modulo1.documento WHERE documento_id = :d"), {"d": viejo}).scalar() is not None
+    # segunda vuelta: sigue pendiente (no se re-marca, se reintenta el borrado)
+    r2 = control_retencion(t, storage, ahora_utc())
+    assert (r2["marcados"], r2["purgados"], r2["no_confirmados"]) == (0, 0, 1)
+    assert storage.borradas == [clave, clave]
 
 
 def test_control_retencion_purga_si_borrado_confirmado(tenant_de_prueba):
@@ -264,14 +288,53 @@ def test_control_retencion_purga_si_borrado_confirmado(tenant_de_prueba):
     with tenant_session(t) as s:
         viejo = _preparar_retencion(s, t)
     storage = _StorageFalso(confirma=True)
-    with tenant_session(t) as s:
-        r = control_retencion(s, t, storage, ahora_utc())
-        assert r["purgados"] == 1
+    r = control_retencion(t, storage, ahora_utc())
+    assert r["purgados"] == 1 and r["marcados"] == 1
+    assert _estado_archivo(t, viejo) == ("purgado", None)
     with tenant_session(t) as s:
         assert _contar_eventos(s, "ArchivoPurgado") == 1
-        assert s.execute(text("SELECT clave_storage FROM modulo1.documento WHERE documento_id = :d"), {"d": viejo}).scalar() is None
         assert s.execute(text("SELECT count(*) FROM modulo1.documento WHERE clave_storage IS NOT NULL")).scalar() == 2
-        assert control_retencion(s, t, storage, ahora_utc())["candidatos"] == 0
+    assert control_retencion(t, storage, ahora_utc())["candidatos"] == 0
+
+
+def test_control_retencion_corte_entre_borrado_y_confirmacion_se_reconcilia(tenant_de_prueba):
+    """A-05: la fase 1 commiteó `purga_pendiente`, el archivo se borró, y el proceso murió
+    antes de confirmar en la base. La vuelta siguiente detecta que el archivo ya no existe
+    y cierra la fase 2 sin volver a borrar nada ni perder el evento."""
+    t = tenant_de_prueba.tenant_id
+    with tenant_session(t) as s:
+        viejo = _preparar_retencion(s, t)
+    clave = f"{t}/{viejo}/viejo.pdf"
+
+    class _MuereDespuesDeBorrar(_StorageFalso):
+        def borrar(self, clave):
+            self.presentes.discard(clave)
+            raise RuntimeError("proceso caído después del unlink")
+
+    caido = _MuereDespuesDeBorrar(confirma=True, presentes={clave})
+    r = control_retencion(t, caido, ahora_utc())
+    # el borrar "explotó" pero el archivo ya no existe → la reconciliación cierra igual
+    assert r["purgados"] == 1
+    assert _estado_archivo(t, viejo) == ("purgado", None)
+    with tenant_session(t) as s:
+        assert _contar_eventos(s, "ArchivoPurgado") == 1
+
+
+def test_control_retencion_nunca_borra_dentro_de_la_transaccion(tenant_de_prueba, monkeypatch):
+    """La fase 1 tiene que estar commiteada ANTES del primer borrado físico: si el proceso
+    muere en el unlink, la base ya dice `purga_pendiente`."""
+    t = tenant_de_prueba.tenant_id
+    with tenant_session(t) as s:
+        viejo = _preparar_retencion(s, t)
+    vistos: list[tuple[str, str | None]] = []
+
+    class _EspiaEstado(_StorageFalso):
+        def borrar(self, clave):
+            vistos.append(_estado_archivo(t, viejo))  # lectura desde OTRA sesión: solo ve lo commiteado
+            return super().borrar(clave)
+
+    control_retencion(t, _EspiaEstado(confirma=True), ahora_utc())
+    assert vistos == [("purga_pendiente", f"{t}/{viejo}/viejo.pdf")]
 
 
 # --- sistema ----------------------------------------------------------------------

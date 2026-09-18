@@ -1,188 +1,268 @@
-"""Storage local: URLs firmadas HMAC (PUT/GET), rechazo de firmas vencidas/ajenas/alteradas,
-preparar_subida y firmar_descarga con auditoría en event_log, y el endpoint de descarga
-autenticado. El router se monta a mano sobre la app (main.py es compartido)."""
+"""Storage de evidencia (A-02 / M-05 de la auditoría): claves derivadas en servidor, flujo
+preparar → PUT firmado → confirmar (checksum y bytes medidos del archivo real), descarga
+solo de archivos confirmados del propio tenant+documento, límites de tamaño y
+Content-Type, y tests adversariales entre tenants y entre documentos.
+"""
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
-from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido, registrar_handlers
-from app.comun.reloj import ahora_utc
+from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
+from app.auth.identidad import Identidad, Rol
 from app.db import tenant_session
-from app.storage.local import StorageLocal, sanear_nombre
-from app.storage.servicio import firmar_descarga, preparar_subida
+from app.main import app
+from app.storage.local import StorageLocal
+from app.storage.servicio import confirmar_subida, firmar_descarga, preparar_subida
 
 
 @pytest.fixture
 def storage(tmp_path, monkeypatch):
-    monkeypatch.setenv("STORAGE_LOCAL_DIR", str(tmp_path))
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "storage_local_dir", str(tmp_path))
     return StorageLocal()
 
 
 @pytest.fixture
-def api_storage(storage):
-    from app.storage import router as router_mod
-
-    app = FastAPI()
-    registrar_handlers(app)
-    app.include_router(router_mod.router, prefix="/v1")
+def api(storage):
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
 
-def _documento(tenant_id: str, sujeto_id: str = "persona_1", clave: str | None = None) -> str:
+def _documento(tenant_id: str, sujeto_id: str = "persona_1", propuesta: bool = False) -> str:
     did = str(uuid.uuid4())
     with tenant_session(tenant_id) as s:
         s.execute(
             text(
-                "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen, clave_storage) "
-                "VALUES (:d, :t, :sj, '2026-01-01', '2027-01-01', 'carga_manual', :c)"
+                "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen, "
+                "origen_propuesta, estado_confirmacion) VALUES (:d, :t, :sj, '2026-01-01', '2027-01-01', 'carga_manual', :p, "
+                "CASE WHEN :p THEN 'declarado' ELSE 'verificado' END)"
             ),
-            {"d": did, "t": tenant_id, "sj": sujeto_id, "c": clave},
+            {"d": did, "t": tenant_id, "sj": sujeto_id, "p": propuesta},
         )
     return did
 
 
-# --- firma ------------------------------------------------------------------------
-def test_clave_estable_con_prefijo_de_tenant(storage):
-    clave = storage.clave_para("T", "D", "../../etc/Mi Cert (2026).pdf")
-    assert clave == "T/D/Mi_Cert_2026_.pdf"
-    assert sanear_nombre("   ") == "archivo"
+def _ident(t, rol: str) -> Identidad:
+    return Identidad(t.tenant_id, t.usuarios[rol], frozenset({Rol(rol)}), t.sujeto_tecnico if rol == "tecnico" else None)
 
 
-def test_put_y_get_firmados_funcionan(api_storage, storage):
-    t, d = str(uuid.uuid4()), str(uuid.uuid4())
-    clave = storage.clave_para(t, d, "cert.pdf")
-    url_put = storage.url_prefirmada_put(clave, "application/pdf", 60)
-    assert url_put.startswith("/v1/storage/")
-    r = api_storage.put(url_put, content=b"%PDF-contenido", headers={"Content-Type": "application/pdf"})
-    assert r.status_code == 200, r.text
-    assert r.json()["clave_storage"] == clave and r.json()["bytes"] == 14
-    assert storage.existe(clave)
-    r = api_storage.get(storage.url_prefirmada_get(clave, 60))
-    assert r.status_code == 200 and r.content == b"%PDF-contenido"
-    # La firma de GET no sirve para PUT ni al revés.
-    assert api_storage.put(storage.url_prefirmada_get(clave, 60), content=b"x").status_code == 403
-    assert api_storage.get(url_put).status_code == 403
-    # Content-Type distinto al firmado.
-    assert api_storage.put(url_put, content=b"x", headers={"Content-Type": "image/png"}).status_code == 403
+def _fila(tenant_id: str, documento_id: str) -> dict:
+    with tenant_session(tenant_id) as s:
+        return dict(s.execute(
+            text("SELECT clave_storage, archivo_estado, checksum_archivo, archivo_bytes, archivo_content_type "
+                 "FROM modulo1.documento WHERE documento_id = :d"), {"d": documento_id}).mappings().one())
 
 
-def test_firma_vencida_rechazada(api_storage, storage):
-    t, d = str(uuid.uuid4()), str(uuid.uuid4())
-    clave = storage.clave_para(t, d, "cert.pdf")
-    firma = storage.firmar(clave, "get", 10, ahora=ahora_utc() - timedelta(seconds=30))
-    r = api_storage.get(f"/v1/storage/{firma}")
-    assert r.status_code == 403 and "venci" in r.json()["error"]["mensaje"]
+def _subir_completo(api, storage, t, doc: str, contenido: bytes = b"%PDF-1.4 evidencia", rol="responsable_legajos") -> dict:
+    prep = api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers(rol),
+                    json={"documento_id": doc, "nombre_archivo": "apto.pdf", "content_type": "application/pdf"})
+    assert prep.status_code == 200, prep.text
+    put = api.put(prep.json()["url_subida"], content=contenido, headers={"Content-Type": "application/pdf"})
+    assert put.status_code == 200, put.text
+    conf = api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers(rol), json={"documento_id": doc})
+    assert conf.status_code == 200, conf.text
+    return conf.json()
+
+
+# --- flujo feliz -------------------------------------------------------------------
+def test_flujo_preparar_put_confirmar_descargar(api, storage, tenant_de_prueba):
+    t = tenant_de_prueba
+    doc = _documento(t.tenant_id)
+    conf = _subir_completo(api, storage, t, doc)
+    fila = _fila(t.tenant_id, doc)
+    assert fila["archivo_estado"] == "confirmado"
+    assert fila["clave_storage"] == f"{t.tenant_id}/{doc}/apto.pdf"  # derivada en servidor
+    assert fila["archivo_bytes"] == len(b"%PDF-1.4 evidencia") == conf["bytes"]
+    assert fila["checksum_archivo"] == conf["checksum_sha256"] == storage.inspeccionar(fila["clave_storage"]).checksum_sha256
+    url = api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).json()["url"]
+    assert api.get(url).content == b"%PDF-1.4 evidencia"
+    # confirmar de nuevo es idempotente
+    assert api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": doc}).json()["ya_confirmado"] is True
+    # y no se re-prepara un confirmado (inmutabilidad de la versión)
+    assert api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": doc, "nombre_archivo": "otro.pdf", "content_type": "application/pdf"}).status_code == 409
+
+
+def test_el_cliente_no_puede_elegir_la_clave_ni_el_checksum(api, tenant_de_prueba):
+    """Los bodies públicos ya no aceptan clave_storage/checksum_archivo (se ignoran) y el
+    nombre de archivo se sanea: la clave siempre es tenant/documento/nombre."""
+    t = tenant_de_prueba
+    req = api.post("/v1/comandos/dar_de_alta_definicion_de_requisito", headers=t.headers("configuracion"),
+                   json={"nombre": "Apto", "categoria": "documento", "tipo_sujeto_aplicable": "persona"}).json()["requisito_definicion_id"]
+    persona = api.post("/v1/comandos/alta_de_sujeto", headers=t.headers("responsable_legajos"),
+                       json={"tipo_sujeto": "persona", "identificador_natural": "S-1"}).json()["sujeto_id"]
+    r = api.post("/v1/comandos/cargar_documento", headers=t.headers("responsable_legajos"), json={
+        "sujeto_id": persona, "requisito_definicion_id": req, "vigente_desde": "2026-01-01", "vigente_hasta": "2026-12-31",
+        "clave_storage": "otro-tenant/otro-doc/x.pdf", "checksum_archivo": "deadbeef"})
+    assert r.status_code == 200
+    fila = _fila(t.tenant_id, r.json()["documento_id"])
+    assert fila["clave_storage"] is None and fila["checksum_archivo"] is None and fila["archivo_estado"] == "sin_archivo"
+    prep = api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": r.json()["documento_id"], "nombre_archivo": "../../../etc/passwd", "content_type": "application/pdf"})
+    assert prep.status_code == 200
+    assert _fila(t.tenant_id, r.json()["documento_id"])["clave_storage"] == f"{t.tenant_id}/{r.json()['documento_id']}/passwd"
+
+
+# --- adversarial: entre tenants ------------------------------------------------------
+def test_adversarial_documento_de_A_no_puede_apuntar_a_clave_de_B(api, storage, dos_tenants):
+    """Escenario A-02: el documento de A intenta referenciar el archivo físico de B."""
+    ta, tb = dos_tenants
+    doc_b = _documento(tb.tenant_id)
+    _subir_completo(api, storage, tb, doc_b, b"secreto de B")
+    clave_b = _fila(tb.tenant_id, doc_b)["clave_storage"]
+    doc_a = _documento(ta.tenant_id)
+
+    # 1) La base rechaza la fila inconsistente aunque alguien la escriba a mano.
+    with pytest.raises(IntegrityError):
+        with tenant_session(ta.tenant_id) as s:
+            s.execute(text("UPDATE modulo1.documento SET clave_storage = :c, archivo_estado = 'confirmado', "
+                           "checksum_archivo = 'x', archivo_bytes = 1 WHERE documento_id = :d"), {"c": clave_b, "d": doc_a})
+
+    # 2) Aunque la base no existiera: el servicio re-deriva y rechaza (defensa en profundidad).
+    #    Se simula desactivando temporalmente el CHECK vía monkeypatch del helper de lectura.
+    from app.storage import servicio as srv
+    original = srv._documento
+    estado_simulado = {"valor": "confirmado"}
+
+    def con_clave_ajena(session, documento_id, *, bloquear=False):
+        d = original(session, documento_id, bloquear=bloquear)
+        if str(d["documento_id"]) == doc_a:
+            d.update({"clave_storage": clave_b, "archivo_estado": estado_simulado["valor"]})
+        return d
+
+    srv._documento = con_clave_ajena
+    try:
+        with tenant_session(ta.tenant_id) as s:
+            with pytest.raises(Prohibido):
+                firmar_descarga(s, _ident(ta, "responsable_legajos"), doc_a, storage=storage)
+            estado_simulado["valor"] = "subida_pendiente"
+            with pytest.raises(Prohibido):
+                confirmar_subida(s, _ident(ta, "responsable_legajos"), doc_a, storage=storage)
+            estado_simulado["valor"] = "confirmado"
+        assert api.get(f"/v1/storage/documentos/{doc_a}/url", headers=ta.headers("responsable_legajos")).status_code == 403
+    finally:
+        srv._documento = original
+
+    # 3) Sin JWT: una URL firmada solo puede nacer de firmar_descarga; la de B, usada sin
+    #    token, sirve el archivo de B (es el diseño de URL prefirmada) pero con token de A
+    #    se rechaza, y con una firma fabricada con otro secreto se rechaza siempre.
+    url_b = api.get(f"/v1/storage/documentos/{doc_b}/url", headers=tb.headers("responsable_legajos")).json()["url"]
+    assert api.get(url_b, headers=ta.headers("responsable_legajos")).status_code == 403
+    fabricada = StorageLocal(secreto="otro-secreto").firmar(clave_b, "get", 60)
+    assert api.get(f"/v1/storage/{fabricada}").status_code == 403
+    # y no hay ningún camino por API para que A obtenga una firma sobre clave_b
+    for rol in ("responsable_legajos", "supervisor", "tecnico", "configuracion"):
+        assert api.get(f"/v1/storage/documentos/{doc_b}/url", headers=ta.headers(rol)).status_code in (403, 404)
+
+
+def test_adversarial_entre_documentos_del_mismo_tenant(api, storage, tenant_de_prueba):
+    """Un documento no puede apuntar al archivo de otro documento del mismo tenant."""
+    t = tenant_de_prueba
+    d1, d2 = _documento(t.tenant_id), _documento(t.tenant_id)
+    _subir_completo(api, storage, t, d1, b"archivo de d1")
+    clave_1 = _fila(t.tenant_id, d1)["clave_storage"]
+    with pytest.raises(IntegrityError):
+        with tenant_session(t.tenant_id) as s:
+            s.execute(text("UPDATE modulo1.documento SET clave_storage = :c, archivo_estado = 'subida_pendiente' "
+                           "WHERE documento_id = :d"), {"c": clave_1, "d": d2})
+    assert _fila(t.tenant_id, d2)["archivo_estado"] == "sin_archivo"
+
+
+# --- firma: vencimiento, tenant, secreto ----------------------------------------------
+def test_firma_vencida_y_operacion_incorrecta(api, storage, tenant_de_prueba):
+    t = tenant_de_prueba
+    clave = storage.clave_para(t.tenant_id, str(uuid.uuid4()), "x.pdf")
+    vencida = storage.firmar(clave, "get", 60, ahora=datetime.now(timezone.utc) - timedelta(seconds=120))
+    assert api.get(f"/v1/storage/{vencida}").status_code == 403
+    put_como_get = storage.firmar(clave, "put", 60, content_type="application/pdf", max_bytes=10)
+    assert api.get(f"/v1/storage/{put_como_get}").status_code == 403
+
+
+def test_secreto_de_storage_es_distinto_del_jwt(storage):
+    from app.config import settings
+
+    assert settings.storage_secret != settings.jwt_secret
+    clave = storage.clave_para(str(uuid.uuid4()), "doc", "c.pdf")
+    firmada_con_jwt = StorageLocal(secreto=settings.jwt_secret).firmar(clave, "get", 60)
     with pytest.raises(Prohibido):
-        storage.verificar(firma, "get")
+        storage.verificar(firmada_con_jwt, "get")
 
 
-def test_firma_de_otro_tenant_o_alterada_rechazada(api_storage, storage, tenant_de_prueba):
-    t_a, t_b, d = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
-    clave_a = storage.clave_para(t_a, d, "cert.pdf")
-    # Firma emitida con otro secreto (otro emisor): HMAC no cierra.
-    ajena = StorageLocal(secreto="otro-secreto").firmar(clave_a, "get", 60)
-    assert api_storage.get(f"/v1/storage/{ajena}").status_code == 403
-    # Firma válida cuyo cuerpo dice tenant B pero la clave es de A: rechazada.
-    firma_b = storage.firmar(storage.clave_para(t_b, d, "cert.pdf"), "get", 60)
-    datos_b, mac_b = firma_b.split(".")
-    firma_a = storage.firmar(clave_a, "get", 60)
-    datos_a, _ = firma_a.split(".")
-    assert api_storage.get(f"/v1/storage/{datos_a}.{mac_b}").status_code == 403  # mac de otro cuerpo
-    # Token JWT de un tenant distinto al de la firma: rechazado aunque la firma sea válida.
-    clave_t = storage.clave_para(tenant_de_prueba.tenant_id, d, "cert.pdf")
-    storage.escribir(clave_t, b"x")
-    ok = storage.url_prefirmada_get(clave_t, 60)
-    assert api_storage.get(ok, headers=tenant_de_prueba.headers("responsable_legajos")).status_code == 200
-    from tests.conftest import token_para
+# --- M-05: límites de subida ---------------------------------------------------------
+def test_put_exige_content_type_y_respeta_tamano_maximo(api, storage, tenant_de_prueba, monkeypatch):
+    from app.config import settings
 
-    otro = {"Authorization": f"Bearer {token_para(t_b, str(uuid.uuid4()), ['responsable_legajos'])}"}
-    assert api_storage.get(ok, headers=otro).status_code == 403
-    # Firma con basura.
-    assert api_storage.get("/v1/storage/no-es-una-firma").status_code == 403
+    monkeypatch.setattr(settings, "storage_max_bytes", 16)
+    t = tenant_de_prueba
+    doc = _documento(t.tenant_id)
+    url = api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                   json={"documento_id": doc, "nombre_archivo": "a.pdf", "content_type": "application/pdf"}).json()["url_subida"]
+    assert api.put(url, content=b"x" * 8).status_code == 403  # sin Content-Type
+    assert api.put(url, content=b"x" * 8, headers={"Content-Type": "text/plain"}).status_code == 403
+    assert api.put(url, content=b"x" * 17, headers={"Content-Type": "application/pdf"}).status_code == 422
+    assert api.put(url, content=b"", headers={"Content-Type": "application/pdf"}).status_code == 422
+    assert api.put(url, content=b"x" * 16, headers={"Content-Type": "application/pdf"}).status_code == 200
+    # content_type no permitido se rechaza al preparar
+    assert api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": _documento(t.tenant_id), "nombre_archivo": "a.exe",
+                          "content_type": "application/x-msdownload"}).status_code == 422
 
 
-def test_borrar_confirma_solo_si_desaparece(storage):
-    clave = storage.clave_para(str(uuid.uuid4()), str(uuid.uuid4()), "a.pdf")
-    assert storage.borrar(clave) is True  # inexistente: ya no está, se confirma
-    storage.escribir(clave, b"x")
-    assert storage.existe(clave)
-    assert storage.borrar(clave) is True and not storage.existe(clave)
-    with pytest.raises(Prohibido):
-        storage.ruta("../fuera")
+def test_confirmar_sin_archivo_subido_falla_y_no_confirma(api, storage, tenant_de_prueba):
+    t = tenant_de_prueba
+    doc = _documento(t.tenant_id)
+    api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+             json={"documento_id": doc, "nombre_archivo": "a.pdf", "content_type": "application/pdf"})
+    r = api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers("responsable_legajos"), json={"documento_id": doc})
+    assert r.status_code == 422 and r.json()["error"]["codigo"] == "archivo_ausente"
+    assert _fila(t.tenant_id, doc)["archivo_estado"] == "subida_pendiente"
+    # descargar un no confirmado no se firma
+    assert api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).status_code == 422
 
 
-# --- servicio ---------------------------------------------------------------------
-def test_preparar_subida_guarda_clave_y_devuelve_url_put(storage, tenant_de_prueba):
-    t = tenant_de_prueba.tenant_id
-    d = _documento(t)
-    with tenant_session(t) as s:
-        url = preparar_subida(s, t, tenant_de_prueba.usuarios["responsable_legajos"], d, "cert.pdf", "application/pdf", storage=storage)
-    assert url.startswith("/v1/storage/")
-    cuerpo = storage.verificar(url.rsplit("/", 1)[1], "put")
-    assert cuerpo["clave"] == f"{t}/{d}/cert.pdf" and cuerpo["ct"] == "application/pdf"
-    with tenant_session(t) as s:
-        assert s.execute(text("SELECT clave_storage FROM modulo1.documento WHERE documento_id = :d"), {"d": d}).scalar() == cuerpo["clave"]
-        with pytest.raises(NoEncontrado):
-            preparar_subida(s, t, "u", str(uuid.uuid4()), "x.pdf", "application/pdf", storage=storage)
-
-
-def test_firmar_descarga_audita_en_event_log(storage, tenant_de_prueba):
-    t = tenant_de_prueba.tenant_id
-    usuario = tenant_de_prueba.usuarios["responsable_legajos"]
-    d = _documento(t, clave=f"{t}/x/cert.pdf")
-    sin_archivo = _documento(t)
-    with tenant_session(t) as s:
-        url = firmar_descarga(s, t, usuario, d, expira_seg=120, storage=storage)
-        with pytest.raises(ErrorDeDominio):
-            firmar_descarga(s, t, usuario, sin_archivo, storage=storage)
-        with pytest.raises(NoEncontrado):
-            firmar_descarga(s, t, usuario, str(uuid.uuid4()), storage=storage)
-    assert storage.verificar(url.rsplit("/", 1)[1], "get")["clave"] == f"{t}/x/cert.pdf"
-    with tenant_session(t) as s:
-        filas = s.execute(text("SELECT payload FROM modulo1.event_log WHERE tipo = 'DescargarArchivoDeEvidencia'")).all()
-        assert len(filas) == 1
-        p = filas[0][0]
-        assert p["documento_id"] == d and p["clave_storage"] == f"{t}/x/cert.pdf" and p["usuario_id"] == usuario and "expira_en" in p
-        # La URL/firma nunca se persiste.
-        assert "url" not in p and "firma" not in p
-    # Otro tenant no ve el documento (RLS) → NoEncontrado.
-    with tenant_session(str(uuid.uuid4())) as s:
-        with pytest.raises(NoEncontrado):
-            firmar_descarga(s, t, usuario, d, storage=storage)
-
-
-def test_endpoint_descarga_respeta_matriz_de_permisos(api_storage, storage, tenant_de_prueba):
-    t = tenant_de_prueba.tenant_id
-    propio = _documento(t, sujeto_id=tenant_de_prueba.sujeto_tecnico, clave=f"{t}/a/propio.pdf")
-    ajeno = _documento(t, sujeto_id="persona_otra", clave=f"{t}/b/ajeno.pdf")
-    storage.escribir(f"{t}/a/propio.pdf", b"propio")
+# --- permisos --------------------------------------------------------------------------
+def test_permisos_de_subida_y_descarga(api, storage, tenant_de_prueba):
+    t = tenant_de_prueba
+    propio = _documento(t.tenant_id, sujeto_id=t.sujeto_tecnico, propuesta=True)
+    ajeno = _documento(t.tenant_id, sujeto_id="persona_otra")
+    # técnico solo adjunta a su propia propuesta
+    assert api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("tecnico"),
+                    json={"documento_id": ajeno, "nombre_archivo": "a.pdf", "content_type": "application/pdf"}).status_code == 403
+    _subir_completo(api, storage, t, propio, b"propio", rol="tecnico")
+    _subir_completo(api, storage, t, ajeno, b"ajeno")
+    # supervisor no adjunta
+    assert api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("supervisor"),
+                    json={"documento_id": ajeno, "nombre_archivo": "a.pdf", "content_type": "application/pdf"}).status_code == 403
 
     def pedir(rol, doc):
-        return api_storage.get(f"/v1/storage/documentos/{doc}/url", headers=tenant_de_prueba.headers(rol))
+        return api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers(rol))
 
     assert pedir("responsable_legajos", ajeno).status_code == 200
     assert pedir("configuracion", ajeno).status_code == 403
     assert pedir("tecnico", ajeno).status_code == 403
     r = pedir("tecnico", propio)
     assert r.status_code == 200 and r.json()["eventos"] == ["DescargarArchivoDeEvidencia"]
-    # La URL devuelta funciona y sirve el archivo.
-    assert api_storage.get(r.json()["url"]).content == b"propio"
-    # Supervisor: fuera de su universo → 403; con asignación vigente → 200.
+    assert api.get(r.json()["url"]).content == b"propio"
     assert pedir("supervisor", ajeno).status_code == 403
-    with tenant_session(t) as s:
-        s.execute(
-            text(
-                "INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
-                "VALUES (:t, 'persona_otra', :u, '2026-01-01', 'test')"
-            ),
-            {"t": t, "u": tenant_de_prueba.usuarios["supervisor"]},
-        )
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
+                       "VALUES (:t, 'persona_otra', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["supervisor"]})
     assert pedir("supervisor", ajeno).status_code == 200
-    assert api_storage.get(f"/v1/storage/documentos/{ajeno}/url").status_code == 401
+    assert api.get(f"/v1/storage/documentos/{ajeno}/url").status_code == 401
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = 'DescargarArchivoDeEvidencia'")).scalar() == 3
+
+
+def test_borrar_confirma_solo_si_desaparece(storage):
+    clave = storage.clave_para(str(uuid.uuid4()), "x", "a.pdf")
+    assert storage.borrar(clave) is True  # inexistente = ya no está
+    storage.escribir(clave, b"1")
+    assert storage.existe(clave) and storage.borrar(clave) is True and not storage.existe(clave)

@@ -147,7 +147,8 @@ def correr_una_vuelta(storage: Storage, publicador: Publicador, handlers: dict[s
 
         _reloj("control_vencimientos", lambda s: control_vencimientos(s, tenant_id, ahora))
         _reloj("vencer_excepciones_y_constancias", lambda s: vencer_excepciones_y_constancias(s, tenant_id, ahora))
-        _reloj("control_retencion", lambda s: control_retencion(s, tenant_id, storage, ahora))
+        # La retención maneja sus propias transacciones (borrado físico fuera de la tx).
+        _con_latido("control_retencion", tenant_id, lambda: control_retencion(tenant_id, storage, ahora))
 
     # Latido global del worker (tenant NULL): "el loop está vivo".
     try:

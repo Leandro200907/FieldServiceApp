@@ -5,10 +5,9 @@ La "URL prefirmada" local es `{base_url}/{firma}` donde `firma` es un token
 content_type (solo put) y vencimiento. `app/storage/router.py` la valida y sirve el
 archivo. La firma nunca se persiste: se deriva cada vez.
 
-Configuración por env (no se toca app/config.py — ver informe):
-  STORAGE_LOCAL_DIR       directorio base (default ./storage_local)
-  STORAGE_LOCAL_BASE_URL  prefijo de las URLs (default /v1/storage)
-El secreto de firma es `settings.jwt_secret`.
+Configuración: `settings.storage_local_dir`, `settings.storage_local_base_url` y el
+secreto de firma `settings.storage_secret` — distinto del JWT a propósito (A-02): una
+filtración de uno no compromete al otro.
 """
 from __future__ import annotations
 
@@ -25,6 +24,7 @@ from typing import Any
 from app.api.errores import Prohibido
 from app.comun.reloj import ahora_utc
 from app.config import settings
+from app.storage.contrato import InfoArchivo
 
 _NOMBRE_SEGURO = re.compile(r"[^A-Za-z0-9._-]+")
 # tenant_id / documento_id / nombre — sin puntos sueltos en los segmentos de id, así no
@@ -54,22 +54,36 @@ class StorageLocal:
         secreto: str | None = None,
         base_url: str | None = None,
     ):
-        self.directorio = Path(directorio or os.environ.get("STORAGE_LOCAL_DIR", "./storage_local")).resolve()
-        self.secreto = (secreto or settings.jwt_secret).encode()
-        self.base_url = (base_url or os.environ.get("STORAGE_LOCAL_BASE_URL", "/v1/storage")).rstrip("/")
+        self.directorio = Path(directorio or settings.storage_local_dir).resolve()
+        self.secreto = (secreto or settings.storage_secret).encode()
+        self.base_url = (base_url or settings.storage_local_base_url).rstrip("/")
 
     # --- contrato -----------------------------------------------------------------
     def clave_para(self, tenant_id: str, documento_id: str, nombre_archivo: str) -> str:
         return f"{tenant_id}/{documento_id}/{sanear_nombre(nombre_archivo)}"
 
-    def url_prefirmada_put(self, clave: str, content_type: str, expira_seg: int) -> str:
-        return f"{self.base_url}/{self.firmar(clave, 'put', expira_seg, content_type=content_type)}"
+    def url_prefirmada_put(self, clave: str, content_type: str, expira_seg: int, max_bytes: int) -> str:
+        if not content_type or max_bytes <= 0:
+            raise ValueError("content_type y max_bytes son obligatorios para firmar una subida")
+        return f"{self.base_url}/{self.firmar(clave, 'put', expira_seg, content_type=content_type, max_bytes=max_bytes)}"
 
     def url_prefirmada_get(self, clave: str, expira_seg: int) -> str:
         return f"{self.base_url}/{self.firmar(clave, 'get', expira_seg)}"
 
     def existe(self, clave: str) -> bool:
         return self.ruta(clave).is_file()
+
+    def inspeccionar(self, clave: str) -> InfoArchivo | None:
+        ruta = self.ruta(clave)
+        if not ruta.is_file():
+            return None
+        h = hashlib.sha256()
+        total = 0
+        with ruta.open("rb") as f:
+            for bloque in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(bloque)
+                total += len(bloque)
+        return InfoArchivo(bytes=total, checksum_sha256=h.hexdigest())
 
     def borrar(self, clave: str) -> bool:
         ruta = self.ruta(clave)
@@ -99,9 +113,11 @@ class StorageLocal:
         expira_seg: int,
         content_type: str | None = None,
         ahora: datetime | None = None,
+        max_bytes: int | None = None,
     ) -> str:
         if expira_seg <= 0:
             raise ValueError("expira_seg debe ser positivo")
+        self.ruta(clave)  # forma válida antes de firmar nada
         exp = (ahora or ahora_utc()) + timedelta(seconds=expira_seg)
         cuerpo: dict[str, Any] = {
             "clave": clave,
@@ -111,6 +127,8 @@ class StorageLocal:
         }
         if content_type:
             cuerpo["ct"] = content_type
+        if max_bytes:
+            cuerpo["max"] = int(max_bytes)
         datos = _b64(json.dumps(cuerpo, separators=(",", ":"), sort_keys=True).encode())
         return f"{datos}.{self._mac(datos)}"
 

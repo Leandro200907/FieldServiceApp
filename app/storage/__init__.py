@@ -10,13 +10,12 @@ STORAGE_BACKEND, hoy solo `local`).
 """
 from __future__ import annotations
 
-import os
-
+from app.config import settings
 from app.storage.contrato import Storage
 
 
 def obtener_storage() -> Storage:
-    backend = os.environ.get("STORAGE_BACKEND", "local")
+    backend = settings.storage_backend
     if backend == "local":
         from app.storage.local import StorageLocal
 

@@ -37,8 +37,6 @@ class CargarDocumento(BaseModel):
     # Cuando lo carga el responsable, por defecto ya lo está verificando (1.10).
     estado_confirmacion: EstadoConfirmacion = "verificado"
     confianza_extraccion: Confianza | None = None
-    clave_storage: str | None = None
-    checksum_archivo: str | None = None
 
 
 class ProponerDocumento(BaseModel):
@@ -48,8 +46,6 @@ class ProponerDocumento(BaseModel):
     vigente_hasta: date
     numero: str | None = None
     origen: OrigenDocumento = "carga_manual"
-    clave_storage: str | None = None
-    checksum_archivo: str | None = None
 
 
 class ConfirmarDocumento(BaseModel):
