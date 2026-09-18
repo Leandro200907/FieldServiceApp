@@ -32,11 +32,11 @@ from app.modules.legajos import esquemas as e
 # --------------------------------------------------------------------------- helpers
 
 
-def _legajo_activo(s: Session, tenant_id: str, sujeto_id: str) -> dict[str, Any]:
+def _legajo_activo(s: Session, tenant_id: str, sujeto_id: str, *, bloquear: bool = False) -> dict[str, Any]:
     fila = s.execute(
         text(
             "SELECT legajo_id, sujeto_id, tipo_sujeto, dado_de_baja_en FROM modulo1.legajo "
-            "WHERE tenant_id = :t AND sujeto_id = :sj"
+            "WHERE tenant_id = :t AND sujeto_id = :sj" + (" FOR UPDATE" if bloquear else "")
         ),
         {"t": tenant_id, "sj": sujeto_id},
     ).mappings().first()
@@ -73,6 +73,19 @@ def _exigir_aplicable(definicion: dict[str, Any], legajo: dict[str, Any]) -> Non
 def _exigir_vigencia(desde: date, hasta: date) -> None:
     if desde > hasta:
         raise ErrorDeDominio("vigente_desde no puede ser posterior a vigente_hasta", {"vigente_desde": str(desde), "vigente_hasta": str(hasta)})
+
+
+def _bloquear_legajo(s: Session, tenant_id: str, sujeto_id: str) -> None:
+    """Ancla de serialización: toda escritura que cambie qué versión está `vigente` para
+    un sujeto (cargar/proponer, rechazar, revertir lote) toma primero el lock de la fila
+    de `legajo`. Sin esto, dos escritores concurrentes pasan ambos el `FOR UPDATE` sobre
+    el vigente (READ COMMITTED re-evalúa el WHERE tras el commit ajeno y devuelve vacío)
+    y el segundo termina chocando contra `uq_documento_vigente`. Orden de bloqueo fijo en
+    todo el módulo: legajo → documento (evita deadlocks entre comandos)."""
+    s.execute(
+        text("SELECT legajo_id FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :sj FOR UPDATE"),
+        {"t": tenant_id, "sj": sujeto_id},
+    )
 
 
 def _documento(s: Session, tenant_id: str, documento_id: str, *, bloquear: bool = False) -> dict[str, Any]:
@@ -125,6 +138,7 @@ def _insertar_version_documento(
     mismo (sujeto, requisito) se serialicen en vez de chocar contra uq_documento_vigente.
     """
     t = identidad.tenant_id
+    _bloquear_legajo(s, t, sujeto_id)
     anterior = s.execute(
         text(
             "SELECT documento_id, version FROM modulo1.documento "
@@ -324,7 +338,9 @@ def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocum
 
 def rechazar_propuesta(s: Session, identidad: Identidad, body: e.RechazarPropuesta) -> dict[str, Any]:
     t = identidad.tenant_id
-    doc = _documento(s, t, str(body.documento_id), bloquear=True)
+    doc = _documento(s, t, str(body.documento_id))
+    _bloquear_legajo(s, t, doc["sujeto_id"])
+    doc = _documento(s, t, str(body.documento_id), bloquear=True)  # re-lectura ya serializada
     if not doc["origen_propuesta"]:
         raise Conflicto("El documento no es una propuesta", {"documento_id": str(doc["documento_id"])})
     if doc["estado_confirmacion"] != "declarado":
@@ -601,6 +617,12 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
     if lote["estado"] != "aplicado":
         raise Conflicto("Solo se revierte un lote aplicado", {"estado": lote["estado"]})
 
+    sujetos = s.execute(
+        text("SELECT DISTINCT sujeto_id FROM modulo1.documento WHERE tenant_id = :t AND lote_id = :l ORDER BY sujeto_id"),
+        {"t": t, "l": lote_id},
+    ).scalars().all()
+    for sujeto_id in sujetos:  # orden fijo (alfabético) → sin deadlock entre dos reversiones
+        _bloquear_legajo(s, t, sujeto_id)
     docs = s.execute(
         text(
             "SELECT documento_id, estado_version, sucede_a FROM modulo1.documento "
@@ -678,7 +700,7 @@ def _abrir_asignacion(s: Session, identidad: Identidad, sujeto_id: str, supervis
 
 def asignar_supervisor(s: Session, identidad: Identidad, body: e.AsignarSupervisor) -> dict[str, Any]:
     t = identidad.tenant_id
-    _legajo_activo(s, t, body.sujeto_id)
+    _legajo_activo(s, t, body.sujeto_id, bloquear=True)  # serializa dos primeras asignaciones
     sup = str(body.supervisor_usuario_id)
     _exigir_supervisor(s, t, sup)
     if _asignacion_vigente(s, t, body.sujeto_id) is not None:
@@ -695,7 +717,7 @@ def asignar_supervisor(s: Session, identidad: Identidad, body: e.AsignarSupervis
 
 def reasignar_supervisor(s: Session, identidad: Identidad, body: e.ReasignarSupervisor) -> dict[str, Any]:
     t = identidad.tenant_id
-    _legajo_activo(s, t, body.sujeto_id)
+    _legajo_activo(s, t, body.sujeto_id, bloquear=True)
     sup = str(body.supervisor_usuario_id)
     _exigir_supervisor(s, t, sup)
     actual = _asignacion_vigente(s, t, body.sujeto_id)

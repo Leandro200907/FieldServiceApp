@@ -19,7 +19,7 @@ from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import ahora_utc, hoy_del_tenant
-from app.modules.consultas.acceso import alcance_de_sujetos
+from app.auth.alcance import alcance_de_sujetos
 
 try:  # Interfaz de orquestación (brief): la construye Operación, acá se consume.
     from app.core.orquestacion import evaluar_compromiso

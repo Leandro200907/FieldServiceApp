@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 
 class ErrorDeDominio(Exception):
@@ -60,6 +61,19 @@ def registrar_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validacion(_: Request, exc: RequestValidationError):
         return JSONResponse(status_code=422, content=envelope("validacion", "Request inválido", exc.errors()))
+
+    @app.exception_handler(IntegrityError)
+    async def _integridad(_: Request, exc: IntegrityError):
+        # Red de seguridad: una restricción de la base (UNIQUE/CHECK/FK) que la lógica no
+        # anticipó — típicamente una carrera — es un conflicto reintentable, no un 500.
+        # La transacción ya quedó revertida por tenant_session.
+        nombre = getattr(getattr(exc, "orig", None), "diag", None)
+        restriccion = getattr(nombre, "constraint_name", None)
+        return JSONResponse(
+            status_code=409,
+            content=envelope("conflicto_concurrencia", "La operación chocó con una restricción de la base; reintentar",
+                             {"restriccion": restriccion}),
+        )
 
     @app.exception_handler(Exception)
     async def _generico(_: Request, exc: Exception):

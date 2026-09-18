@@ -132,3 +132,26 @@ definitiva de cada una en `docs/DECISIONES_DOMINIO.md`; tests de aceptación en
 - Test 6.4 de orquestación reescrito: la segunda mitad dependía de que la matriz se
   eligiera por "hoy"; ahora prueba el borde de día sobre el vencimiento de una constancia.
 - Suite: **110 passed**.
+
+## 2026-09-18 — Sesión 4: integración y robustez final
+
+- **Bootstrap desde cero** en `modulo1_limpia` (base vacía): las 6 migraciones
+  (0001 → 0002 → 4×0003 → 0004_merge) aplican limpias. Verificado: 24/25 tablas con
+  RLS+FORCE (la 25ª es el espejo `tenant_slug`, sin GRANT al rol de app), 3 funciones
+  SECURITY DEFINER del owner, 1 trigger, roles sin BYPASSRLS, 38 índices únicos, CHECKs.
+- **Suite y E2E sobre la base limpia**: 110 passed antes de los cambios de esta sesión.
+- **Bug real de concurrencia** (encontrado por análisis, confirmado con tests de hilos):
+  dos versiones nuevas del mismo (sujeto, requisito) a la vez → la segunda chocaba contra
+  `uq_documento_vigente` con 500. Igual para revertir-lote vs carga manual y para dos
+  primeras asignaciones de supervisor. Corrección: `_bloquear_legajo` como ancla de
+  serialización (orden fijo legajo → documento) + handler global `IntegrityError → 409`.
+- **Código muerto**: `app/modules/consultas/acceso.py` (solo reexportaba `app.auth.alcance`
+  y tenía `ve_todo_el_tenant` sin usar) eliminado.
+- **Tests nuevos** (`tests/test_robustez.py`, 59): cadenas A→B→C con todas las
+  combinaciones de estados (6), invariantes de agregación combinatorias (36 pares de
+  perfiles + bordes de matriz + empresa sin legajo + no bloqueante en ejecución),
+  aislamiento entre dos tenants por HTTP / servicios / `alcance` / storage / JWT
+  manipulado, concurrencia real con hilos (5) y contrato HTTP (40 rutas, códigos,
+  envelope, serialización). Fixture `dos_tenants` en conftest.
+- Suite final sobre base limpia: **169 passed**. `.env` queda apuntando a
+  `modulo1_limpia`; `.env.dev` conserva la base de desarrollo (ambos ignorados por git).

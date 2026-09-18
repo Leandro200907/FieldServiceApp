@@ -157,3 +157,38 @@ anteriores tenían la misma semántica (mismas condiciones, misma JOIN de custod
 5. **`sin_cambios` en lotes**: la spec dice "no hace nada, no duplica" pero no si cuenta
    como fila aceptada o rechazada. Se cuenta como aceptada (no es un error) y se informa
    aparte en `filas_sin_cambios`.
+
+## 5. Concurrencia — dónde protege la base y dónde la lógica
+
+Revisado en la sesión 4 (`tests/test_robustez.py`, sección 6).
+
+| Carrera | Invariante | Protección en la base | Protección en código |
+|---|---|---|---|
+| Dos versiones nuevas del mismo (sujeto, requisito) | ≤ 1 vigente | `uq_documento_vigente` | lock de la fila `legajo` (`_bloquear_legajo`) antes del vigente: el segundo escritor ve la versión del primero y la sucede. Sin ese ancla, READ COMMITTED re-evaluaba el `FOR UPDATE` sobre el vigente ya sucedido, devolvía vacío y el segundo chocaba contra el índice (500). |
+| Confirmar y rechazar la misma propuesta | transiciones desde estado origen | — | `FOR UPDATE` por PK del documento; el segundo re-lee el estado nuevo → 409 |
+| Revertir lote vs carga manual | ≤ 1 vigente | `uq_documento_vigente` | ambos toman el lock de `legajo` (revertir: legajos ordenados alfabéticamente → documentos; carga: legajo → documento). Orden fijo = sin deadlock. |
+| Dos primeras asignaciones de supervisor | ≤ 1 vigente por sujeto | `uq_asignacion_supervisor_vigente` | lock de `legajo` en asignar/reasignar → el segundo ve la vigente → 409 |
+| Dos evaluaciones de la misma OC | ninguna (inmutables) | — | dos filas, cada una consistente con su propio snapshot (4.1: "toda corrección es una evaluación nueva") |
+| Primera versión de matriz para una clave | sin dos v1 | `uq_matriz_clave_version` | `IntegrityError` → 409 en `publicar_version_de_matriz` |
+| Cambio de custodia concurrente | ≤ 1 período vigente | `uq_periodo_custodia_vigente` | lock de `custodia_recurso` (ancla) antes del período vigente |
+
+Red de seguridad global: `app/api/errores.py` traduce cualquier `IntegrityError` no anticipado
+a **409 `conflicto_concurrencia`** (la transacción ya fue revertida por `tenant_session`).
+Ninguna invariante crítica depende solo de Python: las que importan tienen índice/CHECK.
+
+**Riesgos abiertos (aceptados):**
+- `ImportarLote` toma el lock de cada legajo fila por fila (a través de
+  `_insertar_version_documento`), no de todos al inicio; un lote grande concurrente con
+  otro lote sobre los mismos sujetos en orden distinto podría deadlockear → Postgres
+  aborta uno → 409 reintentable. No se serializa por tenant a propósito (bloquearía
+  toda la carga masiva).
+- `evaluar_compromiso` no bloquea nada: una evaluación puede leer un documento que otro
+  comando está sucediendo en ese instante. Es consistente con el snapshot que persiste y
+  con `HabilitacionRequiereRevaluacion` como mecanismo de corrección.
+
+## 6. Contrato HTTP — orden de validación y autorización
+
+FastAPI valida el body **antes** de ejecutar el handler, donde corre `exigir_rol`. Por
+eso un body inválido con un rol incorrecto responde **422**, no 403. No es filtración
+(el esquema es público en `/openapi.json`) y todas las rutas protegidas responden 401 sin
+token antes de cualquier otra cosa (`test_contrato_http_todas_las_rutas_estan_protegidas`).

@@ -85,8 +85,9 @@ class TenantDePrueba:
         return h
 
 
-@pytest.fixture
-def tenant_de_prueba() -> TenantDePrueba:
+def crear_tenant_de_prueba() -> TenantDePrueba:
+    """Tenant nuevo + un usuario por rol. Reutilizable fuera de la fixture (tests que
+    necesitan dos tenants a la vez)."""
     tenant_id = str(uuid.uuid4())
     slug = f"test-{tenant_id[:8]}"
     usuarios: dict[str, str] = {}
@@ -115,10 +116,28 @@ def tenant_de_prueba() -> TenantDePrueba:
                     "sj": sujeto_tecnico if rol == "tecnico" else None,
                 },
             )
-    yield TenantDePrueba(tenant_id=tenant_id, slug=slug, usuarios=usuarios, sujeto_tecnico=sujeto_tecnico)
+    return TenantDePrueba(tenant_id=tenant_id, slug=slug, usuarios=usuarios, sujeto_tecnico=sujeto_tecnico)
+
+
+def limpiar_tenant(tenant_id: str) -> None:
     with tenant_session(tenant_id) as s:
         for tabla in TABLAS_TENANT:
             s.execute(text(f"DELETE FROM modulo1.{tabla}"))
+
+
+@pytest.fixture
+def tenant_de_prueba() -> TenantDePrueba:
+    t = crear_tenant_de_prueba()
+    yield t
+    limpiar_tenant(t.tenant_id)
+
+
+@pytest.fixture
+def dos_tenants() -> tuple[TenantDePrueba, TenantDePrueba]:
+    a, b = crear_tenant_de_prueba(), crear_tenant_de_prueba()
+    yield a, b
+    limpiar_tenant(a.tenant_id)
+    limpiar_tenant(b.tenant_id)
 
 
 @pytest.fixture
