@@ -10,6 +10,8 @@ from datetime import date, datetime, timezone
 import pytest
 from sqlalchemy import text
 
+from tests import apoyo
+
 from app.core.orquestacion import evaluar_compromiso
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _docs, _ok, _post, _vigentes
 from tests.test_orquestacion import (
@@ -280,6 +282,8 @@ def test_universo_del_supervisor_es_el_mismo_para_consultas_y_descargas(tenant_d
     sup = Identidad(t.tenant_id, t.usuarios["supervisor"], frozenset({Rol.SUPERVISOR}))
     conf = Identidad(t.tenant_id, t.usuarios["configuracion"], frozenset({Rol.CONFIGURACION}))
     hoy = date(2026, 9, 18)
+    apoyo.legajo(sesion, t.tenant_id, "persona_A")
+    apoyo.legajo(sesion, t.tenant_id, "vehiculo_V", "vehiculo")
     sesion.execute(
         text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
              "VALUES (:t, 'persona_A', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": sup.usuario_id})

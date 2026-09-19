@@ -6,6 +6,8 @@ import uuid
 
 from sqlalchemy import text
 
+from tests import apoyo
+
 from app.db import tenant_session
 
 CMD = "/v1/comandos"
@@ -154,6 +156,8 @@ def test_matriz_idempotency_key_repite_sin_duplicar(cliente_api, tenant_de_prueb
 def test_requisito_particular(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     rid = _alta_def(cliente_api, t, "Apto médico")
+    with tenant_session(t.tenant_id) as s:
+        apoyo.oc(s, t.tenant_id, "compromiso_OC-2026-1188")
     body = {"commitment_id": "compromiso_OC-2026-1188", "requisito_definicion_id": rid, "clasificacion": "excepcionable", "bloqueante_durante_ejecucion": False}
 
     prohibido = cliente_api.post(f"{CMD}/cargar_requisito_particular", json=body, headers=t.headers("configuracion"))

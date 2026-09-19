@@ -8,6 +8,8 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
+from tests import apoyo
+
 from app.comun.reloj import hoy_del_tenant
 from app.db import tenant_session
 
@@ -199,13 +201,14 @@ def test_confirmar_documento_regulariza_excepcion(cliente_api, tenant_de_prueba)
 
     # Excepciones otorgadas: una sobre (sujeto, req) que debe regularizarse; otras que no.
     with tenant_session(t.tenant_id) as s:
+        ref = apoyo.evaluacion(s, t.tenant_id, "compromiso_OC-2026-1188")
         for sj, r, estado in ((sujeto, req, "otorgada"), (sujeto, req, "revocada"), (sujeto, otro_req, "otorgada"), (otro_sujeto, req, "otorgada")):
             s.execute(
                 text(
                     "INSERT INTO modulo1.excepcion (tenant_id, referencia_evaluacion, sujeto_id, requisito_definicion_id, commitment_id, "
                     "otorgada_por, motivo, estado) VALUES (:t, :ev, :sj, :r, 'compromiso_OC-2026-1188', 'sup', 'prueba', :estado)"
                 ),
-                {"t": t.tenant_id, "ev": str(uuid.uuid4()), "sj": sj, "r": r, "estado": estado},
+                {"t": t.tenant_id, "ev": ref, "sj": sj, "r": r, "estado": estado},
             )
 
     d = _cargar(cliente_api, t, sujeto, req, estado_confirmacion="declarado")

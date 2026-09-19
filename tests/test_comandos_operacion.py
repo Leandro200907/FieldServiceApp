@@ -7,6 +7,8 @@ from datetime import date
 
 from sqlalchemy import text
 
+from tests import apoyo
+
 from app.db import tenant_session
 from tests.test_orquestacion import (
     armar_escenario,
@@ -36,8 +38,16 @@ def _periodos(tenant_id: str, custodia_id: str) -> list[dict]:
 # --------------------------------------------------------------------------- custodia
 
 
+def _legajos_de_custodia(t):
+    with tenant_session(t.tenant_id) as s:
+        for sujeto, tipo in (("vehiculo_ABC123", "vehiculo"), ("vehiculo_IDEM", "vehiculo"), ("equipo_9", "equipo"),
+                             ("persona_0042", "persona"), ("persona_0077", "persona"), ("persona_0043", "persona"), ("p1", "persona")):
+            apoyo.legajo(s, t.tenant_id, sujeto, tipo)
+
+
 def test_cambiar_custodia_cierra_el_anterior_el_dia_previo(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
+    _legajos_de_custodia(t)
     r1 = _post(cliente_api, t, "supervisor", "cambiar_custodia",
                {"recurso_id": "vehiculo_ABC123", "tipo_recurso": "vehiculo", "custodio_id": "persona_0042", "desde": "2026-09-01"})
     assert r1.status_code == 200, r1.text
@@ -59,7 +69,7 @@ def test_cambiar_custodia_cierra_el_anterior_el_dia_previo(cliente_api, tenant_d
 
     # No se puede abrir un período que empiece antes (o el mismo día) que el vigente.
     r3 = _post(cliente_api, t, "supervisor", "cambiar_custodia",
-               {"recurso_id": "vehiculo_ABC123", "tipo_recurso": "vehiculo", "custodio_id": "x", "desde": "2026-09-10"})
+               {"recurso_id": "vehiculo_ABC123", "tipo_recurso": "vehiculo", "custodio_id": "persona_0042", "desde": "2026-09-10"})
     assert r3.status_code == 409 and r3.json()["error"]["codigo"] == "conflicto"
 
     with tenant_session(t.tenant_id) as s:
@@ -69,6 +79,7 @@ def test_cambiar_custodia_cierra_el_anterior_el_dia_previo(cliente_api, tenant_d
 
 def test_corregir_custodia_conserva_historia(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
+    _legajos_de_custodia(t)
     r1 = _post(cliente_api, t, "supervisor", "cambiar_custodia",
                {"recurso_id": "equipo_9", "tipo_recurso": "equipo", "custodio_id": "persona_0042", "desde": "2026-09-01"})
     periodo_viejo = r1.json()["periodo_id"]
@@ -91,6 +102,7 @@ def test_corregir_custodia_conserva_historia(cliente_api, tenant_de_prueba):
 
 def test_idempotency_key_devuelve_el_mismo_resultado_sin_reaplicar(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
+    _legajos_de_custodia(t)
     body = {"recurso_id": "vehiculo_IDEM", "tipo_recurso": "vehiculo", "custodio_id": "p1", "desde": "2026-09-01"}
     r1 = _post(cliente_api, t, "supervisor", "cambiar_custodia", body, clave="clave-1")
     r2 = _post(cliente_api, t, "supervisor", "cambiar_custodia", body, clave="clave-1")

@@ -8,6 +8,8 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import text
 
+from tests import apoyo
+
 from app.comun.reloj import hoy_del_tenant
 from app.db import tenant_session
 
@@ -26,7 +28,7 @@ def _legajo(s, tenant, sujeto_id, tipo="persona"):
     s.execute(
         text(
             "INSERT INTO modulo1.legajo (tenant_id, sujeto_id, tipo_sujeto, identificador_natural) "
-            "VALUES (:t, :s, :tipo, :s)"
+            "VALUES (:t, :s, :tipo, :s) ON CONFLICT DO NOTHING"
         ),
         {"t": tenant.tenant_id, "s": sujeto_id, "tipo": tipo},
     )
@@ -45,6 +47,7 @@ def _requisito(s, tenant, nombre="Carnet", tipo_sujeto="persona") -> str:
 
 
 def _documento(s, tenant, sujeto_id, requisito_id, desde, hasta, **extra) -> str:
+    apoyo.legajo(s, tenant.tenant_id, sujeto_id)  # FK compuesta (0011): el sujeto debe existir
     did = str(uuid.uuid4())
     campos = {
         "estado_confirmacion": "verificado",
@@ -66,6 +69,7 @@ def _documento(s, tenant, sujeto_id, requisito_id, desde, hasta, **extra) -> str
 
 
 def _asignar_supervisor(s, tenant, sujeto_id, desde, supervisor_usuario_id=None):
+    apoyo.legajo(s, tenant.tenant_id, sujeto_id)
     s.execute(
         text(
             "INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
@@ -186,6 +190,7 @@ def test_supervisor_ve_solo_su_universo_en_tablero(cliente_api, tenant_de_prueba
         _asignar_supervisor(s, t, "p_mio", hoy)
         _asignar_supervisor(s, t, "p_ajeno", hoy, supervisor_usuario_id=t.usuarios["configuracion"])
         # Asignación cerrada: ya no forma parte del universo.
+        apoyo.legajo(s, t.tenant_id, "p_cerrado")
         s.execute(
             text(
                 "INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, hasta, estado, asignada_por) "
@@ -254,6 +259,7 @@ def test_historial_supervision(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     hoy = _hoy(t)
     with tenant_session(t.tenant_id) as s:
+        apoyo.legajo(s, t.tenant_id, "p1")
         s.execute(
             text(
                 "INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, hasta, estado, asignada_por) "

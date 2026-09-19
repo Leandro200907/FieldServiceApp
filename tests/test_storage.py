@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+
+from tests import apoyo
 from sqlalchemy.exc import IntegrityError
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
@@ -38,6 +40,7 @@ def api(storage):
 def _documento(tenant_id: str, sujeto_id: str = "persona_1", propuesta: bool = False) -> str:
     did = str(uuid.uuid4())
     with tenant_session(tenant_id) as s:
+        apoyo.legajo(s, tenant_id, sujeto_id)
         s.execute(
             text(
                 "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen, "

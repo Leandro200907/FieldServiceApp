@@ -10,6 +10,8 @@ from datetime import date, datetime, timezone
 
 import pytest
 from sqlalchemy import text
+
+from tests import apoyo
 from sqlalchemy.exc import IntegrityError
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
@@ -244,7 +246,7 @@ def test_empresa_sin_legajo_nunca_permite_asignar(tenant_de_prueba, sesion, con_
     if con_excepcion_empresa:
         # ni siquiera una excepción "para la empresa" sirve si no hay legajo que evaluar
         ref = decidir(sesion, t, "OC-e", AHORA, ["persona_0042"])["referencia_evaluacion"]
-        insertar_excepcion(sesion, t, ref, "empresa_fantasma", req_e, "OC-e")
+        insertar_excepcion(sesion, t, ref, "persona_0042", req_e, "OC-e")  # (la FK exige un legajo real)
         r = evaluar_compromiso(sesion, t, "OC-e", AHORA, None)
     assert r["resultado_de_decision"] == "no_puede_asignarse"
     assert r["veredicto_de_cumplimiento"] == "no_habilitado"
@@ -347,8 +349,11 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
     # --- alcance: el universo de un supervisor de B nunca incluye sujetos de A, ni con
     #     una asignación "plantada" con su usuario_id dentro del tenant A.
     with tenant_session(ta.tenant_id) as s:
+        apoyo.legajo(s, ta.tenant_id, "persona_extra_de_A")
+        # la FK compuesta (0011) impide plantar el usuario_id de B como supervisor en A:
+        # se planta uno de A y se verifica que el universo de B igual no lo incluye
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
-                       "VALUES (:t, 'persona_extra_de_A', :u, '2026-01-01', 'test')"), {"t": ta.tenant_id, "u": tb.usuarios["supervisor"]})
+                       "VALUES (:t, 'persona_extra_de_A', :u, '2026-01-01', 'test')"), {"t": ta.tenant_id, "u": ta.usuarios["supervisor"]})
     sup_b = Identidad(tb.tenant_id, tb.usuarios["supervisor"], frozenset({Rol.SUPERVISOR}))
     with tenant_session(tb.tenant_id) as s:
         assert alcance_de_sujetos(s, sup_b, date(2026, 9, 18)) == [b["persona"]]

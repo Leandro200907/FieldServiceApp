@@ -7,6 +7,8 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
+from tests import apoyo
+
 from app.comun.eventos import encolar_outbox
 from app.comun.reloj import ahora_utc, hoy_del_tenant
 from app.db import SessionLocal, platform_session, tenant_session
@@ -42,6 +44,7 @@ def _definicion(s, tenant_id: str, retencion: str | None = None, categoria: str 
 def _documento(s, tenant_id: str, requisito_id: str, vigente_hasta, estado_version="vigente", clave=None, creado_en=None) -> str:
     # Un sujeto distinto por documento: uq_documento_vigente admite un solo vigente por (sujeto, requisito).
     did = str(uuid.uuid4())
+    apoyo.legajo(s, tenant_id, f"persona_{did[:8]}")
     s.execute(
         text(
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, "
@@ -194,13 +197,15 @@ def test_vencer_excepciones_y_constancias(tenant_de_prueba):
     with tenant_session(t) as s:
         hoy = hoy_del_tenant(s, t, ahora)
         req = _definicion(s, t)
+        apoyo.legajo(s, t, "p1")
+        ref = apoyo.evaluacion(s, t, "OC-9")
         for vig, estado in ((hoy - timedelta(days=1), "otorgada"), (hoy, "otorgada"), (hoy - timedelta(days=5), "revocada")):
             s.execute(
                 text(
                     "INSERT INTO modulo1.excepcion (tenant_id, referencia_evaluacion, sujeto_id, requisito_definicion_id, "
-                    "commitment_id, otorgada_por, motivo, vigencia, estado) VALUES (:t, gen_random_uuid(), 'p1', :r, 'OC-9', 'sup', 'm', :v, :e)"
+                    "commitment_id, otorgada_por, motivo, vigencia, estado) VALUES (:t, :ref, 'p1', :r, 'OC-9', 'sup', 'm', :v, :e)"
                 ),
-                {"t": t, "r": req, "v": vig, "e": estado},
+                {"t": t, "ref": ref, "r": req, "v": vig, "e": estado},
             )
         s.execute(
             text(
@@ -217,9 +222,10 @@ def test_vencer_excepciones_y_constancias(tenant_de_prueba):
         assert estados == ["otorgada", "revocada", "vencida"]  # la de vigencia == hoy sigue viva (inclusive)
         assert s.execute(text("SELECT estado FROM modulo1.constancia_cliente")).scalar() == "vencida"
         assert _contar_eventos(s, "ExcepcionVencida") == 1 and _contar_eventos(s, "ConstanciaVencida") == 1
-        # HabilitacionRequiereRevaluacion lo decide la política de 7.2 (A-07): sin decisiones
-        # vigentes que citen estos sujetos no hay nada que marcar → outbox vacío.
-        assert s.execute(text("SELECT count(*) FROM modulo1.outbox_events")).scalar() == 0
+        # HabilitacionRequiereRevaluacion lo decide la política de 7.2 (A-07): la excepción
+        # vencida cita la decisión plantada → un aviso y un outbox; la constancia (sujeto p1)
+        # no marca nada porque la decisión plantada no propone sujetos.
+        assert s.execute(text("SELECT count(*) FROM modulo1.outbox_events")).scalar() == 1
         assert vencer_excepciones_y_constancias(s, t, ahora)["excepciones_vencidas"] == 0
 
 

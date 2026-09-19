@@ -287,3 +287,21 @@ la tabla 7.2 no les asigna HRR; se respeta la tabla.
 `storage.borrar()` es **al menos una vez** e idempotente (borrar una clave ausente es
 éxito). Están garantizados exactamente una confirmación en la base y un solo
 `ArchivoPurgado`; una sola llamada física NO.
+
+## 10. Integridad multi-tenant por claves foráneas compuestas (M-01, migración 0011)
+
+Toda relación entre tablas tenant-scoped referencia `(tenant_id, id_padre)`; el padre
+tiene `UNIQUE (tenant_id, id)`. RLS filtra lo que se lee; la FK prueba además que padre e
+hijo son del mismo tenant aunque un bug o un endpoint nuevo se saltee la validación.
+`ON DELETE` se conserva salvo dos correcciones: `custodia_recurso → periodo_custodia` y
+`event_log → aviso_revaluacion_causa` dejan de ser CASCADE (historial y auditoría no se
+borran por arrastre). Ningún CASCADE nuevo. Las migraciones que agregan FKs suspenden
+`FORCE ROW LEVEL SECURITY` dentro de su transacción para que la validación de filas
+existentes sea un escaneo real y no "cero filas visibles".
+
+**Excepciones intencionales (sin FK):** `usuario.sujeto_id` (el usuario técnico puede
+existir antes de importar su legajo; se valida en servicio), `acreditacion.evidencias[]`
+(array; `_exigir_documentos_del_sujeto`), `*_por` (texto de auditoría), `cliente_id` /
+`locacion_id` / `tipo_servicio_id` (maestros externos no modelados en Módulo 1),
+`aviso_revaluacion_causa.entidad_id` (polimórfico), `idempotency_keys.actor_id`,
+`job_queue.tenant_id` nullable (jobs de sistema).
