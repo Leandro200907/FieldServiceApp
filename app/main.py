@@ -15,6 +15,7 @@ registrar_handlers(app)
 PREFIJO = "/v1"
 
 ROUTERS = [
+    "app.api.salud",
     "app.auth.router",
     "app.modules.legajos.router",
     "app.modules.requisitos.router",
@@ -23,11 +24,6 @@ ROUTERS = [
     "app.modules.consultas.router",
     "app.storage.router",
 ]
-
-
-@app.get(f"{PREFIJO}/salud")
-def salud() -> dict:
-    return {"ok": True}
 
 
 def _montar_routers() -> None:

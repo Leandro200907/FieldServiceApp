@@ -25,7 +25,9 @@ class _ConfigMigraciones(BaseSettings):
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: si Alembic corre en el mismo proceso que la app (tests,
+    # tooling), no debe silenciar los loggers ya creados (modulo1.api, modulo1.worker).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 try:
     _cfg = _ConfigMigraciones()

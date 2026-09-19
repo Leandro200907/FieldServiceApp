@@ -5,8 +5,8 @@ from app.db import tenant_session
 
 
 def test_salud(cliente_api):
-    r = cliente_api.get("/v1/salud")
-    assert r.status_code == 200 and r.json() == {"ok": True}
+    r = cliente_api.get("/v1/salud/vivo")
+    assert r.status_code == 200 and r.json()["ok"] is True
 
 
 def test_error_envelope_en_404(cliente_api):

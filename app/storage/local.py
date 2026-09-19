@@ -93,6 +93,18 @@ class StorageLocal:
             return False
         return not ruta.exists()
 
+    def disponible(self) -> bool:
+        """El directorio existe (o se puede crear) y admite escritura real."""
+        try:
+            self.directorio.mkdir(parents=True, exist_ok=True)
+            sonda = self.directorio / f".readiness-{os.getpid()}"
+            sonda.write_bytes(b"ok")
+            leido = sonda.read_bytes()
+            sonda.unlink(missing_ok=True)
+            return leido == b"ok"
+        except OSError:
+            return False
+
     # --- firma --------------------------------------------------------------------
     @staticmethod
     def tenant_de_clave(clave: str) -> str:

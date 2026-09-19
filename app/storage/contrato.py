@@ -45,3 +45,7 @@ class Storage(Protocol):
         """True SOLO si el borrado físico se confirmó (o el archivo ya no existía). Si
         devuelve False el llamador no debe dar el archivo por purgado."""
         ...
+
+    def disponible(self) -> bool:
+        """Readiness: el backend puede leer y escribir ahora mismo. Nunca lanza."""
+        ...
