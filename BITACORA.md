@@ -183,3 +183,29 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
   RLS. Consultas finales en las tres bases: 0 FKs sin validar, 0 FKs simples
   tenant-scoped, 0 duplicados activos (excepciones, constancias, custodias vigentes),
   0 definiciones duplicadas NULL-aware. Suite final: **343 passed**.
+
+## 2026-09-19 — Sesión 7: Paso 8 (M-06, M-08, M-09) y cierre operativo
+
+- **M-06 (`11320fb`)**: contraseñas medidas en bytes UTF-8 (72, límite de bcrypt), nunca
+  truncadas: `PasswordDemasiadoLarga`, validador de bytes en login (422 estable sin echo),
+  `scripts/crear_usuario.py` (única vía de alta en v1; contraseña por `USUARIO_PASSWORD`).
+  v1 no tiene endpoints de cambio/reset. 12 tests (límite exacto, +1 byte, multibyte,
+  no equivalencia por prefijo, CLI).
+- **Salud y diagnóstico (`89cb07a`)**: `/v1/salud/vivo` y `/v1/salud/listo` (DB, migración ==
+  `app.version.MIGRACION_HEAD`, `Storage.disponible()`), 0014 (GRANT SELECT
+  `alembic_version`), `X-Request-ID` en toda respuesta, 500 con stack trace + request_id en
+  log y mensaje genérico, 422 sin `input`. Bug real encontrado: `fileConfig` de Alembic
+  silenciaba los loggers de la app cuando corría en proceso (`disable_existing_loggers`).
+- **Worker (`f2ff30b`, 0015)**: dead-letter (`fallido` + `ultimo_error` saneado + `fallido_en`),
+  backoff 30 s·2ⁿ⁻¹ tope 1 h, 5 intentos, `JobNoProcesable` terminal, colas sin
+  implementación fallan visiblemente, `CanalDeNotificaciones`, reloj controlable. 17 tests.
+- **M-08 (`d31fa80`)**: `requirements.in`/`-dev.in` + locks con hashes; verificado en venv
+  limpio (install → import → alembic → suite).
+- **M-09 (`2bb758f`)**: README, HANDOFF_FRONTEND.md, `.env.example`, `docs_schema_actual.sql`
+  regenerado desde cero por `scripts/generar_schema.py`, `tests/test_docs_actualizados.py`
+  (head, dump completo y sin credenciales, cifras del README, rutas del handoff).
+- **Verificación final** (en este orden): bootstrap desde cero (18 upgrades) · venv limpio
+  desde locks (46 paquetes, import ok) · suite **388 passed** desde el venv limpio · E2E HTTP ·
+  dos procesos de worker sobre 43 jobs (24/19, ningún job dos veces, 3 en dead-letter, outbox
+  drenado) · upgrade/downgrade/upgrade de 0015 en las tres bases · integridad: 0 en todos los
+  chequeos · `git status` limpio · `alembic heads` = 1.
