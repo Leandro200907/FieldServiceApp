@@ -13,7 +13,7 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 - **Rutas HTTP:** 47 operaciones sobre 46 paths bajo `/v1` (OpenAPI en `/docs`).
 - **Migraciones:** 18 archivos en `migrations/versions/`, un solo head: `0015_job_queue_dead_letter`.
-- **Tests:** 388 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Tests:** 404 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 
@@ -29,7 +29,7 @@ pytest. Sin librería de cola: cola nativa en Postgres (`FOR UPDATE SKIP LOCKED`
 app/
   main.py               # FastAPI, monta routers bajo /v1; handlers de error + request_id
   version.py            # VERSION y MIGRACION_HEAD (readiness y docs lo verifican)
-  config.py             # settings desde entorno (.env); nunca secretos en código
+  config.py / entorno.py # settings desde entorno (precedencia proceso > ENV_FILE > .env); nunca secretos en código
   db.py                 # engine (rol app), tenant_session (SET LOCAL app.current_tenant)
   api/errores.py        # envelope de error único, X-Request-ID, 500 con stack trace en log
   api/salud.py          # /salud/vivo (liveness) y /salud/listo (readiness)
@@ -47,7 +47,7 @@ app/
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
 migrations/             # Alembic (0001 … 0015, lineales, un head)
-scripts/                # crear_roles.sql, crear_base.sql, crear_usuario.py, generar_schema.py
+scripts/                # crear_roles.sql, crear_base.sql, administracion.py, generar_schema.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
 ```
@@ -81,14 +81,39 @@ cp .env.example .env
 ENV_FILE=.env .venv/Scripts/alembic upgrade head
 ```
 
+## Administración inicial (CLI, sin endpoints ni pantallas en v1)
+
+`scripts/administracion.py` corre con `DATABASE_URL` del archivo de entorno (rol de
+aplicación, respeta RLS). La contraseña entra por la variable `USUARIO_PASSWORD` o, si no
+está, por prompt seguro (`getpass`, dos veces, sin eco); **nunca** por argv ni stdout.
+Máximo 72 bytes UTF-8, sin truncar.
+
 ```bash
-# 6) Primer tenant y usuario (la contraseña va por variable de entorno, máx. 72 bytes UTF-8)
-.venv/Scripts/python scripts/crear_usuario.py tenant --slug acme --nombre "ACME SRL"
+# 1) tenant (imprime el tenant_id)
+.venv/Scripts/python scripts/administracion.py crear-tenant --slug acme --nombre "ACME SRL"
 ```
 
 ```bash
-USUARIO_PASSWORD='…' .venv/Scripts/python scripts/crear_usuario.py usuario --tenant-slug acme --email ana@acme.test --nombre Ana --rol configuracion --rol responsable_legajos
+# 2) primer responsable de legajos (+ configuración para cargar definiciones y matrices)
+.venv/Scripts/python scripts/administracion.py crear-usuario --tenant-slug acme --email ana@acme.test --nombre Ana --rol responsable_legajos --rol configuracion
 ```
+
+```bash
+# 3) supervisor
+.venv/Scripts/python scripts/administracion.py crear-usuario --tenant-slug acme --email sup@acme.test --nombre Sup --rol supervisor
+```
+
+```bash
+# 4) desactivar un usuario (bloquea login y refresh, revoca sus refresh tokens; los access tokens ya emitidos vencen en JWT_ACCESS_TOKEN_MINUTES)
+.venv/Scripts/python scripts/administracion.py desactivar-usuario --tenant-slug acme --email sup@acme.test
+```
+
+```bash
+.venv/Scripts/python scripts/administracion.py listar-usuarios --tenant-slug acme
+```
+
+Pendiente expresamente para después de v1: cambio y restablecimiento de contraseña,
+reactivación y gestión de usuarios por API/pantallas.
 
 ## Correr
 
@@ -107,8 +132,23 @@ USUARIO_PASSWORD='…' .venv/Scripts/python scripts/crear_usuario.py usuario --t
 .venv/Scripts/python -m pytest -q
 ```
 
-Salud: `GET /v1/salud/vivo` (liveness) y `GET /v1/salud/listo` (readiness: DB, migración
-en `MIGRACION_HEAD`, storage; 503 si algo falla, sin revelar detalles).
+Salud (públicas, sin JWT): `GET /v1/salud/vivo` (liveness) y `GET /v1/salud/listo`
+(readiness: DB, migración en `MIGRACION_HEAD`, storage y worker — último latido global en
+`latido_proceso` más reciente que `WORKER_LATIDO_MAX_SEG`, 120 s por defecto; estados
+`ok`/`sin_latido`/`vencido`/`no_disponible`). 503 si algo falla, sólo estados cerrados,
+sin DSN, rutas, hostname, PID ni excepciones.
+
+## Archivo de entorno (`ENV_FILE`)
+
+Regla única para API, worker, Alembic y scripts (`app/entorno.py`), de mayor a menor precedencia:
+
+1. **variables reales del proceso** (siempre ganan);
+2. el archivo indicado por **`ENV_FILE`**, si la variable está definida (sólo ése; si no existe, valen únicamente las del proceso);
+3. **`.env`** del directorio de trabajo, únicamente cuando `ENV_FILE` no fue indicado.
+
+API y worker registran al arrancar el archivo elegido, la base y el host (nunca secretos ni
+el DSN completo). `tests/test_env_file.py` arranca API y worker con dos archivos distintos y
+comprueba que cada uno usa el suyo.
 
 ## Dependencias reproducibles (M-08)
 
@@ -147,9 +187,13 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
   registran headers, cuerpos, tokens ni contraseñas; los 422 no devuelven el `input`.
 - Worker: leases con token (fencing), backoff exponencial (30 s · 2ⁿ⁻¹, tope 1 h), 5
   intentos, dead-letter (`job_queue.estado='fallido'` con `ultimo_error` saneado y
-  `fallido_en`). Colas sin implementación en v1 (`evidencia_qr`, `score_documental`,
-  `validacion_evidencia`) mandan sus jobs al dead-letter con error visible; notificaciones
-  salen por `CanalEnLog` (WARNING) hasta que haya canal externo. Latidos en `latido_proceso`.
+  `fallido_en`). Latidos en `latido_proceso` (el global alimenta readiness).
+- Colas **futuras** (`evidencia_qr`, `score_documental`, `validacion_evidencia`): ningún
+  flujo soportado en v1 las produce — `tests/test_colas_futuras.py` lo verifica por
+  relevamiento del código y corriendo el E2E principal + una vuelta del worker con cero
+  jobs en dead-letter. Si aparece un productor, ese test falla hasta implementar el handler
+  o desactivar el productor. Notificaciones salen por `CanalEnLog` (WARNING) hasta que
+  haya canal externo.
 - Purga de archivos: dos fases (`purga_pendiente` confirmado → borrado físico fuera de tx →
   `purgado`); borrado físico al menos una vez, confirmación exactamente una vez.
 
@@ -164,4 +208,4 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
 | Transporte real a Módulo 2, canal de notificaciones, storage S3, handlers qr/score/validación | Pendiente (declarado, no silencioso) |
-| Gestión de usuarios por API (alta/cambio/reset de contraseña) | Pendiente (CLI `scripts/crear_usuario.py`) |
+| Gestión de usuarios por API (alta/cambio/reset de contraseña, reactivación) | Pendiente (CLI `scripts/administracion.py`: tenant, usuarios, desactivación) |

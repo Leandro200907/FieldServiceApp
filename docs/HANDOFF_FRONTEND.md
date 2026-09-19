@@ -62,8 +62,9 @@ Todo error, de cualquier status, tiene esta forma exacta:
 
 ### 4.1 Salud (sin token)
 - `GET /v1/salud/vivo` — liveness `{ok, version}`.
-- `GET /v1/salud/listo` — readiness: `{ok, version, chequeos:{db, migracion, storage}}`;
-  200 si todo `ok`, 503 si no (valores: `ok`, `no_disponible`, `atrasada`, `adelantada`, `desconocida`).
+- `GET /v1/salud/listo` — readiness: `{ok, version, chequeos:{db, migracion, storage, worker}}`;
+  200 si todo `ok`, 503 si no. Valores cerrados: `ok`, `no_disponible`, `atrasada`,
+  `adelantada`, `desconocida`, `sin_latido`, `vencido`. Sin JWT, sin detalles internos.
 
 ### 4.2 Comandos de legajos y evidencia (`POST /v1/comandos/…`)
 | Ruta | Rol | Body (campos principales) |
@@ -189,9 +190,12 @@ Dominio (422 salvo indicación): `requisito_no_excepcionable`, `excepcion_de_emp
 `archivo_ausente`, `archivo_vacio`, `archivo_demasiado_grande`.
 
 ## 8. Lo que el frontend NO tiene todavía (deudas conocidas del backend v1)
-- No hay endpoints de gestión de usuarios (alta, cambio ni restablecimiento de contraseña):
-  se hace con `scripts/crear_usuario.py` desde operaciones.
+- No hay endpoints de gestión de usuarios (alta, desactivación, cambio ni restablecimiento
+  de contraseña): tenant y usuarios se administran con `scripts/administracion.py`
+  (crear-tenant, crear-usuario, desactivar-usuario, listar-usuarios). Un usuario
+  desactivado no puede hacer login ni refresh; su access token vigente expira solo.
 - Notificaciones: sin canal externo (quedan en el log del worker). Colas `evidencia_qr`,
-  `score_documental`, `validacion_evidencia`: sin implementación (sus jobs van al dead-letter).
+  `score_documental`, `validacion_evidencia`: **futuras** — ningún flujo de v1 las
+  produce (verificado por test); no existe capacidad de QR, score ni validación automática.
 - Publicación a Módulo 2: `PublicadorEnLog` (transporte real pendiente).
 - Storage: sólo backend local (`STORAGE_BACKEND=local`); el contrato ya es el de un bucket.

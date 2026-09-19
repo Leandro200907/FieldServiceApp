@@ -1,7 +1,7 @@
 """M-06: el límite de contraseña se mide en BYTES UTF-8 (72, límite de bcrypt), nunca se
 trunca, y el rechazo es un 422 estable que no registra ni devuelve la contraseña.
 
-Superficies revisadas: login (`/v1/auth/login`), creación (`scripts/crear_usuario.py` →
+Superficies revisadas: login (`/v1/auth/login`), creación (`scripts/administracion.py` →
 `hashear_password`); v1 no tiene endpoints de cambio ni restablecimiento de contraseña
 (toda alta pasa por `hashear_password`, la única puerta de hasheo)."""
 from __future__ import annotations
@@ -103,17 +103,17 @@ def test_el_422_de_validacion_nunca_devuelve_el_input(cliente_api, tenant_de_pru
 
 
 def test_cli_crear_usuario_rechaza_73_bytes_sin_imprimir_la_contrasena(tenant_de_prueba, monkeypatch, capsys):
-    from scripts import crear_usuario as cli
+    from scripts import administracion as cli
     t = tenant_de_prueba
     monkeypatch.setenv("USUARIO_PASSWORD", UN_BYTE_DE_MAS_ASCII)
-    rc = cli.main(["usuario", "--tenant-slug", t.slug, "--email", "nuevo@x.test", "--nombre", "N", "--rol", "supervisor"])
+    rc = cli.main(["crear-usuario", "--tenant-slug", t.slug, "--email", "nuevo@x.test", "--nombre", "N", "--rol", "supervisor"])
     salida = capsys.readouterr()
     assert rc == 2 and "password_demasiado_larga" in salida.err and UN_BYTE_DE_MAS_ASCII not in salida.err + salida.out
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.usuario WHERE email = 'nuevo@x.test'")).scalar() == 0
 
     monkeypatch.setenv("USUARIO_PASSWORD", LIMITE_MULTIBYTE)
-    rc = cli.main(["usuario", "--tenant-slug", t.slug, "--email", "nuevo@x.test", "--nombre", "N", "--rol", "supervisor"])
+    rc = cli.main(["crear-usuario", "--tenant-slug", t.slug, "--email", "nuevo@x.test", "--nombre", "N", "--rol", "supervisor"])
     salida = capsys.readouterr()
     assert rc == 0 and LIMITE_MULTIBYTE not in salida.out
     with tenant_session(t.tenant_id) as s:
