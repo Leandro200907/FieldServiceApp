@@ -82,16 +82,28 @@ def dar_de_alta_definicion_de_requisito(
         )
 
     requisito_definicion_id = str(uuid.uuid4())
-    s.execute(
-        text(
-            "INSERT INTO modulo1.definicion_requisito (requisito_definicion_id, tenant_id, nombre, categoria, "
-            "tipo_sujeto_aplicable, locacion_id, definicion_global_id, plazo_retencion_archivo) "
-            "VALUES (:r, :t, :n, :c, :ts, :loc, :g, "
-            "CASE WHEN CAST(:dias AS int) IS NULL THEN NULL ELSE make_interval(days => CAST(:dias AS int)) END)"
-        ),
-        {"r": requisito_definicion_id, "t": t, "n": body.nombre, "c": body.categoria, "ts": body.tipo_sujeto_aplicable,
-         "loc": locacion, "g": global_id, "dias": body.plazo_retencion_archivo_dias},
-    )
+    try:
+        s.execute(
+            text(
+                "INSERT INTO modulo1.definicion_requisito (requisito_definicion_id, tenant_id, nombre, categoria, "
+                "tipo_sujeto_aplicable, locacion_id, definicion_global_id, plazo_retencion_archivo) "
+                "VALUES (:r, :t, :n, :c, :ts, :loc, :g, "
+                "CASE WHEN CAST(:dias AS int) IS NULL THEN NULL ELSE make_interval(days => CAST(:dias AS int)) END)"
+            ),
+            {"r": requisito_definicion_id, "t": t, "n": body.nombre, "c": body.categoria, "ts": body.tipo_sujeto_aplicable,
+             "loc": locacion, "g": global_id, "dias": body.plazo_retencion_archivo_dias},
+        )
+    except IntegrityError as err:
+        # Dos altas concurrentes de la misma clave (M-04, 0013 NULLS NOT DISTINCT): la que
+        # pierde la carrera recibe el mismo 409 de dominio que una repetida secuencial.
+        if getattr(getattr(err.orig, "diag", None), "constraint_name", None) != "uq_definicion_clave_negocio":
+            raise
+        raise Conflicto(
+            "Ya existe una definición con ese nombre, categoría, tipo de sujeto y locación",
+            {"nombre": body.nombre, "categoria": body.categoria, "tipo_sujeto_aplicable": body.tipo_sujeto_aplicable,
+             "locacion_id": locacion},
+            codigo="definicion_duplicada",
+        ) from err
     registrar_evento(
         s, t, "DefinicionDeRequisitoDadaDeAlta",
         {"requisito_definicion_id": requisito_definicion_id, "nombre": body.nombre, "categoria": body.categoria,

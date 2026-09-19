@@ -354,3 +354,14 @@ cae en la regla "`desde` posterior al vigente" o lo cierra y abre el suyo); el �
 parcial `uq_periodo_custodia_vigente` es la red residual y se traduce a 409
 `custodia_vigente_duplicada`. El historial (`cerrado`, `corregido`) nunca se borra ni se
 arrastra por CASCADE.
+
+## 13. Unicidad NULL-aware de la definición de requisito (M-04, migración 0013)
+
+Clave de negocio completa: `(tenant_id, nombre, categoria, tipo_sujeto_aplicable,
+locacion_id)`, con `UNIQUE NULLS NOT DISTINCT` (`uq_definicion_clave_negocio`). Antes,
+con el UNIQUE clásico, dos definiciones iguales con `locacion_id` NULL —todo lo que no es
+inducción— no chocaban en la base. La clave cubre **todas** las filas, activas o dadas de
+baja: dar de baja no libera el nombre (el servicio ya respondía 409 sin mirar `activa`).
+Misma clave en distinta locación o distinto tenant: permitido. Carrera entre dos altas:
+la base decide, la que pierde recibe 409 `definicion_duplicada` (nunca 500). La migración
+aborta con diagnóstico si encuentra duplicados NULL-aware y no borra ni elige ninguno.
