@@ -1,0 +1,11 @@
+# Dependencias DIRECTAS de la aplicación (API + worker + migraciones).
+# Regenerar el lock: ver README "Dependencias reproducibles".
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+psycopg[binary]
+pydantic
+pydantic-settings
+pyjwt
+bcrypt

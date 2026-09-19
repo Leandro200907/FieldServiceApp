@@ -1,0 +1,6 @@
+# Dependencias de desarrollo/tests (incluye las de producción vía -c para que ambos
+# locks resuelvan las mismas versiones).
+-c requirements.lock
+pytest
+httpx
+pip-tools
