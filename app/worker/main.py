@@ -108,12 +108,14 @@ def procesar_cola(tenant_id: str, nombre_cola: str, handler: Handler, contexto: 
         try:
             with tenant_session(tenant_id) as s:
                 handler(s, job, contexto)
-            with tenant_session(tenant_id) as s:
+                # Fencing (A-06): la validación del lease y los efectos del handler se
+                # confirman en la MISMA transacción. Si el lease ya no es nuestro, LeaseAjeno
+                # hace rollback de todo lo que el handler escribió — nunca se confirman
+                # efectos de un worker que perdió la propiedad.
                 cola_mod.completar(s, job.id, job.lease_token)
         except cola_mod.LeaseAjeno:
-            # El lease venció y otro worker readquirió la tarea (A-06): este worker ya no es
-            # dueño; no completa, no falla, no reintenta. Los handlers deben ser idempotentes.
-            log.warning("job %s (%s): lease perdido, otro worker es el propietario", job.id, nombre_cola)
+            # Otro worker readquirió la tarea: este no completa, no falla, no reintenta.
+            log.warning("job %s (%s): lease perdido, efectos revertidos", job.id, nombre_cola)
         except Exception:
             log.exception("job %s (%s) falló", job.id, nombre_cola)
             try:

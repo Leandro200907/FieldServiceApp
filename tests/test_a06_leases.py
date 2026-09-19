@@ -135,6 +135,39 @@ def test_renovar_lease_solo_por_su_propietario(tenant_de_prueba):
             renovar_lease(s, jid, j.lease_token, lease_seg=600)
 
 
+def test_efectos_del_worker_viejo_se_revierten_al_perder_el_lease(tenant_de_prueba):
+    """Fencing real: el worker A corre un handler lento que ESCRIBE en la base; durante la
+    ejecución su lease vence y el worker B readquiere y completa. Al terminar, A intenta
+    confirmar: como completar() corre en la misma transacción que el handler y el lease
+    ya no es suyo, todo lo que A escribió se revierte. Solo quedan los efectos de B."""
+    from app.worker import main as worker_main
+
+    t = tenant_de_prueba.tenant_id
+    jid = _job(t, "notificaciones")
+
+    def handler_a(s, job, ctx):
+        # A escribe su efecto (evento) dentro de su transacción…
+        s.execute(text("INSERT INTO modulo1.event_log (tenant_id, tipo, payload) VALUES (:t, 'EfectoDe', '{\"worker\": \"A\"}')"),
+                  {"t": t})
+        # …mientras tanto su lease vence y B readquiere, hace SU efecto y completa.
+        _vencer_lease(t, job.id)
+        with tenant_session(t) as sb:
+            jb = tomar(sb, "notificaciones", lease_seg=30)
+            assert jb is not None and jb.lease_token != job.lease_token
+            sb.execute(text("INSERT INTO modulo1.event_log (tenant_id, tipo, payload) VALUES (:t, 'EfectoDe', '{\"worker\": \"B\"}')"),
+                       {"t": t})
+            completar(sb, job.id, jb.lease_token)
+        # A sigue y "termina": procesar_cola llamará completar() con el token viejo en esta tx.
+
+    n = worker_main.procesar_cola(t, "notificaciones", handler_a, {}, max_jobs=1)
+    assert n == 1
+    with tenant_session(t) as s:
+        efectos = [p["worker"] for (p,) in s.execute(text("SELECT payload FROM modulo1.event_log WHERE tipo = 'EfectoDe'")).all()]
+        assert efectos == ["B"]  # el efecto de A fue revertido junto con su intento de completar
+        assert _fila(t, jid)["estado"] == "completado"
+        assert s.execute(text("SELECT count(*) FROM modulo1.job_queue WHERE estado = 'completado'")).scalar() == 1
+
+
 def test_procesar_cola_worker_lento_no_completa_tras_readquisicion(tenant_de_prueba):
     """Integración con el loop del worker: un handler que tarda más que el lease y un
     segundo worker que readquiere: solo uno completa, sin errores no controlados."""
