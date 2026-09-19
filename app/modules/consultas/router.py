@@ -97,3 +97,9 @@ def matriz_vigente(
 ) -> dict:
     with tenant_session(identidad.tenant_id) as s:
         return servicio.matriz_vigente(s, identidad, str(cliente_id), str(locacion_id), str(tipo_servicio_id), fecha)
+
+
+@router.get("/consultas/incumplimiento_empresa")
+def incumplimiento_empresa(identidad: Identidad = Depends(identidad_actual)) -> dict:
+    with tenant_session(identidad.tenant_id) as s:
+        return servicio.incumplimiento_empresa(s, identidad)

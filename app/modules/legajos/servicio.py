@@ -182,6 +182,11 @@ def _insertar_version_documento(
         identidad.usuario_id,
     )
     eventos.append("DocumentoCargado")
+    if estado_confirmacion != "declarado" and requisito_definicion_id is not None:
+        # Carga ya validada por el responsable = verificación implícita: se emite el evento
+        # canónico (7.2) en vez de reinterpretar DocumentoCargado en la política (A-07).
+        _al_verificar(s, identidad, {"documento_id": documento_id, "sujeto_id": sujeto_id,
+                                     "requisito_definicion_id": requisito_definicion_id}, eventos)
     if anterior:
         registrar_evento(
             s, t, "DocumentoSucedido",
@@ -289,27 +294,17 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
     return {**r, "eventos": eventos}
 
 
-def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocumento) -> dict[str, Any]:
+def _al_verificar(s: Session, identidad: Identidad, doc: dict[str, Any], eventos: list[str]) -> list[str]:
+    """Efectos de DocumentoVerificado (7.2): el evento canónico y la regularización
+    automática de excepciones `otorgada` del mismo (sujeto, requisito). Compartido por
+    ConfirmarDocumento y por la carga ya verificada."""
     t = identidad.tenant_id
-    doc = _documento(s, t, str(body.documento_id), bloquear=True)
-    if doc["estado_version"] != "vigente":
-        raise Conflicto("Solo se confirma la versión vigente", {"estado_version": doc["estado_version"]})
-    if doc["estado_confirmacion"] != "declarado":
-        raise Conflicto("El documento no está en estado declarado", {"estado_confirmacion": doc["estado_confirmacion"]})
-
-    s.execute(
-        text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE tenant_id = :t AND documento_id = :d"),
-        {"t": t, "d": str(doc["documento_id"])},
-    )
-    eventos = ["DocumentoVerificado"]
     registrar_evento(
         s, t, "DocumentoVerificado",
-        {"documento_id": str(doc["documento_id"]), "sujeto_id": doc["sujeto_id"], "requisito_definicion_id": str(doc["requisito_definicion_id"])},
+        {"documento_id": str(doc["documento_id"]), "sujeto_id": doc["sujeto_id"], "requisito_definicion_id": doc["requisito_definicion_id"]},
         identidad.usuario_id,
     )
-
-    # Regularización automática: si cubre el requisito de una Excepción otorgada del
-    # mismo sujeto, esa excepción pasa a `regularizada` (2.2 / 4.4).
+    eventos.append("DocumentoVerificado")
     regularizadas: list[str] = []
     if doc["requisito_definicion_id"] is not None:
         filas = s.execute(
@@ -329,7 +324,25 @@ def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocum
                 identidad.usuario_id,
             )
             eventos.append("ExcepcionRegularizada")
+    return regularizadas
 
+
+def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocumento) -> dict[str, Any]:
+    t = identidad.tenant_id
+    doc = _documento(s, t, str(body.documento_id), bloquear=True)
+    if doc["estado_version"] != "vigente":
+        raise Conflicto("Solo se confirma la versión vigente", {"estado_version": doc["estado_version"]})
+    if doc["estado_confirmacion"] != "declarado":
+        raise Conflicto("El documento no está en estado declarado", {"estado_confirmacion": doc["estado_confirmacion"]})
+
+    s.execute(
+        text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE tenant_id = :t AND documento_id = :d"),
+        {"t": t, "d": str(doc["documento_id"])},
+    )
+    eventos: list[str] = []
+    regularizadas = _al_verificar(s, identidad, {"documento_id": str(doc["documento_id"]), "sujeto_id": doc["sujeto_id"],
+                                                "requisito_definicion_id": str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None},
+                                  eventos)
     return {"documento_id": str(doc["documento_id"]), "excepciones_regularizadas": regularizadas, "eventos": eventos}
 
 

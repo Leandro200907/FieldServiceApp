@@ -399,3 +399,12 @@ def matriz_vigente(
     salida["fecha_consultada"] = fecha.isoformat()
     salida["lineas"] = [_plano(f) for f in lineas]
     return salida
+
+
+def incumplimiento_empresa(session: Session, identidad: Identidad) -> dict[str, Any]:
+    """Estado actual del aviso de incumplimiento de empresa (2.9): lo consulta el
+    consumidor de `CumplimientoEmpresaAfectado`, que es un aviso flaco sin causas."""
+    from app.core.incumplimiento_empresa import estado_actual
+
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
+    return {"aviso": _plano(estado_actual(session, identidad.tenant_id) or {}) or None}

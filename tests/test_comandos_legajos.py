@@ -82,11 +82,12 @@ def test_alta_carga_y_sucesion_un_solo_vigente(cliente_api, tenant_de_prueba):
     _ok(_post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", {"tipo_sujeto": "vehiculo", "identificador_natural": "DNI 30111222"}))
 
     d1 = _cargar(cliente_api, t, sujeto, req)
-    assert d1["version"] == 1 and d1["sucede_a"] is None and d1["eventos"] == ["DocumentoCargado"]
+    # carga ya verificada: además del evento de carga se emite el canónico DocumentoVerificado (7.2 / A-07)
+    assert d1["version"] == 1 and d1["sucede_a"] is None and d1["eventos"] == ["DocumentoCargado", "DocumentoVerificado"]
 
     d2 = _cargar(cliente_api, t, sujeto, req, desde="2026-09-01", hasta="2027-03-01", numero="AM-2")
     assert d2["version"] == 2 and d2["sucede_a"] == d1["documento_id"]
-    assert d2["eventos"] == ["DocumentoCargado", "DocumentoSucedido"]
+    assert d2["eventos"] == ["DocumentoCargado", "DocumentoVerificado", "DocumentoSucedido"]
 
     docs = _docs(t, sujeto, req)
     assert [d["estado_version"] for d in docs] == ["sucedida", "vigente"]
@@ -180,7 +181,7 @@ def test_propuesta_y_rechazo_restaura_el_anterior(cliente_api, tenant_de_prueba)
     # propuesta sobre un requisito sin documento previo: queda vigente sin sucesión
     req2 = _alta_def(cliente_api, t, "Carnet de conducir")
     sola = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {**body, "requisito_definicion_id": req2}))
-    assert sola["sucede_a"] is None and sola["eventos"] == ["DocumentoCargado"]
+    assert sola["sucede_a"] is None and sola["eventos"] == ["DocumentoCargado"]  # propuesta: declarada, sin verificación
     rech2 = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": sola["documento_id"]}))
     assert rech2["restaurado_documento_id"] is None
     assert _vigentes(_docs(t, propio, req2)) == []
@@ -287,7 +288,8 @@ def test_importar_lote_idempotente_por_lote_id(cliente_api, tenant_de_prueba):
     assert (r1["filas_totales"], r1["filas_aceptadas"], r1["filas_rechazadas"]) == (4, 2, 2)
     assert [f["fila"] for f in r1["detalle_filas_rechazadas"]] == [2, 3]
     assert r1["detalle_filas_rechazadas"][0]["codigo"] == "no_encontrado"
-    assert r1["eventos"] == ["DocumentoCargado", "DocumentoCargado", "LoteAplicado"]
+    # fila 1 viene verificada → emite también el canónico DocumentoVerificado (A-07)
+    assert r1["eventos"] == ["DocumentoCargado", "DocumentoCargado", "DocumentoVerificado", "LoteAplicado"]
     assert _docs(t, s1, req)[0]["estado_confirmacion"] == "declarado"  # default del lote
     assert _docs(t, s2, req)[0]["estado_confirmacion"] == "verificado"
     assert _docs(t, s1, req)[0]["lote_id"] == lote_id

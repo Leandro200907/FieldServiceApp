@@ -211,15 +211,15 @@ def test_vencer_excepciones_y_constancias(tenant_de_prueba):
         )
     with tenant_session(t) as s:
         r = vencer_excepciones_y_constancias(s, t, ahora)
-        assert r == {"excepciones_vencidas": 1, "constancias_vencidas": 1, "hoy": hoy.isoformat()}
+        assert (r["excepciones_vencidas"], r["constancias_vencidas"], r["hoy"]) == (1, 1, hoy.isoformat())
     with tenant_session(t) as s:
         estados = sorted(f[0] for f in s.execute(text("SELECT estado FROM modulo1.excepcion")))
         assert estados == ["otorgada", "revocada", "vencida"]  # la de vigencia == hoy sigue viva (inclusive)
         assert s.execute(text("SELECT estado FROM modulo1.constancia_cliente")).scalar() == "vencida"
         assert _contar_eventos(s, "ExcepcionVencida") == 1 and _contar_eventos(s, "ConstanciaVencida") == 1
-        outbox = s.execute(text("SELECT payload FROM modulo1.outbox_events WHERE tipo = 'HabilitacionRequiereRevaluacion' ORDER BY creado_en")).all()
-        assert {o[0]["motivo"] for o in outbox} == {"excepcion_vencida", "constancia_vencida"}
-        assert {o[0]["commitment_id"] for o in outbox} == {"OC-9", None}
+        # HabilitacionRequiereRevaluacion lo decide la política de 7.2 (A-07): sin decisiones
+        # vigentes que citen estos sujetos no hay nada que marcar → outbox vacío.
+        assert s.execute(text("SELECT count(*) FROM modulo1.outbox_events")).scalar() == 0
         assert vencer_excepciones_y_constancias(s, t, ahora)["excepciones_vencidas"] == 0
 
 

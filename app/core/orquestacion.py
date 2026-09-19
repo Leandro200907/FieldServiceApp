@@ -734,6 +734,9 @@ def _validar_sujetos_propuestos(session: Session, tenant_id: str, sujetos_propue
     return [por_id[x] for x in sujetos_propuestos]
 
 
+ORIGENES_SUJETOS = ("explicito", "custodia_por_defecto")
+
+
 def decidir_habilitacion(
     session: Session,
     tenant_id: str,
@@ -741,21 +744,29 @@ def decidir_habilitacion(
     sujetos_propuestos: list[str],
     ahora_utc: datetime,
     usuario_id: str | None,
+    *,
+    origen_sujetos: str = "explicito",
 ) -> dict:
     """MODO DECISIÓN (2.1 / 4.1): evalúa exclusivamente los sujetos propuestos y, en la
     misma transacción, persiste el snapshot, la relación normalizada
     `evaluacion_sujeto_propuesto` y el evento EvaluacionDeHabilitacionRealizada.
     La autorización (solo responsable de legajos) la hace el servicio que llama."""
+    if origen_sujetos not in ORIGENES_SUJETOS:
+        raise ValueError(f"origen_sujetos inválido: {origen_sujetos}")
     propuestos = _validar_sujetos_propuestos(session, tenant_id, sujetos_propuestos)
     r = _evaluar(session, tenant_id, commitment_id, ahora_utc, modo=MODO_DECISION, sujetos_propuestos=propuestos)
     r["snapshot"]["sujetos_propuestos"] = list(sujetos_propuestos)
+    # `origen_sujetos` lo fija SIEMPRE el servidor (7.2 CustodiaCambiada es condicional a él):
+    # el endpoint público solo produce 'explicito'; una pantalla que derive la custodia
+    # vigente pasará 'custodia_por_defecto' desde su propio servicio, nunca desde el body.
+    r["snapshot"]["origen_sujetos"] = origen_sujetos
 
     fila = session.execute(
         text(
             "INSERT INTO modulo1.evaluacion_habilitacion "
             "(tenant_id, commitment_id, veredicto_de_cumplimiento, resultado_de_decision, por_sujeto, "
-            " requisitos_faltantes, version_matriz, snapshot) "
-            "VALUES (:t, :c, :v, :r, CAST(:ps AS jsonb), CAST(:rf AS jsonb), CAST(:vm AS jsonb), CAST(:sn AS jsonb)) "
+            " requisitos_faltantes, version_matriz, snapshot, origen_sujetos) "
+            "VALUES (:t, :c, :v, :r, CAST(:ps AS jsonb), CAST(:rf AS jsonb), CAST(:vm AS jsonb), CAST(:sn AS jsonb), :orig) "
             "RETURNING referencia_evaluacion, creado_en"
         ),
         {
@@ -767,6 +778,7 @@ def decidir_habilitacion(
             "rf": json.dumps(r["requisitos_faltantes"], ensure_ascii=False),
             "vm": json.dumps(r["version_matriz"]),
             "sn": json.dumps(r["snapshot"], ensure_ascii=False),
+            "orig": origen_sujetos,
         },
     ).first()
     referencia = str(fila[0])
@@ -793,9 +805,17 @@ def decidir_habilitacion(
         usuario_id,
     )
 
+    # 7.2 EvaluacionDeHabilitacionRealizada: cierra los avisos abiertos de decisiones
+    # anteriores del MISMO commitment (nunca de otra OC), en esta misma transacción.
+    from app.core.revaluacion import cerrar_avisos_por_decision_nueva
+
+    avisos_cerrados = cerrar_avisos_por_decision_nueva(session, tenant_id, commitment_id, referencia)
+
     return {
         "referencia_evaluacion": referencia,
         "sujetos_propuestos": list(sujetos_propuestos),
+        "origen_sujetos": origen_sujetos,
+        "avisos_cerrados": avisos_cerrados,
         **r,
         "creado_en": fila[1].isoformat(),
     }

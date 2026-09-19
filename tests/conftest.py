@@ -23,6 +23,11 @@ ROLES = ("configuracion", "responsable_legajos", "supervisor", "tecnico")
 TABLAS_TENANT = [
     "refresh_token",
     "asignacion_supervisor",
+    "aviso_revaluacion_causa",
+    "aviso_revaluacion",
+    "aviso_incumplimiento_empresa_causa",
+    "aviso_incumplimiento_empresa",
+    "politica_evento_procesado",
     "excepcion",
     "constancia_cliente",
     "evaluacion_sujeto_propuesto",

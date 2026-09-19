@@ -184,7 +184,8 @@ def publicar_version_de_matriz(s: Session, identidad: Identidad, body: e.Publica
     registrar_evento(
         s, t, "MatrizVersionPublicada",
         {"matriz_version_id": matriz_version_id, "cliente_id": cliente, "locacion_id": locacion, "tipo_servicio_id": tipo_servicio,
-         "version": version, "vigente_desde": body.vigente_desde, "lineas": len(body.lineas), "version_anterior": version_anterior},
+         "version": version, "vigente_desde": body.vigente_desde, "lineas": len(body.lineas), "version_anterior": version_anterior,
+         "version_anterior_id": version_anterior["matriz_version_id"] if version_anterior else None},
         identidad.usuario_id,
     )
     return {

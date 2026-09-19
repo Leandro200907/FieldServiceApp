@@ -246,13 +246,24 @@ def cancelar_oc(session: Session, identidad: Identidad, oc_id: str | None, clave
         raise NoEncontrado("OC inexistente", {"oc_id": oc_id, "clave_origen": clave_origen})
     if fila[2] == "cancelado":
         raise Conflicto("La OC ya está cancelada", {"oc_id": str(fila[0])})
+    # 7.1: "cambio o cancelación del compromiso mismo" dispara revaluación. La referencia de
+    # la última decisión se captura ANTES de cancelar (después, la OC ya no es "activa").
+    from app.core.revaluacion import ultima_decision
+
+    referencia = ultima_decision(session, identidad.tenant_id, fila[1])
     session.execute(
         text("UPDATE modulo1.oc SET estado = 'cancelado', actualizado_en = now() WHERE oc_id = :id"),
         {"id": str(fila[0])},
     )
-    # No hay evento de catálogo para la cancelación de OC (brief): queda en el UPDATE y en
-    # `actualizado_en`. No se inventan nombres de evento.
-    return {"oc_id": str(fila[0]), "clave_origen": fila[1], "estado": "cancelado", "eventos": []}
+    eventos = []
+    registrar_evento(
+        session, identidad.tenant_id, "CompromisoCancelado",
+        {"oc_id": str(fila[0]), "commitment_id": fila[1],
+         "referencias_afectadas": [str(referencia)] if referencia else []},
+        identidad.usuario_id,
+    )
+    eventos.append("CompromisoCancelado")
+    return {"oc_id": str(fila[0]), "clave_origen": fila[1], "estado": "cancelado", "eventos": eventos}
 
 
 def _json(valor: Any) -> str:

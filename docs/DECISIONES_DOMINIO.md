@@ -243,3 +243,47 @@ tipo vivo se lee siempre de `legajo.tipo_sujeto`.
 (`filtro_decisiones_visibles`, `decision_visible`), `app/modules/consultas/servicio.py`,
 `app/modules/operacion/servicio.py`. Migración `0006_evaluacion_sujetos`. Tests:
 `tests/test_a04_alcance_evaluacion.py`.
+
+## 8. Política de revaluación y outbox (A-07, cerrado 2026-09-19)
+
+Implementación declarativa de la tabla 7.2 en `app/core/revaluacion.py::EVENTOS_FUENTE`
+(único lugar donde se decide qué evento marca qué decisiones). Definiciones:
+- **Decisión vigente**: última decisión de un commitment (`ORDER BY creado_en DESC,
+  secuencia DESC` — `secuencia` BIGSERIAL desempata de forma determinista; `creado_en` lo
+  genera la base, nunca el cliente) con OC activa y `vigencia_hasta ≥ hoy`.
+- **Marcar** = `aviso_revaluacion` (uno abierto por evaluación; coalescing: nuevas causas se
+  suman en `aviso_revaluacion_causa`, única por `(aviso, evento_id)`, sin repetir el
+  evento) + un `HabilitacionRequiereRevaluacion` en outbox por apertura
+  (`clave_dedup = hrr:{referencia}:{aviso_id}`, UNIQUE por tenant). Nunca crea decisiones.
+- **Idempotencia por evento causal**: `politica_evento_procesado (tenant_id, evento_id)`;
+  reprocesar un evento antiguo no reabre un aviso cerrado.
+- **Despachador**: `registrar_evento` despacha solo eventos fuente; los producidos por la
+  política (`AvisoDeRevaluacion*`, `CumplimientoEmpresa*`) van por `registrar_evento_interno`.
+
+| Evento | HRR | Selector |
+|---|---|---|
+| DocumentoVerificado | sí | decisiones que proponen al sujeto; empresa → todas |
+| DocumentoCargado (cualquier estado) | **no** | el productor emite además `DocumentoVerificado` cuando la carga ya viene verificada (verificación implícita, evento canónico) |
+| LoteRevertido | sí | sujetos de los documentos revertidos |
+| LegajoDadoDeBaja | sí | decisiones que proponen al sujeto |
+| MatrizVersionPublicada | sí | decisiones bajo la versión que se cierra (`version_anterior_id`) |
+| RequisitoParticularCargado | sí | decisiones del commitment |
+| Excepcion Otorgada/Revocada/Regularizada/Vencida | sí | decisión citada (si existe) + vigentes del commitment con el sujeto |
+| Constancia Registrada/Revocada/Vencida | sí | específica: commitment; general: OCs del cliente con el sujeto |
+| CustodiaCambiada | **condicional** | solo decisiones con `origen_sujetos = custodia_por_defecto` que proponen el recurso; `explicito` nunca. `origen_sujetos` lo fija el servidor (el body público no lo acepta) |
+| CompromisoModificado / CompromisoCancelado | sí | `referencias_afectadas` capturadas por el productor ANTES del cambio; payload con `tipo_cambio` — con `cancelacion` el consumidor **invalida**, nunca crea una decisión |
+| Vencimiento de documento de empresa (reloj) | outbox `CumplimientoEmpresaAfectado` | `aviso_incumplimiento_empresa` (uno abierto por tenant) con causas normalizadas (una activa por requisito); payload flaco con `aviso_id`; el consumidor consulta `GET /consultas/incumplimiento_empresa`. Marca internamente las decisiones vigentes sin HRR (2.9). Se regulariza solo cuando la reevaluación de TODAS las causas activas no encuentra ninguna incumplida |
+| Resto de 7.2 (Cargado, Rechazado, Sucedido, Acreditación/Inducción, LoteAplicado, LegajoCreado, Supervisor*, Definicion*, EvaluacionRealizada, Tarea, CustodiaCorregida, ConstanciaReemplazada, Alerta*, ArchivoPurgado, Aviso*) | no | tests negativos uno por uno |
+
+`EvaluacionDeHabilitacionRealizada` no genera HRR pero cierra, en la misma transacción,
+los avisos abiertos de decisiones anteriores del mismo commitment (`AvisoDeRevaluacionCerrado`
+por la vía interna), nunca de otra OC.
+
+Ambigüedad registrada: acreditaciones e inducciones también son entradas del snapshot pero
+la tabla 7.2 no les asigna HRR; se respeta la tabla.
+
+## 9. Semántica del borrado físico (A-05)
+
+`storage.borrar()` es **al menos una vez** e idempotente (borrar una clave ausente es
+éxito). Están garantizados exactamente una confirmación en la base y un solo
+`ArchivoPurgado`; una sola llamada física NO.

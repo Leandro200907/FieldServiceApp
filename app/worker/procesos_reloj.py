@@ -15,7 +15,7 @@ from typing import Any, Callable
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
-from app.comun.eventos import encolar_outbox, registrar_evento
+from app.comun.eventos import registrar_evento
 from app.comun.reloj import hoy_del_tenant
 from app.storage.contrato import Storage
 from app.worker.cola import encolar
@@ -147,12 +147,7 @@ def vencer_excepciones_y_constancias(session: Session, tenant_id: str, ahora_utc
             },
             usuario_id=None,
         )
-        encolar_outbox(
-            session,
-            tenant_id,
-            "HabilitacionRequiereRevaluacion",
-            {"commitment_id": commitment_id, "motivo": "excepcion_vencida", "excepcion_id": str(excepcion_id), "sujeto_id": sujeto_id},
-        )
+        # HabilitacionRequiereRevaluacion lo decide la política de 7.2 al registrar el evento (A-07).
 
     constancias = session.execute(
         text(
@@ -179,20 +174,12 @@ def vencer_excepciones_y_constancias(session: Session, tenant_id: str, ahora_utc
             },
             usuario_id=None,
         )
-        # Constancia general (commitment_id NULL): Módulo 2 resuelve por sujeto+cliente.
-        encolar_outbox(
-            session,
-            tenant_id,
-            "HabilitacionRequiereRevaluacion",
-            {
-                "commitment_id": commitment_id,
-                "motivo": "constancia_vencida",
-                "constancia_id": str(constancia_id),
-                "sujeto_id": sujeto_id,
-                "cliente_id": str(cliente_id),
-            },
-        )
-    resumen = {"excepciones_vencidas": len(excepciones), "constancias_vencidas": len(constancias), "hoy": hoy.isoformat()}
+    # 2.9: vencimiento de documento de EMPRESA → aviso de incumplimiento + CumplimientoEmpresaAfectado.
+    from app.core.incumplimiento_empresa import registrar_vencimientos_de_empresa
+
+    empresa = registrar_vencimientos_de_empresa(session, tenant_id, hoy)
+    resumen = {"excepciones_vencidas": len(excepciones), "constancias_vencidas": len(constancias), "hoy": hoy.isoformat(),
+               "incumplimiento_empresa": empresa}
     latir(session, "vencer_excepciones_y_constancias", tenant_id, True, resumen)
     return resumen
 
