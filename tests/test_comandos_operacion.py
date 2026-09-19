@@ -43,6 +43,8 @@ def _legajos_de_custodia(t):
         for sujeto, tipo in (("vehiculo_ABC123", "vehiculo"), ("vehiculo_IDEM", "vehiculo"), ("equipo_9", "equipo"),
                              ("persona_0042", "persona"), ("persona_0077", "persona"), ("persona_0043", "persona"), ("p1", "persona")):
             apoyo.legajo(s, t.tenant_id, sujeto, tipo)
+            if tipo == "persona":
+                apoyo.supervisor_de(s, t, sujeto)
 
 
 def test_cambiar_custodia_cierra_el_anterior_el_dia_previo(cliente_api, tenant_de_prueba):

@@ -10,6 +10,8 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+
+from tests import apoyo
 from sqlalchemy import text
 
 from app.comun.eventos import registrar_evento, registrar_evento_interno
@@ -269,6 +271,7 @@ def test_custodia_cambiada_no_marca_decision_con_sujetos_explicitos(cliente_api,
     t = tenant_de_prueba
     e = _base(sesion, t)
     insertar_legajo(sesion, t.tenant_id, "vehiculo_V", "vehiculo")
+    apoyo.supervisor_de(sesion, t, "persona_A")
     d = decidir_habilitacion(sesion, t.tenant_id, "OC-1", ["persona_A", "vehiculo_V"], AHORA, None)  # explícito
     sesion.commit()
     assert d["origen_sujetos"] == "explicito"
@@ -280,6 +283,7 @@ def test_custodia_cambiada_marca_decision_con_custodia_por_defecto(cliente_api, 
     t = tenant_de_prueba
     e = _base(sesion, t)
     insertar_legajo(sesion, t.tenant_id, "vehiculo_V", "vehiculo")
+    apoyo.supervisor_de(sesion, t, "persona_A")
     d = decidir_habilitacion(sesion, t.tenant_id, "OC-1", ["persona_A", "vehiculo_V"], AHORA, None, origen_sujetos="custodia_por_defecto")
     sesion.commit()
     with tenant_session(t.tenant_id) as s:

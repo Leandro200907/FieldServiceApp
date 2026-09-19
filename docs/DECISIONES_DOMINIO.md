@@ -330,3 +330,27 @@ sobre esos índices) se traduce a 409 de dominio estable —`excepcion_activa_du
 `constancia_activa_duplicada`—, nunca 500. Ninguna fila activa "gana" por orden
 arbitrario: gana la transacción que tomó el ancla primero. La migración aborta con
 diagnóstico si encuentra duplicados activos previos; no elige ni borra ninguno.
+
+## 12. Custodia: validaciones y autorización (M-03)
+
+FKs (0011, sin CASCADE): `custodia_recurso (tenant, recurso_id) → legajo`,
+`periodo_custodia (tenant, custodio_id) → legajo`, `periodo_custodia (tenant, custodia_id)
+→ custodia_recurso`. El recurso no se repite en `periodo_custodia`: vive en el agregado
+`custodia_recurso`, así que la FK compuesta por tenant lo cubre a través de la custodia.
+
+Antes de cambiar o corregir una custodia el servicio valida, en este orden: rol
+Supervisor (matriz 2.2 de no-funcionales: **solo** el Supervisor opera la custodia; el
+Responsable de legajos no, aunque tenga todo el tenant en lectura); recurso existente en
+el tenant, del tipo declarado (`vehiculo`/`equipo`, coincidiendo con `tipo_sujeto` del
+legajo) y no dado de baja (`recurso_no_custodiable`, `legajo_dado_de_baja`); custodio
+existente, `persona`, no dado de baja y dentro del universo del supervisor que opera
+(`custodio_no_permitido`, `legajo_dado_de_baja`, 403); custodio vacío sólo para equipo
+(`sin_custodio_personal`, documentacion-habilitante 1.5 bis → `custodio_requerido` para
+vehículo). IDs de otro tenant son 404 (RLS + FK compuesta), nunca un cruce.
+
+Nunca dos vigentes: el legajo del recurso se bloquea `FOR UPDATE` como ancla (dos
+primeras custodias concurrentes se serializan; la segunda ve el período de la primera y
+cae en la regla "`desde` posterior al vigente" o lo cierra y abre el suyo); el índice
+parcial `uq_periodo_custodia_vigente` es la red residual y se traduce a 409
+`custodia_vigente_duplicada`. El historial (`cerrado`, `corregido`) nunca se borra ni se
+arrastra por CASCADE.

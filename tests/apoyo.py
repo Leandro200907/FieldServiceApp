@@ -32,3 +32,13 @@ def evaluacion(s, tenant_id: str, commitment_id: str) -> str:
              "por_sujeto, snapshot) VALUES (:t, :c, 'no_habilitado', 'no_puede_asignarse', '[]', '{}') RETURNING referencia_evaluacion"),
         {"t": tenant_id, "c": commitment_id},
     ).scalar())
+
+
+def supervisor_de(s, tenant, sujeto_id: str, desde: date = date(2026, 1, 1), supervisor_usuario_id: str | None = None) -> None:
+    """Pone al sujeto en el universo del supervisor del tenant de prueba (M-03: quien cambia
+    la custodia tiene que administrar al custodio)."""
+    s.execute(
+        text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
+             "VALUES (:t, :s, :u, :d, 'test')"),
+        {"t": tenant.tenant_id, "s": sujeto_id, "u": supervisor_usuario_id or tenant.usuarios["supervisor"], "d": desde},
+    )

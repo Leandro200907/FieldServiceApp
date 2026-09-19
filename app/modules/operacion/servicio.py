@@ -80,6 +80,54 @@ def _custodia_de(session: Session, tenant_id: str, recurso_id: str, tipo_recurso
     return str(nuevo[0])
 
 
+def _validar_recurso_custodiable(session: Session, tenant_id: str, recurso_id: str, tipo_recurso: str) -> None:
+    """El recurso existe en el tenant, es vehículo o equipo del tipo declarado y está activo.
+    Bloquea su legajo (FOR UPDATE): es el ancla que serializa dos primeras custodias del
+    mismo recurso (M-03), así la segunda ve la custodia y el período que creó la primera."""
+    if tipo_recurso not in TIPOS_RECURSO_CUSTODIABLE:
+        raise ErrorDeDominio("Solo vehículos y equipos tienen custodia", {"tipo_recurso": tipo_recurso})
+    legajo = _bloquear_legajo(session, tenant_id, recurso_id)
+    if legajo["tipo_sujeto"] != tipo_recurso:
+        raise ErrorDeDominio(
+            "El recurso no es del tipo declarado",
+            {"recurso_id": recurso_id, "tipo_recurso": tipo_recurso, "tipo_sujeto": legajo["tipo_sujeto"]},
+            codigo="recurso_no_custodiable",
+        )
+    if legajo["dado_de_baja_en"] is not None:
+        raise ErrorDeDominio("El recurso está dado de baja", {"recurso_id": recurso_id}, codigo="legajo_dado_de_baja")
+
+
+def _validar_custodio(session: Session, identidad: Identidad, tipo_recurso: str, custodio_id: str | None) -> None:
+    """Custodio: persona activa del tenant, dentro del universo del supervisor que opera
+    (2.3 §3). Vacío solo para equipo (`sin_custodio_personal`, documentacion-habilitante
+    1.5 bis); un vehículo siempre tiene conductor responsable (1.5)."""
+    tenant_id = identidad.tenant_id
+    if custodio_id is None:
+        if tipo_recurso != "equipo":
+            raise ErrorDeDominio(
+                "Un vehículo siempre tiene custodio; `sin_custodio_personal` solo vale para equipos",
+                {"tipo_recurso": tipo_recurso},
+                codigo="custodio_requerido",
+            )
+        return
+    legajo = session.execute(
+        text("SELECT tipo_sujeto, dado_de_baja_en FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s"),
+        {"t": tenant_id, "s": custodio_id},
+    ).mappings().first()
+    if legajo is None:
+        raise NoEncontrado("Custodio inexistente", {"custodio_id": custodio_id})
+    if legajo["tipo_sujeto"] != "persona":
+        raise ErrorDeDominio(
+            "Solo una persona puede ser custodio",
+            {"custodio_id": custodio_id, "tipo_sujeto": legajo["tipo_sujeto"]},
+            codigo="custodio_no_permitido",
+        )
+    if legajo["dado_de_baja_en"] is not None:
+        raise ErrorDeDominio("El custodio está dado de baja", {"custodio_id": custodio_id}, codigo="legajo_dado_de_baja")
+    if not sujeto_en_alcance(session, identidad, custodio_id, hoy_del_tenant(session, tenant_id)):
+        raise Prohibido("El custodio está fuera del universo del supervisor", {"custodio_id": custodio_id})
+
+
 def cambiar_custodia(
     session: Session,
     identidad: Identidad,
@@ -90,9 +138,9 @@ def cambiar_custodia(
     desde: date,
 ) -> dict[str, Any]:
     identidad.exigir_rol(Rol.SUPERVISOR)
-    if tipo_recurso not in TIPOS_RECURSO_CUSTODIABLE:
-        raise ErrorDeDominio("Solo vehículos y equipos tienen custodia", {"tipo_recurso": tipo_recurso})
     tenant_id = identidad.tenant_id
+    _validar_recurso_custodiable(session, tenant_id, recurso_id, tipo_recurso)
+    _validar_custodio(session, identidad, tipo_recurso, custodio_id)
     custodia_id = _custodia_de(session, tenant_id, recurso_id, tipo_recurso)
 
     vigente = session.execute(
@@ -119,15 +167,23 @@ def cambiar_custodia(
             {"t": tenant_id, "p": periodo_cerrado_id, "hasta": desde - timedelta(days=1)},
         )
 
-    periodo_id = str(
-        session.execute(
-            text(
-                "INSERT INTO modulo1.periodo_custodia (tenant_id, custodia_id, custodio_id, desde, estado) "
-                "VALUES (:t, :c, :cu, :d, 'vigente') RETURNING periodo_id"
-            ),
-            {"t": tenant_id, "c": custodia_id, "cu": custodio_id, "d": desde},
-        ).scalar()
-    )
+    try:
+        periodo_id = str(
+            session.execute(
+                text(
+                    "INSERT INTO modulo1.periodo_custodia (tenant_id, custodia_id, custodio_id, desde, estado) "
+                    "VALUES (:t, :c, :cu, :d, 'vigente') RETURNING periodo_id"
+                ),
+                {"t": tenant_id, "c": custodia_id, "cu": custodio_id, "d": desde},
+            ).scalar()
+        )
+    except IntegrityError as err:
+        if not _es_colision_activa(err, "uq_periodo_custodia_vigente"):
+            raise
+        raise Conflicto(
+            "El recurso ya tiene un período de custodia vigente", {"custodia_id": custodia_id},
+            codigo="custodia_vigente_duplicada",
+        ) from err
     registrar_evento(
         session,
         tenant_id,
@@ -181,6 +237,11 @@ def corregir_custodia(
 
     nuevo_estado = viejo["estado"]  # vigente sigue vigente, cerrado sigue cerrado
     nuevo_custodio = custodio_id if custodio_id is not None else viejo["custodio_id"]
+    tipo_recurso = session.execute(
+        text("SELECT tipo_recurso FROM modulo1.custodia_recurso WHERE tenant_id = :t AND custodia_id = :c FOR UPDATE"),
+        {"t": tenant_id, "c": str(viejo["custodia_id"])},
+    ).scalar()
+    _validar_custodio(session, identidad, tipo_recurso, nuevo_custodio)
     nuevo_desde = desde if desde is not None else viejo["desde"]
     if nuevo_estado == "vigente":
         if hasta is not None:
