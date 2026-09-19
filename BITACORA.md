@@ -155,3 +155,31 @@ definitiva de cada una en `docs/DECISIONES_DOMINIO.md`; tests de aceptación en
   envelope, serialización). Fixture `dos_tenants` en conftest.
 - Suite final sobre base limpia: **169 passed**. `.env` queda apuntando a
   `modulo1_limpia`; `.env.dev` conserva la base de desarrollo (ambos ignorados por git).
+
+## 2026-09-19 — Sesiones 5–6: remediación de auditoría externa (A-01…A-07, M-01…M-04)
+
+Orden pactado y commits (todo con migraciones lineales, un solo head, un integrador):
+A-01/M-07 (roles y bootstrap sin secretos) · A-02/M-05 (universo del supervisor único,
+`app/auth/alcance.py`) · A-04 (modo decisión sólo responsable; `evaluacion_sujeto_propuesto`,
+0006) · A-03/A-06 (idempotencia con fingerprint inmutable + exclusión real, 0007/0009;
+leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físico) · A-07
+(revaluación declarativa `EVENTOS_FUENTE`, outbox dedup, 0010; commit `4a98085`).
+
+- **M-01 (`78f597e`, 0011)**: FKs compuestas `(tenant_id, id)` en 32 relaciones; UNIQUE
+  `(tenant_id, id)` en 7 padres; dos CASCADE corregidos; `_sin_force_rls` para que la
+  validación sea un escaneo real. `tests/apoyo.py` planta padres. 28 tests.
+- **M-02 (`693a3e8`, 0012)**: índices únicos parciales de excepción/constancia activas
+  (DECISIONES §11); ancla `FOR UPDATE` sobre el legajo; reemplazo antes del INSERT;
+  23505 residual → 409 de dominio. 11 tests (hilos + proxy de sesión para la ventana
+  residual + HTTP).
+- **M-03 (`ffb7ed1`)**: validaciones de custodia (recurso/custodio existentes, activos, del
+  tipo correcto, custodio en el universo del supervisor, sin custodio sólo para equipo)
+  y ancla sobre el legajo del recurso (DECISIONES §12). 20 tests.
+- **M-04 (`59e658e`, 0013)**: `UNIQUE NULLS NOT DISTINCT` sobre la clave completa de la
+  definición de requisito; la migración aborta con diagnóstico si hay duplicados (test
+  que lo prueba haciendo downgrade/upgrade real). 8 tests.
+- Verificación por migración: upgrade/downgrade/upgrade en `modulo1_limpia` y `modulo1`,
+  bootstrap desde cero en `modulo1_boot` (16 upgrades), head único, 0 tablas sin FORCE
+  RLS. Consultas finales en las tres bases: 0 FKs sin validar, 0 FKs simples
+  tenant-scoped, 0 duplicados activos (excepciones, constancias, custodias vigentes),
+  0 definiciones duplicadas NULL-aware. Suite final: **343 passed**.
