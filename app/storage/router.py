@@ -59,7 +59,7 @@ def preparar_subida_de_evidencia(
 ) -> dict:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.TECNICO)
     return ejecutar_idempotente(
-        identidad.tenant_id, idempotency_key,
+        identidad.tenant_id, identidad.usuario_id, idempotency_key,
         fingerprint_de("POST", "/comandos/preparar_subida_de_evidencia", body.model_dump(mode="json")),
         lambda s: preparar_subida(s, identidad, body.documento_id, body.nombre_archivo, body.content_type, storage=_storage()),
     )
@@ -73,7 +73,7 @@ def confirmar_subida_de_evidencia(
 ) -> dict:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.TECNICO)
     return ejecutar_idempotente(
-        identidad.tenant_id, idempotency_key,
+        identidad.tenant_id, identidad.usuario_id, idempotency_key,
         fingerprint_de("POST", "/comandos/confirmar_subida_de_evidencia", body.model_dump(mode="json")),
         lambda s: confirmar_subida(s, identidad, body.documento_id, storage=_storage()),
     )

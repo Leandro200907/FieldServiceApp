@@ -27,9 +27,9 @@ def _ruta(nombre: str, body_cls: type, fn, roles: tuple[Rol, ...], clave_de_body
         clave: str | None = Depends(clave_idempotencia),
     ) -> dict[str, Any]:
         clave_efectiva = clave_de_body(body) if clave_de_body else clave
-        # Un lote es idempotente por lote_id, NO por hash del archivo (8.2): el fingerprint
-        # es la propia clave, así un reenvío con filas corregidas devuelve lo ya aplicado.
-        huella = {"clave": clave_efectiva} if clave_de_body else body.model_dump(mode="json")
+        # Un lote es idempotente por lote_id (8.2), pero el fingerprint incluye el hash
+        # canónico del contenido: mismo lote con filas distintas es 409, no un replay.
+        huella = body.model_dump(mode="json")
         return ejecutar_comando(
             identidad, clave_efectiva, roles, lambda s: fn(s, identidad, body),
             ruta=f"/comandos/{nombre}", body=huella,

@@ -87,14 +87,23 @@ def importar_lote_oc(
     # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # La clave de idempotencia expira (24 h) pero el lote queda: si existe, tampoco se
     # re-aplica — se reconstruye el resultado desde lote_importacion.
+    from app.comun.idempotencia import hash_canonico
+
+    hash_contenido = hash_canonico([dict(f) for f in filas])
     lote_existente = session.execute(
         text(
-            "SELECT filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, estado "
+            "SELECT filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, estado, hash_archivo "
             "FROM modulo1.lote_importacion WHERE lote_id = :l"
         ),
         {"l": lote_id},
     ).mappings().first()
     if lote_existente is not None:
+        if lote_existente["hash_archivo"] != hash_contenido:
+            raise Conflicto(
+                "El lote ya fue importado con otro contenido; un lote_id identifica un contenido único",
+                {"lote_id": lote_id},
+                codigo="lote_contenido_distinto",
+            )
         oc_ids = [
             str(f[0])
             for f in session.execute(text("SELECT oc_id FROM modulo1.oc WHERE lote_id = :l ORDER BY clave_origen"), {"l": lote_id})
@@ -130,11 +139,12 @@ def importar_lote_oc(
     session.execute(
         text(
             "INSERT INTO modulo1.lote_importacion "
-            "(lote_id, tenant_id, origen, entidad, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas) "
-            "VALUES (:l, :t, :o, 'oc', :tot, :ok, :ko, CAST(:det AS jsonb))"
+            "(lote_id, tenant_id, origen, entidad, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, hash_archivo) "
+            "VALUES (:l, :t, :o, 'oc', :tot, :ok, :ko, CAST(:det AS jsonb), :hash)"
         ),
         {
             "l": lote_id,
+            "hash": hash_contenido,
             "t": tenant_id,
             "o": origen,
             "tot": len(filas),

@@ -38,4 +38,4 @@ def ejecutar_comando(
        fingerprint (ruta + body) coincide, 409 si difiere o si otra solicitud está en curso.
     """
     identidad.exigir_rol(*roles)
-    return ejecutar_idempotente(identidad.tenant_id, clave, fingerprint_de("POST", ruta, body), efecto)
+    return ejecutar_idempotente(identidad.tenant_id, identidad.usuario_id, clave, fingerprint_de("POST", ruta, body), efecto)

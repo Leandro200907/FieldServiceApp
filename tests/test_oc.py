@@ -46,9 +46,12 @@ def test_importar_lote_es_idempotente_por_lote_id(cliente_api, tenant_de_prueba)
     assert cuerpo["filas_aceptadas"] == 2 and cuerpo["oc_creadas"] == 2
     assert cuerpo["eventos"] == ["LoteAplicado"]
 
-    r2 = _importar(cliente_api, tenant_de_prueba, lote, [_fila("OC-1"), _fila("OC-2"), _fila("OC-3")])
+    # Mismo lote_id con contenido distinto: 409, no un replay silencioso (A-03). Nada se aplica.
+    r_dist = _importar(cliente_api, tenant_de_prueba, lote, [_fila("OC-1"), _fila("OC-2"), _fila("OC-3")])
+    assert r_dist.status_code == 409 and r_dist.json()["error"]["codigo"] == "clave_idempotencia_reutilizada"
+    # Mismo lote_id y mismo contenido: replay exacto, sin re-aplicar.
+    r2 = _importar(cliente_api, tenant_de_prueba, lote, [_fila("OC-1"), _fila("OC-2")])
     assert r2.status_code == 200
-    # Devuelve el resultado guardado, sin re-aplicar (ni la fila nueva OC-3).
     assert r2.json()["oc_ids"] == cuerpo["oc_ids"]
     assert _contar(tenant_de_prueba, "SELECT count(*) FROM modulo1.oc") == 2
     assert _contar(tenant_de_prueba, "SELECT count(*) FROM modulo1.lote_importacion") == 1

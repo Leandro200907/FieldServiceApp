@@ -26,7 +26,7 @@ def _ejecutar(
     identidad: Identidad, clave: str | None, comando: Callable[[Session], dict[str, Any]], *, ruta: str, body: Any
 ) -> dict[str, Any]:
     """Idempotencia con reserva atómica (A-03): ver app/comun/idempotencia.py."""
-    return ejecutar_idempotente(identidad.tenant_id, clave, fingerprint_de("POST", ruta, body.model_dump(mode="json")), comando)
+    return ejecutar_idempotente(identidad.tenant_id, identidad.usuario_id, clave, fingerprint_de("POST", ruta, body.model_dump(mode="json")), comando)
 
 
 # --------------------------------------------------------------------------- bodies

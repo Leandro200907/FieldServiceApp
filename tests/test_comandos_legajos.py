@@ -292,8 +292,10 @@ def test_importar_lote_idempotente_por_lote_id(cliente_api, tenant_de_prueba):
     assert _docs(t, s2, req)[0]["estado_confirmacion"] == "verificado"
     assert _docs(t, s1, req)[0]["lote_id"] == lote_id
 
-    # Segunda llamada con el mismo lote_id (incluso con filas distintas): mismo resultado, nada nuevo.
-    r2 = _ok(_post(cliente_api, t, "responsable_legajos", "importar_lote", {**body, "filas": body["filas"][:1]}))
+    # Mismo lote_id con filas distintas: 409 (A-03), nada nuevo. Mismo contenido: replay exacto.
+    r_dist = _post(cliente_api, t, "responsable_legajos", "importar_lote", {**body, "filas": body["filas"][:1]})
+    assert r_dist.status_code == 409 and r_dist.json()["error"]["codigo"] == "clave_idempotencia_reutilizada"
+    r2 = _ok(_post(cliente_api, t, "responsable_legajos", "importar_lote", body))
     assert r2 == r1
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.documento")).scalar() == 2

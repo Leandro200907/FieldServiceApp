@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad
 from app.comun.eventos import registrar_evento
+from app.comun.idempotencia import hash_canonico
 from app.comun.reloj import hoy_del_tenant
 from app.modules.legajos import esquemas as e
 
@@ -509,17 +510,25 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
 
-    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03);
-    # acá solo queda la red de seguridad por si el lote existe con la clave ya expirada.
+    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # Red de seguridad de dominio, válida también entre actores distintos: si el lote ya
+    # existe, solo se reproduce el resultado si el contenido es el MISMO (hash canónico
+    # de las filas, persistido en hash_archivo); con filas distintas es un conflicto.
+    hash_contenido = hash_canonico([f.model_dump(mode="json") for f in body.filas])
     existente = s.execute(
         text(
-            "SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas "
+            "SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, hash_archivo "
             "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l"
         ),
         {"t": t, "l": lote_id},
     ).mappings().first()
     if existente is not None:
-        # El registro de idempotencia venció (24 h) pero el lote existe: no se re-aplica.
+        if existente["hash_archivo"] != hash_contenido:
+            raise Conflicto(
+                "El lote ya fue importado con otro contenido; un lote_id identifica un contenido único",
+                {"lote_id": lote_id},
+                codigo="lote_contenido_distinto",
+            )
         return {
             "lote_id": lote_id, "estado": existente["estado"], "filas_totales": existente["filas_totales"],
             "filas_aceptadas": existente["filas_aceptadas"], "filas_rechazadas": existente["filas_rechazadas"],
@@ -562,7 +571,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
             "VALUES (:l, :t, :o, 'legajos', :tot, :ok, :rech, CAST(:det AS jsonb), 'aplicado', :hash)"
         ),
         {"l": lote_id, "t": t, "o": body.origen, "tot": len(body.filas), "ok": aceptadas, "rech": len(rechazadas),
-         "det": json.dumps(rechazadas, default=str, ensure_ascii=False), "hash": body.hash_archivo},
+         "det": json.dumps(rechazadas, default=str, ensure_ascii=False), "hash": hash_contenido},
     )
 
     # 3) Aplicación de las válidas.
