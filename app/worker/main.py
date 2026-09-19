@@ -109,11 +109,18 @@ def procesar_cola(tenant_id: str, nombre_cola: str, handler: Handler, contexto: 
             with tenant_session(tenant_id) as s:
                 handler(s, job, contexto)
             with tenant_session(tenant_id) as s:
-                cola_mod.completar(s, job.id)
+                cola_mod.completar(s, job.id, job.lease_token)
+        except cola_mod.LeaseAjeno:
+            # El lease venció y otro worker readquirió la tarea (A-06): este worker ya no es
+            # dueño; no completa, no falla, no reintenta. Los handlers deben ser idempotentes.
+            log.warning("job %s (%s): lease perdido, otro worker es el propietario", job.id, nombre_cola)
         except Exception:
             log.exception("job %s (%s) falló", job.id, nombre_cola)
-            with tenant_session(tenant_id) as s:
-                cola_mod.fallar(s, job.id)
+            try:
+                with tenant_session(tenant_id) as s:
+                    cola_mod.fallar(s, job.id, job.lease_token)
+            except cola_mod.LeaseAjeno:
+                log.warning("job %s (%s): lease perdido al marcar el fallo", job.id, nombre_cola)
         procesados += 1
     return procesados
 

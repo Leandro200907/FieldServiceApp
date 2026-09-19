@@ -96,7 +96,7 @@ def test_lease_vencido_permite_retomar_y_lease_obligatorio(tenant_de_prueba):
     with tenant_session(t) as s:
         job = tomar(s, "evidencia_qr", lease_seg=30)
         assert job is not None and job.id == jid and job.intentos == 2
-        completar(s, jid)
+        completar(s, jid, job.lease_token)
     with tenant_session(t) as s:
         assert s.execute(text("SELECT estado FROM modulo1.job_queue WHERE id = :id"), {"id": jid}).scalar() == "completado"
 
@@ -105,16 +105,16 @@ def test_fallar_reintenta_con_backoff_y_pasa_a_fallido(tenant_de_prueba):
     t = tenant_de_prueba.tenant_id
     with tenant_session(t) as s:
         jid = encolar(s, "score_documental", {}, tenant_id=t)
-        tomar(s, "score_documental")
-        assert fallar(s, jid, max_intentos=3) == "pendiente"
+        j = tomar(s, "score_documental")
+        assert fallar(s, jid, j.lease_token, max_intentos=3) == "pendiente"
         fila = s.execute(text("SELECT estado, disponible_en > now() FROM modulo1.job_queue WHERE id = :id"), {"id": jid}).first()
         assert fila[0] == "pendiente" and fila[1] is True  # backoff: no disponible todavía
         assert tomar(s, "score_documental") is None
         s.execute(text("UPDATE modulo1.job_queue SET disponible_en = now() WHERE id = :id"), {"id": jid})
-        tomar(s, "score_documental")
-        assert fallar(s, jid, reintentar_en_seg=0, max_intentos=3) == "pendiente"
-        tomar(s, "score_documental")  # intentos = 3
-        assert fallar(s, jid, max_intentos=3) == "fallido"
+        j = tomar(s, "score_documental")
+        assert fallar(s, jid, j.lease_token, reintentar_en_seg=0, max_intentos=3) == "pendiente"
+        j = tomar(s, "score_documental")  # intentos = 3
+        assert fallar(s, jid, j.lease_token, max_intentos=3) == "fallido"
         assert s.execute(text("SELECT estado FROM modulo1.job_queue WHERE id = :id"), {"id": jid}).scalar() == "fallido"
         assert tomar(s, "score_documental") is None
 
@@ -125,7 +125,7 @@ def test_job_de_sistema_sin_tenant_es_visible(tenant_de_prueba):
         jid = encolar(s, "validacion_evidencia", {"sistema": True})
         job = tomar(s, "validacion_evidencia")
         assert job is not None and job.id == jid and job.tenant_id is None
-        completar(s, jid)
+        completar(s, jid, job.lease_token)
 
 
 # --- outbox -----------------------------------------------------------------------
