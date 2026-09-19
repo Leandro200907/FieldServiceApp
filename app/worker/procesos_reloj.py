@@ -214,7 +214,15 @@ def control_retencion(
 
     Un corte entre borrar y confirmar deja `purga_pendiente` con archivo ausente: la
     vuelta siguiente lo detecta (`existe() == False`) y cierra la fase 2. La base nunca
-    apunta a un archivo inexistente como si estuviera `confirmado`."""
+    apunta a un archivo inexistente como si estuviera `confirmado`.
+
+    SEMÁNTICA DEL BORRADO FÍSICO — "al menos una vez" (decisión A-05): dos workers pueden
+    leer `purga_pendiente` y llamar a `storage.borrar()` sobre la misma clave a la vez. El
+    contrato de `Storage.borrar` es idempotente (borrar una clave ya inexistente es éxito),
+    así que puede haber MÁS DE UNA llamada física; lo que es exactamente-una-vez es la
+    confirmación en la base y el evento `ArchivoPurgado`, garantizados por
+    `UPDATE … WHERE archivo_estado = 'purga_pendiente'` (rowcount). No se promete
+    exactly-once para el storage."""
     abrir = abrir_sesion or _sesion_por_defecto
     with abrir(tenant_id) as s:
         marcados = _marcar_purga_pendiente(s, ahora_utc)

@@ -101,7 +101,10 @@ def test_caida_despues_del_borrado_y_antes_de_confirmar_se_reconcilia(tenant_de_
         assert _contar_eventos(s, "ArchivoPurgado") == 1
 
 
-def test_dos_workers_en_paralelo_no_purgan_dos_veces(tenant_de_prueba):
+def test_dos_workers_producen_una_sola_confirmacion_y_un_solo_evento(tenant_de_prueba):
+    """Semántica explícita "al menos una vez" para el storage: puede haber MÁS DE UNA llamada
+    física a `borrar()` (idempotente: borrar una clave ya ausente es éxito), pero la
+    confirmación en la base y el evento son exactamente uno."""
     t = tenant_de_prueba.tenant_id
     viejo, clave = _preparar(t)
     barrera = threading.Barrier(2)
@@ -109,17 +112,19 @@ def test_dos_workers_en_paralelo_no_purgan_dos_veces(tenant_de_prueba):
 
     class _Lento(_StorageFalso):
         def borrar(self, clave_):
+            self.borradas.append(clave_)
             barrera.wait(timeout=10)  # ambos workers llegan al I/O a la vez
             presentes.discard(clave_)
-            return True
+            return True  # idempotente: la segunda llamada sobre clave ausente también es éxito
 
     st = _Lento(confirma=True, presentes=presentes)
     salidas = _en_paralelo([lambda: control_retencion(t, st, ahora_utc())] * 2)
     assert all(e is None for _, e in salidas), [str(e) for _, e in salidas if e]
+    assert len(st.borradas) == 2  # DOS llamadas físicas: al menos una vez, explícitamente
     assert sum(r["purgados"] for r, _ in salidas) == 1  # exactamente una confirmación
     assert _estado_archivo(t, viejo) == ("purgado", None)
     with tenant_session(t) as s:
-        assert _contar_eventos(s, "ArchivoPurgado") == 1
+        assert _contar_eventos(s, "ArchivoPurgado") == 1  # y un solo evento
 
 
 def test_evidencia_de_auditoria_sin_contenido(tenant_de_prueba):
