@@ -773,7 +773,7 @@ def decidir_habilitacion(
     for x in propuestos:
         session.execute(
             text(
-                "INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto) "
+                "INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto_al_proponer) "
                 "VALUES (:t, :e, :sj, :tipo)"
             ),
             {"t": tenant_id, "e": referencia, "sj": str(x["sujeto_id"]), "tipo": x["tipo_sujeto"]},

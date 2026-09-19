@@ -166,9 +166,11 @@ def tablero_vencimientos(session: Session, identidad: Identidad, dias: int, p: P
 
 
 def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pagina) -> dict[str, Any]:
-    """OCs (por defecto las activas) con la última DECISIÓN visible para quien consulta
-    (2.3 §3: el supervisor solo ve decisiones cuyos sujetos propuestos están todos en su
-    universo). La cobertura en vivo se pide aparte con `cobertura_oc`."""
+    """OCs (por defecto las activas) con su ÚLTIMA decisión global. Para el supervisor,
+    esa última decisión se devuelve solo si todos sus sujetos propuestos están en su
+    universo (2.3 §3); si no, `ultima_decision` es null — nunca se sustituye por una
+    decisión anterior visible, porque se presentaría como "última" algo que no lo es.
+    La cobertura en vivo se pide aparte con `cobertura_oc`."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     alcance = alcance_de_sujetos(session, identidad, hoy)
@@ -186,13 +188,14 @@ def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pa
             SELECT o.oc_id, o.clave_origen, o.referencia, o.cliente_id, o.locacion_id, o.tipo_servicio_id,
                    o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.creado_en, o.actualizado_en,
                    e.referencia_evaluacion, e.veredicto_de_cumplimiento, e.resultado_de_decision,
-                   e.creado_en AS evaluada_en
+                   e.creado_en AS evaluada_en, e.visible
             FROM modulo1.oc o
             LEFT JOIN LATERAL (
-                SELECT e.referencia_evaluacion, e.veredicto_de_cumplimiento, e.resultado_de_decision, e.creado_en
+                SELECT e.referencia_evaluacion, e.veredicto_de_cumplimiento, e.resultado_de_decision, e.creado_en,
+                       (true {filtro_decisiones_visibles(alcance)}) AS visible
                 FROM modulo1.evaluacion_habilitacion e
-                WHERE e.commitment_id = o.clave_origen {filtro_decisiones_visibles(alcance)}
-                ORDER BY e.creado_en DESC LIMIT 1
+                WHERE e.commitment_id = o.clave_origen
+                ORDER BY e.creado_en DESC, e.referencia_evaluacion DESC LIMIT 1
             ) e ON true
             {condicion}
             ORDER BY o.vigencia_desde, o.clave_origen OFFSET :off LIMIT :lim
@@ -204,7 +207,8 @@ def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pa
     for f in filas:
         d = _plano(f)
         decision = None
-        if d.pop("referencia_evaluacion", None) is not None:
+        visible = d.pop("visible", None)
+        if d.pop("referencia_evaluacion", None) is not None and visible:
             decision = {
                 "referencia_evaluacion": str(f["referencia_evaluacion"]),
                 "veredicto_de_cumplimiento": d["veredicto_de_cumplimiento"],

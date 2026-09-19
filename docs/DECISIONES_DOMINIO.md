@@ -220,12 +220,23 @@ afuera la decisión entera no existe para él (404, sin filtrado parcial). La em
 interviene en el universo. `otorgar_excepcion` aplica lo mismo: la decisión citada tiene
 que ser visible y el sujeto tiene que estar en el universo (403).
 
-**Consecuencia registrada**: como la empresa nunca está en el universo de un supervisor y
-solo el supervisor otorga excepciones, hoy **nadie** puede otorgar una excepción sobre un
-requisito excepcionable de empresa. Es coherente con 2.4 de modelo-dominio ("para un
-bloqueante duro de empresa no existe excepción") pero deja sin dueño el caso
-excepcionable-de-empresa. Punto abierto para el dominio (ver §"Puntos que la
-especificación no permite decidir sola", ítem 3).
+**`ultima_decision` del backlog** es la última decisión **global** de la OC. Para el
+supervisor se devuelve solo si es visible; si no, `null` — nunca se sustituye por una
+decisión anterior visible (se presentaría como "última" algo que no lo es).
+
+**Excepciones sobre la empresa — DESHABILITADAS (cierre seguro).** Una excepción sobre un
+requisito de la empresa afecta a toda la dotación y ningún rol tiene hoy ese alcance
+definido (la empresa nunca está en el universo de un supervisor, y solo el supervisor
+otorga excepciones). `otorgar_excepcion` con un sujeto de tipo empresa responde 422
+`excepcion_de_empresa_deshabilitada` antes de cualquier chequeo de alcance, para
+cualquier supervisor. Queda así hasta que el dominio defina qué rol puede afectar
+globalmente a la empresa (ver "Puntos que la especificación no permite decidir sola",
+ítem 3). Coherente con 2.4 de modelo-dominio ("para un bloqueante duro de empresa no
+existe excepción").
+
+**`evaluacion_sujeto_propuesto.tipo_sujeto_al_proponer`** es un snapshot deliberado del
+tipo del legajo al decidir (parte de la foto inmutable de 4.1, CHECK sobre el enum); el
+tipo vivo se lee siempre de `legajo.tipo_sujeto`.
 
 **Código.** `app/core/orquestacion.py` (`_evaluar`, `cobertura_de_oc`,
 `decidir_habilitacion`, `_validar_sujetos_propuestos`), `app/auth/alcance.py`

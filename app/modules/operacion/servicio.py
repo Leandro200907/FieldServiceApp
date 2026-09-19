@@ -241,6 +241,21 @@ def otorgar_excepcion(
     identidad.exigir_rol(Rol.SUPERVISOR)
     tenant_id = identidad.tenant_id
 
+    # Cierre seguro (DECISIONES_DOMINIO §7): una excepción sobre la EMPRESA afecta a toda la
+    # dotación y ningún rol tiene hoy ese alcance definido → deshabilitado explícitamente,
+    # antes de cualquier chequeo de alcance, con error estable.
+    tipo = session.execute(
+        text("SELECT tipo_sujeto FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s"),
+        {"t": tenant_id, "s": sujeto_id},
+    ).scalar()
+    if tipo == "empresa":
+        raise ErrorDeDominio(
+            "Las excepciones sobre requisitos de la empresa están deshabilitadas: afectan a toda la "
+            "dotación y no hay un rol definido con ese alcance",
+            {"sujeto_id": sujeto_id},
+            codigo="excepcion_de_empresa_deshabilitada",
+        )
+
     evaluacion = session.execute(
         text("SELECT commitment_id FROM modulo1.evaluacion_habilitacion WHERE tenant_id = :t AND referencia_evaluacion = :e"),
         {"t": tenant_id, "e": referencia_evaluacion},

@@ -138,7 +138,7 @@ def test_supervisor_rechazado_en_modo_decision_y_responsable_autorizado(cliente_
     ref = r.json()["referencia_evaluacion"]
     with tenant_session(t.tenant_id) as s:
         assert _contar(s, "evaluacion_habilitacion") == 1
-        assert s.execute(text("SELECT sujeto_id, tipo_sujeto FROM modulo1.evaluacion_sujeto_propuesto WHERE evaluacion_id = :e"),
+        assert s.execute(text("SELECT sujeto_id, tipo_sujeto_al_proponer FROM modulo1.evaluacion_sujeto_propuesto WHERE evaluacion_id = :e"),
                          {"e": ref}).all() == [("persona_A", "persona")]
         assert _contar(s, "event_log", "WHERE tipo = 'EvaluacionDeHabilitacionRealizada'") == 1
 
@@ -201,17 +201,17 @@ def test_relacion_evaluacion_sujeto_no_cruza_tenants(dos_tenants):
     # desde B: evaluación de A + legajo de B → la FK (tenant_id, evaluacion_id) no existe para B
     with pytest.raises(IntegrityError):
         with tenant_session(tb.tenant_id) as s:
-            s.execute(text("INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto) "
+            s.execute(text("INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto_al_proponer) "
                            "VALUES (:t, :e, 'persona_de_B', 'persona')"), {"t": tb.tenant_id, "e": ref_a})
     # desde A: evaluación de A + legajo de B → la FK (tenant_id, sujeto_id) no existe para A
     with pytest.raises(IntegrityError):
         with tenant_session(ta.tenant_id) as s:
-            s.execute(text("INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto) "
+            s.execute(text("INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto_al_proponer) "
                            "VALUES (:t, :e, 'persona_de_B', 'persona')"), {"t": ta.tenant_id, "e": ref_a})
     # y con tenant_id ajeno directamente, la policy RLS lo rechaza
     with pytest.raises(Exception):
         with tenant_session(tb.tenant_id) as s:
-            s.execute(text("INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto) "
+            s.execute(text("INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto_al_proponer) "
                            "VALUES (:t, :e, 'persona_A', 'persona')"), {"t": ta.tenant_id, "e": ref_a})
 
 
@@ -222,11 +222,13 @@ def test_decision_historica_oculta_por_completo_si_un_sujeto_esta_fuera_del_univ
     t = tenant_de_prueba
     esc = _escenario(sesion, t)
     resp = t.usuarios["responsable_legajos"]
-    solo_a = decidir_habilitacion(sesion, t.tenant_id, "OC-1", ["persona_A"], AHORA, resp)["referencia_evaluacion"]
-    mixta = decidir_habilitacion(sesion, t.tenant_id, "OC-1", ["persona_A", "persona_B"], AHORA, resp)["referencia_evaluacion"]
     sesion.commit()
+    with tenant_session(t.tenant_id) as s:  # la mixta primero, la de A sola después (última global)
+        mixta = decidir_habilitacion(s, t.tenant_id, "OC-1", ["persona_A", "persona_B"], AHORA, resp)["referencia_evaluacion"]
+    with tenant_session(t.tenant_id) as s:
+        solo_a = decidir_habilitacion(s, t.tenant_id, "OC-1", ["persona_A"], AHORA, resp)["referencia_evaluacion"]
     h = t.headers("supervisor")  # universo = persona_A
-    # backlog: la última decisión visible para sup1 es la de A sola (la mixta no existe para él)
+    # backlog: la última decisión GLOBAL es la de A sola y es visible para sup1
     item = next(i for i in cliente_api.get("/v1/consultas/backlog_oc", headers=h).json()["items"] if i["clave_origen"] == "OC-1")
     assert item["ultima_decision"]["referencia_evaluacion"] == solo_a
     # historial de decisiones de la OC
@@ -259,3 +261,48 @@ def test_excepcion_del_supervisor_solo_sobre_decisiones_y_sujetos_de_su_universo
     assert cliente_api.post("/v1/comandos/otorgar_excepcion", json={**base, "referencia_evaluacion": ref_b, "sujeto_id": "persona_B"}, headers=h).status_code == 404
     assert cliente_api.post("/v1/comandos/otorgar_excepcion", json={**base, "referencia_evaluacion": ref_a, "sujeto_id": "persona_B"}, headers=h).status_code == 403
     assert cliente_api.post("/v1/comandos/otorgar_excepcion", json={**base, "referencia_evaluacion": ref_a, "sujeto_id": "persona_A"}, headers=h).status_code == 200
+
+
+def test_ultima_decision_del_backlog_es_la_global_y_no_se_sustituye_por_una_anterior_visible(cliente_api, tenant_de_prueba, sesion):
+    """Decisión 1 (solo A, visible para sup1) y decisión 2 posterior (A+B, B fuera del
+    universo de sup1): el backlog de sup1 NO presenta la 1 como última ni revela la 2."""
+    t = tenant_de_prueba
+    _escenario(sesion, t)
+    resp = t.usuarios["responsable_legajos"]
+    sesion.commit()
+    with tenant_session(t.tenant_id) as s:  # transacciones separadas → creado_en distinto
+        d1 = decidir_habilitacion(s, t.tenant_id, "OC-1", ["persona_A"], AHORA, resp)["referencia_evaluacion"]
+    with tenant_session(t.tenant_id) as s:
+        d2 = decidir_habilitacion(s, t.tenant_id, "OC-1", ["persona_A", "persona_B"], AHORA, resp)["referencia_evaluacion"]
+    item = next(i for i in cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("supervisor")).json()["items"]
+                if i["clave_origen"] == "OC-1")
+    assert item["ultima_decision"] is None
+    assert d1 not in str(item) and d2 not in str(item) and "persona_B" not in str(item)
+    # el responsable ve la 2 como última; el historial de sup1 sigue mostrando solo la 1
+    item_r = next(i for i in cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos")).json()["items"]
+                  if i["clave_origen"] == "OC-1")
+    assert item_r["ultima_decision"]["referencia_evaluacion"] == d2
+    hist = cliente_api.get("/v1/consultas/decisiones_oc", params={"commitment_id": "OC-1"}, headers=t.headers("supervisor")).json()
+    assert [d["referencia_evaluacion"] for d in hist["items"]] == [d1]
+
+
+def test_ningun_supervisor_puede_otorgar_excepcion_sobre_la_empresa(cliente_api, tenant_de_prueba, sesion):
+    """Cierre seguro: deshabilitado con error de dominio estable (422), independientemente
+    del alcance — ni siquiera con la empresa 'plantada' en el universo del supervisor."""
+    t = tenant_de_prueba
+    esc = _escenario(sesion, t)
+    req_e = sesion.execute(text("SELECT requisito_definicion_id FROM modulo1.definicion_requisito WHERE nombre = 'ART'")).scalar()
+    sesion.execute(text("UPDATE modulo1.linea_requisito SET clasificacion = 'excepcionable' WHERE requisito_definicion_id = :r"), {"r": req_e})
+    sesion.execute(text("DELETE FROM modulo1.documento WHERE sujeto_id = 'empresa_0001'"))
+    ref = decidir_habilitacion(sesion, t.tenant_id, "OC-1", ["persona_A"], AHORA, t.usuarios["responsable_legajos"])["referencia_evaluacion"]
+    _asignar(sesion, t.tenant_id, "empresa_0001", t.usuarios["supervisor"])  # plantada a propósito
+    sesion.commit()
+    for rol_sup in (t.usuarios["supervisor"], esc["sup2"]):
+        from tests.conftest import token_para
+        h = {"Authorization": f"Bearer {token_para(t.tenant_id, rol_sup, ['supervisor'])}"}
+        r = cliente_api.post("/v1/comandos/otorgar_excepcion", json={
+            "referencia_evaluacion": ref, "sujeto_id": "empresa_0001", "requisito_definicion_id": str(req_e),
+            "commitment_id": "OC-1", "motivo": "x"}, headers=h)
+        assert r.status_code == 422 and r.json()["error"]["codigo"] == "excepcion_de_empresa_deshabilitada", r.text
+    with tenant_session(t.tenant_id) as s:
+        assert _contar(s, "excepcion") == 0

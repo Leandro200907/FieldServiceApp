@@ -141,12 +141,11 @@ def test_otorgar_excepcion_solo_sobre_excepcionable_y_revocar(cliente_api, tenan
     assert ev.json()["resultado_de_decision"] == "no_puede_asignarse"
     assert ev.json()["eventos"] == ["EvaluacionDeHabilitacionRealizada"]
 
-    # Sobre la empresa: la empresa no forma parte del universo de ningún supervisor (2.3),
-    # así que ni siquiera llega a evaluarse la clasificación → 403 (mínimo privilegio).
+    # Sobre la empresa: deshabilitado por cierre seguro (DECISIONES §7) con error estable.
     duro = _post(cliente_api, t, "supervisor", "otorgar_excepcion",
                  {"referencia_evaluacion": referencia, "sujeto_id": "empresa_0001", "requisito_definicion_id": esc["req_empresa"],
                   "commitment_id": "OC-1", "motivo": "no"})
-    assert duro.status_code == 403
+    assert duro.status_code == 422 and duro.json()["error"]["codigo"] == "excepcion_de_empresa_deshabilitada"
     # Sobre bloqueante_duro de un sujeto del universo: 422.
     with tenant_session(t.tenant_id) as s:
         s.execute(text("UPDATE modulo1.linea_requisito SET clasificacion = 'bloqueante_duro' WHERE requisito_definicion_id = :r"),

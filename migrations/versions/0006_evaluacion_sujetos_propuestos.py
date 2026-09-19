@@ -6,7 +6,9 @@ habilitante 1.5/1.5 bis) y esa relación es relacional, no un JSON.
   consulta NUNCA persiste — 2.1: "Consulta: no persiste, no crea tareas, no emite eventos").
 - `legajo`: UNIQUE (tenant_id, sujeto_id) — un sujeto_id identifica un legajo dentro del
   tenant (la unicidad anterior incluía tipo_sujeto; el código ya usa sujeto_id solo).
-- `evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto)`:
+- `evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto_al_proponer)`:
+  `tipo_sujeto_al_proponer` es una FOTO del tipo del legajo al momento de decidir (parte
+  del snapshot inmutable de 4.1), no un dato vivo: el tipo vivo se lee de `legajo`.
   PK compuesta (unicidad), FK compuesta a la evaluación y FK compuesta al legajo — ambas
   con tenant_id, así una fila jamás puede referenciar una evaluación o un legajo de otro
   tenant aunque RLS no estuviera. RLS + FORCE + policy como el resto.
@@ -42,7 +44,8 @@ def upgrade() -> None:
             tenant_id UUID NOT NULL,
             evaluacion_id UUID NOT NULL,
             sujeto_id TEXT NOT NULL,
-            tipo_sujeto TEXT NOT NULL CHECK (tipo_sujeto IN ('persona', 'vehiculo', 'equipo')),
+            tipo_sujeto_al_proponer TEXT NOT NULL
+                CONSTRAINT ck_esp_tipo_snapshot CHECK (tipo_sujeto_al_proponer IN ('persona', 'vehiculo', 'equipo')),
             PRIMARY KEY (tenant_id, evaluacion_id, sujeto_id),
             CONSTRAINT fk_esp_evaluacion FOREIGN KEY (tenant_id, evaluacion_id)
                 REFERENCES modulo1.evaluacion_habilitacion (tenant_id, referencia_evaluacion) ON DELETE CASCADE,
@@ -50,6 +53,10 @@ def upgrade() -> None:
                 REFERENCES modulo1.legajo (tenant_id, sujeto_id)
         )
         """
+    )
+    op.execute(
+        "COMMENT ON COLUMN modulo1.evaluacion_sujeto_propuesto.tipo_sujeto_al_proponer IS "
+        "'Snapshot del tipo del legajo al momento de la decisión (4.1, inmutable). El tipo vivo está en legajo.tipo_sujeto.'"
     )
     op.execute("CREATE INDEX ix_esp_sujeto ON modulo1.evaluacion_sujeto_propuesto (tenant_id, sujeto_id)")
     op.execute("ALTER TABLE modulo1.evaluacion_sujeto_propuesto ENABLE ROW LEVEL SECURITY")
