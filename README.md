@@ -13,9 +13,11 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 - **Rutas HTTP:** 47 operaciones sobre 46 paths bajo `/v1` (OpenAPI en `/docs`).
 - **Migraciones:** 18 archivos en `migrations/versions/`, un solo head: `0015_job_queue_dead_letter`.
-- **Tests:** 404 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Tests:** 409 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
+- Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
+  `scripts/generar_openapi.py`; `tests/test_openapi_versionado.py` lo compara con la app).
 
 ## Stack
 
@@ -47,7 +49,7 @@ app/
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
 migrations/             # Alembic (0001 … 0015, lineales, un head)
-scripts/                # crear_roles.sql, crear_base.sql, administracion.py, generar_schema.py
+scripts/                # crear_roles.sql, crear_base.sql, administracion.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
 ```

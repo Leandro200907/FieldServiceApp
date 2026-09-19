@@ -8,6 +8,39 @@ semántica de concurrencia, roles y flujos.
 Versión del backend: `app/version.py` (`VERSION`), migración esperada `0015_job_queue_dead_letter`.
 Prefijo de todas las rutas: `/v1`.
 
+## 0. Contrato OpenAPI versionado y tipos TypeScript
+
+`docs/openapi.json` es el contrato canónico (claves ordenadas, sin hosts, `info.version` y
+`info.x-migracion-head` = head de migraciones). Un test lo compara con el OpenAPI real de
+la app: si el backend cambia el contrato, el archivo cambia en el mismo commit y el diff
+muestra exactamente qué.
+
+Regenerar (backend):
+
+```bash
+.venv/Scripts/python scripts/generar_openapi.py
+```
+
+Comprobar sin escribir: `scripts/generar_openapi.py --check` (sale 1 si difiere).
+
+Generar tipos TypeScript (frontend), con [openapi-typescript](https://openapi-ts.dev):
+
+```bash
+npx openapi-typescript docs/openapi.json -o src/api/modulo1.d.ts
+```
+
+y un cliente tipado con `openapi-fetch`:
+
+```ts
+import createClient from "openapi-fetch";
+import type { paths } from "./api/modulo1";
+const api = createClient<paths>({ baseUrl: "/v1", headers: { Authorization: `Bearer ${token}` } });
+const { data, error } = await api.GET("/v1/consultas/legajo", { params: { query: { sujeto_id: "p1" } } });
+```
+
+Todas las respuestas de error están tipadas con `components.schemas.ErrorEnvelope`; las
+rutas protegidas declaran `security: bearerAuth`.
+
 ## 1. Autenticación
 
 | Ruta | Body | Respuesta |
