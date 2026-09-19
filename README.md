@@ -1,73 +1,167 @@
-# Módulo 1 — Documentación habilitante (implementación)
+# Módulo 1 — Documentación habilitante (backend)
 
-Arranque de código, siguiendo al pie lo cerrado en los documentos de diseño del Project
-("Field Service Management"): `modulo1-documentacion-habilitante.md`, `modulo1-modelo-dominio.md`,
+Backend del Módulo 1 del FSM (habilitación documental de personas, vehículos, equipos y
+empresa para compromisos/OC en Vaca Muerta). Implementa al pie los documentos de diseño
+del Project (`modulo1-documentacion-habilitante.md`, `modulo1-modelo-dominio.md`,
 `modulo1-especificacion.md`, `modulo1-no-funcionales.md`, `modulo1-arquitectura-tecnica.md`,
-`modulo1-wireframes-api.md`.
+`modulo1-wireframes-api.md`). Las decisiones que esos documentos dejaron abiertas están
+cerradas en [docs/DECISIONES_DOMINIO.md](docs/DECISIONES_DOMINIO.md); el contrato para
+el frontend en [docs/HANDOFF_FRONTEND.md](docs/HANDOFF_FRONTEND.md); el diario de
+sesiones en [BITACORA.md](BITACORA.md).
 
-Este README se actualiza a medida que se agregan piezas. No es documentación de diseño —
-esa vive en el Project. Esto es la bitácora de qué existe en el código y cómo correrlo.
+## Cifras (verificadas por `tests/test_docs_actualizados.py`)
+
+- **Rutas HTTP:** 47 operaciones sobre 46 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 18 archivos en `migrations/versions/`, un solo head: `0015_job_queue_dead_letter`.
+- **Tests:** 388 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+  concurrencia con hilos, aislamiento multi-tenant y dos workers).
+- Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 
 ## Stack
 
-- Python 3.11+, FastAPI (API), SQLAlchemy 2.0 (ORM), Alembic (migraciones), PostgreSQL.
-- pytest para tests, incluida la suite de casos de oro del motor de evaluación (obligatoria
-  en cada cambio, per 8.6 de arquitectura-tecnica.md).
-- Sin librería de cola de terceros todavía: 8.4 dejó la elección de librería como detalle de
-  implementación — se define cuando el volumen real lo pida; mientras tanto, patrón a mano
-  sobre Postgres (`SELECT ... FOR UPDATE SKIP LOCKED`) con lease/expiración explícita.
+Python 3.13 · FastAPI · SQLAlchemy 2.0 Core (`text()` + bind params, sin ORM) · Alembic ·
+PostgreSQL 16 (RLS por tenant, `FORCE ROW LEVEL SECURITY`) · psycopg 3 · PyJWT · bcrypt ·
+pytest. Sin librería de cola: cola nativa en Postgres (`FOR UPDATE SKIP LOCKED` + leases).
 
 ## Estructura
 
 ```
 app/
-  config.py          # settings (env vars), sin secretos hardcodeados
-  db.py               # engine, session factory, contexto de tenant (SET LOCAL, 8.1)
-  main.py             # FastAPI app, monta los routers de cada módulo
-  core/
-    tipos.py          # value objects puros del motor (sin ORM, sin I/O)
-    evaluacion.py      # motor de evaluación de habilitación — función pura (1.9, 4.1 de especificacion.md)
-  auth/
-    jwt.py             # emisión/validación de JWT (9.2)
-    dependencies.py     # dependency de FastAPI que resuelve tenant_id + usuario desde el token
+  main.py               # FastAPI, monta routers bajo /v1; handlers de error + request_id
+  version.py            # VERSION y MIGRACION_HEAD (readiness y docs lo verifican)
+  config.py             # settings desde entorno (.env); nunca secretos en código
+  db.py                 # engine (rol app), tenant_session (SET LOCAL app.current_tenant)
+  api/errores.py        # envelope de error único, X-Request-ID, 500 con stack trace en log
+  api/salud.py          # /salud/vivo (liveness) y /salud/listo (readiness)
+  auth/                 # JWT, login/refresh/logout, passwords (bcrypt, límite en bytes),
+                        # identidad y roles, alcance (universo del supervisor)
+  core/                 # motor puro de evaluación + orquestación (decidir/consultar),
+                        # revaluación declarativa, incumplimiento de empresa
+  comun/                # eventos + outbox, idempotencia, reloj del tenant, paginación
   modules/
-    legajos/           # Legajo, Documento, Acreditación, Inducción, Asignación de supervisor,
-                        # Lote de importación, CustodiaDelRecurso (dominio "Evidencia" + "Operación" parcial)
-    requisitos/         # Definición de requisito, Matriz de requisitos, Línea de requisito,
-                        # Requisito particular
-    operacion/          # Evaluación de habilitación (persistida), Excepción, Constancia del cliente,
-                        # Alerta de vencimiento, Aviso de revaluación, Aviso de incumplimiento
-    oc/                 # Vista de compromiso (proyección) + backlog de OC standalone (1.12)
-migrations/            # Alembic
-tests/
-  test_casos_de_oro.py # Los 5 casos de oro de especificacion.md, sección 6 — el motor no se
-                        # considera correcto si no los pasa todos.
+    legajos/            # sujetos, documentos, acreditaciones, inducciones, lotes, supervisor
+    requisitos/         # definiciones, matrices, requisitos particulares
+    operacion/          # custodia, excepciones, constancias, evaluar habilitación
+    oc/                 # importación/cancelación de OC (vista de compromiso)
+    consultas/          # GET /consultas/* (read models con alcance por rol)
+  storage/              # contrato de storage, backend local firmado, subida/descarga
+  worker/               # cola con leases, outbox, procesos de reloj, dead-letter
+migrations/             # Alembic (0001 … 0015, lineales, un head)
+scripts/                # crear_roles.sql, crear_base.sql, crear_usuario.py, generar_schema.py
+tests/                  # suite completa (ver Cifras)
+docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
 ```
 
-## Cómo correr (local, con Postgres ya levantado)
+## Bootstrap desde cero (local)
+
+Requiere PostgreSQL 16 con un superusuario y `psql`/`pg_dump` en el PATH (o rutas absolutas).
 
 ```bash
-cp .env.example .env   # completar DATABASE_URL, JWT_SECRET
-pip install -r requirements.txt
-alembic upgrade head
-pytest
-uvicorn app.main:app --reload
+# 1) Roles (contraseñas SOLO por variables de psql, mínimo 12 caracteres; nunca en el repo)
+psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v owner_password='…' -v app_password='…' -f scripts/crear_roles.sql
 ```
 
-## Estado de avance
+```bash
+# 2) Base con owner correcto
+psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v db=modulo1 -f scripts/crear_base.sql
+```
+
+```bash
+# 3) Entorno virtual + dependencias fijadas por hash
+python -m venv .venv && .venv/Scripts/python -m pip install --require-hashes -r requirements.lock -r requirements-dev.lock
+```
+
+```bash
+# 4) Configuración (copiar y completar; DATABASE_URL_MIGRATIONS solo la usa Alembic)
+cp .env.example .env
+```
+
+```bash
+# 5) Migraciones (rol owner, vía DATABASE_URL_MIGRATIONS del ENV_FILE)
+ENV_FILE=.env .venv/Scripts/alembic upgrade head
+```
+
+```bash
+# 6) Primer tenant y usuario (la contraseña va por variable de entorno, máx. 72 bytes UTF-8)
+.venv/Scripts/python scripts/crear_usuario.py tenant --slug acme --nombre "ACME SRL"
+```
+
+```bash
+USUARIO_PASSWORD='…' .venv/Scripts/python scripts/crear_usuario.py usuario --tenant-slug acme --email ana@acme.test --nombre Ana --rol configuracion --rol responsable_legajos
+```
+
+## Correr
+
+```bash
+# API
+.venv/Scripts/uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+```bash
+# Worker (polling cada WORKER_POLL_SEG; --una-vuelta para cron/CLI). Se pueden correr varias instancias.
+.venv/Scripts/python -m app.worker.main
+```
+
+```bash
+# Tests (usan DATABASE_URL de .env; la base debe estar en el head)
+.venv/Scripts/python -m pytest -q
+```
+
+Salud: `GET /v1/salud/vivo` (liveness) y `GET /v1/salud/listo` (readiness: DB, migración
+en `MIGRACION_HEAD`, storage; 503 si algo falla, sin revelar detalles).
+
+## Dependencias reproducibles (M-08)
+
+- `requirements.in`: dependencias directas de producción. `requirements-dev.in`: tests y
+  tooling (constreñido por `requirements.lock`).
+- `requirements.lock` / `requirements-dev.lock`: versiones exactas **con hashes**; la
+  instalación es `pip install --require-hashes -r requirements.lock [-r requirements-dev.lock]`.
+- Regenerar (después de tocar un `.in`):
+
+```bash
+.venv/Scripts/pip-compile --generate-hashes --strip-extras --allow-unsafe -o requirements.lock requirements.in
+```
+
+```bash
+.venv/Scripts/pip-compile --generate-hashes --strip-extras --allow-unsafe -o requirements-dev.lock requirements-dev.in
+```
+
+`.venv/` no se versiona (`.gitignore`).
+
+## Migraciones
+
+- Un único integrador toca Alembic; migraciones temáticas, lineales, un solo head
+  (`alembic heads`). Cada una se verifica con upgrade → downgrade → upgrade y bootstrap desde cero.
+- `app/version.py::MIGRACION_HEAD` debe apuntar al head: readiness lo compara con la base y
+  `tests/test_docs_actualizados.py` lo compara con `migrations/`, el README y el dump.
+- Regenerar el esquema documentado (base creada desde cero, sin datos ni propietarios):
+
+```bash
+ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
+```
+
+## Operación y diagnóstico
+
+- Toda respuesta lleva `X-Request-ID` (se respeta el entrante). Un 500 se registra con
+  stack trace y `request_id`; el cliente recibe sólo `error_interno` + `request_id`. Nunca se
+  registran headers, cuerpos, tokens ni contraseñas; los 422 no devuelven el `input`.
+- Worker: leases con token (fencing), backoff exponencial (30 s · 2ⁿ⁻¹, tope 1 h), 5
+  intentos, dead-letter (`job_queue.estado='fallido'` con `ultimo_error` saneado y
+  `fallido_en`). Colas sin implementación en v1 (`evidencia_qr`, `score_documental`,
+  `validacion_evidencia`) mandan sus jobs al dead-letter con error visible; notificaciones
+  salen por `CanalEnLog` (WARNING) hasta que haya canal externo. Latidos en `latido_proceso`.
+- Purga de archivos: dos fases (`purga_pendiente` confirmado → borrado físico fuera de tx →
+  `purgado`); borrado físico al menos una vez, confirmación exactamente una vez.
+
+## Estado
 
 | Pieza | Estado |
 |---|---|
-| Bootstrap del proyecto (estructura, config, conexión con tenant) | Hecho |
-| Migraciones (0001 schema+RLS, 0002 usuario/supervisor, 0003 x4, 0004 merge) | Hecho y aplicadas |
-| Motor de evaluación puro + casos de oro | Hecho |
-| Auth (JWT propio, login/refresh/logout, dependency de tenant) | Hecho |
-| Comandos Evidencia + Requisitos (16 endpoints) | Hecho |
-| Comandos Operación + orquestación `evaluar_compromiso` (7 endpoints) | Hecho |
-| Consultas (8 GET) + backlog de OC (2 comandos) | Hecho |
-| Worker (cola SKIP LOCKED, outbox, procesos de reloj, latidos) + storage local firmado | Hecho |
-| E2E por HTTP (casos de oro 6.1/6.3/6.5 + excepción nunca verde + constancia) | Hecho |
-| Transporte real a Módulo 2 (`Publicador`), handlers qr/score/validación, storage S3 | Pendiente (stubs) |
-
-Suite: `.venv/Scripts/python -m pytest -q` → 96 tests. Worker: `python -m app.worker.main --una-vuelta`.
-Bitácora detallada de sesiones: `BITACORA.md`. Contrato entre piezas: `docs/BRIEF_SUBAGENTES.md`.
+| Esquema + RLS + FKs compuestas por tenant, unicidades activas y NULL-aware | Hecho (0001–0015) |
+| Motor de evaluación puro + 5 casos de oro + orquestación decisión/consulta | Hecho |
+| Auth JWT (login/refresh/logout), roles, universo del supervisor, contraseñas por bytes | Hecho |
+| Comandos (31) + consultas (11) + storage (3) + salud (2) | Hecho |
+| Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
+| Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
+| Transporte real a Módulo 2, canal de notificaciones, storage S3, handlers qr/score/validación | Pendiente (declarado, no silencioso) |
+| Gestión de usuarios por API (alta/cambio/reset de contraseña) | Pendiente (CLI `scripts/crear_usuario.py`) |
