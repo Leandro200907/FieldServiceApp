@@ -22,6 +22,7 @@ from urllib.parse import urlsplit
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 
+from app.entorno import archivo_de_entorno  # noqa: E402
 from app.version import MIGRACION_HEAD  # noqa: E402
 
 DESTINO = RAIZ / "docs_schema_actual.sql"
@@ -29,12 +30,13 @@ _VOLATILES = re.compile(r"^(\\restrict|\\unrestrict|SET |SELECT pg_catalog\.set_
 
 
 def _dsn_migraciones() -> str:
-    env_file = os.environ.get("ENV_FILE", ".env")
+    ruta = Path(archivo_de_entorno())
     valores: dict[str, str] = {}
-    for linea in (RAIZ / env_file).read_text(encoding="utf-8").splitlines():
-        if "=" in linea and not linea.lstrip().startswith("#"):
-            k, v = linea.split("=", 1)
-            valores[k.strip()] = v.strip()
+    if ruta.is_file():  # misma precedencia que app.config: proceso > ENV_FILE > .env
+        for linea in ruta.read_text(encoding="utf-8").splitlines():
+            if "=" in linea and not linea.lstrip().startswith("#"):
+                k, v = linea.split("=", 1)
+                valores[k.strip()] = v.strip()
     dsn = os.environ.get("DATABASE_URL_MIGRATIONS") or valores.get("DATABASE_URL_MIGRATIONS")
     if not dsn:
         raise SystemExit("Falta DATABASE_URL_MIGRATIONS (en el entorno o en el ENV_FILE)")

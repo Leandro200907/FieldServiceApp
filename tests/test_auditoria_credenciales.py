@@ -12,7 +12,11 @@ RAIZ = Path(__file__).resolve().parents[1]
 
 
 def _python_sin_variable(codigo: str, *quitar: str) -> subprocess.CompletedProcess:
+    # ENV_FILE apunta a un archivo inexistente en los códigos de abajo, así que la app sólo
+    # ve variables del proceso: se le dan las mínimas (nunca DATABASE_URL_MIGRATIONS).
+    from app.config import settings
     env = {k: v for k, v in os.environ.items() if k not in quitar}
+    env.update({"DATABASE_URL": settings.database_url, "JWT_SECRET": settings.jwt_secret, "STORAGE_SECRET": settings.storage_secret})
     env["PYTHONPATH"] = str(RAIZ)
     return subprocess.run([sys.executable, "-c", codigo], env=env, capture_output=True, text=True, cwd=RAIZ,
                           stdin=subprocess.DEVNULL, timeout=60)

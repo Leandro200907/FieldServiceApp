@@ -4,12 +4,25 @@ Cada módulo expone un `router` en app/<paquete>/router.py; los de comandos expo
 POST /comandos/<nombre>, los de consultas GET /consultas/<nombre>.
 """
 import importlib
+import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from app.api.errores import registrar_handlers
+from app.config import describir_entorno
+from app.version import VERSION
 
-app = FastAPI(title="Módulo 1 — Documentación habilitante", version="1")
+log = logging.getLogger("modulo1.api")
+
+
+@asynccontextmanager
+async def _ciclo_de_vida(_: FastAPI):
+    log.info("api arranca: version=%s %s", VERSION, describir_entorno())  # sin secretos ni DSN completo
+    yield
+
+
+app = FastAPI(title="Módulo 1 — Documentación habilitante", version=VERSION, lifespan=_ciclo_de_vida)
 registrar_handlers(app)
 
 PREFIJO = "/v1"

@@ -13,13 +13,15 @@ import os
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.entorno import archivo_de_entorno
+
 
 class _ConfigMigraciones(BaseSettings):
     """Configuración propia de Alembic: NO usa app.config, que a propósito no conoce
     esta credencial. Lee del entorno (o del .env local de desarrollo; ENV_FILE permite
     apuntar a otro archivo o a uno inexistente)."""
 
-    model_config = SettingsConfigDict(env_file=os.environ.get("ENV_FILE", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(env_file=archivo_de_entorno(), extra="ignore")
     database_url_migrations: str
 
 

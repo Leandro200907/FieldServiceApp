@@ -227,14 +227,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=os.environ.get("WORKER_LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
+    from app.config import describir_entorno, settings
     from app.storage import obtener_storage
 
+    log.info("worker arranca: %s", describir_entorno())  # sin secretos ni DSN completo
     storage = obtener_storage()
     publicador = PublicadorEnLog()
     sin_handler = [c for c in cola_mod.COLAS if c not in HANDLERS]
     if sin_handler:
         log.warning("colas sin implementación en esta versión (sus jobs van al dead-letter): %s", ", ".join(sin_handler))
-    poll = float(os.environ.get("WORKER_POLL_SEG", "5"))
+    poll = float(settings.worker_poll_seg)
     while True:
         try:
             resumen = correr_una_vuelta(storage, publicador)
