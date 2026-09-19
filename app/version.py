@@ -6,4 +6,4 @@ base: si difieren, la instancia no está lista (migración atrasada o código vi
 y con lo documentado (README, docs_schema_actual.sql).
 """
 VERSION = "1.0.0-rc1"
-MIGRACION_HEAD = "0014_readiness_version"
+MIGRACION_HEAD = "0015_job_queue_dead_letter"

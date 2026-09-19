@@ -10,6 +10,16 @@ una fila. No se confía en el id del worker: solo en el token.
 Colas válidas (CHECK en la tabla): drenaje_outbox, notificaciones, evidencia_qr,
 score_documental, validacion_evidencia.
 
+Reintentos y dead-letter: cada fallo cuenta un intento; `fallar` reprograma con backoff
+exponencial (`backoff_seg`: 30 s · 2^(n-1), tope 1 h) hasta `max_intentos` y después pasa
+a `fallido` — estado TERMINAL (dead-letter): no se vuelve a tomar, conserva `ultimo_error`
+saneado (sin tokens, contraseñas ni DSN) y `fallido_en`. Un fallo `terminal=True` (job
+desconocido, handler no implementado, payload inválido) va al dead-letter en el primer
+intento: un mensaje venenoso nunca se reintenta en loop.
+
+Reloj controlable: `tomar`, `renovar_lease` y `fallar` aceptan `ahora` (UTC) — por defecto
+`now()` de la base — para que los tests de expiración y backoff no dependan del reloj real.
+
 RESTRICCIÓN PARA HANDLERS (fencing, A-06): `procesar_cola` ejecuta el handler y el
 `completar` en la MISMA transacción; si el lease se perdió, todo se revierte. Por eso:
   - los handlers pueden hacer escrituras transaccionales en PostgreSQL con libertad;
@@ -22,6 +32,7 @@ RESTRICCIÓN PARA HANDLERS (fencing, A-06): `procesar_cola` ejecuta el handler y
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,9 +44,37 @@ from sqlalchemy.orm import Session
 COLAS = ("drenaje_outbox", "notificaciones", "evidencia_qr", "score_documental", "validacion_evidencia")
 
 
+MAX_INTENTOS = 5
+BACKOFF_BASE_SEG = 30
+BACKOFF_TOPE_SEG = 3600
+MAX_ERROR_CHARS = 500
+
+_REDACCIONES = (
+    (re.compile(r"(?i)bearer\s+[a-z0-9._\-]+"), "Bearer [redactado]"),
+    (re.compile(r"(?i)(password|passwd|pwd|secret|token|api[_-]?key)(\s*[=:]\s*)\S+"), r"\1\2[redactado]"),
+    (re.compile(r"://([^:/@\s]+):([^@\s]+)@"), "://\\1:[redactado]@"),
+)
+
+
 class LeaseAjeno(Exception):
     """El job no está `en_curso` a nombre de este token (venció y otro lo retomó, ya se
     completó, o el token es incorrecto). El llamador no debe tocar nada más."""
+
+
+def backoff_seg(intentos: int) -> int:
+    """Espera antes del reintento número `intentos`+1: 30, 60, 120, 240, … tope 3600."""
+    return min(BACKOFF_BASE_SEG * (2 ** max(intentos - 1, 0)), BACKOFF_TOPE_SEG)
+
+
+def sanear_error(error: BaseException | str | None) -> str | None:
+    """Texto corto y sin secretos para `ultimo_error`: tipo + mensaje, con tokens,
+    contraseñas y credenciales de DSN redactados, truncado a MAX_ERROR_CHARS."""
+    if error is None:
+        return None
+    texto = f"{type(error).__name__}: {error}" if isinstance(error, BaseException) else str(error)
+    for patron, reemplazo in _REDACCIONES:
+        texto = patron.sub(reemplazo, texto)
+    return texto[:MAX_ERROR_CHARS]
 
 
 @dataclass(frozen=True)
@@ -82,10 +121,11 @@ def encolar(
     return int(fila[0])
 
 
-def tomar(session: Session, cola: str, lease_seg: int = 60) -> Job | None:
+def tomar(session: Session, cola: str, lease_seg: int = 60, ahora: datetime | None = None) -> Job | None:
     """Toma el próximo job disponible de la cola con un lease de `lease_seg` segundos y un
     `lease_token` nuevo. Pendientes, o en_curso con lease vencido (worker caído). SKIP
-    LOCKED: dos workers concurrentes nunca reciben el mismo job."""
+    LOCKED: dos workers concurrentes nunca reciben el mismo job. `fallido` (dead-letter)
+    y `completado` nunca se toman."""
     if lease_seg <= 0:
         raise ValueError("lease_seg debe ser positivo: el lease es obligatorio")
     token = uuid.uuid4()
@@ -93,13 +133,13 @@ def tomar(session: Session, cola: str, lease_seg: int = 60) -> Job | None:
         text(
             """
             UPDATE modulo1.job_queue
-            SET estado = 'en_curso', tomado_en = now(), lease_token = :token,
-                lease_hasta = now() + make_interval(secs => :lease), intentos = intentos + 1
+            SET estado = 'en_curso', tomado_en = COALESCE(:ahora, now()), lease_token = :token,
+                lease_hasta = COALESCE(:ahora, now()) + make_interval(secs => :lease), intentos = intentos + 1
             WHERE id = (
                 SELECT id FROM modulo1.job_queue
                 WHERE cola = :c
-                  AND (estado = 'pendiente' OR (estado = 'en_curso' AND lease_hasta < now()))
-                  AND disponible_en <= now()
+                  AND (estado = 'pendiente' OR (estado = 'en_curso' AND lease_hasta < COALESCE(:ahora, now())))
+                  AND disponible_en <= COALESCE(:ahora, now())
                 ORDER BY id
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
@@ -107,7 +147,7 @@ def tomar(session: Session, cola: str, lease_seg: int = 60) -> Job | None:
             RETURNING id, tenant_id, cola, payload, intentos, lease_hasta, estado, lease_token
             """
         ),
-        {"c": cola, "lease": lease_seg, "token": token},
+        {"c": cola, "lease": lease_seg, "token": token, "ahora": ahora},
     ).first()
     return _fila_a_job(fila) if fila else None
 
@@ -128,26 +168,34 @@ def completar(session: Session, id: int, lease_token: uuid.UUID) -> None:
     _exigir_una_fila(afectadas, id, "completar")
 
 
-def renovar_lease(session: Session, id: int, lease_token: uuid.UUID, lease_seg: int) -> None:
+def renovar_lease(session: Session, id: int, lease_token: uuid.UUID, lease_seg: int, ahora: datetime | None = None) -> None:
     """Extiende el lease de un job en curso; solo su propietario y solo si no venció (un
     lease vencido pudo ser readquirido: hay que volver a tomar)."""
     if lease_seg <= 0:
         raise ValueError("lease_seg debe ser positivo")
     afectadas = session.execute(
         text(
-            "UPDATE modulo1.job_queue SET lease_hasta = now() + make_interval(secs => :lease) "
-            "WHERE id = :id AND estado = 'en_curso' AND lease_token = :token AND lease_hasta >= now() RETURNING id"
+            "UPDATE modulo1.job_queue SET lease_hasta = COALESCE(:ahora, now()) + make_interval(secs => :lease) "
+            "WHERE id = :id AND estado = 'en_curso' AND lease_token = :token AND lease_hasta >= COALESCE(:ahora, now()) RETURNING id"
         ),
-        {"id": id, "token": lease_token, "lease": lease_seg},
+        {"id": id, "token": lease_token, "lease": lease_seg, "ahora": ahora},
     ).rowcount
     _exigir_una_fila(afectadas, id, "renovar el lease")
 
 
 def fallar(
-    session: Session, id: int, lease_token: uuid.UUID, reintentar_en_seg: int | None = None, max_intentos: int = 5
+    session: Session,
+    id: int,
+    lease_token: uuid.UUID,
+    reintentar_en_seg: int | None = None,
+    max_intentos: int = MAX_INTENTOS,
+    error: BaseException | str | None = None,
+    terminal: bool = False,
+    ahora: datetime | None = None,
 ) -> str:
-    """Marca el intento como fallido (solo el propietario del lease). Si ya se agotaron
-    los intentos pasa a `fallido` (terminal); si no, vuelve a `pendiente` con backoff
+    """Marca el intento como fallido (solo el propietario del lease) y guarda
+    `ultimo_error` saneado. Si `terminal` o se agotaron los intentos → `fallido`
+    (dead-letter, no se vuelve a tomar); si no, vuelve a `pendiente` con backoff
     exponencial (o el que se pida). Devuelve el estado resultante."""
     fila = session.execute(
         text("SELECT intentos FROM modulo1.job_queue WHERE id = :id AND estado = 'en_curso' AND lease_token = :token FOR UPDATE"),
@@ -156,24 +204,27 @@ def fallar(
     if fila is None:
         raise LeaseAjeno(f"job {id}: no se pudo fallar — el lease no pertenece a este token o el job ya no está en curso")
     intentos = int(fila[0])
-    if intentos >= max_intentos:
+    texto_error = sanear_error(error)
+    if terminal or intentos >= max_intentos:
         afectadas = session.execute(
             text(
-                "UPDATE modulo1.job_queue SET estado = 'fallido', lease_hasta = NULL, lease_token = NULL "
+                "UPDATE modulo1.job_queue SET estado = 'fallido', lease_hasta = NULL, lease_token = NULL, "
+                "ultimo_error = :err, ultimo_error_en = COALESCE(:ahora, now()), fallido_en = COALESCE(:ahora, now()) "
                 "WHERE id = :id AND estado = 'en_curso' AND lease_token = :token RETURNING id"
             ),
-            {"id": id, "token": lease_token},
+            {"id": id, "token": lease_token, "err": texto_error, "ahora": ahora},
         ).rowcount
         _exigir_una_fila(afectadas, id, "marcar fallido")
         return "fallido"
-    espera = reintentar_en_seg if reintentar_en_seg is not None else min(30 * (2 ** max(intentos - 1, 0)), 3600)
+    espera = reintentar_en_seg if reintentar_en_seg is not None else backoff_seg(intentos)
     afectadas = session.execute(
         text(
             "UPDATE modulo1.job_queue SET estado = 'pendiente', lease_hasta = NULL, lease_token = NULL, "
-            "disponible_en = now() + make_interval(secs => :e) "
+            "disponible_en = COALESCE(:ahora, now()) + make_interval(secs => :e), "
+            "ultimo_error = :err, ultimo_error_en = COALESCE(:ahora, now()) "
             "WHERE id = :id AND estado = 'en_curso' AND lease_token = :token RETURNING id"
         ),
-        {"e": espera, "id": id, "token": lease_token},
+        {"e": espera, "id": id, "token": lease_token, "err": texto_error, "ahora": ahora},
     ).rowcount
     _exigir_una_fila(afectadas, id, "reprogramar")
     return "pendiente"

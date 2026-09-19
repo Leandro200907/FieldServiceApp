@@ -358,12 +358,15 @@ def test_correr_una_vuelta_procesa_colas_outbox_y_reloj(tenant_de_prueba):
     with tenant_session(t) as s:
         encolar_outbox(s, t, "CumplimientoEmpresaAfectado", {"empresa": "x"})
         encolar(s, "evidencia_qr", {"stub": True}, tenant_id=t)
-        encolar(s, "notificaciones", {"hola": True}, tenant_id=t)
+        encolar(s, "notificaciones", {"tipo": "Prueba", "hola": True}, tenant_id=t)
     resumen = worker_main.correr_una_vuelta(_StorageFalso(confirma=True), pub)
     assert resumen["tenants"] >= 1 and resumen["outbox_publicados"] >= 1 and resumen["jobs"] >= 2
     assert any(e[0] == "CumplimientoEmpresaAfectado" for e in pub.eventos)
     with tenant_session(t) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.job_queue WHERE estado = 'completado'")).scalar() == 2
+        # notificaciones se completa (CanalEnLog); evidencia_qr no tiene handler en v1:
+        # dead-letter visible, nunca "completado sin efecto".
+        estados = dict(s.execute(text("SELECT cola, estado FROM modulo1.job_queue WHERE tenant_id = :t"), {"t": t}).all())
+        assert estados == {"notificaciones": "completado", "evidencia_qr": "fallido"}
         nombres = {f[0] for f in s.execute(text("SELECT nombre FROM modulo1.latido_proceso WHERE tenant_id = :t AND ultimo_ok IS NOT NULL"), {"t": t})}
         assert {"drenaje_outbox", "control_vencimientos", "vencer_excepciones_y_constancias", "control_retencion"} <= nombres
     with platform_session() as s:

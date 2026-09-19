@@ -19,7 +19,8 @@ import argparse
 import logging
 import os
 import time
-from typing import Any, Callable
+from datetime import datetime
+from typing import Any, Callable, Protocol
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -45,9 +46,30 @@ LEASE_SEG = 60
 
 
 # --- handlers ---------------------------------------------------------------------
+class JobNoProcesable(Exception):
+    """Fallo TERMINAL: el job va al dead-letter en este mismo intento (handler no
+    implementado, payload inválido, job que nunca va a poder procesarse). Reintentar no
+    ayuda y sería un mensaje venenoso en loop."""
+
+
+class CanalDeNotificaciones(Protocol):
+    def enviar(self, tenant_id: str | None, notificacion: dict[str, Any]) -> None: ...
+
+
+class CanalEnLog:
+    """Adaptador de notificaciones de v1 (arquitectura 8.x: los canales son adaptadores
+    detrás de una interfaz). Declarado, no un stub: la notificación se registra en el log
+    del worker con nivel WARNING para que sea visible que no hay canal externo."""
+
+    def enviar(self, tenant_id: str | None, notificacion: dict[str, Any]) -> None:
+        log.warning("notificación sin canal externo (CanalEnLog) tenant=%s tipo=%s", tenant_id, notificacion.get("tipo"))
+
+
 def handler_notificaciones(session: Session, job: Job, contexto: dict[str, Any]) -> None:
-    # v1: sin canal de salida todavía; la notificación queda en el log.
-    log.info("notificación tenant=%s %s", job.tenant_id, job.payload)
+    canal: CanalDeNotificaciones = contexto.get("canal_notificaciones") or CanalEnLog()
+    if "tipo" not in job.payload:
+        raise JobNoProcesable("notificación sin `tipo` en el payload")
+    canal.enviar(job.tenant_id, job.payload)
 
 
 def handler_drenaje_outbox(session: Session, job: Job, contexto: dict[str, Any]) -> None:
@@ -55,20 +77,33 @@ def handler_drenaje_outbox(session: Session, job: Job, contexto: dict[str, Any])
         drenar_outbox(session, job.tenant_id, contexto["publicador"])
 
 
-def _stub(nombre: str) -> Handler:
-    def handler(session: Session, job: Job, contexto: dict[str, Any]) -> None:
-        log.info("cola %s: no implementado en v1 (job %s completado sin efecto)", nombre, job.id)
+def handler_no_implementado(nombre: str) -> Handler:
+    """Cola sin implementación en esta versión: el job NO se completa en silencio; va al
+    dead-letter con error visible (`JobNoProcesable`) y queda registrado."""
 
+    def handler(session: Session, job: Job, contexto: dict[str, Any]) -> None:
+        raise JobNoProcesable(f"cola {nombre}: handler no implementado en esta versión")
+
+    handler.__name__ = f"no_implementado_{nombre}"
     return handler
 
 
 HANDLERS: dict[str, Handler] = {
     "drenaje_outbox": handler_drenaje_outbox,
     "notificaciones": handler_notificaciones,
-    "evidencia_qr": _stub("evidencia_qr"),
-    "score_documental": _stub("score_documental"),
-    "validacion_evidencia": _stub("validacion_evidencia"),
+    # evidencia_qr / score_documental / validacion_evidencia: sin implementación en v1.
 }
+
+
+def handlers_completos(handlers: dict[str, Handler] | None = None) -> dict[str, Handler]:
+    """Toda cola válida tiene un handler: las que no tienen implementación reciben
+    `handler_no_implementado`, así un job encolado ahí falla visiblemente en vez de
+    quedarse `pendiente` para siempre o completarse sin efecto."""
+    base = dict(HANDLERS if handlers is None else handlers)
+    for cola in cola_mod.COLAS:
+        if cola not in base:
+            base[cola] = handler_no_implementado(cola)
+    return base
 
 
 # --- infraestructura de la vuelta -------------------------------------------------
@@ -98,11 +133,19 @@ def _con_latido(nombre: str, tenant_id: str | None, fn: Callable[[], Any]) -> An
         return None
 
 
-def procesar_cola(tenant_id: str, nombre_cola: str, handler: Handler, contexto: dict[str, Any], max_jobs: int = MAX_JOBS_POR_COLA_POR_VUELTA) -> int:
+def procesar_cola(
+    tenant_id: str,
+    nombre_cola: str,
+    handler: Handler,
+    contexto: dict[str, Any],
+    max_jobs: int = MAX_JOBS_POR_COLA_POR_VUELTA,
+    ahora: datetime | None = None,
+    max_intentos: int = cola_mod.MAX_INTENTOS,
+) -> int:
     procesados = 0
     for _ in range(max_jobs):
         with tenant_session(tenant_id) as s:
-            job = cola_mod.tomar(s, nombre_cola, lease_seg=LEASE_SEG)
+            job = cola_mod.tomar(s, nombre_cola, lease_seg=LEASE_SEG, ahora=ahora)
         if job is None:
             break
         try:
@@ -116,21 +159,31 @@ def procesar_cola(tenant_id: str, nombre_cola: str, handler: Handler, contexto: 
         except cola_mod.LeaseAjeno:
             # Otro worker readquirió la tarea: este no completa, no falla, no reintenta.
             log.warning("job %s (%s): lease perdido, efectos revertidos", job.id, nombre_cola)
-        except Exception:
-            log.exception("job %s (%s) falló", job.id, nombre_cola)
+        except Exception as e:
+            terminal = isinstance(e, JobNoProcesable)
+            log.error("job %s (%s) falló%s: %s", job.id, nombre_cola, " (terminal → dead-letter)" if terminal else "",
+                      cola_mod.sanear_error(e), exc_info=not terminal)
             try:
                 with tenant_session(tenant_id) as s:
-                    cola_mod.fallar(s, job.id, job.lease_token)
+                    estado = cola_mod.fallar(s, job.id, job.lease_token, error=e, terminal=terminal, ahora=ahora, max_intentos=max_intentos)
+                if estado == "fallido":
+                    log.error("job %s (%s) en dead-letter tras %s intento(s)", job.id, nombre_cola, job.intentos)
             except cola_mod.LeaseAjeno:
                 log.warning("job %s (%s): lease perdido al marcar el fallo", job.id, nombre_cola)
         procesados += 1
     return procesados
 
 
-def correr_una_vuelta(storage: Storage, publicador: Publicador, handlers: dict[str, Handler] | None = None) -> dict[str, Any]:
-    handlers = handlers or HANDLERS
-    contexto = {"publicador": publicador, "storage": storage}
-    ahora = ahora_utc()
+def correr_una_vuelta(
+    storage: Storage,
+    publicador: Publicador,
+    handlers: dict[str, Handler] | None = None,
+    ahora: datetime | None = None,
+    canal_notificaciones: CanalDeNotificaciones | None = None,
+) -> dict[str, Any]:
+    handlers = handlers_completos(handlers)
+    contexto = {"publicador": publicador, "storage": storage, "canal_notificaciones": canal_notificaciones}
+    ahora = ahora or ahora_utc()
     resumen: dict[str, Any] = {"tenants": 0, "outbox_publicados": 0, "jobs": 0}
     for tenant_id in listar_tenants():
         resumen["tenants"] += 1
@@ -144,7 +197,7 @@ def correr_una_vuelta(storage: Storage, publicador: Publicador, handlers: dict[s
         resumen["outbox_publicados"] += _con_latido("drenaje_outbox", tenant_id, _drenar) or 0
 
         for nombre_cola, handler in handlers.items():
-            n = _con_latido(f"cola_{nombre_cola}", tenant_id, lambda: procesar_cola(tenant_id, nombre_cola, handler, contexto))
+            n = _con_latido(f"cola_{nombre_cola}", tenant_id, lambda: procesar_cola(tenant_id, nombre_cola, handler, contexto, ahora=ahora))
             resumen["jobs"] += n or 0
 
         def _reloj(nombre: str, fn: Callable[[Session], Any]) -> None:
@@ -178,6 +231,9 @@ def main(argv: list[str] | None = None) -> int:
 
     storage = obtener_storage()
     publicador = PublicadorEnLog()
+    sin_handler = [c for c in cola_mod.COLAS if c not in HANDLERS]
+    if sin_handler:
+        log.warning("colas sin implementación en esta versión (sus jobs van al dead-letter): %s", ", ".join(sin_handler))
     poll = float(os.environ.get("WORKER_POLL_SEG", "5"))
     while True:
         try:
