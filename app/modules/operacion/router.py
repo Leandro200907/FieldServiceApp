@@ -10,7 +10,7 @@ from datetime import date
 from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, Header
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import identidad_actual
@@ -83,6 +83,11 @@ class RevocarConstanciaBody(BaseModel):
 
 
 class EvaluarHabilitacionBody(BaseModel):
+    """`origen_sujetos` NO es parte del contrato público: lo determina exclusivamente el
+    servidor (este endpoint siempre produce 'explicito'). Enviarlo es un error 422."""
+
+    model_config = ConfigDict(extra="forbid")
+
     commitment_id: str = Field(min_length=1)
     sujetos_propuestos: list[str] = Field(min_length=1, max_length=200)
 

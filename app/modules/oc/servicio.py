@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
+from app.core.revaluacion import ultima_decision
 
 ORIGENES = ("planilla", "drive")
 CAMPOS_OBLIGATORIOS = ("clave_origen", "cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta")
@@ -156,9 +157,20 @@ def importar_lote_oc(
 
     oc_ids: list[str] = []
     creadas = actualizadas = 0
+    modificadas: list[dict[str, Any]] = []
     for fila in aceptadas:
-        # `xmax = 0` distingue INSERT de UPDATE en el RETURNING del UPSERT. `estado` no se
-        # toca a propósito: una OC cancelada no se reactiva por reimportarla.
+        # Regla de modificación de compromiso (7.1, A-07): ANTES de actualizar se captura el
+        # estado previo de las entradas de la evaluación y la última decisión de la OC; si
+        # alguna entrada cambia se emite UN `CompromisoModificado` por OC (varios campos →
+        # un solo evento causal). Una OC nueva, una reimportación idéntica o un cambio solo
+        # descriptivo (`referencia`) no emiten nada.
+        previa = session.execute(
+            text("SELECT oc_id, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta "
+                 "FROM modulo1.oc WHERE tenant_id = :t AND clave_origen = :c FOR UPDATE"),
+            {"t": tenant_id, "c": fila["clave_origen"]},
+        ).mappings().first()
+        cambios = _campos_modificados(previa, fila) if previa is not None else {}
+        referencia_previa = ultima_decision(session, tenant_id, fila["clave_origen"]) if cambios else None
         resultado = session.execute(
             text(
                 """
@@ -194,6 +206,19 @@ def importar_lote_oc(
             creadas += 1
         else:
             actualizadas += 1
+        if cambios:
+            evento_id = registrar_evento(
+                session, tenant_id, "CompromisoModificado",
+                {
+                    "commitment_id": fila["clave_origen"], "oc_id": str(resultado[0]), "lote_id": lote_id,
+                    "referencias_afectadas": [str(referencia_previa)] if referencia_previa else [],
+                    "campos_modificados": sorted(cambios),
+                    "anterior": {k: v[0] for k, v in cambios.items()},
+                    "nuevo": {k: v[1] for k, v in cambios.items()},
+                },
+                identidad.usuario_id,
+            )
+            modificadas.append({"commitment_id": fila["clave_origen"], "campos_modificados": sorted(cambios), "evento_id": evento_id})
 
     registrar_evento(
         session,
@@ -208,6 +233,7 @@ def importar_lote_oc(
             "filas_rechazadas": len(rechazadas),
             "oc_creadas": creadas,
             "oc_actualizadas": actualizadas,
+            "oc_modificadas": len(modificadas),
         },
         identidad.usuario_id,
     )
@@ -221,10 +247,25 @@ def importar_lote_oc(
         "oc_ids": oc_ids,
         "oc_creadas": creadas,
         "oc_actualizadas": actualizadas,
+        "oc_modificadas": modificadas,
         "ya_aplicado": False,
-        "eventos": ["LoteAplicado"],
+        "eventos": ["CompromisoModificado"] * len(modificadas) + ["LoteAplicado"],
     }
     return resultado_cmd
+
+
+CAMPOS_ENTRADA_EVALUACION = ("cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta")
+
+
+def _campos_modificados(previa: dict[str, Any], fila: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """Compara de forma canónica (str) las entradas del snapshot; `referencia` y `estado`
+    quedan fuera a propósito (descriptivo / cancelación tiene su propio evento)."""
+    cambios: dict[str, tuple[str, str]] = {}
+    for campo in CAMPOS_ENTRADA_EVALUACION:
+        antes, despues = str(previa[campo]), str(fila[campo])
+        if antes != despues:
+            cambios[campo] = (antes, despues)
+    return cambios
 
 
 def cancelar_oc(session: Session, identidad: Identidad, oc_id: str | None, clave_origen: str | None) -> dict[str, Any]:
@@ -248,8 +289,6 @@ def cancelar_oc(session: Session, identidad: Identidad, oc_id: str | None, clave
         raise Conflicto("La OC ya está cancelada", {"oc_id": str(fila[0])})
     # 7.1: "cambio o cancelación del compromiso mismo" dispara revaluación. La referencia de
     # la última decisión se captura ANTES de cancelar (después, la OC ya no es "activa").
-    from app.core.revaluacion import ultima_decision
-
     referencia = ultima_decision(session, identidad.tenant_id, fila[1])
     session.execute(
         text("UPDATE modulo1.oc SET estado = 'cancelado', actualizado_en = now() WHERE oc_id = :id"),

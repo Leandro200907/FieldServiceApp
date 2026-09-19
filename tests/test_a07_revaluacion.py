@@ -296,8 +296,8 @@ def test_origen_sujetos_no_es_falsificable_desde_la_api(cliente_api, tenant_de_p
     sesion.commit()
     esquema = cliente_api.get("/openapi.json").json()["components"]["schemas"]["EvaluarHabilitacionBody"]
     assert "origen_sujetos" not in esquema["properties"]
-    r = cliente_api.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-1", "sujetos_propuestos": ["persona_A"],
-                         "origen_sujetos": "custodia_por_defecto"}, headers=t.headers("responsable_legajos"))
+    r = cliente_api.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-1", "sujetos_propuestos": ["persona_A"]},
+                         headers=t.headers("responsable_legajos"))
     assert r.status_code == 200 and r.json()["origen_sujetos"] == "explicito"
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT origen_sujetos FROM modulo1.evaluacion_habilitacion WHERE referencia_evaluacion = :r"),
@@ -522,3 +522,139 @@ def test_drenaje_con_dos_workers_publica_cada_evento_una_vez(tenant_de_prueba, s
     assert len(ids) == 7 and len(set(ids)) == 7  # cada evento exactamente una vez (SKIP LOCKED + procesado_en)
     assert all(o["procesado_en"] is not None for o in _outbox(t))
     assert all(p["version_contrato"] == "1.0" for _, p, _ in pub.eventos)
+
+
+# ============================================================ compromiso modificado (importar_lote_oc)
+
+
+def _fila_oc(e, clave_origen="OC-1", **cambios):
+    base = {"clave_origen": clave_origen, "cliente_id": e["clave"]["c"], "locacion_id": e["clave"]["l"],
+            "tipo_servicio_id": e["clave"]["ts"], "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}
+    return {**base, **cambios}
+
+
+def _importar(cliente_api, t, filas, lote=None):
+    return cliente_api.post("/v1/comandos/importar_lote_oc", json={"lote_id": lote or str(uuid.uuid4()), "origen": "planilla", "filas": filas},
+                            headers=t.headers("responsable_legajos"))
+
+
+@pytest.mark.parametrize("cambio", [
+    {"vigencia_hasta": "2026-10-09"}, {"cliente_id": str(uuid.uuid4())}, {"locacion_id": str(uuid.uuid4())},
+    {"tipo_servicio_id": str(uuid.uuid4())},
+])
+def test_modificacion_de_una_entrada_abre_un_aviso_y_un_outbox(cliente_api, tenant_de_prueba, sesion, cambio):
+    t = tenant_de_prueba
+    e = _base(sesion, t)
+    sesion.commit()
+    r = _importar(cliente_api, t, [_fila_oc(e, **cambio)])
+    assert r.status_code == 200, r.text
+    assert r.json()["eventos"] == ["CompromisoModificado", "LoteAplicado"]
+    assert r.json()["oc_modificadas"][0]["campos_modificados"] == list(cambio)
+    _espera_un_aviso(t, e["d1"], "CompromisoModificado", "oc")
+    ob = _outbox(t)[0]["payload"]
+    assert ob["tipo_cambio"] == "modificacion"
+    with tenant_session(t.tenant_id) as s:
+        p = s.execute(text("SELECT payload FROM modulo1.event_log WHERE tipo = 'CompromisoModificado'")).scalar()
+    assert p["campos_modificados"] == list(cambio) and p["referencias_afectadas"] == [e["d1"]]
+    assert set(p["anterior"]) == set(cambio) and p["nuevo"] == {k: str(v) for k, v in cambio.items()}
+    # sigue siendo la misma decisión (invalidada), no se creó otra
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 1
+
+
+def test_varios_campos_juntos_un_solo_evento_causal_y_un_aviso(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    e = _base(sesion, t)
+    sesion.commit()
+    r = _importar(cliente_api, t, [_fila_oc(e, vigencia_desde="2026-10-02", vigencia_hasta="2026-10-09", cliente_id=str(uuid.uuid4()))])
+    assert r.status_code == 200 and r.json()["eventos"].count("CompromisoModificado") == 1
+    assert r.json()["oc_modificadas"][0]["campos_modificados"] == ["cliente_id", "vigencia_desde", "vigencia_hasta"]
+    assert _eventos(t, "CompromisoModificado") == 1
+    _espera_un_aviso(t, e["d1"], "CompromisoModificado", "oc")
+
+
+def test_reimportacion_identica_oc_nueva_y_solo_referencia_no_emiten(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    e = _base(sesion, t)
+    sesion.commit()
+    r = _importar(cliente_api, t, [_fila_oc(e)])  # idéntica
+    assert r.status_code == 200 and r.json()["eventos"] == ["LoteAplicado"] and r.json()["oc_actualizadas"] == 1
+    r = _importar(cliente_api, t, [_fila_oc(e, referencia="Orden 4711")])  # solo referencia (descriptiva)
+    assert r.status_code == 200 and r.json()["eventos"] == ["LoteAplicado"]
+    r = _importar(cliente_api, t, [_fila_oc(e, clave_origen="OC-nueva", vigencia_hasta="2026-11-01")])  # OC nueva
+    assert r.status_code == 200 and r.json()["eventos"] == ["LoteAplicado"] and r.json()["oc_creadas"] == 1
+    assert _eventos(t, "CompromisoModificado") == 0 and _avisos(t) == [] and _outbox(t) == []
+
+
+def test_modificacion_sin_decision_previa_audita_pero_no_marca(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    e = _base(sesion, t)
+    insertar_oc(sesion, t.tenant_id, "OC-sin", e["clave"], date(2026, 10, 1), date(2026, 10, 5))
+    sesion.commit()
+    r = _importar(cliente_api, t, [_fila_oc(e, clave_origen="OC-sin", vigencia_hasta="2026-10-09")])
+    assert r.status_code == 200 and r.json()["eventos"] == ["CompromisoModificado", "LoteAplicado"]
+    with tenant_session(t.tenant_id) as s:
+        p = s.execute(text("SELECT payload FROM modulo1.event_log WHERE tipo = 'CompromisoModificado'")).scalar()
+        assert p["referencias_afectadas"] == []
+        assert s.execute(text("SELECT count(*) FROM modulo1.politica_evento_procesado")).scalar() == 1  # procesado, sin afectadas
+    assert _avisos(t) == [] and _outbox(t) == []
+
+
+def test_rollback_de_la_importacion_no_deja_nada(tenant_de_prueba, sesion):
+    from app.auth.identidad import Identidad, Rol
+    from app.modules.oc.servicio import importar_lote_oc
+
+    t = tenant_de_prueba
+    e = _base(sesion, t)
+    sesion.commit()
+    ident = Identidad(t.tenant_id, t.usuarios["responsable_legajos"], frozenset({Rol.RESPONSABLE_LEGAJOS}))
+    with pytest.raises(RuntimeError):
+        with tenant_session(t.tenant_id) as s:
+            r = importar_lote_oc(s, ident, str(uuid.uuid4()), "planilla", [_fila_oc(e, vigencia_hasta="2026-10-09")])
+            assert r["eventos"][0] == "CompromisoModificado"
+            raise RuntimeError("rollback")
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT vigencia_hasta FROM modulo1.oc WHERE clave_origen = 'OC-1'")).scalar() == date(2026, 10, 5)
+        for tabla, cond in (("event_log", "tipo = 'CompromisoModificado'"), ("politica_evento_procesado", "true"),
+                            ("aviso_revaluacion", "true"), ("aviso_revaluacion_causa", "true"), ("outbox_events", "true"),
+                            ("lote_importacion", "true")):
+            assert s.execute(text(f"SELECT count(*) FROM modulo1.{tabla} WHERE {cond}")).scalar() == 0, tabla
+
+
+def test_repeticion_idempotente_del_lote_no_duplica(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    e = _base(sesion, t)
+    sesion.commit()
+    lote = str(uuid.uuid4())
+    filas = [_fila_oc(e, vigencia_hasta="2026-10-09")]
+    r1 = _importar(cliente_api, t, filas, lote)
+    r2 = _importar(cliente_api, t, filas, lote)
+    assert r1.status_code == 200 and r2.status_code == 200 and r1.json() == r2.json()
+    assert _eventos(t, "CompromisoModificado") == 1 and len(_avisos(t)) == 1 and len(_outbox(t)) == 1
+    assert len(_causas(t, str(_avisos(t)[0]["aviso_id"]))) == 1
+
+
+def test_dos_ocs_modificadas_en_un_lote_se_tratan_por_separado(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    e = _base(sesion, t)
+    insertar_oc(sesion, t.tenant_id, "OC-2", e["clave"], date(2026, 10, 1), date(2026, 10, 5))
+    d2 = decidir_habilitacion(sesion, t.tenant_id, "OC-2", ["persona_A"], AHORA, None)["referencia_evaluacion"]
+    sesion.commit()
+    r = _importar(cliente_api, t, [_fila_oc(e, vigencia_hasta="2026-10-09"), _fila_oc(e, clave_origen="OC-2"),
+                                   _fila_oc(e, clave_origen="OC-3")])  # OC-2 idéntica, OC-3 nueva
+    assert r.status_code == 200
+    assert r.json()["eventos"] == ["CompromisoModificado", "LoteAplicado"]
+    assert [m["commitment_id"] for m in r.json()["oc_modificadas"]] == ["OC-1"]
+    assert {a["referencia_evaluacion"] for a in _avisos(t)} == {uuid.UUID(e["d1"])}
+    assert _avisos(t, d2) == [] and len(_outbox(t)) == 1
+
+
+def test_origen_sujetos_en_el_body_es_422(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    _base(sesion, t)
+    sesion.commit()
+    r = cliente_api.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-1", "sujetos_propuestos": ["persona_A"],
+                         "origen_sujetos": "custodia_por_defecto"}, headers=t.headers("responsable_legajos"))
+    assert r.status_code == 422 and r.json()["error"]["codigo"] == "validacion"
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 1  # solo D1
