@@ -22,6 +22,7 @@ from app.modules.legajos import servicio as legajos
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _docs, _ok, _post, _vigentes
 from tests.test_orquestacion import (
     armar_escenario,
+    decidir,
     clave_de_matriz,
     insertar_definicion,
     insertar_documento,
@@ -178,8 +179,12 @@ def test_agregar_un_sujeto_nunca_mejora_ni_vuelve_verde_bajo_excepcion(tenant_de
     esc = armar_escenario(sesion, t, "excepcionable")
     sesion.execute(text("DELETE FROM modulo1.legajo WHERE sujeto_id = 'persona_0042'"))
     insertar_oc(sesion, t, "OC-p", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
-    base = evaluar_compromiso(sesion, t, "OC-p", AHORA, None)  # sin personas: no_habilitado
-    ref = base["referencia_evaluacion"]
+    # una decisión "vacía" no existe: la referencia para las excepciones sale de una
+    # decisión sobre la empresa sola no es posible (se exige ≥1 propuesto) → se crea con
+    # una persona auxiliar que después se da de baja.
+    insertar_legajo(sesion, t, "persona_ref", "persona")
+    ref = decidir(sesion, t, "OC-p", AHORA, ["persona_ref"])["referencia_evaluacion"]
+    sesion.execute(text("UPDATE modulo1.legajo SET dado_de_baja_en = now() WHERE sujeto_id = 'persona_ref'"))
 
     _armar_persona(sesion, t, esc, "pA", perfil_a, "OC-p", ref)
     solo_a = evaluar_compromiso(sesion, t, "OC-p", AHORA, None)
@@ -238,7 +243,8 @@ def test_empresa_sin_legajo_nunca_permite_asignar(tenant_de_prueba, sesion, con_
     r = evaluar_compromiso(sesion, t, "OC-e", AHORA, None)
     if con_excepcion_empresa:
         # ni siquiera una excepción "para la empresa" sirve si no hay legajo que evaluar
-        insertar_excepcion(sesion, t, r["referencia_evaluacion"], "empresa_fantasma", req_e, "OC-e")
+        ref = decidir(sesion, t, "OC-e", AHORA, ["persona_0042"])["referencia_evaluacion"]
+        insertar_excepcion(sesion, t, ref, "empresa_fantasma", req_e, "OC-e")
         r = evaluar_compromiso(sesion, t, "OC-e", AHORA, None)
     assert r["resultado_de_decision"] == "no_puede_asignarse"
     assert r["veredicto_de_cumplimiento"] == "no_habilitado"
@@ -303,8 +309,8 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
 
     # --- HTTP: el tenant B intenta leer/escribir cosas del tenant A con sus propios tokens
     assert c.get("/v1/consultas/legajo", params={"sujeto_id": a["persona"]}, headers=tb.headers("responsable_legajos")).status_code == 404
-    assert c.get("/v1/consultas/cobertura_oc", params={"commitment_id": a["oc"], "recalcular": "true"}, headers=tb.headers("supervisor")).status_code == 404
-    assert c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": a["oc"]}, headers=tb.headers("supervisor")).status_code == 404
+    assert c.get("/v1/consultas/cobertura_oc", params={"commitment_id": a["oc"]}, headers=tb.headers("supervisor")).status_code == 404
+    assert c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": a["oc"], "sujetos_propuestos": [a["persona"]]}, headers=tb.headers("responsable_legajos")).status_code == 404
     assert c.post("/v1/comandos/confirmar_documento", json={"documento_id": a["doc"]}, headers=tb.headers("responsable_legajos")).status_code == 404
     assert c.post("/v1/comandos/cargar_documento", json={"sujeto_id": a["persona"], "requisito_definicion_id": a["req"],
                   "vigente_desde": "2026-01-01", "vigente_hasta": "2026-12-31"}, headers=tb.headers("responsable_legajos")).status_code == 404
@@ -477,7 +483,7 @@ def test_concurrencia_dos_evaluaciones_de_la_misma_oc_son_dos_filas_consistentes
 
     def evaluar():
         with tenant_session(t) as s:
-            return evaluar_compromiso(s, t, "OC-c", AHORA, None)
+            return decidir(s, t, "OC-c", AHORA, ["persona_0042"])
 
     salidas = _en_paralelo([evaluar, evaluar])
     assert all(e is None for _, e in salidas)
@@ -544,7 +550,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     token: sin Authorization responde 401 con envelope, nunca 500 ni 200."""
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}"}
-    assert len(paths) == 42
+    assert len(paths) == 44
     for path, ops in paths.items():
         if path in publicas:
             continue

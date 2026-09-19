@@ -14,6 +14,7 @@ from app.core.orquestacion import evaluar_compromiso
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _docs, _ok, _post, _vigentes
 from tests.test_orquestacion import (
     armar_escenario,
+    decidir,
     clave_de_matriz,
     insertar_definicion,
     insertar_documento,
@@ -146,7 +147,7 @@ def test_sujeto_bajo_excepcion_cubre_por_delante_de_uno_bloqueado_sin_volver_ver
     insertar_legajo(sesion, t, "persona_0043", "persona")
     insertar_documento(sesion, t, "persona_0042", esc["req_apto"], date(2026, 1, 1), date(2026, 10, 3))
     insertar_oc(sesion, t, "OC-3", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
-    primera = evaluar_compromiso(sesion, t, "OC-3", AHORA, None)
+    primera = decidir(sesion, t, "OC-3", AHORA)
     assert primera["resultado_de_decision"] == "no_puede_asignarse"
     insertar_excepcion(sesion, t, primera["referencia_evaluacion"], "persona_0043", esc["req_apto"], "OC-3")
     r = evaluar_compromiso(sesion, t, "OC-3", AHORA, None)
@@ -170,7 +171,7 @@ def test_excepcion_parcial_no_alcanza_si_otro_requisito_del_mismo_sujeto_bloquea
     insertar_legajo(sesion, t, "persona_0043", "persona")
     insertar_documento(sesion, t, "persona_0043", req_lic, date(2026, 1, 1), date(2026, 12, 31))  # solo licencia
     insertar_oc(sesion, t, "OC-4", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
-    primera = evaluar_compromiso(sesion, t, "OC-4", AHORA, None)
+    primera = decidir(sesion, t, "OC-4", AHORA)
     insertar_excepcion(sesion, t, primera["referencia_evaluacion"], "persona_0042", esc["req_apto"], "OC-4")
     r = evaluar_compromiso(sesion, t, "OC-4", AHORA, None)
     assert r["resultado_de_decision"] == "no_puede_asignarse"

@@ -48,13 +48,23 @@ def backlog_oc(
 
 
 @router.get("/consultas/cobertura_oc")
-def cobertura_oc(
-    commitment_id: str = Query(...),
-    recalcular: bool = Query(False),
-    identidad: Identidad = Depends(identidad_actual),
+def cobertura_oc(commitment_id: str = Query(...), identidad: Identidad = Depends(identidad_actual)) -> dict:
+    with tenant_session(identidad.tenant_id) as s:
+        return servicio.cobertura_oc(s, identidad, commitment_id)
+
+
+@router.get("/consultas/decisiones_oc")
+def decisiones_oc(
+    commitment_id: str = Query(...), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)
 ) -> dict:
     with tenant_session(identidad.tenant_id) as s:
-        return servicio.cobertura_oc(s, identidad, commitment_id, recalcular)
+        return servicio.decisiones_oc(s, identidad, commitment_id, p)
+
+
+@router.get("/consultas/decision")
+def decision(referencia_evaluacion: str = Query(...), identidad: Identidad = Depends(identidad_actual)) -> dict:
+    with tenant_session(identidad.tenant_id) as s:
+        return servicio.decision(s, identidad, referencia_evaluacion)
 
 
 @router.get("/consultas/historial_supervision")

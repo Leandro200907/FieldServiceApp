@@ -273,42 +273,46 @@ def test_historial_supervision(cliente_api, tenant_de_prueba):
 # --------------------------------------------------------------------- OC
 
 
-def test_backlog_oc_con_ultima_evaluacion(cliente_api, tenant_de_prueba):
+def test_backlog_oc_con_ultima_decision(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
+    hoy = _hoy(t)
     with tenant_session(t.tenant_id) as s:
-        _oc(s, t, "OC-A", "2026-01-01", "2026-12-31")
-        _oc(s, t, "OC-B", "2026-02-01", "2026-12-31")
+        _legajo(s, t, "empresa_1", tipo="empresa")
+        _legajo(s, t, "p1")
+        rid = _requisito(s, t, "Carnet", "persona")
+        _matriz(s, t, 1, hoy - timedelta(days=30), None, [rid])
+        _oc(s, t, "OC-A", hoy, hoy + timedelta(days=10))
+        _oc(s, t, "OC-B", hoy + timedelta(days=1), hoy + timedelta(days=10))
         s.execute(text("UPDATE modulo1.oc SET estado = 'cancelado' WHERE clave_origen = 'OC-B'"))
-        for veredicto in ("no_habilitado", "habilitado"):  # la segunda es la última
-            s.execute(
-                text(
-                    "INSERT INTO modulo1.evaluacion_habilitacion (tenant_id, commitment_id, veredicto_de_cumplimiento, resultado_de_decision, por_sujeto, snapshot, creado_en) "
-                    "VALUES (:t, 'OC-A', :v, :r, '[]', '{}', now() + make_interval(secs => :s))"
-                ),
-                {"t": t.tenant_id, "v": veredicto, "r": "no_puede_asignarse" if veredicto == "no_habilitado" else "puede_asignarse", "s": 1 if veredicto == "habilitado" else 0},
-            )
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("supervisor"))
+    from app.core.orquestacion import decidir_habilitacion
+    from datetime import datetime, timezone
+    with tenant_session(t.tenant_id) as s:  # transacciones separadas: creado_en distinto
+        primera = decidir_habilitacion(s, t.tenant_id, "OC-A", ["p1"], datetime.now(timezone.utc), None)  # sin doc: no_habilitado
+    with tenant_session(t.tenant_id) as s:
+        _documento(s, t, "p1", rid, hoy - timedelta(days=10), hoy + timedelta(days=365))
+        segunda = decidir_habilitacion(s, t.tenant_id, "OC-A", ["p1"], datetime.now(timezone.utc), None)
+    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos"))
     assert r.status_code == 200, r.text
     assert r.json()["total"] == 1
     item = r.json()["items"][0]
-    assert item["clave_origen"] == "OC-A" and item["ultima_evaluacion"]["veredicto_de_cumplimiento"] == "habilitado"
+    assert item["clave_origen"] == "OC-A" and item["ultima_decision"]["referencia_evaluacion"] == segunda["referencia_evaluacion"]
+    assert item["ultima_decision"]["veredicto_de_cumplimiento"] == "habilitado"
     r = cliente_api.get("/v1/consultas/backlog_oc", params={"estado": "cancelado"}, headers=t.headers("responsable_legajos"))
-    assert r.json()["total"] == 1 and r.json()["items"][0]["ultima_evaluacion"] is None
+    assert r.json()["total"] == 1 and r.json()["items"][0]["ultima_decision"] is None
     r = cliente_api.get("/v1/consultas/backlog_oc", params={"estado": ""}, headers=t.headers("responsable_legajos"))
     assert r.json()["total"] == 2
-    # Cobertura sin recalcular devuelve la última persistida.
-    r = cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "OC-A"}, headers=t.headers("responsable_legajos"))
-    assert r.status_code == 200, r.text
-    assert r.json()["veredicto_de_cumplimiento"] == "habilitado" and r.json()["recalculada"] is False
-    assert cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "OC-B"}, headers=t.headers("responsable_legajos")).status_code == 404
+    # el supervisor sin p1 en su universo no ve ninguna decisión de OC-A
+    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("supervisor"))
+    assert r.json()["items"][0]["ultima_decision"] is None
+    # historial de decisiones
+    h = cliente_api.get("/v1/consultas/decisiones_oc", params={"commitment_id": "OC-A"}, headers=t.headers("responsable_legajos")).json()
+    assert [d["referencia_evaluacion"] for d in h["items"]] == [segunda["referencia_evaluacion"], primera["referencia_evaluacion"]]
+    assert h["items"][0]["sujetos_propuestos"] == ["p1"]
+    assert cliente_api.get("/v1/consultas/decisiones_oc", params={"commitment_id": "OC-A"}, headers=t.headers("supervisor")).json()["total"] == 0
     assert cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "NADA"}, headers=t.headers("responsable_legajos")).status_code == 404
 
 
-def test_cobertura_oc_recalcular(cliente_api, tenant_de_prueba):
-    from app.modules.consultas import servicio
-
-    if not servicio.ORQUESTACION_DISPONIBLE:
-        pytest.skip("app.core.orquestacion.evaluar_compromiso todavía no existe")
+def test_cobertura_oc_es_consulta_sin_persistir(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     hoy = _hoy(t)
     with tenant_session(t.tenant_id) as s:
@@ -318,18 +322,14 @@ def test_cobertura_oc_recalcular(cliente_api, tenant_de_prueba):
         _matriz(s, t, 1, hoy - timedelta(days=30), None, [rid])
         _documento(s, t, "p1", rid, hoy - timedelta(days=10), hoy + timedelta(days=365))
         _oc(s, t, "OC-R", hoy, hoy + timedelta(days=10))
-    r = cliente_api.get(
-        "/v1/consultas/cobertura_oc", params={"commitment_id": "OC-R", "recalcular": "true"}, headers=t.headers("supervisor")
-    )
+        s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
+                       "VALUES (:t, 'p1', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["supervisor"]})
+    r = cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "OC-R"}, headers=t.headers("supervisor"))
     assert r.status_code == 200, r.text
     cuerpo = r.json()
-    assert cuerpo["recalculada"] is True
-    assert cuerpo["veredicto_de_cumplimiento"] in ("habilitado", "vence_durante_el_trabajo", "no_habilitado", "requiere_revision")
-    assert cuerpo["resultado_de_decision"] in ("puede_asignarse", "puede_asignarse_bajo_excepcion", "no_puede_asignarse")
+    assert cuerpo["modo"] == "consulta" and "referencia_evaluacion" not in cuerpo
+    assert cuerpo["veredicto_de_cumplimiento"] == "habilitado" and cuerpo["resultado_de_decision"] == "puede_asignarse"
     assert cuerpo["por_sujeto"] is not None and cuerpo["requisitos_faltantes"] is not None
     with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion WHERE commitment_id = 'OC-R'")).scalar() == 1
-        assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = 'EvaluacionDeHabilitacionRealizada'")).scalar() == 1
-    # Sin recalcular, ahora devuelve la recién persistida.
-    r = cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "OC-R"}, headers=t.headers("supervisor"))
-    assert r.json()["referencia_evaluacion"] == cuerpo["referencia_evaluacion"]
+        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 0
+        assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = 'EvaluacionDeHabilitacionRealizada'")).scalar() == 0

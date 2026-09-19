@@ -71,3 +71,29 @@ def sujeto_en_alcance(
 ) -> bool:
     alcance = alcance_de_sujetos(session, identidad, hoy, roles_con_todo)
     return alcance is None or sujeto_id in alcance
+
+
+def filtro_decisiones_visibles(alcance: list[str] | None, alias: str = "e", param: str = "alcance") -> str:
+    """Fragmento SQL (AND ...) que deja pasar solo las decisiones cuyos sujetos propuestos
+    están TODOS en `alcance` (2.3 §3, regla cerrada A-04: si uno queda afuera, la decisión
+    entera no existe para ese usuario). La empresa nunca es "propuesta", así que no
+    interviene. `alcance=None` → sin filtro. El llamador debe bindear `param` como text[]."""
+    if alcance is None:
+        return ""
+    return (
+        f" AND NOT EXISTS (SELECT 1 FROM modulo1.evaluacion_sujeto_propuesto p "
+        f"WHERE p.evaluacion_id = {alias}.referencia_evaluacion "
+        f"AND NOT (p.sujeto_id = ANY(CAST(:{param} AS text[]))))"
+    )
+
+
+def decision_visible(session: Session, identidad: Identidad, referencia_evaluacion: str, hoy: date) -> bool:
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    fila = session.execute(
+        text(
+            "SELECT 1 FROM modulo1.evaluacion_habilitacion e WHERE e.referencia_evaluacion = CAST(:r AS uuid)"
+            + filtro_decisiones_visibles(alcance)
+        ),
+        {"r": referencia_evaluacion, "alcance": list(alcance) if alcance is not None else None},
+    ).first()
+    return fila is not None

@@ -107,11 +107,13 @@ def test_permisos_por_rol(cliente_api, tenant_de_prueba):
            "commitment_id": "OC", "motivo": "m"}
     r = _post(cliente_api, t, "responsable_legajos", "otorgar_excepcion", exc)
     assert r.status_code == 403 and r.json()["error"]["codigo"] == "prohibido"
+    r = _post(cliente_api, t, "supervisor", "evaluar_habilitacion", {"commitment_id": "OC", "sujetos_propuestos": ["p"]})
+    assert r.status_code == 403 and r.json()["error"]["codigo"] == "prohibido"
     assert _post(cliente_api, t, "tecnico", "cambiar_custodia",
                  {"recurso_id": "v", "tipo_recurso": "vehiculo", "custodio_id": "p", "desde": "2026-09-01"}).status_code == 403
     const = {"sujeto_id": "p", "requisito_definicion_id": str(uuid.uuid4()), "cliente_id": str(uuid.uuid4()), "evidencia": "e"}
     assert _post(cliente_api, t, "supervisor", "registrar_constancia_del_cliente", const).status_code == 403
-    assert _post(cliente_api, t, "configuracion", "evaluar_habilitacion", {"commitment_id": "OC"}).status_code == 403
+    assert _post(cliente_api, t, "configuracion", "evaluar_habilitacion", {"commitment_id": "OC", "sujetos_propuestos": ["p"]}).status_code == 403
     # Sin token: 401 con envelope propio.
     assert cliente_api.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC"}).status_code == 401
 
@@ -125,17 +127,37 @@ def test_otorgar_excepcion_solo_sobre_excepcionable_y_revocar(cliente_api, tenan
         esc = armar_escenario(s, t.tenant_id, clasificacion_persona="excepcionable")
         insertar_oc(s, t.tenant_id, "OC-1", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
 
-    ev = _post(cliente_api, t, "supervisor", "evaluar_habilitacion", {"commitment_id": "OC-1"})
+    # Decisión: solo el responsable, sobre sujetos propuestos (A-04). El supervisor queda
+    # con la persona en su universo para poder otorgar la excepción (2.3 §3).
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
+                       "VALUES (:t, 'persona_0042', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["supervisor"]})
+    assert _post(cliente_api, t, "supervisor", "evaluar_habilitacion",
+                 {"commitment_id": "OC-1", "sujetos_propuestos": ["persona_0042"]}).status_code == 403
+    ev = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion",
+               {"commitment_id": "OC-1", "sujetos_propuestos": ["persona_0042"]})
     assert ev.status_code == 200, ev.text
     referencia = ev.json()["referencia_evaluacion"]
     assert ev.json()["resultado_de_decision"] == "no_puede_asignarse"
     assert ev.json()["eventos"] == ["EvaluacionDeHabilitacionRealizada"]
 
-    # Sobre bloqueante_duro (el requisito de empresa): 422.
+    # Sobre la empresa: la empresa no forma parte del universo de ningún supervisor (2.3),
+    # así que ni siquiera llega a evaluarse la clasificación → 403 (mínimo privilegio).
     duro = _post(cliente_api, t, "supervisor", "otorgar_excepcion",
                  {"referencia_evaluacion": referencia, "sujeto_id": "empresa_0001", "requisito_definicion_id": esc["req_empresa"],
                   "commitment_id": "OC-1", "motivo": "no"})
+    assert duro.status_code == 403
+    # Sobre bloqueante_duro de un sujeto del universo: 422.
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("UPDATE modulo1.linea_requisito SET clasificacion = 'bloqueante_duro' WHERE requisito_definicion_id = :r"),
+                  {"r": esc["req_apto"]})
+    duro = _post(cliente_api, t, "supervisor", "otorgar_excepcion",
+                 {"referencia_evaluacion": referencia, "sujeto_id": "persona_0042", "requisito_definicion_id": esc["req_apto"],
+                  "commitment_id": "OC-1", "motivo": "no"})
     assert duro.status_code == 422 and duro.json()["error"]["codigo"] == "requisito_no_excepcionable"
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("UPDATE modulo1.linea_requisito SET clasificacion = 'excepcionable' WHERE requisito_definicion_id = :r"),
+                  {"r": esc["req_apto"]})
 
     # Evaluación de otro compromiso: 422; evaluación inexistente: 404.
     otro = _post(cliente_api, t, "supervisor", "otorgar_excepcion",
@@ -160,14 +182,15 @@ def test_otorgar_excepcion_solo_sobre_excepcionable_y_revocar(cliente_api, tenan
     assert _post(cliente_api, t, "supervisor", "otorgar_excepcion",
                  {"referencia_evaluacion": referencia, "sujeto_id": "persona_0042", "requisito_definicion_id": esc["req_apto"],
                   "commitment_id": "OC-1", "motivo": "otra vez"}).status_code == 409
-    ev2 = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-1"}).json()
+    ev2 = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion",
+                {"commitment_id": "OC-1", "sujetos_propuestos": ["persona_0042"]}).json()
     assert ev2["veredicto_de_cumplimiento"] == "no_habilitado"
     assert ev2["resultado_de_decision"] == "puede_asignarse_bajo_excepcion"
 
     rev = _post(cliente_api, t, "supervisor", "revocar_excepcion", {"excepcion_id": excepcion_id, "motivo": "no hizo el curso"})
     assert rev.status_code == 200 and rev.json()["eventos"] == ["ExcepcionRevocada"]
     assert _post(cliente_api, t, "supervisor", "revocar_excepcion", {"excepcion_id": excepcion_id}).status_code == 409
-    ev3 = _post(cliente_api, t, "supervisor", "evaluar_habilitacion", {"commitment_id": "OC-1"}).json()
+    ev3 = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-1", "sujetos_propuestos": ["persona_0042"]}).json()
     assert ev3["resultado_de_decision"] == "no_puede_asignarse"
 
 
@@ -228,18 +251,21 @@ def test_constancia_cubre_bloqueante_duro_en_evaluacion_http(cliente_api, tenant
     with tenant_session(t.tenant_id) as s:
         esc = armar_escenario(s, t.tenant_id)  # persona bloqueante_duro sin documento
         insertar_oc(s, t.tenant_id, "OC-1", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
-    antes = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-1"}).json()
+    cuerpo = {"commitment_id": "OC-1", "sujetos_propuestos": ["persona_0042"]}
+    antes = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", cuerpo).json()
     assert antes["resultado_de_decision"] == "no_puede_asignarse"
     c = _post(cliente_api, t, "responsable_legajos", "registrar_constancia_del_cliente",
               {"sujeto_id": "persona_0042", "requisito_definicion_id": esc["req_apto"], "cliente_id": esc["cliente_id"],
                "commitment_id": "OC-1", "evidencia": "carta"})
     assert c.status_code == 200, c.text
-    despues = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-1"}).json()
+    despues = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", cuerpo).json()
     assert despues["resultado_de_decision"] == "puede_asignarse"
     assert despues["referencia_evaluacion"] != antes["referencia_evaluacion"]
 
 
 def test_evaluar_habilitacion_errores(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
-    r = _post(cliente_api, t, "supervisor", "evaluar_habilitacion", {"commitment_id": "no-existe"})
+    assert _post(cliente_api, t, "supervisor", "evaluar_habilitacion",
+                 {"commitment_id": "no-existe", "sujetos_propuestos": ["x"]}).status_code == 403
+    r = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "no-existe", "sujetos_propuestos": ["x"]})
     assert r.status_code == 404 and r.json()["error"]["codigo"] == "no_encontrado"

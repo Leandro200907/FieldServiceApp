@@ -25,6 +25,7 @@ TABLAS_TENANT = [
     "asignacion_supervisor",
     "excepcion",
     "constancia_cliente",
+    "evaluacion_sujeto_propuesto",
     "evaluacion_habilitacion",
     "requisito_particular",
     "linea_requisito",

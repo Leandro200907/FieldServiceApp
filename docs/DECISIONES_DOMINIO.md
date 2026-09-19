@@ -192,3 +192,43 @@ FastAPI valida el body **antes** de ejecutar el handler, donde corre `exigir_rol
 eso un body inválido con un rol incorrecto responde **422**, no 403. No es filtración
 (el esquema es público en `/openapi.json`) y todas las rutas protegidas responden 401 sin
 token antes de cualquier otra cosa (`test_contrato_http_todas_las_rutas_estan_protegidas`).
+
+## 7. Modo consulta vs. modo decisión y alcance del supervisor (A-04, cerrado 2026-09-19)
+
+**Citas.** modelo-dominio 2.1: *"Puntual: sujetos propuestos + un compromiso → veredicto.
+Los recursos propuestos los declara el módulo 2 … Barrido: toda la vista de compromiso ×
+todos los legajos → cobertura. Siempre en modo consulta"*; *"Consulta: no persiste, no
+crea tareas, no emite eventos. Decisión: persiste el snapshot, emite el evento y devuelve
+`referencia_evaluacion`"*. habilitante 1.5/1.5 bis: *"el motor evalúa siempre sobre los
+sujetos propuestos que recibe"* (un parámetro). no-funcionales 2.2: *"Verificar
+habilitación (**modo consulta**, antes de asignar)"* → responsable y supervisor;
+*"cobertura del backlog"* → supervisor **"su universo"**. no-funcionales 2.3: el supervisor
+ve *"las Evaluaciones de habilitación … cuyo sujeto caiga dentro"* de su universo.
+
+**Regla definitiva.**
+| | Decisión — `POST /comandos/evaluar_habilitacion` | Consulta — `GET /consultas/cobertura_oc` |
+|---|---|---|
+| Entrada | `commitment_id` + `sujetos_propuestos[]` (≥1; sin duplicados; legajos activos del tenant; nunca la empresa, que entra siempre implícita) | `commitment_id` |
+| Cálculo | Empresa + **cada** propuesto entero. Todos deben ser asignables y cada tipo exigido debe estar presente | Empresa + mejor candidato asignable por tipo (1.12) |
+| Candidatos | los propuestos | responsable: todo el tenant; supervisor: **solo su universo** |
+| Persiste / emite | Sí: `evaluacion_habilitacion` + `evaluacion_sujeto_propuesto` (relación normalizada, FKs compuestas por tenant) + `EvaluacionDeHabilitacionRealizada`, misma transacción | **Nunca** |
+| Roles | **solo responsable de legajos** (y la identidad técnica de Módulo 2 cuando se integre). Supervisor → 403 (mínimo privilegio: la matriz solo le da "modo consulta") | responsable, supervisor |
+
+**Historial** (`backlog_oc.ultima_decision`, `decisiones_oc`, `decision`): el supervisor ve
+una decisión solo si **todos** sus sujetos propuestos están en su universo; si uno queda
+afuera la decisión entera no existe para él (404, sin filtrado parcial). La empresa no
+interviene en el universo. `otorgar_excepcion` aplica lo mismo: la decisión citada tiene
+que ser visible y el sujeto tiene que estar en el universo (403).
+
+**Consecuencia registrada**: como la empresa nunca está en el universo de un supervisor y
+solo el supervisor otorga excepciones, hoy **nadie** puede otorgar una excepción sobre un
+requisito excepcionable de empresa. Es coherente con 2.4 de modelo-dominio ("para un
+bloqueante duro de empresa no existe excepción") pero deja sin dueño el caso
+excepcionable-de-empresa. Punto abierto para el dominio (ver §"Puntos que la
+especificación no permite decidir sola", ítem 3).
+
+**Código.** `app/core/orquestacion.py` (`_evaluar`, `cobertura_de_oc`,
+`decidir_habilitacion`, `_validar_sujetos_propuestos`), `app/auth/alcance.py`
+(`filtro_decisiones_visibles`, `decision_visible`), `app/modules/consultas/servicio.py`,
+`app/modules/operacion/servicio.py`. Migración `0006_evaluacion_sujetos`. Tests:
+`tests/test_a04_alcance_evaluacion.py`.

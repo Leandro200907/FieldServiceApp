@@ -1,10 +1,10 @@
 """Consultas de Módulo 1 (GET /v1/consultas/*): solo lectura, SQL explícito, alcance por
-rol resuelto en `acceso.py`. "Hoy" siempre es `hoy_del_tenant` (regla dura 2) y
+rol resuelto en `app.auth.alcance`. "Hoy" siempre es `hoy_del_tenant` (regla dura 2) y
 `vigente_hasta` es inclusive en todos los cálculos.
 
-`cobertura_oc` con `recalcular=true` delega en `app.core.orquestacion.evaluar_compromiso`
-(pieza Operación). Hasta que exista, el import es tolerante y la consulta devuelve la
-última evaluación persistida.
+`cobertura_oc` es el barrido en MODO CONSULTA (`app.core.orquestacion.cobertura_de_oc`):
+nunca persiste. Las decisiones persistidas se leen con `decisiones_oc` / `decision`,
+filtradas por visibilidad (A-04).
 """
 from __future__ import annotations
 
@@ -19,14 +19,8 @@ from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import ahora_utc, hoy_del_tenant
-from app.auth.alcance import alcance_de_sujetos
-
-try:  # Interfaz de orquestación (brief): la construye Operación, acá se consume.
-    from app.core.orquestacion import evaluar_compromiso
-except ImportError:  # pragma: no cover - depende de qué pieza esté integrada
-    evaluar_compromiso = None  # type: ignore[assignment]
-
-ORQUESTACION_DISPONIBLE = evaluar_compromiso is not None
+from app.auth.alcance import alcance_de_sujetos, filtro_decisiones_visibles
+from app.core.orquestacion import cobertura_de_oc
 
 
 # --------------------------------------------------------------------- utilidades
@@ -172,9 +166,13 @@ def tablero_vencimientos(session: Session, identidad: Identidad, dias: int, p: P
 
 
 def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pagina) -> dict[str, Any]:
-    """OCs (por defecto las activas) con su última evaluación de habilitación, si la hay."""
+    """OCs (por defecto las activas) con la última DECISIÓN visible para quien consulta
+    (2.3 §3: el supervisor solo ve decisiones cuyos sujetos propuestos están todos en su
+    universo). La cobertura en vivo se pide aparte con `cobertura_oc`."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
-    params: dict[str, Any] = {}
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    params: dict[str, Any] = {"alcance": list(alcance) if alcance is not None else None}
     condicion = ""
     if estado:
         if estado not in ("activo", "cancelado"):
@@ -191,10 +189,10 @@ def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pa
                    e.creado_en AS evaluada_en
             FROM modulo1.oc o
             LEFT JOIN LATERAL (
-                SELECT referencia_evaluacion, veredicto_de_cumplimiento, resultado_de_decision, creado_en
-                FROM modulo1.evaluacion_habilitacion
-                WHERE commitment_id = o.clave_origen
-                ORDER BY creado_en DESC LIMIT 1
+                SELECT e.referencia_evaluacion, e.veredicto_de_cumplimiento, e.resultado_de_decision, e.creado_en
+                FROM modulo1.evaluacion_habilitacion e
+                WHERE e.commitment_id = o.clave_origen {filtro_decisiones_visibles(alcance)}
+                ORDER BY e.creado_en DESC LIMIT 1
             ) e ON true
             {condicion}
             ORDER BY o.vigencia_desde, o.clave_origen OFFSET :off LIMIT :lim
@@ -205,9 +203,9 @@ def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pa
     items = []
     for f in filas:
         d = _plano(f)
-        evaluacion = None
+        decision = None
         if d.pop("referencia_evaluacion", None) is not None:
-            evaluacion = {
+            decision = {
                 "referencia_evaluacion": str(f["referencia_evaluacion"]),
                 "veredicto_de_cumplimiento": d["veredicto_de_cumplimiento"],
                 "resultado_de_decision": d["resultado_de_decision"],
@@ -215,14 +213,16 @@ def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pa
             }
         for k in ("veredicto_de_cumplimiento", "resultado_de_decision", "evaluada_en"):
             d.pop(k, None)
-        d["ultima_evaluacion"] = evaluacion
+        d["ultima_decision"] = decision
         items.append(d)
     return envolver(items, int(total or 0), p)
 
 
-def cobertura_oc(session: Session, identidad: Identidad, commitment_id: str, recalcular: bool) -> dict[str, Any]:
-    """Cobertura de una OC (`commitment_id` = `oc.clave_origen`). Con `recalcular` corre
-    la orquestación y persiste una evaluación nueva; si no, devuelve la última."""
+def cobertura_oc(session: Session, identidad: Identidad, commitment_id: str) -> dict[str, Any]:
+    """Cobertura de una OC en MODO CONSULTA (2.1: no persiste, no crea tareas, no emite
+    eventos). Candidatos: todo el tenant para el responsable; solo su universo para el
+    supervisor (matriz 2.2: "su universo"). Nunca reutiliza una decisión persistida ni
+    devuelve sujetos fuera del alcance."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
     oc = session.execute(
         text("SELECT oc_id, clave_origen, estado, vigencia_desde, vigencia_hasta FROM modulo1.oc WHERE clave_origen = :c"),
@@ -230,42 +230,76 @@ def cobertura_oc(session: Session, identidad: Identidad, commitment_id: str, rec
     ).mappings().first()
     if oc is None:
         raise NoEncontrado("OC inexistente", {"commitment_id": commitment_id})
-
-    if recalcular and evaluar_compromiso is not None:
-        evaluacion = evaluar_compromiso(session, identidad.tenant_id, commitment_id, ahora_utc(), identidad.usuario_id)
-        return _respuesta_cobertura(oc, evaluacion, recalculada=True)
-
-    fila = session.execute(
-        text(
-            "SELECT referencia_evaluacion, commitment_id, veredicto_de_cumplimiento, resultado_de_decision, "
-            "por_sujeto, requisitos_faltantes, version_vista_compromiso, version_matriz, creado_en "
-            "FROM modulo1.evaluacion_habilitacion WHERE commitment_id = :c ORDER BY creado_en DESC LIMIT 1"
-        ),
-        {"c": commitment_id},
-    ).mappings().first()
-    if fila is None:
-        raise NoEncontrado(
-            "La OC no tiene ninguna evaluación de habilitación persistida"
-            + ("" if evaluar_compromiso is not None else " y la orquestación no está disponible para recalcular"),
-            {"commitment_id": commitment_id},
-        )
-    return _respuesta_cobertura(oc, dict(fila), recalculada=False)
-
-
-def _respuesta_cobertura(oc: Any, evaluacion: dict[str, Any], recalculada: bool) -> dict[str, Any]:
-    ev = _plano(evaluacion)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    cobertura = cobertura_de_oc(session, identidad.tenant_id, commitment_id, ahora_utc(), candidatos=alcance)
+    ev = _plano(cobertura)
     return {
         "commitment_id": oc["clave_origen"],
         "oc": _plano(oc),
-        "recalculada": recalculada,
-        "referencia_evaluacion": ev.get("referencia_evaluacion"),
-        "veredicto_de_cumplimiento": ev.get("veredicto_de_cumplimiento"),
-        "resultado_de_decision": ev.get("resultado_de_decision"),
-        "por_sujeto": ev.get("por_sujeto"),
-        "requisitos_faltantes": ev.get("requisitos_faltantes"),
-        "version_matriz": ev.get("version_matriz"),
-        "creado_en": ev.get("creado_en"),
+        "modo": "consulta",
+        "veredicto_de_cumplimiento": ev["veredicto_de_cumplimiento"],
+        "resultado_de_decision": ev["resultado_de_decision"],
+        "por_sujeto": ev["por_sujeto"],
+        "requisitos_faltantes": ev["requisitos_faltantes"],
+        "version_matriz": ev["version_matriz"],
     }
+
+
+def _filas_decision(fila: Any) -> dict[str, Any]:
+    d = _plano(fila)
+    d["referencia_evaluacion"] = str(fila["referencia_evaluacion"])
+    return d
+
+
+def decisiones_oc(session: Session, identidad: Identidad, commitment_id: str, p: Pagina) -> dict[str, Any]:
+    """Historial de decisiones persistidas de una OC, filtrado por visibilidad (2.3 §3)."""
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    params = {"c": commitment_id, "alcance": list(alcance) if alcance is not None else None}
+    filtro = filtro_decisiones_visibles(alcance)
+    total = session.execute(
+        text(f"SELECT count(*) FROM modulo1.evaluacion_habilitacion e WHERE e.commitment_id = :c {filtro}"), params
+    ).scalar()
+    filas = session.execute(
+        text(
+            f"""
+            SELECT e.referencia_evaluacion, e.commitment_id, e.veredicto_de_cumplimiento, e.resultado_de_decision,
+                   e.por_sujeto, e.requisitos_faltantes, e.version_matriz, e.creado_en,
+                   (SELECT array_agg(p.sujeto_id ORDER BY p.sujeto_id) FROM modulo1.evaluacion_sujeto_propuesto p
+                     WHERE p.evaluacion_id = e.referencia_evaluacion) AS sujetos_propuestos
+            FROM modulo1.evaluacion_habilitacion e
+            WHERE e.commitment_id = :c {filtro}
+            ORDER BY e.creado_en DESC OFFSET :off LIMIT :lim
+            """
+        ),
+        {**params, "off": p.offset, "lim": p.limit},
+    ).mappings().all()
+    return envolver([_filas_decision(f) for f in filas], int(total or 0), p)
+
+
+def decision(session: Session, identidad: Identidad, referencia_evaluacion: str) -> dict[str, Any]:
+    """Una decisión por id. Fuera de alcance → 404 (no se confirma su existencia)."""
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    fila = session.execute(
+        text(
+            f"""
+            SELECT e.referencia_evaluacion, e.commitment_id, e.veredicto_de_cumplimiento, e.resultado_de_decision,
+                   e.por_sujeto, e.requisitos_faltantes, e.version_matriz, e.snapshot, e.creado_en,
+                   (SELECT array_agg(p.sujeto_id ORDER BY p.sujeto_id) FROM modulo1.evaluacion_sujeto_propuesto p
+                     WHERE p.evaluacion_id = e.referencia_evaluacion) AS sujetos_propuestos
+            FROM modulo1.evaluacion_habilitacion e
+            WHERE e.referencia_evaluacion = CAST(:r AS uuid) {filtro_decisiones_visibles(alcance)}
+            """
+        ),
+        {"r": referencia_evaluacion, "alcance": list(alcance) if alcance is not None else None},
+    ).mappings().first()
+    if fila is None:
+        raise NoEncontrado("Decisión inexistente", {"referencia_evaluacion": referencia_evaluacion})
+    return _filas_decision(fila)
 
 
 def historial_supervision(session: Session, identidad: Identidad, sujeto_id: str, p: Pagina) -> dict[str, Any]:

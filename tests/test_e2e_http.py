@@ -72,19 +72,25 @@ def test_flujo_completo_por_http(cliente_api, tenant_de_prueba):
     assert lote["filas_aceptadas"] == 2, lote
 
     # 6.1: vigente_hasta inclusive → habilitado el mismo día, vence_durante_el_trabajo al siguiente
-    ev_borde = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-BORDE"}, headers=sup))
+    ev_borde = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-BORDE", "sujetos_propuestos": [persona]}, headers=resp))
     assert ev_borde["veredicto_de_cumplimiento"] == "habilitado"
     assert ev_borde["resultado_de_decision"] == "puede_asignarse"
-    ev_pasada = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA"}, headers=sup))
+    ev_pasada = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA", "sujetos_propuestos": [persona]}, headers=resp))
     assert ev_pasada["veredicto_de_cumplimiento"] == "vence_durante_el_trabajo"
     assert ev_pasada["resultado_de_decision"] == "no_puede_asignarse"
+
+    # --- El supervisor solo actúa sobre su universo: se le asigna la persona (2.3)
+    _ok(c.post("/v1/comandos/asignar_supervisor", json={"sujeto_id": persona, "supervisor_usuario_id": t.usuarios["supervisor"]}, headers=resp))
+    # y como consulta ve la cobertura de su universo sin persistir nada
+    cob = _ok(c.get("/v1/consultas/cobertura_oc", params={"commitment_id": "OC-PASADA"}, headers=sup))
+    assert cob["modo"] == "consulta" and cob["veredicto_de_cumplimiento"] == "vence_durante_el_trabajo"
 
     # --- Excepción del supervisor sobre el requisito excepcionable: NUNCA vuelve verde
     exc = _ok(c.post("/v1/comandos/otorgar_excepcion", json={
         "referencia_evaluacion": ev_pasada["referencia_evaluacion"], "sujeto_id": persona,
         "requisito_definicion_id": req, "commitment_id": "OC-PASADA", "motivo": "renueva en 3 días"}, headers=sup))
     assert exc["excepcion_id"]
-    ev_exc = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA"}, headers=sup))
+    ev_exc = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA", "sujetos_propuestos": [persona]}, headers=resp))
     assert ev_exc["resultado_de_decision"] == "puede_asignarse_bajo_excepcion"
     assert ev_exc["veredicto_de_cumplimiento"] == "vence_durante_el_trabajo"  # no "habilitado"
 
@@ -111,7 +117,7 @@ def test_flujo_completo_por_http(cliente_api, tenant_de_prueba):
     assert hoy_m["version"] == 2
 
     # 6.5: reclasificado a bloqueante_duro → la excepción sigue otorgada pero sin efecto
-    ev_reclas = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA"}, headers=sup))
+    ev_reclas = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA", "sujetos_propuestos": [persona]}, headers=resp))
     assert ev_reclas["resultado_de_decision"] == "no_puede_asignarse"
     reqs = [r for sj in ev_reclas["por_sujeto"] if sj["sujeto_id"] == persona for r in sj["requisitos"]]
     assert any(r.get("excepcion_aplicable_pero_sin_efecto") for r in reqs), reqs
@@ -125,7 +131,7 @@ def test_flujo_completo_por_http(cliente_api, tenant_de_prueba):
     _ok(c.post("/v1/comandos/registrar_constancia_del_cliente", json={
         "sujeto_id": persona, "requisito_definicion_id": req, "cliente_id": cliente_id,
         "commitment_id": "OC-PASADA", "evidencia": "constancia firmada por el cliente"}, headers=resp))
-    ev_const = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA"}, headers=sup))
+    ev_const = _ok(c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-PASADA", "sujetos_propuestos": [persona]}, headers=resp))
     assert ev_const["veredicto_de_cumplimiento"] == "habilitado"
     assert ev_const["resultado_de_decision"] == "puede_asignarse"
 

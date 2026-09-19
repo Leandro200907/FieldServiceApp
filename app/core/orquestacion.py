@@ -458,13 +458,30 @@ def _jsonable(valor: Any) -> Any:
     return json.loads(json.dumps(valor, default=str, ensure_ascii=False))
 
 
-def evaluar_compromiso(
-    session: Session, tenant_id: str, commitment_id: str, ahora_utc: datetime, usuario_id: str | None
-) -> dict:
-    """Evalúa la OC `commitment_id` y persiste el resultado. Ver docstring del módulo.
+MODO_CONSULTA = "consulta"
+MODO_DECISION = "decision"
 
-    `session` tiene que ser una `tenant_session(tenant_id)` abierta: todo (lecturas,
-    fila de evaluación y evento) va en esa misma transacción.
+
+def _evaluar(
+    session: Session,
+    tenant_id: str,
+    commitment_id: str,
+    ahora_utc: datetime,
+    *,
+    modo: str,
+    candidatos: list[str] | None = None,
+    sujetos_propuestos: list[dict[str, Any]] | None = None,
+) -> dict:
+    """Cálculo común a los dos modos (2.1 de modelo-dominio: "es la misma evaluación;
+    cambia sólo si la envuelve una decisión"). NO persiste ni emite nada.
+
+    - modo consulta (barrido / cobertura): candidatos = legajos activos del tenant, o
+      solo los `candidatos` dados (universo de quien consulta). Cubre cada tipo exigido
+      con el mejor candidato asignable (1.12).
+    - modo decisión: evalúa EXCLUSIVAMENTE `sujetos_propuestos` (ya validados por quien
+      llama). Cada propuesto es representante: se asigna la cuadrilla entera, así que
+      todos deben ser asignables y cada tipo exigido debe estar presente entre ellos.
+    La empresa se evalúa siempre en ambos modos (1.8) y no forma parte de los propuestos.
     """
     oc = buscar_oc(session, tenant_id, commitment_id)
     if oc is None:
@@ -539,31 +556,55 @@ def evaluar_compromiso(
                      "motivo": "sin legajo de empresa: no hay evidencia que evaluar", "bajo_excepcion": False}
                 )
 
-    # Paso 2 — cada tipo de recurso exigido, sujeto por sujeto.
-    sujetos = _sujetos_activos(session, tenant_id, tipos_recurso)
+    # Paso 2 — recursos. Consulta: candidatos (todo el tenant o el universo dado), mejor
+    # por tipo. Decisión: exactamente los propuestos, todos representantes.
+    if modo == MODO_DECISION:
+        sujetos = list(sujetos_propuestos or [])
+    else:
+        sujetos = _sujetos_activos(session, tenant_id, tipos_recurso)
+        if candidatos is not None:
+            permitidos = set(candidatos)
+            sujetos = [x for x in sujetos if str(x["sujeto_id"]) in permitidos]
     tipo_sin_sujetos: list[str] = []
     for tipo in tipos_recurso:
         evaluados = [
-            _evaluar_sujeto(ctx, str(s["sujeto_id"]), tipo, requisitos_por_tipo[tipo])
-            for s in sujetos
-            if s["tipo_sujeto"] == tipo
+            _evaluar_sujeto(ctx, str(x["sujeto_id"]), tipo, requisitos_por_tipo[tipo])
+            for x in sujetos
+            if x["tipo_sujeto"] == tipo
         ]
         if not evaluados:
             tipo_sin_sujetos.append(tipo)
             cobertura_por_tipo[tipo] = None
             requisitos_faltantes.append(
                 {"tipo_sujeto": tipo, "sujeto_id": None, "requisito_definicion_id": None,
-                 "veredicto": Veredicto.NO_HABILITADO.value, "motivo": f"sin legajos activos de tipo {tipo}",
+                 "veredicto": Veredicto.NO_HABILITADO.value,
+                 "motivo": (f"ningún sujeto propuesto de tipo {tipo}" if modo == MODO_DECISION
+                            else f"sin candidatos de tipo {tipo}"),
                  "bajo_excepcion": False}
             )
             continue
-        mejor = min(evaluados, key=_clave_mejor_sujeto)
-        mejor["representante"] = True
-        for e in evaluados:
-            e.setdefault("representante", False)
+        if modo == MODO_DECISION:
+            for e in evaluados:
+                e["representante"] = True
+            representantes.extend(evaluados)
+            cobertura_por_tipo[tipo] = [e["sujeto_id"] for e in evaluados]
+        else:
+            mejor = min(evaluados, key=_clave_mejor_sujeto)
+            mejor["representante"] = True
+            for e in evaluados:
+                e.setdefault("representante", False)
+            representantes.append(mejor)
+            cobertura_por_tipo[tipo] = mejor["sujeto_id"]
         por_sujeto.extend(evaluados)
-        representantes.append(mejor)
-        cobertura_por_tipo[tipo] = mejor["sujeto_id"]
+    # Propuestos de un tipo que la matriz no exige: se informan igual (evaluados sin
+    # requisitos → habilitado), para que la decisión refleje la cuadrilla completa.
+    if modo == MODO_DECISION:
+        for x in sujetos:
+            if x["tipo_sujeto"] not in requisitos_por_tipo:
+                e = _evaluar_sujeto(ctx, str(x["sujeto_id"]), x["tipo_sujeto"], [])
+                e["representante"] = True
+                por_sujeto.append(e)
+                representantes.append(e)
 
     # Agregación: peor entre empresa y el mejor sujeto de cada tipo exigido.
     veredictos_globales = [Veredicto(r["veredicto"]) for r in representantes]
@@ -624,8 +665,90 @@ def evaluar_compromiso(
             "sujetos_evaluados": len(por_sujeto),
         }
     )
-    por_sujeto = _jsonable(por_sujeto)
-    requisitos_faltantes = _jsonable(requisitos_faltantes)
+    return {
+        "commitment_id": commitment_id,
+        "modo": modo,
+        "veredicto_de_cumplimiento": veredicto_global.value,
+        "resultado_de_decision": resultado.value,
+        "por_sujeto": _jsonable(por_sujeto),
+        "requisitos_faltantes": _jsonable(requisitos_faltantes),
+        "version_matriz": version_matriz,
+        "snapshot": snapshot,
+    }
+
+
+def cobertura_de_oc(
+    session: Session,
+    tenant_id: str,
+    commitment_id: str,
+    ahora_utc: datetime,
+    candidatos: list[str] | None = None,
+) -> dict:
+    """Barrido en MODO CONSULTA (2.1: "no persiste, no crea tareas, no emite eventos").
+    `candidatos=None` → todos los legajos activos del tenant (responsable de legajos);
+    lista → solo esos sujetos (universo del supervisor, A-04). Nunca reutiliza una
+    decisión persistida ni devuelve sujetos fuera de `candidatos`."""
+    r = _evaluar(session, tenant_id, commitment_id, ahora_utc, modo=MODO_CONSULTA, candidatos=candidatos)
+    r["snapshot"]["candidatos"] = None if candidatos is None else sorted(candidatos)
+    return r
+
+
+def evaluar_compromiso(
+    session: Session,
+    tenant_id: str,
+    commitment_id: str,
+    ahora_utc: datetime,
+    usuario_id: str | None = None,
+    candidatos: list[str] | None = None,
+) -> dict:
+    """Nombre histórico del barrido en MODO CONSULTA. `usuario_id` se acepta por
+    compatibilidad y se ignora: una consulta no persiste ni audita nada."""
+    return cobertura_de_oc(session, tenant_id, commitment_id, ahora_utc, candidatos)
+
+
+def _validar_sujetos_propuestos(session: Session, tenant_id: str, sujetos_propuestos: list[str]) -> list[dict[str, Any]]:
+    """Duplicados, vacíos, inexistentes (o de otro tenant: RLS los hace inexistentes),
+    dados de baja o de tipo empresa → error antes de calcular nada."""
+    if not sujetos_propuestos:
+        raise ErrorDeDominio("Hay que proponer al menos un sujeto", codigo="sin_sujetos_propuestos")
+    duplicados = sorted({x for x in sujetos_propuestos if sujetos_propuestos.count(x) > 1})
+    if duplicados:
+        raise ErrorDeDominio("Sujetos propuestos duplicados", {"sujetos": duplicados}, codigo="sujetos_duplicados")
+    filas = session.execute(
+        text(
+            "SELECT sujeto_id, tipo_sujeto, dado_de_baja_en FROM modulo1.legajo "
+            "WHERE tenant_id = :t AND sujeto_id = ANY(CAST(:ids AS text[]))"
+        ),
+        {"t": tenant_id, "ids": list(sujetos_propuestos)},
+    ).mappings().all()
+    por_id = {str(f["sujeto_id"]): dict(f) for f in filas}
+    inexistentes = [x for x in sujetos_propuestos if x not in por_id]
+    if inexistentes:
+        raise NoEncontrado("Sujetos propuestos inexistentes", {"sujetos": inexistentes})
+    inactivos = [x for x in sujetos_propuestos if por_id[x]["dado_de_baja_en"] is not None]
+    if inactivos:
+        raise ErrorDeDominio("Sujetos propuestos dados de baja", {"sujetos": inactivos}, codigo="sujetos_inactivos")
+    empresas = [x for x in sujetos_propuestos if por_id[x]["tipo_sujeto"] == "empresa"]
+    if empresas:
+        raise ErrorDeDominio("La empresa se evalúa siempre; no se propone", {"sujetos": empresas}, codigo="empresa_no_se_propone")
+    return [por_id[x] for x in sujetos_propuestos]
+
+
+def decidir_habilitacion(
+    session: Session,
+    tenant_id: str,
+    commitment_id: str,
+    sujetos_propuestos: list[str],
+    ahora_utc: datetime,
+    usuario_id: str | None,
+) -> dict:
+    """MODO DECISIÓN (2.1 / 4.1): evalúa exclusivamente los sujetos propuestos y, en la
+    misma transacción, persiste el snapshot, la relación normalizada
+    `evaluacion_sujeto_propuesto` y el evento EvaluacionDeHabilitacionRealizada.
+    La autorización (solo responsable de legajos) la hace el servicio que llama."""
+    propuestos = _validar_sujetos_propuestos(session, tenant_id, sujetos_propuestos)
+    r = _evaluar(session, tenant_id, commitment_id, ahora_utc, modo=MODO_DECISION, sujetos_propuestos=propuestos)
+    r["snapshot"]["sujetos_propuestos"] = list(sujetos_propuestos)
 
     fila = session.execute(
         text(
@@ -638,15 +761,23 @@ def evaluar_compromiso(
         {
             "t": tenant_id,
             "c": commitment_id,
-            "v": veredicto_global.value,
-            "r": resultado.value,
-            "ps": json.dumps(por_sujeto, ensure_ascii=False),
-            "rf": json.dumps(requisitos_faltantes, ensure_ascii=False),
-            "vm": json.dumps(version_matriz),
-            "sn": json.dumps(snapshot, ensure_ascii=False),
+            "v": r["veredicto_de_cumplimiento"],
+            "r": r["resultado_de_decision"],
+            "ps": json.dumps(r["por_sujeto"], ensure_ascii=False),
+            "rf": json.dumps(r["requisitos_faltantes"], ensure_ascii=False),
+            "vm": json.dumps(r["version_matriz"]),
+            "sn": json.dumps(r["snapshot"], ensure_ascii=False),
         },
     ).first()
     referencia = str(fila[0])
+    for x in propuestos:
+        session.execute(
+            text(
+                "INSERT INTO modulo1.evaluacion_sujeto_propuesto (tenant_id, evaluacion_id, sujeto_id, tipo_sujeto) "
+                "VALUES (:t, :e, :sj, :tipo)"
+            ),
+            {"t": tenant_id, "e": referencia, "sj": str(x["sujeto_id"]), "tipo": x["tipo_sujeto"]},
+        )
 
     registrar_evento(
         session,
@@ -655,20 +786,16 @@ def evaluar_compromiso(
         {
             "referencia_evaluacion": referencia,
             "commitment_id": commitment_id,
-            "veredicto": veredicto_global.value,
-            "resultado": resultado.value,
+            "veredicto": r["veredicto_de_cumplimiento"],
+            "resultado": r["resultado_de_decision"],
+            "sujetos_propuestos": list(sujetos_propuestos),
         },
         usuario_id,
     )
 
     return {
         "referencia_evaluacion": referencia,
-        "commitment_id": commitment_id,
-        "veredicto_de_cumplimiento": veredicto_global.value,
-        "resultado_de_decision": resultado.value,
-        "por_sujeto": por_sujeto,
-        "requisitos_faltantes": requisitos_faltantes,
-        "version_matriz": version_matriz,
-        "snapshot": snapshot,
+        "sujetos_propuestos": list(sujetos_propuestos),
+        **r,
         "creado_en": fila[1].isoformat(),
     }

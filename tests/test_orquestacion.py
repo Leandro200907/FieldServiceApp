@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import text
 
 from app.api.errores import ErrorDeDominio, NoEncontrado
-from app.core.orquestacion import clasificacion_vigente, evaluar_compromiso
+from app.core.orquestacion import clasificacion_vigente, decidir_habilitacion, evaluar_compromiso
 from app.core.tipos import Clasificacion
 
 # Un instante fijo: 2026-09-18 15:00 UTC → hoy = 2026-09-18 en Buenos Aires.
@@ -143,6 +143,16 @@ def requisitos_de(resultado: dict, sujeto_id: str) -> dict[str, dict]:
     return {r["requisito_definicion_id"]: r for r in sujeto["requisitos"]}
 
 
+def decidir(s, tenant_id: str, commitment_id: str, ahora, sujetos: list[str] | None = None, usuario: str | None = None) -> dict:
+    """Decisión persistida sobre sujetos propuestos (default: todos los legajos activos no
+    empresa del tenant, que es lo que los escenarios de estos tests dan por sentado)."""
+    if sujetos is None:
+        sujetos = [str(x) for x in s.execute(text(
+            "SELECT sujeto_id FROM modulo1.legajo WHERE dado_de_baja_en IS NULL AND tipo_sujeto <> 'empresa' ORDER BY creado_en, sujeto_id"
+        )).scalars().all()]
+    return decidir_habilitacion(s, tenant_id, commitment_id, sujetos, ahora, usuario)
+
+
 def contar_eventos(s, tipo: str) -> int:
     return s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = :tipo"), {"tipo": tipo}).scalar()
 
@@ -181,12 +191,12 @@ def test_6_1_borde_inclusive_de_vigente_hasta_end_to_end(tenant_de_prueba, sesio
     insertar_oc(sesion, t, "OC-dia-limite", esc["clave"], date(2026, 9, 15), date(2026, 9, 15))
     insertar_oc(sesion, t, "OC-dia-siguiente", esc["clave"], date(2026, 9, 16), date(2026, 9, 16))
 
-    limite = evaluar_compromiso(sesion, t, "OC-dia-limite", AHORA, "usuario-test")
+    limite = decidir(sesion, t, "OC-dia-limite", AHORA, ["persona_0042"], "usuario-test")
     assert limite["veredicto_de_cumplimiento"] == "habilitado"
     assert limite["resultado_de_decision"] == "puede_asignarse"
     assert limite["referencia_evaluacion"]
 
-    siguiente = evaluar_compromiso(sesion, t, "OC-dia-siguiente", AHORA, "usuario-test")
+    siguiente = decidir(sesion, t, "OC-dia-siguiente", AHORA, ["persona_0042"], "usuario-test")
     assert siguiente["veredicto_de_cumplimiento"] == "no_habilitado"
     assert siguiente["resultado_de_decision"] == "no_puede_asignarse"
     req = requisitos_de(siguiente, "persona_0042")[esc["req_apto"]]
@@ -282,7 +292,7 @@ def test_6_5_excepcion_deja_de_aplicar_por_reclasificacion_y_ck_nunca_verde(tena
     esc = armar_escenario(sesion, t, clasificacion_persona="excepcionable")
     insertar_oc(sesion, t, "OC-2026-1188", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
 
-    base = evaluar_compromiso(sesion, t, "OC-2026-1188", AHORA, None)
+    base = decidir(sesion, t, "OC-2026-1188", AHORA, ["persona_0042"])
     assert base["resultado_de_decision"] == "no_puede_asignarse"
     assert clasificacion_vigente(sesion, t, "OC-2026-1188", esc["req_apto"]) == Clasificacion.EXCEPCIONABLE
 
@@ -291,7 +301,7 @@ def test_6_5_excepcion_deja_de_aplicar_por_reclasificacion_y_ck_nunca_verde(tena
     )
 
     # matriz v1 excepcionable: la excepción tiene efecto, pero NUNCA vuelve verde (ck_excepcion_nunca_verde).
-    bajo = evaluar_compromiso(sesion, t, "OC-2026-1188", AHORA, None)
+    bajo = decidir(sesion, t, "OC-2026-1188", AHORA, ["persona_0042"])
     assert bajo["veredicto_de_cumplimiento"] == "no_habilitado"
     assert bajo["resultado_de_decision"] == "puede_asignarse_bajo_excepcion"
     req = requisitos_de(bajo, "persona_0042")[esc["req_apto"]]

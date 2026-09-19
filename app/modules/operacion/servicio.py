@@ -14,11 +14,12 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
+from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
 from app.comun.reloj import ahora_utc, hoy_del_tenant
-from app.core.orquestacion import buscar_oc, clasificacion_vigente, evaluar_compromiso
+from app.auth.alcance import decision_visible, sujeto_en_alcance
+from app.core.orquestacion import buscar_oc, clasificacion_vigente, decidir_habilitacion
 from app.core.tipos import Clasificacion
 
 __all__ = [
@@ -244,8 +245,13 @@ def otorgar_excepcion(
         text("SELECT commitment_id FROM modulo1.evaluacion_habilitacion WHERE tenant_id = :t AND referencia_evaluacion = :e"),
         {"t": tenant_id, "e": referencia_evaluacion},
     ).first()
-    if evaluacion is None:
+    # 2.3 §3: el supervisor solo ve (y por lo tanto solo cita) decisiones cuyos sujetos
+    # están todos en su universo; una decisión fuera de alcance "no existe" para él.
+    hoy = hoy_del_tenant(session, tenant_id)
+    if evaluacion is None or not decision_visible(session, identidad, referencia_evaluacion, hoy):
         raise NoEncontrado("Evaluación inexistente", {"referencia_evaluacion": referencia_evaluacion})
+    if not sujeto_en_alcance(session, identidad, sujeto_id, hoy):
+        raise Prohibido("El sujeto está fuera del universo del supervisor", {"sujeto_id": sujeto_id})
     if evaluacion[0] != commitment_id:
         raise ErrorDeDominio(
             "La evaluación referida no corresponde a ese compromiso",
@@ -485,7 +491,14 @@ def revocar_constancia_del_cliente(
 # --------------------------------------------------------------------------- evaluación
 
 
-def evaluar_habilitacion(session: Session, identidad: Identidad, *, commitment_id: str) -> dict[str, Any]:
-    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
-    resultado = evaluar_compromiso(session, identidad.tenant_id, commitment_id, ahora_utc(), identidad.usuario_id)
+def evaluar_habilitacion(
+    session: Session, identidad: Identidad, *, commitment_id: str, sujetos_propuestos: list[str]
+) -> dict[str, Any]:
+    """MODO DECISIÓN (regla A-04): solo el responsable de legajos (y, cuando se integre, la
+    identidad técnica de Módulo 2). El supervisor tiene únicamente modo consulta —matriz
+    2.2 dice "modo consulta" expresamente— vía GET /consultas/cobertura_oc."""
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    resultado = decidir_habilitacion(
+        session, identidad.tenant_id, commitment_id, sujetos_propuestos, ahora_utc(), identidad.usuario_id
+    )
     return {**resultado, "eventos": ["EvaluacionDeHabilitacionRealizada"]}
