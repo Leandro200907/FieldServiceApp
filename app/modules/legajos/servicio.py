@@ -25,7 +25,6 @@ from sqlalchemy.orm import Session
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad
 from app.comun.eventos import registrar_evento
-from app.comun.idempotencia import buscar_resultado, guardar_resultado
 from app.comun.reloj import hoy_del_tenant
 from app.modules.legajos import esquemas as e
 
@@ -501,9 +500,6 @@ def _politica_reimportacion(s: Session, tenant_id: str, fila: e.FilaDeLote) -> d
     return {"accion": "renovar", "documento_id": str(vigente["documento_id"])}
 
 
-def _clave_lote(lote_id: str) -> str:
-    return f"lote:{lote_id}"
-
 
 def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dict[str, Any]:
     """Una transacción, idempotente por `lote_id` (8.2): si el lote ya existe se devuelve
@@ -513,9 +509,8 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
 
-    previo = buscar_resultado(s, t, _clave_lote(lote_id))
-    if previo is not None:
-        return previo
+    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03);
+    # acá solo queda la red de seguridad por si el lote existe con la clave ya expirada.
     existente = s.execute(
         text(
             "SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas "
@@ -596,7 +591,6 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
         "filas_sin_cambios": sin_cambios,
         "eventos": eventos,
     }
-    guardar_resultado(s, t, _clave_lote(lote_id), resultado)
     return resultado
 
 

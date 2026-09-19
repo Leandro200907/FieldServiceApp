@@ -7,8 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 
-from app.auth.identidad import Identidad
-from app.comun.idempotencia import buscar_resultado, guardar_resultado
+from app.auth.identidad import Identidad, Rol
+from app.comun.idempotencia import ejecutar_idempotente, fingerprint_de
 from app.db import tenant_session
 from app.auth.dependencies import identidad_actual
 from app.modules.oc import servicio
@@ -32,8 +32,12 @@ class CancelarOC(BaseModel):
 @router.post("/comandos/importar_lote_oc")
 def importar_lote_oc(body: ImportarLoteOC, identidad: Identidad = Depends(identidad_actual)) -> dict:
     # Idempotente por lote_id del body (regla dura 6); el header Idempotency-Key no aplica acá.
-    with tenant_session(identidad.tenant_id) as s:
-        return servicio.importar_lote_oc(s, identidad, str(body.lote_id), body.origen, body.filas)
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    return ejecutar_idempotente(
+        identidad.tenant_id, f"lote:{body.lote_id}",
+        fingerprint_de("POST", "/comandos/importar_lote_oc", {"lote_id": str(body.lote_id)}),  # por lote_id, no por hash (8.2)
+        lambda s: servicio.importar_lote_oc(s, identidad, str(body.lote_id), body.origen, body.filas),
+    )
 
 
 @router.post("/comandos/cancelar_oc")
@@ -42,10 +46,9 @@ def cancelar_oc(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict:
-    with tenant_session(identidad.tenant_id) as s:
-        previo = buscar_resultado(s, identidad.tenant_id, idempotency_key)
-        if previo is not None:
-            return previo
-        resultado = servicio.cancelar_oc(s, identidad, str(body.oc_id) if body.oc_id else None, body.clave_origen)
-        guardar_resultado(s, identidad.tenant_id, idempotency_key, resultado)
-        return resultado
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    return ejecutar_idempotente(
+        identidad.tenant_id, idempotency_key,
+        fingerprint_de("POST", "/comandos/cancelar_oc", body.model_dump(mode="json")),
+        lambda s: servicio.cancelar_oc(s, identidad, str(body.oc_id) if body.oc_id else None, body.clave_origen),
+    )

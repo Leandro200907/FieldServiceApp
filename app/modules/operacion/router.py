@@ -15,21 +15,18 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad
-from app.comun.idempotencia import buscar_resultado, guardar_resultado
+from app.comun.idempotencia import ejecutar_idempotente, fingerprint_de
 from app.db import tenant_session
 from app.modules.operacion import servicio
 
 router = APIRouter(prefix="/comandos", tags=["operacion"])
 
 
-def _ejecutar(identidad: Identidad, clave: str | None, comando: Callable[[Session], dict[str, Any]]) -> dict[str, Any]:
-    with tenant_session(identidad.tenant_id) as s:
-        previo = buscar_resultado(s, identidad.tenant_id, clave)
-        if previo is not None:
-            return previo
-        resultado = comando(s)
-        guardar_resultado(s, identidad.tenant_id, clave, resultado)
-        return resultado
+def _ejecutar(
+    identidad: Identidad, clave: str | None, comando: Callable[[Session], dict[str, Any]], *, ruta: str, body: Any
+) -> dict[str, Any]:
+    """Idempotencia con reserva atómica (A-03): ver app/comun/idempotencia.py."""
+    return ejecutar_idempotente(identidad.tenant_id, clave, fingerprint_de("POST", ruta, body.model_dump(mode="json")), comando)
 
 
 # --------------------------------------------------------------------------- bodies
@@ -94,7 +91,7 @@ def cambiar_custodia(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    return _ejecutar(identidad, idempotency_key, lambda s: servicio.cambiar_custodia(s, identidad, **body.model_dump()))
+    return _ejecutar(identidad, idempotency_key, lambda s: servicio.cambiar_custodia(s, identidad, **body.model_dump()), ruta="/comandos/cambiar_custodia", body=body)
 
 
 @router.post("/corregir_custodia")
@@ -103,7 +100,7 @@ def corregir_custodia(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    return _ejecutar(identidad, idempotency_key, lambda s: servicio.corregir_custodia(s, identidad, **body.model_dump()))
+    return _ejecutar(identidad, idempotency_key, lambda s: servicio.corregir_custodia(s, identidad, **body.model_dump()), ruta="/comandos/corregir_custodia", body=body)
 
 
 @router.post("/otorgar_excepcion")
@@ -112,7 +109,7 @@ def otorgar_excepcion(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    return _ejecutar(identidad, idempotency_key, lambda s: servicio.otorgar_excepcion(s, identidad, **body.model_dump()))
+    return _ejecutar(identidad, idempotency_key, lambda s: servicio.otorgar_excepcion(s, identidad, **body.model_dump()), ruta="/comandos/otorgar_excepcion", body=body)
 
 
 @router.post("/revocar_excepcion")
@@ -121,7 +118,7 @@ def revocar_excepcion(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    return _ejecutar(identidad, idempotency_key, lambda s: servicio.revocar_excepcion(s, identidad, **body.model_dump()))
+    return _ejecutar(identidad, idempotency_key, lambda s: servicio.revocar_excepcion(s, identidad, **body.model_dump()), ruta="/comandos/revocar_excepcion", body=body)
 
 
 @router.post("/registrar_constancia_del_cliente")
@@ -131,7 +128,8 @@ def registrar_constancia_del_cliente(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     return _ejecutar(
-        identidad, idempotency_key, lambda s: servicio.registrar_constancia_del_cliente(s, identidad, **body.model_dump())
+        identidad, idempotency_key, lambda s: servicio.registrar_constancia_del_cliente(s, identidad, **body.model_dump()),
+        ruta="/comandos/registrar_constancia_del_cliente", body=body,
     )
 
 
@@ -142,7 +140,8 @@ def revocar_constancia_del_cliente(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     return _ejecutar(
-        identidad, idempotency_key, lambda s: servicio.revocar_constancia_del_cliente(s, identidad, **body.model_dump())
+        identidad, idempotency_key, lambda s: servicio.revocar_constancia_del_cliente(s, identidad, **body.model_dump()),
+        ruta="/comandos/revocar_constancia_del_cliente", body=body,
     )
 
 
@@ -152,4 +151,4 @@ def evaluar_habilitacion(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    return _ejecutar(identidad, idempotency_key, lambda s: servicio.evaluar_habilitacion(s, identidad, **body.model_dump()))
+    return _ejecutar(identidad, idempotency_key, lambda s: servicio.evaluar_habilitacion(s, identidad, **body.model_dump()), ruta="/comandos/evaluar_habilitacion", body=body)

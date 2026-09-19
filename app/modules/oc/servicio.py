@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
-from app.comun.idempotencia import buscar_resultado, guardar_resultado
 
 ORIGENES = ("planilla", "drive")
 CAMPOS_OBLIGATORIOS = ("clave_origen", "cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta")
@@ -85,12 +84,7 @@ def importar_lote_oc(
         raise ErrorDeDominio("origen inválido", {"origen": origen, "validos": list(ORIGENES)})
     lote_id = str(uuid.UUID(str(lote_id)))
 
-    # Idempotencia por lote_id: si ya se aplicó, devolver lo guardado sin tocar nada.
-    # `buscar_resultado` toma FOR UPDATE, así dos importaciones concurrentes del mismo
-    # lote se serializan sobre la clave.
-    previo = buscar_resultado(session, tenant_id, clave_idempotencia_lote(lote_id))
-    if previo is not None:
-        return previo
+    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # La clave de idempotencia expira (24 h) pero el lote queda: si existe, tampoco se
     # re-aplica — se reconstruye el resultado desde lote_importacion.
     lote_existente = session.execute(
@@ -220,7 +214,6 @@ def importar_lote_oc(
         "ya_aplicado": False,
         "eventos": ["LoteAplicado"],
     }
-    guardar_resultado(session, tenant_id, clave_idempotencia_lote(lote_id), resultado_cmd)
     return resultado_cmd
 
 

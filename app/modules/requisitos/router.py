@@ -21,7 +21,10 @@ def _ruta(nombre: str, body_cls: type, fn, roles: tuple[Rol, ...]) -> None:
         identidad: Identidad = Depends(identidad_actual),
         clave: str | None = Depends(clave_idempotencia),
     ) -> dict[str, Any]:
-        return ejecutar_comando(identidad, clave, roles, lambda s: fn(s, identidad, body))
+        return ejecutar_comando(
+            identidad, clave, roles, lambda s: fn(s, identidad, body),
+            ruta=f"/comandos/{nombre}", body=body.model_dump(mode="json"),
+        )
 
     endpoint.__annotations__["body"] = body_cls
     endpoint.__name__ = nombre

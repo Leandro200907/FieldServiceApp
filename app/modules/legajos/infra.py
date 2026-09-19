@@ -13,8 +13,7 @@ from fastapi import Header
 from sqlalchemy.orm import Session
 
 from app.auth.identidad import Identidad, Rol
-from app.comun.idempotencia import buscar_resultado, guardar_resultado
-from app.db import tenant_session
+from app.comun.idempotencia import ejecutar_idempotente, fingerprint_de
 
 
 def clave_idempotencia(idempotency_key: str | None = Header(None, alias="Idempotency-Key")) -> str | None:
@@ -26,20 +25,17 @@ def ejecutar_comando(
     clave: str | None,
     roles: tuple[Rol, ...],
     efecto: Callable[[Session], dict[str, Any]],
+    *,
+    ruta: str,
+    body: Any,
 ) -> dict[str, Any]:
     """Patrón único de todo POST /comandos/*:
 
     1. Permiso por rol (matriz 2.2) — antes de abrir nada.
-    2. Una sola `tenant_session` por request.
-    3. Si `Idempotency-Key` ya tiene resultado, se devuelve tal cual sin re-aplicar.
-    4. Se ejecuta el efecto (servicio) y se guarda su resultado bajo la clave, en la
-       misma transacción: clave y efecto son atómicos.
+    2. Idempotencia con reserva atómica (A-03): `ejecutar_idempotente` reserva la clave en
+       una transacción corta, corre el efecto en su propia `tenant_session` y consolida el
+       resultado en esa misma transacción. Con la misma clave: replay exacto si el
+       fingerprint (ruta + body) coincide, 409 si difiere o si otra solicitud está en curso.
     """
     identidad.exigir_rol(*roles)
-    with tenant_session(identidad.tenant_id) as s:
-        previo = buscar_resultado(s, identidad.tenant_id, clave)
-        if previo is not None:
-            return previo
-        resultado = efecto(s)
-        guardar_resultado(s, identidad.tenant_id, clave, resultado)
-        return resultado
+    return ejecutar_idempotente(identidad.tenant_id, clave, fingerprint_de("POST", ruta, body), efecto)

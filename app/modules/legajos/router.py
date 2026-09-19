@@ -16,13 +16,24 @@ TECNICO = (Rol.TECNICO,)
 CONFIG_O_RESPONSABLE = (Rol.CONFIGURACION, Rol.RESPONSABLE_LEGAJOS)
 
 
-def _ruta(nombre: str, body_cls: type, fn, roles: tuple[Rol, ...]) -> None:
+def _ruta(nombre: str, body_cls: type, fn, roles: tuple[Rol, ...], clave_de_body=None) -> None:
+    """`clave_de_body`: para comandos naturalmente idempotentes por un id del body
+    (ImportarLote → `lote:<lote_id>`, regla 6 del brief) esa clave prevalece sobre el
+    header Idempotency-Key."""
+
     def endpoint(
         body,
         identidad: Identidad = Depends(identidad_actual),
         clave: str | None = Depends(clave_idempotencia),
     ) -> dict[str, Any]:
-        return ejecutar_comando(identidad, clave, roles, lambda s: fn(s, identidad, body))
+        clave_efectiva = clave_de_body(body) if clave_de_body else clave
+        # Un lote es idempotente por lote_id, NO por hash del archivo (8.2): el fingerprint
+        # es la propia clave, así un reenvío con filas corregidas devuelve lo ya aplicado.
+        huella = {"clave": clave_efectiva} if clave_de_body else body.model_dump(mode="json")
+        return ejecutar_comando(
+            identidad, clave_efectiva, roles, lambda s: fn(s, identidad, body),
+            ruta=f"/comandos/{nombre}", body=huella,
+        )
 
     # El tipo del body se fija en runtime (una función por comando, mismo patrón).
     endpoint.__annotations__["body"] = body_cls
@@ -43,7 +54,7 @@ _ruta(
     RESPONSABLE,
 )
 _ruta("registrar_induccion", e.RegistrarInduccion, servicio.registrar_induccion, RESPONSABLE)
-_ruta("importar_lote", e.ImportarLote, servicio.importar_lote, RESPONSABLE)
+_ruta("importar_lote", e.ImportarLote, servicio.importar_lote, RESPONSABLE, clave_de_body=lambda b: f"lote:{b.lote_id}")
 _ruta("revertir_lote", e.RevertirLote, servicio.revertir_lote, RESPONSABLE)
 _ruta("asignar_supervisor", e.AsignarSupervisor, servicio.asignar_supervisor, CONFIG_O_RESPONSABLE)
 _ruta("reasignar_supervisor", e.ReasignarSupervisor, servicio.reasignar_supervisor, CONFIG_O_RESPONSABLE)

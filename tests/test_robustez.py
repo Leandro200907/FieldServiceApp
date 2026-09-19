@@ -499,7 +499,7 @@ def test_integrity_error_no_es_500_sino_409(cliente_api, tenant_de_prueba, monke
     def explota(*_a, **_k):
         raise IntegrityError("INSERT ...", {}, Exception("duplicate key value violates unique constraint"))
 
-    monkeypatch.setattr(infra, "guardar_resultado", explota)  # último paso dentro de la transacción
+    monkeypatch.setattr(infra, "ejecutar_idempotente", explota)
     r = cliente_api.post("/v1/comandos/alta_de_sujeto", json={"tipo_sujeto": "persona", "identificador_natural": "x"},
                          headers=tenant_de_prueba.headers("responsable_legajos"))
     assert r.status_code == 409 and r.json()["error"]["codigo"] == "conflicto_concurrencia"

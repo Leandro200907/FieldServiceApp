@@ -20,7 +20,7 @@ from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
 from app.auth.jwt import validar_access_token
-from app.comun.idempotencia import buscar_resultado, guardar_resultado
+from app.comun.idempotencia import ejecutar_idempotente, fingerprint_de
 from app.db import tenant_session
 from app.storage.local import StorageLocal
 from app.storage.servicio import confirmar_subida, firmar_descarga, preparar_subida
@@ -58,13 +58,11 @@ def preparar_subida_de_evidencia(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.TECNICO)
-    with tenant_session(identidad.tenant_id) as s:
-        previo = buscar_resultado(s, identidad.tenant_id, idempotency_key)
-        if previo is not None:
-            return previo
-        r = preparar_subida(s, identidad, body.documento_id, body.nombre_archivo, body.content_type, storage=_storage())
-        guardar_resultado(s, identidad.tenant_id, idempotency_key, r)
-        return r
+    return ejecutar_idempotente(
+        identidad.tenant_id, idempotency_key,
+        fingerprint_de("POST", "/comandos/preparar_subida_de_evidencia", body.model_dump(mode="json")),
+        lambda s: preparar_subida(s, identidad, body.documento_id, body.nombre_archivo, body.content_type, storage=_storage()),
+    )
 
 
 @router.post("/comandos/confirmar_subida_de_evidencia")
@@ -74,13 +72,11 @@ def confirmar_subida_de_evidencia(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.TECNICO)
-    with tenant_session(identidad.tenant_id) as s:
-        previo = buscar_resultado(s, identidad.tenant_id, idempotency_key)
-        if previo is not None:
-            return previo
-        r = confirmar_subida(s, identidad, body.documento_id, storage=_storage())
-        guardar_resultado(s, identidad.tenant_id, idempotency_key, r)
-        return r
+    return ejecutar_idempotente(
+        identidad.tenant_id, idempotency_key,
+        fingerprint_de("POST", "/comandos/confirmar_subida_de_evidencia", body.model_dump(mode="json")),
+        lambda s: confirmar_subida(s, identidad, body.documento_id, storage=_storage()),
+    )
 
 
 @router.get("/storage/documentos/{documento_id}/url")
