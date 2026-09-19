@@ -34,12 +34,15 @@ import getpass
 import os
 import sys
 import uuid
+from pathlib import Path
 
 from sqlalchemy import text
 
-from app.auth.identidad import Rol
-from app.auth.passwords import PasswordDemasiadoLarga, hashear_password, validar_longitud
-from app.db import platform_session, tenant_session
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # ejecutable desde cualquier cwd
+
+from app.auth.identidad import Rol  # noqa: E402
+from app.auth.passwords import PasswordDemasiadoLarga, hashear_password, validar_longitud  # noqa: E402
+from app.db import platform_session, tenant_session  # noqa: E402
 
 
 class ErrorDeAdministracion(SystemExit):
