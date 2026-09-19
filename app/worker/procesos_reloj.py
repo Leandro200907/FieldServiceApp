@@ -219,13 +219,20 @@ def control_retencion(
     with abrir(tenant_id) as s:
         marcados = _marcar_purga_pendiente(s, ahora_utc)
     with abrir(tenant_id) as s:
+        # Solo lectura: la transacción se cierra ANTES de tocar el storage.
         pendientes = s.execute(
-            text("SELECT documento_id, clave_storage FROM modulo1.documento WHERE archivo_estado = 'purga_pendiente' "
-                 "ORDER BY creado_en"),
-        ).all()
+            text(
+                "SELECT d.documento_id, d.clave_storage, d.checksum_archivo, d.archivo_bytes, d.estado_version, "
+                "       d.requisito_definicion_id, r.plazo_retencion_archivo::text AS plazo, d.creado_en "
+                "FROM modulo1.documento d "
+                "LEFT JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = d.requisito_definicion_id "
+                "WHERE d.archivo_estado = 'purga_pendiente' ORDER BY d.creado_en"
+            ),
+        ).mappings().all()
     purgados = 0
     no_confirmados = 0
-    for documento_id, clave in pendientes:
+    for fila in pendientes:
+        documento_id, clave = fila["documento_id"], fila["clave_storage"]
         try:
             borrado = bool(storage.borrar(clave))
         except Exception:
@@ -250,9 +257,22 @@ def control_retencion(
                 {"d": documento_id, "ahora": ahora_utc},
             ).rowcount
             if actualizado:
+                # Evidencia de auditoría (4.4 de no-funcionales): qué, cuándo, por qué y una
+                # referencia verificable (checksum/bytes) — nunca el contenido eliminado.
                 registrar_evento(
                     s, tenant_id, "ArchivoPurgado",
-                    {"documento_id": str(documento_id), "clave_storage": clave, "purgado_en": ahora_utc.isoformat()},
+                    {
+                        "documento_id": str(documento_id),
+                        "clave_storage": clave,
+                        "purgado_en": ahora_utc.isoformat(),
+                        "motivo": "plazo_retencion_archivo vencido",
+                        "estado_version": fila["estado_version"],
+                        "requisito_definicion_id": str(fila["requisito_definicion_id"]) if fila["requisito_definicion_id"] else None,
+                        "plazo_retencion": fila["plazo"],
+                        "creado_en": fila["creado_en"].isoformat() if fila["creado_en"] else None,
+                        "checksum_sha256": fila["checksum_archivo"],
+                        "bytes": fila["archivo_bytes"],
+                    },
                     usuario_id=None,
                 )
                 purgados += 1
