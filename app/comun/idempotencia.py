@@ -35,6 +35,12 @@ Algoritmo (tabla `idempotency_keys`, migraciones 0007 + 0009):
 clave entra por su propio ámbito y ejecuta el comando completo (autorización y alcance
 incluidos); nunca obtiene el replay ajeno.
 
+Autorización dinámica: `prevalidar(session)` (si se pasa) corre SIEMPRE, en su propia
+sesión de solo lectura, antes de reservar o de reproducir. Ahí va el alcance actual del
+recurso (universo del supervisor, visibilidad de la decisión, …): si el actor perdió el
+alcance desde que ejecutó, recibe 403/404 y no el replay almacenado. El rol se exige
+antes de llamar. No repite el efecto de negocio.
+
 Para ImportarLote la clave es `lote:<lote_id>` y el fingerprint incluye el hash canónico
 de las filas (8.2: idempotente por lote, pero un mismo lote con contenido distinto es un
 conflicto, no un replay silencioso).
@@ -127,8 +133,12 @@ def ejecutar_idempotente(
     fingerprint: str,
     efecto: Callable[[Session], dict[str, Any]],
     abrir_sesion: Callable[[str], Any] | None = None,
+    prevalidar: Callable[[Session], None] | None = None,
 ) -> dict[str, Any]:
     abrir = abrir_sesion or _abrir_por_defecto
+    if prevalidar is not None:
+        with abrir(tenant_id) as s:  # alcance ACTUAL, siempre, aunque haya replay
+            prevalidar(s)
     if not clave:
         with abrir(tenant_id) as s:
             return efecto(s)

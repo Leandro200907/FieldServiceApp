@@ -16,6 +16,7 @@ from sqlalchemy import text
 from app.api.errores import Conflicto, ErrorDeDominio
 from app.comun.idempotencia import ejecutar_idempotente, fingerprint_de
 from app.db import tenant_session
+from tests.test_orquestacion import sesion  # noqa: F401
 from tests.test_robustez import _en_paralelo
 
 ACTOR = "actor-1"
@@ -321,3 +322,48 @@ def test_7_mismo_lote_id_con_filas_distintas_es_409_y_mismo_contenido_es_replay(
     assert r5.status_code == 200 and r5.json()["ya_aplicado"] is True
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.documento")).scalar() == 2
+
+
+# ------------------------------------------------------------------ autorización dinámica
+
+
+def test_9_alcance_actual_se_valida_antes_del_replay(cliente_api, tenant_de_prueba, sesion):
+    """Supervisor otorga una excepción sobre un sujeto de su universo (respuesta idempotente
+    completada). Se cierra su asignación. Repite exactamente la misma clave y fingerprint:
+    recibe 403/404 por alcance actual, no el replay almacenado, y no se repite el efecto."""
+    from datetime import date, datetime, timezone
+
+    from app.core.orquestacion import decidir_habilitacion
+    from tests.test_orquestacion import clave_de_matriz, insertar_definicion, insertar_legajo, insertar_matriz, insertar_oc
+
+    t = tenant_de_prueba
+    clave = clave_de_matriz()
+    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
+    insertar_legajo(sesion, t.tenant_id, "persona_A", "persona")
+    req = insertar_definicion(sesion, t.tenant_id, "Apto", "persona")
+    insertar_matriz(sesion, t.tenant_id, clave, {req: "excepcionable"})
+    insertar_oc(sesion, t.tenant_id, "OC-1", clave, date(2026, 10, 1), date(2026, 10, 5))
+    sesion.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
+                        "VALUES (:t, 'persona_A', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["supervisor"]})
+    ref = decidir_habilitacion(sesion, t.tenant_id, "OC-1", ["persona_A"], datetime(2026, 9, 18, tzinfo=timezone.utc),
+                               t.usuarios["responsable_legajos"])["referencia_evaluacion"]
+    sesion.commit()
+    body = {"referencia_evaluacion": ref, "sujeto_id": "persona_A", "requisito_definicion_id": str(req),
+            "commitment_id": "OC-1", "motivo": "regulariza"}
+    h = t.headers("supervisor", idempotency_key="exc-1")
+    r1 = cliente_api.post("/v1/comandos/otorgar_excepcion", json=body, headers=h)
+    assert r1.status_code == 200, r1.text
+    assert _fila(t.tenant_id, "exc-1", actor=t.usuarios["supervisor"])["estado"] == "completada"
+    # el supervisor pierde el universo
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("UPDATE modulo1.asignacion_supervisor SET estado = 'cerrada', hasta = '2026-09-01' WHERE sujeto_id = 'persona_A'"))
+    r2 = cliente_api.post("/v1/comandos/otorgar_excepcion", json=body, headers=h)  # misma clave, mismo fingerprint
+    assert r2.status_code in (403, 404), r2.text
+    assert "excepcion_id" not in r2.text
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT count(*) FROM modulo1.excepcion")).scalar() == 1  # efecto no repetido
+    # recupera el universo → vuelve a obtener el replay (misma excepción, sin crear otra)
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("UPDATE modulo1.asignacion_supervisor SET estado = 'vigente', hasta = NULL WHERE sujeto_id = 'persona_A'"))
+    r3 = cliente_api.post("/v1/comandos/otorgar_excepcion", json=body, headers=h)
+    assert r3.status_code == 200 and r3.json() == r1.json()

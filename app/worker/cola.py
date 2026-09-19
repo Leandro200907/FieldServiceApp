@@ -9,6 +9,15 @@ una fila. No se confía en el id del worker: solo en el token.
 
 Colas válidas (CHECK en la tabla): drenaje_outbox, notificaciones, evidencia_qr,
 score_documental, validacion_evidencia.
+
+RESTRICCIÓN PARA HANDLERS (fencing, A-06): `procesar_cola` ejecuta el handler y el
+`completar` en la MISMA transacción; si el lease se perdió, todo se revierte. Por eso:
+  - los handlers pueden hacer escrituras transaccionales en PostgreSQL con libertad;
+  - NO deben hacer I/O externo irreversible (correo, HTTP, borrado físico, etc.) antes de
+    que el lease se valide y la transacción confirme: el rollback no puede deshacerlo;
+  - todo efecto externo sale por outbox (`app.comun.eventos.encolar_outbox`) o por un
+    paso idempotente en dos fases (como la purga de archivos, `control_retencion`), y el
+    consumidor externo debe ser idempotente.
 """
 from __future__ import annotations
 

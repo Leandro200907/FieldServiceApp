@@ -226,6 +226,36 @@ def _exigir_definicion(session: Session, tenant_id: str, requisito_definicion_id
         raise NoEncontrado("Definición de requisito inexistente", {"requisito_definicion_id": requisito_definicion_id})
 
 
+def _rechazar_excepcion_sobre_empresa(session: Session, tenant_id: str, sujeto_id: str) -> None:
+    """Cierre seguro (DECISIONES_DOMINIO §7): una excepción sobre la EMPRESA afecta a toda la
+    dotación y ningún rol tiene hoy ese alcance definido → deshabilitado explícitamente,
+    antes de cualquier chequeo de alcance, con error estable."""
+    tipo = session.execute(
+        text("SELECT tipo_sujeto FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s"),
+        {"t": tenant_id, "s": sujeto_id},
+    ).scalar()
+    if tipo == "empresa":
+        raise ErrorDeDominio(
+            "Las excepciones sobre requisitos de la empresa están deshabilitadas: afectan a toda la "
+            "dotación y no hay un rol definido con ese alcance",
+            {"sujeto_id": sujeto_id},
+            codigo="excepcion_de_empresa_deshabilitada",
+        )
+
+
+def prevalidar_otorgar_excepcion(session: Session, identidad: Identidad, *, referencia_evaluacion: str, sujeto_id: str, **_) -> None:
+    """Alcance ACTUAL del supervisor sobre la decisión citada y el sujeto (2.3 §3). Se
+    ejecuta siempre —también antes de un replay idempotente— para que un supervisor que
+    perdió el universo no recupere una respuesta almacenada."""
+    identidad.exigir_rol(Rol.SUPERVISOR)
+    _rechazar_excepcion_sobre_empresa(session, identidad.tenant_id, sujeto_id)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    if not decision_visible(session, identidad, referencia_evaluacion, hoy):
+        raise NoEncontrado("Evaluación inexistente", {"referencia_evaluacion": referencia_evaluacion})
+    if not sujeto_en_alcance(session, identidad, sujeto_id, hoy):
+        raise Prohibido("El sujeto está fuera del universo del supervisor", {"sujeto_id": sujeto_id})
+
+
 def otorgar_excepcion(
     session: Session,
     identidad: Identidad,
@@ -240,33 +270,14 @@ def otorgar_excepcion(
 ) -> dict[str, Any]:
     identidad.exigir_rol(Rol.SUPERVISOR)
     tenant_id = identidad.tenant_id
-
-    # Cierre seguro (DECISIONES_DOMINIO §7): una excepción sobre la EMPRESA afecta a toda la
-    # dotación y ningún rol tiene hoy ese alcance definido → deshabilitado explícitamente,
-    # antes de cualquier chequeo de alcance, con error estable.
-    tipo = session.execute(
-        text("SELECT tipo_sujeto FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s"),
-        {"t": tenant_id, "s": sujeto_id},
-    ).scalar()
-    if tipo == "empresa":
-        raise ErrorDeDominio(
-            "Las excepciones sobre requisitos de la empresa están deshabilitadas: afectan a toda la "
-            "dotación y no hay un rol definido con ese alcance",
-            {"sujeto_id": sujeto_id},
-            codigo="excepcion_de_empresa_deshabilitada",
-        )
+    prevalidar_otorgar_excepcion(session, identidad, referencia_evaluacion=referencia_evaluacion, sujeto_id=sujeto_id)
 
     evaluacion = session.execute(
         text("SELECT commitment_id FROM modulo1.evaluacion_habilitacion WHERE tenant_id = :t AND referencia_evaluacion = :e"),
         {"t": tenant_id, "e": referencia_evaluacion},
     ).first()
-    # 2.3 §3: el supervisor solo ve (y por lo tanto solo cita) decisiones cuyos sujetos
-    # están todos en su universo; una decisión fuera de alcance "no existe" para él.
-    hoy = hoy_del_tenant(session, tenant_id)
-    if evaluacion is None or not decision_visible(session, identidad, referencia_evaluacion, hoy):
+    if evaluacion is None:
         raise NoEncontrado("Evaluación inexistente", {"referencia_evaluacion": referencia_evaluacion})
-    if not sujeto_en_alcance(session, identidad, sujeto_id, hoy):
-        raise Prohibido("El sujeto está fuera del universo del supervisor", {"sujeto_id": sujeto_id})
     if evaluacion[0] != commitment_id:
         raise ErrorDeDominio(
             "La evaluación referida no corresponde a ese compromiso",

@@ -23,10 +23,15 @@ router = APIRouter(prefix="/comandos", tags=["operacion"])
 
 
 def _ejecutar(
-    identidad: Identidad, clave: str | None, comando: Callable[[Session], dict[str, Any]], *, ruta: str, body: Any
+    identidad: Identidad, clave: str | None, comando: Callable[[Session], dict[str, Any]], *, ruta: str, body: Any,
+    prevalidar: Callable[[Session], None] | None = None,
 ) -> dict[str, Any]:
-    """Idempotencia con reserva atómica (A-03): ver app/comun/idempotencia.py."""
-    return ejecutar_idempotente(identidad.tenant_id, identidad.usuario_id, clave, fingerprint_de("POST", ruta, body.model_dump(mode="json")), comando)
+    """Idempotencia con reserva atómica (A-03): ver app/comun/idempotencia.py. `prevalidar`
+    (alcance actual del recurso) corre siempre, también antes de un replay."""
+    return ejecutar_idempotente(
+        identidad.tenant_id, identidad.usuario_id, clave, fingerprint_de("POST", ruta, body.model_dump(mode="json")),
+        comando, prevalidar=prevalidar,
+    )
 
 
 # --------------------------------------------------------------------------- bodies
@@ -109,7 +114,11 @@ def otorgar_excepcion(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    return _ejecutar(identidad, idempotency_key, lambda s: servicio.otorgar_excepcion(s, identidad, **body.model_dump()), ruta="/comandos/otorgar_excepcion", body=body)
+    return _ejecutar(
+        identidad, idempotency_key, lambda s: servicio.otorgar_excepcion(s, identidad, **body.model_dump()),
+        ruta="/comandos/otorgar_excepcion", body=body,
+        prevalidar=lambda s: servicio.prevalidar_otorgar_excepcion(s, identidad, **body.model_dump()),
+    )
 
 
 @router.post("/revocar_excepcion")
