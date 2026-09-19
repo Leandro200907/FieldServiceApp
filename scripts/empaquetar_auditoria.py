@@ -36,11 +36,12 @@ SPECS = ("modulo1-especificacion.md", "modulo1-modelo-dominio.md", "modulo1-no-f
 EXCLUIR_DIRS = {"__pycache__", ".pytest_cache", ".venv", ".git", "storage_local", "htmlcov", ".mypy_cache", ".ruff_cache"}
 EXCLUIR_SUFIJOS = (".pyc", ".log", ".coverage", ".dump", ".backup")
 
+PLACEHOLDERS = ("CAMBIAR", "changeme", "…", "...", "[redactado]", "secreto@", "clave@", "clave-de-prueba")
 PATRONES_SECRETOS = [
-    (re.compile(r"postgresql(\+psycopg)?://[^:\s/]+:[^@\s]+@"), "DSN con credenciales"),
+    (re.compile(r"postgresql(\+psycopg)?://[^:\s/]+:(?!CAMBIAR|\[redactado\]|secreto@|clave@|clave-de-prueba)[^@\s]+@"), "DSN con credenciales"),
     (re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"), "JWT"),
     (re.compile(r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----"), "clave privada"),
-    (re.compile(r"^\s*(JWT_SECRET|STORAGE_SECRET|DATABASE_URL|DATABASE_URL_MIGRATIONS|USUARIO_PASSWORD)\s*=\s*(?!CAMBIAR|\.\.\.|…|<)[^\s#]{8,}", re.M), "variable de secreto con valor"),
+    (re.compile(r"^[ \t]*(JWT_SECRET|STORAGE_SECRET|DATABASE_URL|DATABASE_URL_MIGRATIONS|USUARIO_PASSWORD)[ \t]*=[ \t]*(?![^\r\n]*CAMBIAR)(?!<)[^\s#]{8,}", re.M), "variable de secreto con valor"),
     (re.compile(r"AKIA[0-9A-Z]{16}"), "AWS access key"),
 ]
 
@@ -57,10 +58,10 @@ def _valores_env_locales() -> set[str]:
             continue
         for linea in env.read_text(encoding="utf-8", errors="ignore").splitlines():
             m = re.match(r"\s*(JWT_SECRET|STORAGE_SECRET)\s*=\s*(\S+)", linea)
-            if m and len(m.group(2)) >= 8:
+            if m and len(m.group(2)) >= 8 and m.group(2) not in PLACEHOLDERS:
                 valores.add(m.group(2))
             m = re.search(r"://[^:\s/]+:([^@\s]+)@", linea)
-            if m and len(m.group(1)) >= 6:
+            if m and len(m.group(1)) >= 6 and m.group(1) not in PLACEHOLDERS:
                 valores.add(m.group(1))
     return valores
 

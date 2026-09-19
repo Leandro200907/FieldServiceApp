@@ -147,7 +147,7 @@ def test_notificacion_sin_tipo_es_terminal_y_con_tipo_sale_por_el_canal(tenant_d
 
 @pytest.mark.parametrize("crudo, esperado", [
     ("Authorization: Bearer eyJhbGciOi.abc.def falló", "Authorization: Bearer [redactado] falló"),
-    ("conexión postgresql://modulo1_app:app-dev-local-1@localhost:5432/x rechazada", "conexión postgresql://modulo1_app:[redactado]@localhost:5432/x rechazada"),
+    ("conexión postgresql://modulo1_app:clave-de-prueba-1@localhost:5432/x rechazada", "conexión postgresql://modulo1_app:[redactado]@localhost:5432/x rechazada"),
     ("password=hunter2 token: abc api_key=xyz", "password=[redactado] token: [redactado] api_key=[redactado]"),
     ("x" * 900, "x" * 500),
 ])
