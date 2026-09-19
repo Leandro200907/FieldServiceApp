@@ -305,3 +305,28 @@ existir antes de importar su legajo; se valida en servicio), `acreditacion.evide
 `locacion_id` / `tipo_servicio_id` (maestros externos no modelados en Módulo 1),
 `aviso_revaluacion_causa.entidad_id` (polimórfico), `idempotency_keys.actor_id`,
 `job_queue.tenant_id` nullable (jobs de sistema).
+
+## 11. Unicidad de filas ACTIVAS: excepciones y constancias (M-02, migración 0012)
+
+Claves de negocio, sólo sobre el estado realmente activo (las filas históricas —
+`revocada`, `vencida`, `regularizada`, `reemplazada`— no participan y pueden ser muchas):
+
+| Fila activa | Clave de negocio | Índice único parcial |
+|---|---|---|
+| excepción `otorgada` | (tenant, sujeto, requisito, commitment) | `uq_excepcion_activa` |
+| constancia `vigente` **general** (`commitment_id IS NULL`) | (tenant, sujeto, requisito, cliente) | `uq_constancia_general_activa` |
+| constancia `vigente` **específica** | (tenant, sujeto, requisito, cliente, commitment) | `uq_constancia_especifica_activa` |
+
+La general y la específica son claves distintas a propósito: una constancia general no
+reemplaza a una específica ni al revés (el `IS NOT DISTINCT FROM` del servicio ya lo
+trataba así; los dos índices lo fijan en la base sin ambigüedad por NULL).
+
+Reglas de servicio: (1) se bloquea el **legajo del sujeto** (`FOR UPDATE`) como ancla
+estable antes de decidir, así dos creaciones "primeras" concurrentes se serializan y la
+segunda ve lo que hizo la primera (excepción → 409 `conflicto`; constancia → reemplazo
+legítimo con `reemplazada_por`); (2) la fila anterior sale de `vigente` **antes** del
+INSERT nuevo y `reemplazada_por` se apunta después; (3) una colisión residual (23505
+sobre esos índices) se traduce a 409 de dominio estable —`excepcion_activa_duplicada`,
+`constancia_activa_duplicada`—, nunca 500. Ninguna fila activa "gana" por orden
+arbitrario: gana la transacción que tomó el ancla primero. La migración aborta con
+diagnóstico si encuentra duplicados activos previos; no elige ni borra ninguno.

@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
@@ -34,6 +35,25 @@ __all__ = [
 ]
 
 TIPOS_RECURSO_CUSTODIABLE = ("vehiculo", "equipo")
+
+
+def _bloquear_legajo(session: Session, tenant_id: str, sujeto_id: str) -> dict[str, Any]:
+    """Ancla estable para la unicidad de filas ACTIVAS por sujeto (M-02, 0012): dos
+    transacciones que quieran crear la primera excepción/constancia del mismo sujeto se
+    serializan sobre su legajo, así la segunda ve lo que hizo la primera en lugar de
+    chocar contra el índice. Devuelve el legajo (tipo y baja) o 404 si no existe."""
+    fila = session.execute(
+        text("SELECT sujeto_id, tipo_sujeto, dado_de_baja_en FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s FOR UPDATE"),
+        {"t": tenant_id, "s": sujeto_id},
+    ).mappings().first()
+    if fila is None:
+        raise NoEncontrado("Legajo inexistente", {"sujeto_id": sujeto_id})
+    return dict(fila)
+
+
+def _es_colision_activa(err: IntegrityError, *indices: str) -> bool:
+    diag = getattr(getattr(err, "orig", None), "diag", None)
+    return getattr(diag, "constraint_name", None) in indices
 
 
 # --------------------------------------------------------------------------- custodia
@@ -297,6 +317,7 @@ def otorgar_excepcion(
             {"requisito_definicion_id": requisito_definicion_id, "clasificacion": clasificacion.value},
             codigo="requisito_no_excepcionable",
         )
+    _bloquear_legajo(session, tenant_id, sujeto_id)
     ya = session.execute(
         text(
             "SELECT excepcion_id FROM modulo1.excepcion WHERE tenant_id = :t AND sujeto_id = :s "
@@ -307,19 +328,30 @@ def otorgar_excepcion(
     if ya is not None:
         raise Conflicto("Ya hay una excepción otorgada para ese sujeto, requisito y compromiso", {"excepcion_id": str(ya[0])})
 
-    excepcion_id = str(
-        session.execute(
-            text(
-                "INSERT INTO modulo1.excepcion (tenant_id, referencia_evaluacion, sujeto_id, requisito_definicion_id, "
-                " commitment_id, otorgada_por, motivo, vigencia, evidencia) "
-                "VALUES (:t, :e, :s, :r, :c, :u, :m, :v, :ev) RETURNING excepcion_id"
-            ),
-            {
-                "t": tenant_id, "e": referencia_evaluacion, "s": sujeto_id, "r": requisito_definicion_id,
-                "c": commitment_id, "u": identidad.usuario_id, "m": motivo, "v": vigencia, "ev": evidencia,
-            },
-        ).scalar()
-    )
+    try:
+        excepcion_id = str(
+            session.execute(
+                text(
+                    "INSERT INTO modulo1.excepcion (tenant_id, referencia_evaluacion, sujeto_id, requisito_definicion_id, "
+                    " commitment_id, otorgada_por, motivo, vigencia, evidencia) "
+                    "VALUES (:t, :e, :s, :r, :c, :u, :m, :v, :ev) RETURNING excepcion_id"
+                ),
+                {
+                    "t": tenant_id, "e": referencia_evaluacion, "s": sujeto_id, "r": requisito_definicion_id,
+                    "c": commitment_id, "u": identidad.usuario_id, "m": motivo, "v": vigencia, "ev": evidencia,
+                },
+            ).scalar()
+        )
+    except IntegrityError as err:
+        if not _es_colision_activa(err, "uq_excepcion_activa"):
+            raise
+        # Residual: el ancla del legajo ya serializa las creaciones; si aun así la base
+        # rechaza, es un conflicto de dominio estable, nunca un 500.
+        raise Conflicto(
+            "Ya hay una excepción otorgada para ese sujeto, requisito y compromiso",
+            {"sujeto_id": sujeto_id, "requisito_definicion_id": requisito_definicion_id, "commitment_id": commitment_id},
+            codigo="excepcion_activa_duplicada",
+        ) from err
     registrar_evento(
         session,
         tenant_id,
@@ -428,6 +460,7 @@ def registrar_constancia_del_cliente(
             codigo="requisito_no_bloqueante_duro",
         )
 
+    _bloquear_legajo(session, tenant_id, sujeto_id)
     anterior = session.execute(
         text(
             "SELECT constancia_id FROM modulo1.constancia_cliente "
@@ -437,28 +470,42 @@ def registrar_constancia_del_cliente(
         {"t": tenant_id, "s": sujeto_id, "r": requisito_definicion_id, "c": cliente_id, "cm": commitment_id},
     ).first()
 
-    constancia_id = str(
-        session.execute(
-            text(
-                "INSERT INTO modulo1.constancia_cliente (tenant_id, sujeto_id, requisito_definicion_id, cliente_id, "
-                " commitment_id, registrada_por, emisor, evidencia, vigencia) "
-                "VALUES (:t, :s, :r, :c, :cm, :u, :em, :ev, :v) RETURNING constancia_id"
-            ),
-            {
-                "t": tenant_id, "s": sujeto_id, "r": requisito_definicion_id, "c": cliente_id, "cm": commitment_id,
-                "u": identidad.usuario_id, "em": emisor, "ev": evidencia, "v": vigencia,
-            },
-        ).scalar()
-    )
+    # Orden obligatorio por los índices únicos parciales (0012): la vigente anterior sale
+    # de 'vigente' ANTES de insertar la nueva; `reemplazada_por` se apunta después (FK).
     eventos: list[str] = []
     reemplazada_id: str | None = None
     if anterior is not None:
         reemplazada_id = str(anterior[0])
         session.execute(
-            text(
-                "UPDATE modulo1.constancia_cliente SET estado = 'reemplazada', reemplazada_por = :n "
-                "WHERE tenant_id = :t AND constancia_id = :a"
-            ),
+            text("UPDATE modulo1.constancia_cliente SET estado = 'reemplazada' WHERE tenant_id = :t AND constancia_id = :a"),
+            {"t": tenant_id, "a": reemplazada_id},
+        )
+    try:
+        constancia_id = str(
+            session.execute(
+                text(
+                    "INSERT INTO modulo1.constancia_cliente (tenant_id, sujeto_id, requisito_definicion_id, cliente_id, "
+                    " commitment_id, registrada_por, emisor, evidencia, vigencia) "
+                    "VALUES (:t, :s, :r, :c, :cm, :u, :em, :ev, :v) RETURNING constancia_id"
+                ),
+                {
+                    "t": tenant_id, "s": sujeto_id, "r": requisito_definicion_id, "c": cliente_id, "cm": commitment_id,
+                    "u": identidad.usuario_id, "em": emisor, "ev": evidencia, "v": vigencia,
+                },
+            ).scalar()
+        )
+    except IntegrityError as err:
+        if not _es_colision_activa(err, "uq_constancia_general_activa", "uq_constancia_especifica_activa"):
+            raise
+        raise Conflicto(
+            "Ya hay una constancia vigente para ese sujeto, requisito, cliente y compromiso",
+            {"sujeto_id": sujeto_id, "requisito_definicion_id": requisito_definicion_id, "cliente_id": cliente_id,
+             "commitment_id": commitment_id},
+            codigo="constancia_activa_duplicada",
+        ) from err
+    if reemplazada_id is not None:
+        session.execute(
+            text("UPDATE modulo1.constancia_cliente SET reemplazada_por = :n WHERE tenant_id = :t AND constancia_id = :a"),
             {"t": tenant_id, "a": reemplazada_id, "n": constancia_id},
         )
         registrar_evento(

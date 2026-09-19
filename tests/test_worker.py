@@ -199,13 +199,14 @@ def test_vencer_excepciones_y_constancias(tenant_de_prueba):
         req = _definicion(s, t)
         apoyo.legajo(s, t, "p1")
         ref = apoyo.evaluacion(s, t, "OC-9")
-        for vig, estado in ((hoy - timedelta(days=1), "otorgada"), (hoy, "otorgada"), (hoy - timedelta(days=5), "revocada")):
+        req2 = _definicion(s, t)  # dos otorgadas del mismo (sujeto, requisito, OC) no pueden coexistir (0012)
+        for vig, estado, r in ((hoy - timedelta(days=1), "otorgada", req), (hoy, "otorgada", req2), (hoy - timedelta(days=5), "revocada", req)):
             s.execute(
                 text(
                     "INSERT INTO modulo1.excepcion (tenant_id, referencia_evaluacion, sujeto_id, requisito_definicion_id, "
                     "commitment_id, otorgada_por, motivo, vigencia, estado) VALUES (:t, :ref, 'p1', :r, 'OC-9', 'sup', 'm', :v, :e)"
                 ),
-                {"t": t, "ref": ref, "r": req, "v": vig, "e": estado},
+                {"t": t, "ref": ref, "r": r, "v": vig, "e": estado},
             )
         s.execute(
             text(
