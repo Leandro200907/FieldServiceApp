@@ -531,7 +531,8 @@ def test_contrato_http_codigos_y_serializacion(cliente_api, tenant_de_prueba):
     for r, status, codigo in casos:
         assert r.status_code == status, (r.request.url, r.status_code, r.text)
         cuerpo = r.json()
-        assert set(cuerpo) == {"error"} and set(cuerpo["error"]) == {"codigo", "mensaje", "detalles"}
+        assert set(cuerpo) == {"error"} and set(cuerpo["error"]) == {"codigo", "mensaje", "detalles", "request_id"}
+        assert r.headers["X-Request-ID"] == cuerpo["error"]["request_id"]
         assert cuerpo["error"]["codigo"] == codigo
     # 409 de dominio y detalles con date/UUID serializados (no 500)
     req = _alta_def(c, t, "Apto")
@@ -554,8 +555,8 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     """Cada ruta bajo /v1 (salvo salud, login/refresh y la URL prefirmada de storage) exige
     token: sin Authorization responde 401 con envelope, nunca 500 ni 200."""
     paths = cliente_api.get("/openapi.json").json()["paths"]
-    publicas = {"/v1/salud", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}"}
-    assert len(paths) == 45
+    publicas = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}"}
+    assert len(paths) == 46
     for path, ops in paths.items():
         if path in publicas:
             continue

@@ -138,7 +138,7 @@ def test_permisos_supervisor_no_puede_cargar_documento(cliente_api, tenant_de_pr
     for rol in ("supervisor", "tecnico", "configuracion"):
         r = _post(cliente_api, t, rol, "cargar_documento", body)
         assert r.status_code == 403, rol
-        assert r.json() == {"error": {"codigo": "prohibido", "mensaje": r.json()["error"]["mensaje"], "detalles": {"roles_requeridos": ["responsable_legajos"]}}}
+        assert r.json() == {"error": {"codigo": "prohibido", "mensaje": r.json()["error"]["mensaje"], "detalles": {"roles_requeridos": ["responsable_legajos"]}, "request_id": r.json()["error"]["request_id"]}}
     assert _docs(t, sujeto, req) == []
     sin_token = cliente_api.post(f"{CMD}/cargar_documento", json=body)
     assert sin_token.status_code == 401 and sin_token.json()["error"]["codigo"] == "no_autenticado"

@@ -8,7 +8,7 @@ credenciales malas es el mismo 401 genérico: no se revela si el slug o el email
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,7 @@ from app.api.errores import NoAutenticado
 from app.auth import jwt as tokens
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
-from app.auth.passwords import hashear_password, verificar_password
+from app.auth.passwords import MAX_BYTES, bytes_de, hashear_password, verificar_password
 from app.db import platform_session, tenant_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,7 +32,17 @@ _HASH_SENUELO = hashear_password("senuelo-no-es-una-password-valida")
 class LoginRequest(BaseModel):
     tenant_slug: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=1, max_length=320)
-    password: str = Field(min_length=1, max_length=72)
+    # Límite en BYTES UTF-8 (M-06), no en caracteres: `max_length` de pydantic cuenta
+    # caracteres y dejaría pasar 72 caracteres multibyte que bcrypt truncaría.
+    password: str = Field(min_length=1)
+
+    @field_validator("password")
+    @classmethod
+    def _password_en_bytes(cls, v: str) -> str:
+        n = bytes_de(v)
+        if n > MAX_BYTES:
+            raise ValueError(f"la contraseña no puede superar los {MAX_BYTES} bytes en UTF-8 (recibidos: {n})")
+        return v
 
 
 class RefreshRequest(BaseModel):

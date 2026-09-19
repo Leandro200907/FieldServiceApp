@@ -211,7 +211,7 @@ def test_yo_token_vencido(cliente_api, tenant_de_prueba):
     cuerpo = r.json()
     assert set(cuerpo) == {"error"}
     assert cuerpo["error"]["codigo"] == "no_autenticado"
-    assert set(cuerpo["error"]) == {"codigo", "mensaje", "detalles"}
+    assert set(cuerpo["error"]) == {"codigo", "mensaje", "detalles", "request_id"}
 
 
 def test_yo_token_firmado_con_otro_secreto(cliente_api, tenant_de_prueba):
