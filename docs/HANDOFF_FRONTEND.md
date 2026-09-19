@@ -19,6 +19,10 @@ Prefijo de todas las rutas: `/v1`.
 
 - Todo lo demás exige `Authorization: Bearer <access_token>`. Sin token o vencido: **401**
   `no_autenticado`. Rol insuficiente: **403** `prohibido` (`detalles.roles_requeridos`).
+- **Cada request protegido comprueba el estado actual del usuario en la base**: si fue
+  desactivado (o borrado), el access token vigente responde 401 genérico de inmediato en
+  todas las instancias; refresh y login también 401. Ante un 401 inesperado con token
+  aún no vencido, el cliente debe cerrar sesión (no reintentar el refresh en loop).
 - Credenciales malas: siempre 401 genérico (no se distingue slug/email/contraseña).
 - **Contraseña: máximo 72 bytes UTF-8** (no caracteres). Más largo → 422 `validacion` con
   `loc: ["body","password"]`; el backend nunca trunca. Un 72-caracteres con acentos puede

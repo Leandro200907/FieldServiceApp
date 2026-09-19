@@ -104,7 +104,7 @@ Máximo 72 bytes UTF-8, sin truncar.
 ```
 
 ```bash
-# 4) desactivar un usuario (bloquea login y refresh, revoca sus refresh tokens; los access tokens ya emitidos vencen en JWT_ACCESS_TOKEN_MINUTES)
+# 4) desactivar un usuario: efectivo de inmediato (cada request protegido comprueba `activo` en la base; login y refresh 401; refresh tokens revocados)
 .venv/Scripts/python scripts/administracion.py desactivar-usuario --tenant-slug acme --email sup@acme.test
 ```
 
@@ -113,7 +113,8 @@ Máximo 72 bytes UTF-8, sin truncar.
 ```
 
 Pendiente expresamente para después de v1: cambio y restablecimiento de contraseña,
-reactivación y gestión de usuarios por API/pantallas.
+reactivación (exigirá `tokens_validos_desde` o una versión de seguridad en el claim para
+que no revivan tokens emitidos antes de la desactivación) y gestión de usuarios por API.
 
 ## Correr
 

@@ -23,9 +23,9 @@ Contraseña: NUNCA por argv ni stdout. Se toma de la variable `USUARIO_PASSWORD`
 definida; si no, se pide dos veces por prompt seguro (`getpass`, sin eco) — y si no hay
 terminal interactiva, falla con código 2. Límite: 72 bytes UTF-8 (bcrypt), sin truncar.
 
-Nota sobre desactivación: los access tokens ya emitidos siguen siendo válidos hasta su
-vencimiento (JWT_ACCESS_TOKEN_MINUTES, 30 min por defecto); el refresh queda revocado en
-el acto, así que la sesión no se renueva.
+Desactivación: efectiva de inmediato en todas las instancias — cada request protegido
+comprueba `activo` en la base (app/auth/dependencies.py); login y refresh responden 401 y
+los refresh tokens quedan revocados. No hay reactivación en v1.
 """
 from __future__ import annotations
 
