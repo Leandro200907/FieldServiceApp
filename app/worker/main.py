@@ -9,9 +9,10 @@ registrado, (3) corre los procesos de reloj. Cada proceso deja latido; si uno fa
 error se registra en `latido_proceso` en una sesión aparte y la vuelta sigue con el
 resto — un tenant roto no frena a los demás.
 
-Cada job se procesa en tres transacciones cortas (tomar / handler / completar-fallar)
-para que una falla SQL dentro del handler no deshaga el `tomar` ni deje el job
-`pendiente` sin contar el intento.
+Cada job se procesa en dos transacciones cortas: `tomar` (cuenta el intento) y
+`handler + completar` en la MISMA transacción (fencing A-06); `fallar` va aparte, para
+que una falla SQL dentro del handler no deshaga el `tomar` ni deje el job `pendiente`
+sin contar el intento.
 """
 from __future__ import annotations
 

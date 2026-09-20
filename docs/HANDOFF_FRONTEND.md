@@ -310,7 +310,8 @@ Dominio (422 salvo indicación): `requisito_no_excepcionable`, `excepcion_de_emp
 - No hay endpoints de gestión de usuarios (alta, desactivación, cambio ni restablecimiento
   de contraseña): tenant y usuarios se administran con `scripts/administracion.py`
   (crear-tenant, crear-usuario, desactivar-usuario, listar-usuarios). Un usuario
-  desactivado no puede hacer login ni refresh; su access token vigente expira solo.
+  desactivado no puede hacer login ni refresh, y su access token vigente deja de servir en
+  el request siguiente (cada request protegido comprueba `activo`).
 - Notificaciones: mail y Telegram reales dependen de que la plataforma tenga `SMTP_*` /
   `TELEGRAM_BOT_TOKEN` y de que el tenant habilite el canal; sin eso quedan en el log con
   traza. WhatsApp está diseñado (misma interfaz) pero no activo. Cola `validacion_evidencia`

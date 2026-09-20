@@ -53,7 +53,7 @@ def emitir_access_token(identidad: Identidad, ahora: datetime | None = None) -> 
 def validar_access_token(token: str) -> Identidad:
     """Decodifica y valida un access token; cualquier problema (firma, vencimiento,
     tipo distinto de access, claims faltantes o roles desconocidos) es `NoAutenticado`.
-    No toca la base."""
+    No toca la base: el estado actual del usuario lo comprueba `identidad_actual` en cada request."""
     claims = decodificar(token, tipo_esperado=TIPO_ACCESS)
     try:
         roles = frozenset(Rol(r) for r in claims.get("roles") or [])
