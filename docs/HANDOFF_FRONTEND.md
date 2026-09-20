@@ -114,7 +114,7 @@ Todo error, de cualquier status, tiene esta forma exacta:
 | `POST /v1/comandos/rechazar_propuesta` | responsable_legajos | `{documento_id, motivo?}` |
 | `POST /v1/comandos/registrar_acreditacion_de_competencia` | responsable_legajos | `{persona_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencias[]}` |
 | `POST /v1/comandos/registrar_induccion` | responsable_legajos | `{persona_id, locacion_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencia (documento_id)}` |
-| `POST /v1/comandos/importar_lote` | responsable_legajos | `{lote_id, origen?, filas:[{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?}], hash_archivo?}` (ver `lote_contenido_distinto`) |
+| `POST /v1/comandos/importar_lote` | responsable_legajos | `{lote_id, origen?, filas:[{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?, estado_confirmacion?}], hash_archivo?}` — las filas viajan crudas: una fila con UUID/fecha/campo inválido se rechaza sola (`fila_invalida` en `detalle_filas_rechazadas`) y las demás se aplican; el lote entero sólo es 422 si `filas` no es una lista o está vacía (ver `lote_contenido_distinto`) |
 | `POST /v1/comandos/revertir_lote` | responsable_legajos | `{lote_id}` |
 | `POST /v1/comandos/asignar_supervisor` | configuracion, responsable_legajos | `{sujeto_id, supervisor_usuario_id, desde?}` |
 | `POST /v1/comandos/reasignar_supervisor` | configuracion, responsable_legajos | `{sujeto_id, supervisor_usuario_id, desde?}` |

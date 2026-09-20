@@ -19,6 +19,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -527,7 +528,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     # Red de seguridad de dominio, válida también entre actores distintos: si el lote ya
     # existe, solo se reproduce el resultado si el contenido es el MISMO (hash canónico
     # de las filas, persistido en hash_archivo); con filas distintas es un conflicto.
-    hash_contenido = hash_canonico([f.model_dump(mode="json") for f in body.filas])
+    hash_contenido = hash_canonico(body.filas)
     existente = s.execute(
         text(
             "SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, hash_archivo "
@@ -557,7 +558,19 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     validas: list[tuple[int, e.FilaDeLote]] = []
     sin_cambios: list[dict[str, Any]] = []
     rechazadas: list[dict[str, Any]] = []
-    for i, fila in enumerate(body.filas):
+    for i, cruda in enumerate(body.filas):
+        # 1a) Sintaxis: UUID/fecha/campo obligatorio inválidos rechazan SOLO esta fila.
+        try:
+            fila = e.FilaDeLote.model_validate(cruda)
+        except ValidationError as err:
+            rechazadas.append({
+                "fila": i, "sujeto_id": str(cruda.get("sujeto_id", "")) if isinstance(cruda, dict) else None,
+                "requisito_definicion_id": str(cruda.get("requisito_definicion_id", "")) if isinstance(cruda, dict) else None,
+                "codigo": "fila_invalida", "motivo": "Fila con formato inválido",
+                "detalles": [{"campo": ".".join(str(x) for x in er["loc"]), "tipo": er["type"], "mensaje": er["msg"]} for er in err.errors()],
+            })
+            continue
+        # 1b) Dominio.
         try:
             legajo = _legajo_activo(s, t, fila.sujeto_id)
             definicion = _definicion_activa(s, t, str(fila.requisito_definicion_id))

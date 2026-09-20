@@ -496,59 +496,6 @@
         "title": "EvaluarHabilitacionBody",
         "type": "object"
       },
-      "FilaDeLote": {
-        "properties": {
-          "estado_confirmacion": {
-            "default": "declarado",
-            "enum": [
-              "declarado",
-              "verificado",
-              "confirmado_en_fuente"
-            ],
-            "title": "Estado Confirmacion",
-            "type": "string"
-          },
-          "numero": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Numero"
-          },
-          "requisito_definicion_id": {
-            "format": "uuid",
-            "title": "Requisito Definicion Id",
-            "type": "string"
-          },
-          "sujeto_id": {
-            "minLength": 1,
-            "title": "Sujeto Id",
-            "type": "string"
-          },
-          "vigente_desde": {
-            "format": "date",
-            "title": "Vigente Desde",
-            "type": "string"
-          },
-          "vigente_hasta": {
-            "format": "date",
-            "title": "Vigente Hasta",
-            "type": "string"
-          }
-        },
-        "required": [
-          "sujeto_id",
-          "requisito_definicion_id",
-          "vigente_desde",
-          "vigente_hasta"
-        ],
-        "title": "FilaDeLote",
-        "type": "object"
-      },
       "IdentidadResponse": {
         "properties": {
           "roles": {
@@ -588,11 +535,10 @@
         "type": "object"
       },
       "ImportarLote": {
+        "description": "Las filas entran CRUDAS a propósito (2.11 de modelo-dominio.md): una fila con un\nUUID, una fecha o un campo obligatorio inválido se registra como rechazada en\n`detalle_filas_rechazadas` y NO bloquea a las demás. Si el body tipara `list[FilaDeLote]`,\nFastAPI rechazaría el lote entero con 422 antes de llegar al servicio. La validación\nsintáctica por fila (`FilaDeLote.model_validate`) la hace el servicio, fila por fila.",
         "properties": {
           "filas": {
-            "items": {
-              "$ref": "#/components/schemas/FilaDeLote"
-            },
+            "items": {},
             "title": "Filas",
             "type": "array"
           },

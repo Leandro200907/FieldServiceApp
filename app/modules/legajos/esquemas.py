@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Literal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -87,14 +88,20 @@ class FilaDeLote(BaseModel):
 
 
 class ImportarLote(BaseModel):
+    """Las filas entran CRUDAS a propósito (2.11 de modelo-dominio.md): una fila con un
+    UUID, una fecha o un campo obligatorio inválido se registra como rechazada en
+    `detalle_filas_rechazadas` y NO bloquea a las demás. Si el body tipara `list[FilaDeLote]`,
+    FastAPI rechazaría el lote entero con 422 antes de llegar al servicio. La validación
+    sintáctica por fila (`FilaDeLote.model_validate`) la hace el servicio, fila por fila."""
+
     lote_id: UUID
     origen: OrigenLote = "planilla"
-    filas: list[FilaDeLote] = Field(default_factory=list)
+    filas: list[Any] = Field(default_factory=list)  # cada elemento se valida en el servicio
     hash_archivo: str | None = None
 
     @field_validator("filas")
     @classmethod
-    def _no_vacio(cls, v: list[FilaDeLote]) -> list[FilaDeLote]:
+    def _no_vacio(cls, v: list[Any]) -> list[Any]:
         if not v:
             raise ValueError("el lote no tiene filas")
         return v
