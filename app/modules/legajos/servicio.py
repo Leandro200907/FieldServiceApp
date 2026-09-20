@@ -183,6 +183,12 @@ def _insertar_version_documento(
         identidad.usuario_id,
     )
     eventos.append("DocumentoCargado")
+    # Acción registrada sobre el requisito (3.4): pausa la cadena de recordatorios de la
+    # alerta abierta, en cualquier nivel de confianza.
+    if requisito_definicion_id is not None:
+        from app.modules.alertas.servicio import registrar_accion
+
+        registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id)
     if estado_confirmacion != "declarado" and requisito_definicion_id is not None:
         # Carga ya validada por el responsable = verificación implícita: se emite el evento
         # canónico (7.2) en vez de reinterpretar DocumentoCargado en la política (A-07).
@@ -306,6 +312,13 @@ def _al_verificar(s: Session, identidad: Identidad, doc: dict[str, Any], eventos
         identidad.usuario_id,
     )
     eventos.append("DocumentoVerificado")
+    # Verificación que cubre la fuente de una alerta → resuelta (solo verificado cierra, 2.4).
+    if doc["requisito_definicion_id"] is not None:
+        from app.modules.alertas.servicio import resolver_por_verificacion
+
+        hasta = s.execute(text("SELECT vigente_hasta FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d"),
+                          {"t": t, "d": str(doc["documento_id"])}).scalar()
+        resolver_por_verificacion(s, t, doc["sujeto_id"], str(doc["requisito_definicion_id"]), str(doc["documento_id"]), hasta)
     regularizadas: list[str] = []
     if doc["requisito_definicion_id"] is not None:
         filas = s.execute(

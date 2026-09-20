@@ -162,6 +162,8 @@ def test_outbox_publicador_falla_deja_pendiente_y_cuenta_intento(tenant_de_prueb
 
 # --- procesos de reloj ---------------------------------------------------------------
 def test_control_vencimientos_abre_alerta_una_sola_vez(tenant_de_prueba):
+    """Compat del reloj: abre una alerta por fuente (H-02: agregado persistente; el ciclo
+    completo se prueba en tests/test_h02_alertas_vencimiento.py)."""
     t = tenant_de_prueba.tenant_id
     ahora = ahora_utc()
     with tenant_session(t) as s:
@@ -173,22 +175,18 @@ def test_control_vencimientos_abre_alerta_una_sola_vez(tenant_de_prueba):
         _documento(s, t, req, hoy + timedelta(days=5), estado_version="sucedida")  # no vigente: sin alerta
     with tenant_session(t) as s:
         r = control_vencimientos(s, t, ahora)
-        assert r["alertas_abiertas"] == 2
+        assert r["abiertas"] == 2
     with tenant_session(t) as s:
-        assert control_vencimientos(s, t, ahora)["alertas_abiertas"] == 0  # idempotente
+        assert control_vencimientos(s, t, ahora)["abiertas"] == 0  # idempotente
         assert _contar_eventos(s, "AlertaDeVencimientoAbierta") == 2
-        ids = {f[0] for f in s.execute(text("SELECT payload->>'documento_id' FROM modulo1.event_log WHERE tipo = 'AlertaDeVencimientoAbierta'"))}
+        ids = {f[0] for f in s.execute(text("SELECT payload->>'fuente_id' FROM modulo1.event_log WHERE tipo = 'AlertaDeVencimientoAbierta'"))}
         assert ids == {pronto, vencido}
-        assert s.execute(text("SELECT count(*) FROM modulo1.job_queue WHERE cola = 'notificaciones' AND estado = 'pendiente'")).scalar() == 2
-        vencidos = s.execute(text("SELECT payload->>'vencido' FROM modulo1.event_log WHERE tipo = 'AlertaDeVencimientoAbierta' AND payload->>'documento_id' = :d"), {"d": vencido}).scalar()
-        assert vencidos == "true"
+        etapas = dict(s.execute(text("SELECT fuente_id::text, etapa FROM modulo1.alerta_vencimiento WHERE tenant_id = :t"), {"t": t}).all())
+        assert etapas == {pronto: "recordatorio", vencido: "vencido"}
+        # coalescing: las notificaciones salen agrupadas por destinatario (un job por destinatario)
+        assert s.execute(text("SELECT count(*) FROM modulo1.job_queue WHERE cola = 'notificaciones' AND payload->>'tipo' = 'AlertasDeVencimiento'")).scalar() >= 1
         latido = s.execute(text("SELECT ultimo_ok, detalle FROM modulo1.latido_proceso WHERE nombre = 'control_vencimientos' AND tenant_id = :t"), {"t": t}).first()
-        assert latido is not None and latido[0] is not None and latido[1]["alertas_abiertas"] == 0
-    # Resuelta → se puede reabrir.
-    with tenant_session(t) as s:
-        s.execute(text("INSERT INTO modulo1.event_log (tenant_id, tipo, payload) VALUES (:t, 'AlertaResuelta', CAST(:p AS jsonb))"), {"t": t, "p": f'{{"documento_id": "{pronto}"}}'})
-    with tenant_session(t) as s:
-        assert control_vencimientos(s, t, ahora)["alertas_abiertas"] == 1
+        assert latido is not None and latido[0] is not None and latido[1]["abiertas"] == 0
 
 
 def test_vencer_excepciones_y_constancias(tenant_de_prueba):

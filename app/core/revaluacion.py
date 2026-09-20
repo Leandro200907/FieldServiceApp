@@ -183,6 +183,7 @@ def _sel_compromiso(tipo_cambio: str) -> Selector:
 
 EVENTOS_FUENTE: dict[str, Selector] = {
     "DocumentoVerificado": _sel_documento_verificado,
+    "DocumentoVencido": _sel_documento_verificado,  # 3.4: un vencimiento es cambio de entrada del snapshot
     "LoteRevertido": _sel_lote_revertido,
     "LegajoDadoDeBaja": _sel_legajo_baja,
     "MatrizVersionPublicada": _sel_matriz_publicada,

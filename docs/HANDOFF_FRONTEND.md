@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0016_plantillas_globales`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0017_alertas_vencimiento`.
 Prefijo de todas las rutas: `/v1`.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
@@ -181,6 +181,24 @@ Reglas que el frontend debe reflejar:
   la segunda concurrente recibe 409.
 - **Evaluar habilitación** es modo decisión (persiste). El supervisor sólo consulta
   (`GET /v1/consultas/cobertura_oc`, no persiste). `evaluar_habilitacion` por el supervisor → 403.
+
+### 4.4 bis Alertas de vencimiento (flujo 3.4)
+| Ruta | Rol | Body / query |
+|---|---|---|
+| `POST /v1/comandos/configurar_alertas` | configuracion | `{plazo_aviso_dias (30), escalamiento_dias (7), rol_escalamiento (responsable_legajos\|supervisor\|configuracion), reconocimiento_dias (3)}` |
+| `POST /v1/comandos/reconocer_alerta` | supervisor, responsable_legajos (alerta dentro de su alcance; si no, 404) | `{alerta_id, comentario?}` → silencia notificaciones `reconocimiento_dias`; **no cierra el ciclo** |
+| `GET /v1/consultas/alertas_abiertas` | todos (alcance por rol) | `sujeto_id?`, `etapa?` (aviso\|recordatorio\|vencido\|escalado), paginado → `{items[], total, por_etapa{}, hoy}` |
+| `GET /v1/consultas/historial_alertas` | configuracion, responsable_legajos, supervisor | `sujeto_id?`, paginado; incluye resueltas con `resuelta_motivo` (`verificacion` / `fuente_reemplazada_o_anulada`) y `eventos[]` |
+| `GET /v1/consultas/configuracion_alertas` | configuracion, responsable_legajos, supervisor | → parámetros + `plazos_por_requisito[]` |
+
+Semántica que la UI debe reflejar: `etapa` avanza sola con el tiempo (T−plazo aviso,
+T−plazo/2 recordatorio, T+1 vencido, T+N escalado) y `estado` refleja la acción humana
+(`abierta`, `pausada_por_accion`, `resuelta`). Cargar/proponer un documento o registrar
+una excepción pausa los recordatorios; sólo un documento **verificado** que cubra el
+requisito resuelve; sobre `vencido` una excepción marca `bajo_excepcion` sin resolver.
+Las notificaciones salen agrupadas por destinatario (un mensaje con varias alertas). El
+override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_aviso_dias`
+(vía alta/edición de la definición; hoy sólo por base — pendiente comando propio).
 
 ### 4.5 Consultas (`GET /v1/consultas/…`)
 Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}`.

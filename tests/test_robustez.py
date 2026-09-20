@@ -556,7 +556,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     token: sin Authorization responde 401 con envelope, nunca 500 ni 200."""
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}"}
-    assert len(paths) == 49
+    assert len(paths) == 54
     for path, ops in paths.items():
         if path in publicas:
             continue

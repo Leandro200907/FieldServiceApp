@@ -413,6 +413,9 @@ def otorgar_excepcion(
             {"sujeto_id": sujeto_id, "requisito_definicion_id": requisito_definicion_id, "commitment_id": commitment_id},
             codigo="excepcion_activa_duplicada",
         ) from err
+    from app.modules.alertas.servicio import registrar_accion
+
+    registrar_accion(session, tenant_id, sujeto_id, requisito_definicion_id, "excepcion", excepcion_id)
     registrar_evento(
         session,
         tenant_id,

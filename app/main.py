@@ -33,6 +33,7 @@ ROUTERS = [
     "app.modules.legajos.router",
     "app.modules.requisitos.router",
     "app.modules.operacion.router",
+    "app.modules.alertas.router",
     "app.modules.oc.router",
     "app.modules.consultas.router",
     "app.storage.router",

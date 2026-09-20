@@ -378,3 +378,21 @@ inducciones) y creando las que falten. Una definición global de inducción exig
 una sola vez por (tenant, plantilla, versión nueva) y encola notificación al responsable;
 la actualización nunca se aplica sola. La precarga base (`docs/plantillas/base_v1.json`)
 es contenido a validar con cada operadora, no la matriz oficial.
+
+## 15. Alerta de vencimiento (H-02, migración 0017)
+
+Agregado `alerta_vencimiento`, una por (tenant, fuente_tipo, fuente_id) con `etapa` y
+`estado` como dimensiones independientes (especificación 4.6). `app/core/alertas.py` es la
+función pura (fecha + parámetros → etapa); todo efecto es política del reloj
+(`sincronizar`): abrir, avanzar, `DocumentoVencido` (entra al mapa de revaluación A-07 como
+cambio de entrada del snapshot), `AlertaEscalada` al rol configurable, notificaciones
+pendientes por destinatario (técnico y supervisor resueltos a usuario; roles
+administrativos como broadcast) y entrega coalescida en un job por destinatario y corrida.
+Decisiones de implementación: (1) una fuente sucedida por una versión **declarada** no
+resuelve la alerta — sigue sobre la fecha original hasta `vencido` si no se verifica (1.10);
+sólo `DocumentoVerificado` que cubre el requisito resuelve (`verificacion`), y la ausencia
+total de fuente (anulada, revertida, legajo de baja) resuelve con motivo
+`fuente_reemplazada_o_anulada`; (2) el reconocimiento silencia `reconocimiento_dias`
+contados desde el hoy real, nunca cierra ni frena `vencido`; (3) el plazo por tipo de
+requisito es un override en `definicion_requisito.plazo_aviso_dias`; (4) "OC nueva sin
+matriz" (3.6) se avisa una vez por OC al rol configuración.

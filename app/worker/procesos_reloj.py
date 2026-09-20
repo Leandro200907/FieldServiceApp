@@ -22,7 +22,6 @@ from app.worker.cola import encolar
 
 log = logging.getLogger("modulo1.worker.reloj")
 
-DIAS_AVISO_VENCIMIENTO = 30
 ESTADOS_NO_VIGENTES = ("sucedida", "rechazada", "revertida_por_lote")
 UUID_NULO = "00000000-0000-0000-0000-000000000000"
 
@@ -48,74 +47,16 @@ def latir(session: Session, nombre: str, tenant_id: str | None, ok: bool, detall
 
 
 # --- 1. control de vencimientos -----------------------------------------------------
-def _alerta_ya_abierta(session: Session, documento_id: str) -> bool:
-    """Hay una AlertaDeVencimientoAbierta para este id sin AlertaResuelta posterior."""
-    fila = session.execute(
-        text(
-            """
-            SELECT 1 FROM modulo1.event_log a
-            WHERE a.tipo = 'AlertaDeVencimientoAbierta' AND a.payload->>'documento_id' = :d
-              AND NOT EXISTS (
-                  SELECT 1 FROM modulo1.event_log r
-                  WHERE r.tipo = 'AlertaResuelta' AND r.payload->>'documento_id' = :d AND r.id > a.id)
-            LIMIT 1
-            """
-        ),
-        {"d": documento_id},
-    ).first()
-    return fila is not None
+def control_vencimientos(session: Session, tenant_id: str, ahora_utc: datetime) -> dict[str, Any]:
+    """Flujo 3.4 (H-02): sincroniza el agregado Alerta de vencimiento (abre, avanza etapas,
+    resuelve fuentes desaparecidas), entrega las notificaciones agrupadas por destinatario
+    y avisa las OC sin matriz (3.6). La función pura es `app.core.alertas.etapa_de`."""
+    from app.modules.alertas.servicio import avisar_oc_sin_matriz, entregar_notificaciones, sincronizar
 
-
-def _proximos_a_vencer(session: Session, limite: date) -> list[dict[str, Any]]:
-    filas: list[dict[str, Any]] = []
-    for tipo_objeto, sql in (
-        (
-            "documento",
-            "SELECT documento_id AS id, sujeto_id, requisito_definicion_id, vigente_hasta FROM modulo1.documento "
-            "WHERE estado_version = 'vigente' AND vigente_hasta <= :lim",
-        ),
-        (
-            "acreditacion",
-            "SELECT acreditacion_id AS id, persona_id AS sujeto_id, requisito_definicion_id, vigente_hasta "
-            "FROM modulo1.acreditacion_competencia WHERE vigente_hasta <= :lim",
-        ),
-        (
-            "induccion",
-            "SELECT induccion_id AS id, persona_id AS sujeto_id, requisito_definicion_id, vigente_hasta "
-            "FROM modulo1.induccion WHERE vigente_hasta <= :lim",
-        ),
-    ):
-        for f in session.execute(text(sql), {"lim": limite}).mappings():
-            filas.append({"tipo_objeto": tipo_objeto, **dict(f)})
-    return filas
-
-
-def control_vencimientos(session: Session, tenant_id: str, ahora_utc: datetime) -> dict[str, int]:
-    """Abre (una sola vez) AlertaDeVencimientoAbierta para cada documento/acreditación/
-    inducción que vence dentro de 30 días o ya venció, y encola la notificación."""
     hoy = hoy_del_tenant(session, tenant_id, ahora_utc)
-    limite = hoy + timedelta(days=DIAS_AVISO_VENCIMIENTO)
-    abiertas = 0
-    revisadas = 0
-    for fila in _proximos_a_vencer(session, limite):
-        revisadas += 1
-        objeto_id = str(fila["id"])
-        if _alerta_ya_abierta(session, objeto_id):
-            continue
-        vigente_hasta: date = fila["vigente_hasta"]
-        payload = {
-            "documento_id": objeto_id,
-            "tipo_objeto": fila["tipo_objeto"],
-            "sujeto_id": fila["sujeto_id"],
-            "requisito_definicion_id": str(fila["requisito_definicion_id"]) if fila["requisito_definicion_id"] else None,
-            "vigente_hasta": vigente_hasta.isoformat(),
-            "dias_restantes": (vigente_hasta - hoy).days,
-            "vencido": vigente_hasta < hoy,
-        }
-        registrar_evento(session, tenant_id, "AlertaDeVencimientoAbierta", payload, usuario_id=None)
-        encolar(session, "notificaciones", {"tipo": "AlertaDeVencimientoAbierta", **payload}, tenant_id=tenant_id)
-        abiertas += 1
-    resumen = {"revisadas": revisadas, "alertas_abiertas": abiertas, "hoy": hoy.isoformat()}
+    resumen: dict[str, Any] = {"hoy": hoy.isoformat(), **sincronizar(session, tenant_id, ahora_utc)}
+    resumen.update(entregar_notificaciones(session, tenant_id, ahora_utc))
+    resumen.update(avisar_oc_sin_matriz(session, tenant_id, ahora_utc))
     latir(session, "control_vencimientos", tenant_id, True, resumen)
     return resumen
 

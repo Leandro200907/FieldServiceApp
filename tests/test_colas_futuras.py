@@ -6,7 +6,7 @@
 | evidencia_qr          | ninguno           | — (futuro: QR de credencial, 8.x)         |
 | score_documental      | ninguno           | — (futuro: score de calidad documental)   |
 | validacion_evidencia  | ninguno           | — (futuro: validación automática de evidencia) |
-| notificaciones        | procesos_reloj.control_vencimientos; requisitos/plantillas.control_plantillas | `AlertaDeVencimientoAbierta`, `PlantillaGlobalActualizada` |
+| notificaciones        | alertas/servicio (entregar_notificaciones, avisar_oc_sin_matriz); requisitos/plantillas.control_plantillas | `AlertasDeVencimiento` (coalescido), `OcSinMatriz`, `PlantillaGlobalActualizada` |
 | drenaje_outbox        | (la vuelta del worker drena directo) | — |
 
 Si alguien agrega un productor de una cola futura, el primer test falla y obliga a
@@ -46,7 +46,7 @@ def test_ningun_flujo_soportado_produce_colas_futuras():
     for cola in FUTURAS:
         assert _productores(cola) == [], f"{cola} tiene productor: implementar handler o desactivar el productor"
     assert sorted(Path(p).as_posix() for p in _productores("notificaciones")) == [
-        "app/modules/requisitos/plantillas.py", "app/worker/procesos_reloj.py"]
+        "app/modules/alertas/servicio.py", "app/modules/requisitos/plantillas.py"]
     assert set(worker_main.HANDLERS) == set(SOPORTADAS)   # las futuras sólo tienen handler_no_implementado
 
 

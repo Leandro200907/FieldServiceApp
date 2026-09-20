@@ -11,9 +11,9 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 50 operaciones sobre 49 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 19 archivos en `migrations/versions/`, un solo head: `0016_plantillas_globales`.
-- **Tests:** 419 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Rutas HTTP:** 55 operaciones sobre 54 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 20 archivos en `migrations/versions/`, un solo head: `0017_alertas_vencimiento`.
+- **Tests:** 431 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -38,17 +38,18 @@ app/
   auth/                 # JWT, login/refresh/logout, passwords (bcrypt, límite en bytes),
                         # identidad y roles, alcance (universo del supervisor)
   core/                 # motor puro de evaluación + orquestación (decidir/consultar),
-                        # revaluación declarativa, incumplimiento de empresa
+                        # revaluación declarativa, incumplimiento de empresa, etapa de alerta (pura)
   comun/                # eventos + outbox, idempotencia, reloj del tenant, paginación
   modules/
     legajos/            # sujetos, documentos, acreditaciones, inducciones, lotes, supervisor
     requisitos/         # definiciones, matrices, requisitos particulares
     operacion/          # custodia, excepciones, constancias, evaluar habilitación
+    alertas/            # alerta de vencimiento (agregado, políticas, coalescing, consultas)
     oc/                 # importación/cancelación de OC (vista de compromiso)
     consultas/          # GET /consultas/* (read models con alcance por rol)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0016, lineales, un head)
+migrations/             # Alembic (0001 … 0017, lineales, un head)
 scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
@@ -218,9 +219,10 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 |---|---|
 | Esquema + RLS + FKs compuestas por tenant, unicidades activas y NULL-aware | Hecho (0001–0016) |
 | Catálogo y matrices globales de industria, copia opt-in, aviso de versión nueva (no-funcionales 1.5) | Hecho (0016) |
+| Alerta de vencimiento completa: aviso/recordatorio/vencido/escalado, pausa, resolución por verificación, reconocimiento, rol de escalamiento y plazos configurables, coalescing, tablero e historial, OC sin matriz | Hecho (0017) |
 | Motor de evaluación puro + 5 casos de oro + orquestación decisión/consulta | Hecho |
 | Auth JWT (login/refresh/logout), roles, universo del supervisor, contraseñas por bytes | Hecho |
-| Comandos (33) + consultas (12) + storage (3) + salud (2) | Hecho |
+| Comandos (35) + consultas (15) + storage (3) + salud (2) | Hecho |
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
 | Transporte real a Módulo 2, canal de notificaciones, storage S3, handlers qr/score/validación | Pendiente (declarado, no silencioso) |
