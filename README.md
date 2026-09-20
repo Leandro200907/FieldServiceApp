@@ -11,9 +11,9 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 55 operaciones sobre 54 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Rutas HTTP:** 66 operaciones sobre 65 paths bajo `/v1` (OpenAPI en `/docs`).
 - **Migraciones:** 20 archivos en `migrations/versions/`, un solo head: `0017_alertas_vencimiento`.
-- **Tests:** 431 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Tests:** 448 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -46,7 +46,7 @@ app/
     operacion/          # custodia, excepciones, constancias, evaluar habilitación
     alertas/            # alerta de vencimiento (agregado, políticas, coalescing, consultas)
     oc/                 # importación/cancelación de OC (vista de compromiso)
-    consultas/          # GET /consultas/* (read models con alcance por rol)
+    consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
 migrations/             # Alembic (0001 … 0017, lineales, un head)
@@ -222,7 +222,7 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Alerta de vencimiento completa: aviso/recordatorio/vencido/escalado, pausa, resolución por verificación, reconocimiento, rol de escalamiento y plazos configurables, coalescing, tablero e historial, OC sin matriz | Hecho (0017) |
 | Motor de evaluación puro + 5 casos de oro + orquestación decisión/consulta | Hecho |
 | Auth JWT (login/refresh/logout), roles, universo del supervisor, contraseñas por bytes | Hecho |
-| Comandos (35) + consultas (15) + storage (3) + salud (2) | Hecho |
+| Comandos (35) + consultas (26) + storage (3) + salud (2) | Hecho |
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
 | Transporte real a Módulo 2, canal de notificaciones, storage S3, handlers qr/score/validación | Pendiente (declarado, no silencioso) |

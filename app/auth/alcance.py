@@ -10,7 +10,9 @@ Dos preguntas distintas, que se responden acá y en ningún otro lado:
    los sujetos con `asignacion_supervisor` vigente hacia él, más los vehículos/equipos
    bajo custodia vigente de esos sujetos (1.5 / 1.5 bis de documentacion-habilitante.md:
    la custodia es decisión del supervisor, y lo que custodia su gente es suyo de ver).
-3. Un técnico solo se ve a sí mismo (`identidad.sujeto_id`).
+3. Un técnico se ve a sí mismo (`identidad.sujeto_id`) y a los vehículos/equipos bajo su
+   custodia vigente (H-05; 1.5 / 1.5 bis: "mi vehículo/equipo asignado" es parte de su
+   legajo compuesto). Nunca a otras personas.
 
 Un supervisor sin asignaciones tiene universo vacío — nunca "todo": el filtro vacío no
 abre el alcance.
@@ -58,8 +60,16 @@ def alcance_de_sujetos(
     if identidad.tiene_rol(Rol.SUPERVISOR):
         return universo_del_supervisor(session, identidad, hoy)
     if identidad.tiene_rol(Rol.TECNICO) and identidad.sujeto_id:
-        return [identidad.sujeto_id]
+        return [identidad.sujeto_id] + recursos_bajo_custodia(session, identidad.sujeto_id)
     return []
+
+
+def recursos_bajo_custodia(session: Session, custodio_id: str) -> list[str]:
+    """Vehículos/equipos con período de custodia vigente a nombre de la persona."""
+    return [f[0] for f in session.execute(text(
+        "SELECT c.recurso_id FROM modulo1.periodo_custodia p "
+        "JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
+        "WHERE p.estado = 'vigente' AND p.custodio_id = :cu ORDER BY c.recurso_id"), {"cu": custodio_id}).all()]
 
 
 def sujeto_en_alcance(

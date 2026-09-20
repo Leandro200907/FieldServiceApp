@@ -216,6 +216,7 @@ Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}
 | `GET /v1/consultas/log_auditoria` | configuracion, responsable_legajos | `tipo?`, `desde?`, `hasta?`, paginado |
 | `GET /v1/consultas/matriz_vigente` | todos | `cliente_id`, `locacion_id`, `tipo_servicio_id`, `fecha?` |
 | `GET /v1/consultas/incumplimiento_empresa` | todos | — |
+| `GET /v1/consultas/mi_legajo` | tecnico | — → `{persona: <legajo>, recursos_bajo_custodia: [{tipo_recurso, periodo_id, custodia_desde, ...legajo}], resumen}` (H-05: la vista compuesta del técnico) |
 | `GET /v1/consultas/plantillas_globales` | configuracion, responsable_legajos | — → `{definiciones[], matrices[]}`; cada plantilla con `estado` (`sin_copia` / `al_dia` / `actualizacion_disponible`), sus líneas y `copias_locales[]` con las líneas locales, para decidir a mano qué traer |
 
 **Plantillas globales**: la plataforma mantiene el catálogo de industria (`plataforma.*`);
@@ -224,6 +225,32 @@ worker emite `PlantillaGlobalActualizada` una vez y encola una notificación al
 responsable; nada se actualiza solo. El frontend debe mostrar la comparación (plantilla
 nueva vs. copia local) desde `plantillas_globales` y ofrecer `copiar_matriz_global` /
 `copiar_definicion_global`.
+
+### 4.6 Catálogos para operar los comandos sin tipear ids (H-06)
+Todos paginados (`offset/limit`, máx. 500) → `{items[], total, offset, limit}`; el alcance
+del supervisor/técnico se aplica siempre (un filtro nunca amplía lo visible); otro tenant no
+ve nada.
+
+| Ruta | Roles | Query | Alimenta a |
+|---|---|---|---|
+| `GET /v1/consultas/sujetos` | todos (alcance) | `q` (sujeto_id / identificador), `tipo_sujeto`, `activos` (true por defecto; false = dados de baja) | alta/baja, cargar/proponer documento, custodia, excepción, constancia, asignar supervisor |
+| `GET /v1/consultas/definiciones_requisito` | todos | `q`, `categoria`, `tipo_sujeto_aplicable`, `activas` | cargar documento, líneas de matriz, requisito particular, excepción, constancia |
+| `GET /v1/consultas/matrices` | configuracion, responsable_legajos, supervisor | `cliente_id`, `solo_vigentes` | publicar versión (claves existentes), matriz_vigente |
+| `GET /v1/consultas/usuarios` | configuracion, responsable_legajos | `q` (email/nombre), `rol`, `activos` (sin hashes) | asignar/reasignar supervisor |
+| `GET /v1/consultas/documentos` | todos (alcance) | `sujeto_id`, `estado_version` (vigente por defecto; `todas`), `estado_confirmacion`, `archivo_estado` | confirmar/rechazar, preparar/confirmar subida, descarga |
+| `GET /v1/consultas/excepciones` | configuracion, responsable_legajos, supervisor (alcance) | `sujeto_id`, `estado` (otorgada por defecto), `commitment_id` | revocar excepción |
+| `GET /v1/consultas/constancias` | configuracion, responsable_legajos, supervisor (alcance) | `sujeto_id`, `estado` (vigente por defecto), `cliente_id` | revocar constancia |
+| `GET /v1/consultas/custodias` | todos (alcance por recurso) | `recurso_id`, `custodio_id`, `solo_vigentes` | corregir custodia, cambiar custodia |
+| `GET /v1/consultas/lotes` | configuracion, responsable_legajos | `estado`, `entidad` | revertir lote |
+| `GET /v1/consultas/asignaciones_supervisor` | configuracion, responsable_legajos, supervisor (alcance) | `supervisor_usuario_id`, `sujeto_id`, `solo_vigentes` | reasignar supervisor |
+
+Ya existentes que también dan ids: `backlog_oc` (commitment_id / oc_id), `decisiones_oc` y
+`decision` (referencia_evaluacion), `propuestas_pendientes` (documento_id), `alertas_abiertas`
+(alerta_id), `plantillas_globales` (ids globales).
+
+**Alcance del técnico (H-05)**: se ve a sí mismo y a los vehículos/equipos bajo su custodia
+vigente (legajo, documentos, custodias, sujetos); nunca a otra persona. `mi_legajo` arma la
+vista compuesta persona + recursos.
 
 Visibilidad del supervisor (regla A-04): una decisión es visible sólo si **todos** sus
 sujetos propuestos están en su universo; si uno no lo está, la decisión "no existe" (404).
