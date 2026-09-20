@@ -60,11 +60,12 @@ def dar_de_alta_definicion_de_requisito(
 
     locacion = str(body.locacion_id) if body.locacion_id else None
     global_id = str(body.definicion_global_id) if body.definicion_global_id else None
+    version_global: int | None = None
     if global_id:
-        existe_global = s.execute(
-            text("SELECT 1 FROM plataforma.definicion_requisito_global WHERE definicion_global_id = :g"), {"g": global_id}
-        ).first()
-        if not existe_global:
+        version_global = s.execute(
+            text("SELECT version FROM plataforma.definicion_requisito_global WHERE definicion_global_id = :g"), {"g": global_id}
+        ).scalar()
+        if version_global is None:
             raise NoEncontrado("Definición global inexistente", {"definicion_global_id": global_id})
 
     repetida = s.execute(
@@ -86,12 +87,12 @@ def dar_de_alta_definicion_de_requisito(
         s.execute(
             text(
                 "INSERT INTO modulo1.definicion_requisito (requisito_definicion_id, tenant_id, nombre, categoria, "
-                "tipo_sujeto_aplicable, locacion_id, definicion_global_id, plazo_retencion_archivo) "
-                "VALUES (:r, :t, :n, :c, :ts, :loc, :g, "
+                "tipo_sujeto_aplicable, locacion_id, definicion_global_id, copiada_de_version, plazo_retencion_archivo) "
+                "VALUES (:r, :t, :n, :c, :ts, :loc, :g, :vg, "
                 "CASE WHEN CAST(:dias AS int) IS NULL THEN NULL ELSE make_interval(days => CAST(:dias AS int)) END)"
             ),
             {"r": requisito_definicion_id, "t": t, "n": body.nombre, "c": body.categoria, "ts": body.tipo_sujeto_aplicable,
-             "loc": locacion, "g": global_id, "dias": body.plazo_retencion_archivo_dias},
+             "loc": locacion, "g": global_id, "vg": version_global, "dias": body.plazo_retencion_archivo_dias},
         )
     except IntegrityError as err:
         # Dos altas concurrentes de la misma clave (M-04, 0013 NULLS NOT DISTINCT): la que

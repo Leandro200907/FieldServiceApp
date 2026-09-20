@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0015_job_queue_dead_letter
+-- head: 0016_plantillas_globales
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -156,6 +156,8 @@ CREATE TABLE modulo1.definicion_requisito (
     definicion_global_id uuid,
     plazo_retencion_archivo interval,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    copiada_de_version integer,
+    CONSTRAINT ck_definicion_copia_coherente CHECK ((((definicion_global_id IS NULL) AND (copiada_de_version IS NULL)) OR ((definicion_global_id IS NOT NULL) AND (copiada_de_version IS NOT NULL)))),
     CONSTRAINT definicion_requisito_categoria_check CHECK ((categoria = ANY (ARRAY['documento'::text, 'competencia'::text, 'induccion'::text]))),
     CONSTRAINT definicion_requisito_tipo_sujeto_aplicable_check CHECK ((tipo_sujeto_aplicable = ANY (ARRAY['empresa'::text, 'persona'::text, 'vehiculo'::text, 'equipo'::text]))),
     CONSTRAINT induccion_requiere_locacion CHECK ((((categoria = 'induccion'::text) AND (locacion_id IS NOT NULL)) OR ((categoria <> 'induccion'::text) AND (locacion_id IS NULL))))
@@ -404,7 +406,10 @@ CREATE TABLE modulo1.matriz_requisitos (
     fuente text,
     archivo_de_respaldo text,
     autor text,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    matriz_global_id uuid,
+    copiada_de_version integer,
+    CONSTRAINT ck_matriz_copia_coherente CHECK ((((matriz_global_id IS NULL) AND (copiada_de_version IS NULL)) OR ((matriz_global_id IS NOT NULL) AND (copiada_de_version IS NOT NULL))))
 );
 ALTER TABLE ONLY modulo1.matriz_requisitos FORCE ROW LEVEL SECURITY;
 -- Name: oc; Type: TABLE; Schema: modulo1; Owner: -
@@ -455,6 +460,17 @@ CREATE TABLE modulo1.periodo_custodia (
     CONSTRAINT periodo_custodia_estado_check CHECK ((estado = ANY (ARRAY['vigente'::text, 'cerrado'::text, 'corregido'::text])))
 );
 ALTER TABLE ONLY modulo1.periodo_custodia FORCE ROW LEVEL SECURITY;
+-- Name: plantilla_aviso; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.plantilla_aviso (
+    tenant_id uuid NOT NULL,
+    plantilla_tipo text NOT NULL,
+    plantilla_global_id uuid NOT NULL,
+    version_nueva integer NOT NULL,
+    notificado_en timestamp with time zone DEFAULT now() NOT NULL,
+    evento_id uuid,
+    CONSTRAINT plantilla_aviso_plantilla_tipo_check CHECK ((plantilla_tipo = ANY (ARRAY['matriz'::text, 'definicion_requisito'::text])))
+);
+ALTER TABLE ONLY modulo1.plantilla_aviso FORCE ROW LEVEL SECURITY;
 -- Name: politica_evento_procesado; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.politica_evento_procesado (
     tenant_id uuid NOT NULL,
@@ -523,8 +539,30 @@ CREATE TABLE plataforma.definicion_requisito_global (
     version integer DEFAULT 1 NOT NULL,
     activa boolean DEFAULT true NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    descripcion text,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT definicion_requisito_global_categoria_check CHECK ((categoria = ANY (ARRAY['documento'::text, 'competencia'::text, 'induccion'::text]))),
     CONSTRAINT definicion_requisito_global_tipo_sujeto_aplicable_check CHECK ((tipo_sujeto_aplicable = ANY (ARRAY['empresa'::text, 'persona'::text, 'vehiculo'::text, 'equipo'::text])))
+);
+-- Name: linea_matriz_global; Type: TABLE; Schema: plataforma; Owner: -
+CREATE TABLE plataforma.linea_matriz_global (
+    matriz_global_id uuid NOT NULL,
+    definicion_global_id uuid NOT NULL,
+    clasificacion text NOT NULL,
+    bloqueante_durante_ejecucion boolean DEFAULT false NOT NULL,
+    CONSTRAINT linea_matriz_global_clasificacion_check CHECK ((clasificacion = ANY (ARRAY['bloqueante_duro'::text, 'excepcionable'::text])))
+);
+-- Name: matriz_global; Type: TABLE; Schema: plataforma; Owner: -
+CREATE TABLE plataforma.matriz_global (
+    matriz_global_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    operadora text NOT NULL,
+    tipo_servicio text NOT NULL,
+    descripcion text,
+    version integer DEFAULT 1 NOT NULL,
+    activa boolean DEFAULT true NOT NULL,
+    fuente text,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
 );
 -- Name: evaluacion_habilitacion secuencia; Type: DEFAULT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.evaluacion_habilitacion ALTER COLUMN secuencia SET DEFAULT nextval('modulo1.evaluacion_habilitacion_secuencia_seq'::regclass);
@@ -607,6 +645,9 @@ ALTER TABLE ONLY modulo1.outbox_events
 -- Name: periodo_custodia periodo_custodia_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.periodo_custodia
     ADD CONSTRAINT periodo_custodia_pkey PRIMARY KEY (periodo_id);
+-- Name: plantilla_aviso plantilla_aviso_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.plantilla_aviso
+    ADD CONSTRAINT plantilla_aviso_pkey PRIMARY KEY (tenant_id, plantilla_tipo, plantilla_global_id, version_nueva);
 -- Name: politica_evento_procesado politica_evento_procesado_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.politica_evento_procesado
     ADD CONSTRAINT politica_evento_procesado_pkey PRIMARY KEY (tenant_id, evento_id);
@@ -694,6 +735,18 @@ ALTER TABLE ONLY modulo1.usuario
 -- Name: definicion_requisito_global definicion_requisito_global_pkey; Type: CONSTRAINT; Schema: plataforma; Owner: -
 ALTER TABLE ONLY plataforma.definicion_requisito_global
     ADD CONSTRAINT definicion_requisito_global_pkey PRIMARY KEY (definicion_global_id);
+-- Name: linea_matriz_global linea_matriz_global_pkey; Type: CONSTRAINT; Schema: plataforma; Owner: -
+ALTER TABLE ONLY plataforma.linea_matriz_global
+    ADD CONSTRAINT linea_matriz_global_pkey PRIMARY KEY (matriz_global_id, definicion_global_id);
+-- Name: matriz_global matriz_global_pkey; Type: CONSTRAINT; Schema: plataforma; Owner: -
+ALTER TABLE ONLY plataforma.matriz_global
+    ADD CONSTRAINT matriz_global_pkey PRIMARY KEY (matriz_global_id);
+-- Name: definicion_requisito_global uq_definicion_global_clave; Type: CONSTRAINT; Schema: plataforma; Owner: -
+ALTER TABLE ONLY plataforma.definicion_requisito_global
+    ADD CONSTRAINT uq_definicion_global_clave UNIQUE (nombre, categoria, tipo_sujeto_aplicable);
+-- Name: matriz_global uq_matriz_global_clave; Type: CONSTRAINT; Schema: plataforma; Owner: -
+ALTER TABLE ONLY plataforma.matriz_global
+    ADD CONSTRAINT uq_matriz_global_clave UNIQUE (operadora, tipo_servicio);
 -- Name: ix_acreditacion_competencia__persona_id; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_acreditacion_competencia__persona_id ON modulo1.acreditacion_competencia USING btree (tenant_id, persona_id);
 -- Name: ix_acreditacion_tenant_persona; Type: INDEX; Schema: modulo1; Owner: -
@@ -958,6 +1011,9 @@ ALTER TABLE ONLY modulo1.linea_requisito
 -- Name: lote_importacion lote_importacion_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.lote_importacion
     ADD CONSTRAINT lote_importacion_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: matriz_requisitos matriz_requisitos_matriz_global_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.matriz_requisitos
+    ADD CONSTRAINT matriz_requisitos_matriz_global_id_fkey FOREIGN KEY (matriz_global_id) REFERENCES plataforma.matriz_global(matriz_global_id);
 -- Name: matriz_requisitos matriz_requisitos_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.matriz_requisitos
     ADD CONSTRAINT matriz_requisitos_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -970,12 +1026,21 @@ ALTER TABLE ONLY modulo1.outbox_events
 -- Name: periodo_custodia periodo_custodia_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.periodo_custodia
     ADD CONSTRAINT periodo_custodia_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: plantilla_aviso plantilla_aviso_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.plantilla_aviso
+    ADD CONSTRAINT plantilla_aviso_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: requisito_particular requisito_particular_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.requisito_particular
     ADD CONSTRAINT requisito_particular_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: usuario usuario_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.usuario
     ADD CONSTRAINT usuario_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: linea_matriz_global linea_matriz_global_definicion_global_id_fkey; Type: FK CONSTRAINT; Schema: plataforma; Owner: -
+ALTER TABLE ONLY plataforma.linea_matriz_global
+    ADD CONSTRAINT linea_matriz_global_definicion_global_id_fkey FOREIGN KEY (definicion_global_id) REFERENCES plataforma.definicion_requisito_global(definicion_global_id);
+-- Name: linea_matriz_global linea_matriz_global_matriz_global_id_fkey; Type: FK CONSTRAINT; Schema: plataforma; Owner: -
+ALTER TABLE ONLY plataforma.linea_matriz_global
+    ADD CONSTRAINT linea_matriz_global_matriz_global_id_fkey FOREIGN KEY (matriz_global_id) REFERENCES plataforma.matriz_global(matriz_global_id) ON DELETE CASCADE;
 -- Name: acreditacion_competencia; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.acreditacion_competencia ENABLE ROW LEVEL SECURITY;
 -- Name: acreditacion_competencia acreditacion_competencia_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
@@ -1076,6 +1141,10 @@ CREATE POLICY outbox_events_aislamiento ON modulo1.outbox_events USING ((tenant_
 ALTER TABLE modulo1.periodo_custodia ENABLE ROW LEVEL SECURITY;
 -- Name: periodo_custodia periodo_custodia_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY periodo_custodia_aislamiento ON modulo1.periodo_custodia USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: plantilla_aviso; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.plantilla_aviso ENABLE ROW LEVEL SECURITY;
+-- Name: plantilla_aviso plantilla_aviso_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY plantilla_aviso_aislamiento ON modulo1.plantilla_aviso USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: politica_evento_procesado; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.politica_evento_procesado ENABLE ROW LEVEL SECURITY;
 -- Name: politica_evento_procesado politica_evento_procesado_aislamiento; Type: POLICY; Schema: modulo1; Owner: -

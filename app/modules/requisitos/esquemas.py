@@ -60,3 +60,16 @@ class CargarRequisitoParticular(BaseModel):
     requisito_definicion_id: UUID
     clasificacion: Clasificacion
     bloqueante_durante_ejecucion: bool
+
+
+class CopiarDefinicionGlobal(BaseModel):
+    definicion_global_id: UUID
+    locacion_id: UUID | None = None  # obligatoria si la definición global es una inducción
+
+
+class CopiarMatrizGlobal(BaseModel):
+    matriz_global_id: UUID
+    cliente_id: UUID
+    locacion_id: UUID
+    tipo_servicio_id: UUID
+    vigente_desde: date

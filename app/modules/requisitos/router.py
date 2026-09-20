@@ -7,7 +7,7 @@ from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
 from app.modules.legajos.infra import clave_idempotencia, ejecutar_comando
 from app.modules.requisitos import esquemas as e
-from app.modules.requisitos import servicio
+from app.modules.requisitos import plantillas, servicio
 
 router = APIRouter(tags=["requisitos"])
 
@@ -45,3 +45,5 @@ _ruta(
 )
 _ruta("publicar_version_de_matriz", e.PublicarVersionDeMatriz, servicio.publicar_version_de_matriz, CONFIGURACION)
 _ruta("cargar_requisito_particular", e.CargarRequisitoParticular, servicio.cargar_requisito_particular, RESPONSABLE)
+_ruta("copiar_definicion_global", e.CopiarDefinicionGlobal, plantillas.copiar_definicion_global, CONFIGURACION)
+_ruta("copiar_matriz_global", e.CopiarMatrizGlobal, plantillas.copiar_matriz_global, CONFIGURACION)

@@ -103,3 +103,12 @@ def matriz_vigente(
 def incumplimiento_empresa(identidad: Identidad = Depends(identidad_actual)) -> dict:
     with tenant_session(identidad.tenant_id) as s:
         return servicio.incumplimiento_empresa(s, identidad)
+
+
+@router.get("/consultas/plantillas_globales")
+def plantillas_globales(identidad: Identidad = Depends(identidad_actual)) -> dict:
+    """Plantillas de industria junto a las copias locales (estado sin_copia / al_dia /
+    actualizacion_disponible) para decidir a mano qué traer (no-funcionales 1.5.3)."""
+    from app.modules.requisitos.plantillas import plantillas_globales as _consulta
+    with tenant_session(identidad.tenant_id) as s:
+        return _consulta(s, identidad)

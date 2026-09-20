@@ -291,6 +291,70 @@
         "title": "ConfirmarSubida",
         "type": "object"
       },
+      "CopiarDefinicionGlobal": {
+        "properties": {
+          "definicion_global_id": {
+            "format": "uuid",
+            "title": "Definicion Global Id",
+            "type": "string"
+          },
+          "locacion_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Id"
+          }
+        },
+        "required": [
+          "definicion_global_id"
+        ],
+        "title": "CopiarDefinicionGlobal",
+        "type": "object"
+      },
+      "CopiarMatrizGlobal": {
+        "properties": {
+          "cliente_id": {
+            "format": "uuid",
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "locacion_id": {
+            "format": "uuid",
+            "title": "Locacion Id",
+            "type": "string"
+          },
+          "matriz_global_id": {
+            "format": "uuid",
+            "title": "Matriz Global Id",
+            "type": "string"
+          },
+          "tipo_servicio_id": {
+            "format": "uuid",
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "vigente_desde": {
+            "format": "date",
+            "title": "Vigente Desde",
+            "type": "string"
+          }
+        },
+        "required": [
+          "matriz_global_id",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "vigente_desde"
+        ],
+        "title": "CopiarMatrizGlobal",
+        "type": "object"
+      },
       "CorregirCustodiaBody": {
         "properties": {
           "custodio_id": {
@@ -1231,7 +1295,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0015_job_queue_dead_letter"
+    "x-migracion-head": "0016_plantillas_globales"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2620,6 +2684,238 @@
         "summary": "Confirmar Subida De Evidencia",
         "tags": [
           "storage"
+        ]
+      }
+    },
+    "/v1/comandos/copiar_definicion_global": {
+      "post": {
+        "operationId": "copiar_definicion_global_v1_comandos_copiar_definicion_global_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopiarDefinicionGlobal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Copiar Definicion Global V1 Comandos Copiar Definicion Global Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Copiar Definicion Global",
+        "tags": [
+          "requisitos"
+        ]
+      }
+    },
+    "/v1/comandos/copiar_matriz_global": {
+      "post": {
+        "operationId": "copiar_matriz_global_v1_comandos_copiar_matriz_global_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopiarMatrizGlobal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Copiar Matriz Global V1 Comandos Copiar Matriz Global Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Copiar Matriz Global",
+        "tags": [
+          "requisitos"
         ]
       }
     },
@@ -5720,6 +6016,92 @@
           }
         ],
         "summary": "Matriz Vigente"
+      }
+    },
+    "/v1/consultas/plantillas_globales": {
+      "get": {
+        "description": "Plantillas de industria junto a las copias locales (estado sin_copia / al_dia /\nactualizacion_disponible) para decidir a mano qué traer (no-funcionales 1.5.3).",
+        "operationId": "plantillas_globales_v1_consultas_plantillas_globales_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plantillas Globales V1 Consultas Plantillas Globales Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Plantillas Globales"
       }
     },
     "/v1/consultas/propuestas_pendientes": {

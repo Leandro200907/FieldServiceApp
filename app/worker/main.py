@@ -30,6 +30,7 @@ from app.db import platform_session, tenant_session
 from app.storage.contrato import Storage
 from app.worker import cola as cola_mod
 from app.worker.cola import Job
+from app.modules.requisitos.plantillas import control_plantillas
 from app.worker.outbox import Publicador, PublicadorEnLog, drenar_outbox
 from app.worker.procesos_reloj import (
     control_retencion,
@@ -209,6 +210,7 @@ def correr_una_vuelta(
 
         _reloj("control_vencimientos", lambda s: control_vencimientos(s, tenant_id, ahora))
         _reloj("vencer_excepciones_y_constancias", lambda s: vencer_excepciones_y_constancias(s, tenant_id, ahora))
+        _reloj("control_plantillas", lambda s: control_plantillas(s, tenant_id, ahora))
         # La retención maneja sus propias transacciones (borrado físico fuera de la tx).
         _con_latido("control_retencion", tenant_id, lambda: control_retencion(tenant_id, storage, ahora))
 

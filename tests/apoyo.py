@@ -42,3 +42,24 @@ def supervisor_de(s, tenant, sujeto_id: str, desde: date = date(2026, 1, 1), sup
              "VALUES (:t, :s, :u, :d, 'test')"),
         {"t": tenant.tenant_id, "s": sujeto_id, "u": supervisor_usuario_id or tenant.usuarios["supervisor"], "d": desde},
     )
+
+
+def conexion_owner():
+    """Conexión psycopg con el rol owner (DATABASE_URL_MIGRATIONS del ENV_FILE) para plantar
+    datos de `plataforma` (el rol de aplicación sólo lee ese schema). Autocommit off."""
+    import os
+    from pathlib import Path
+
+    import psycopg
+
+    from app.entorno import archivo_de_entorno
+
+    valores = {}
+    ruta = Path(archivo_de_entorno())
+    if ruta.is_file():
+        for linea in ruta.read_text(encoding="utf-8").splitlines():
+            if "=" in linea and not linea.lstrip().startswith("#"):
+                k, v = linea.split("=", 1)
+                valores[k.strip()] = v.strip()
+    dsn = os.environ.get("DATABASE_URL_MIGRATIONS") or valores["DATABASE_URL_MIGRATIONS"]
+    return psycopg.connect(dsn.replace("postgresql+psycopg://", "postgresql://"))

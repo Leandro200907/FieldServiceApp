@@ -365,3 +365,16 @@ baja: dar de baja no libera el nombre (el servicio ya respondía 409 sin mirar `
 Misma clave en distinta locación o distinto tenant: permitido. Carrera entre dos altas:
 la base decide, la que pierde recibe 409 `definicion_duplicada` (nunca 500). La migración
 aborta con diagnóstico si encuentra duplicados NULL-aware y no borra ni elige ninguno.
+
+## 14. Plantillas globales de industria (H-04, migración 0016)
+
+`plataforma.definicion_requisito_global` y `plataforma.matriz_global` (+ líneas) son
+propiedad de la plataforma, versionadas, sin `tenant_id`; el motor nunca las lee. La copia
+local guarda `definicion_global_id`/`matriz_global_id` y `copiada_de_version`. Copiar una
+matriz publica una versión local por el mismo `publicar_version_de_matriz` (caso de oro 6.3
+incluido), reutilizando copias locales existentes de cada definición (misma locación para
+inducciones) y creando las que falten. Una definición global de inducción exige elegir
+`locacion_id` al copiar. `control_plantillas` (reloj) emite `PlantillaGlobalActualizada`
+una sola vez por (tenant, plantilla, versión nueva) y encola notificación al responsable;
+la actualización nunca se aplica sola. La precarga base (`docs/plantillas/base_v1.json`)
+es contenido a validar con cada operadora, no la matriz oficial.

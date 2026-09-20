@@ -21,6 +21,7 @@ ROLES = ("configuracion", "responsable_legajos", "supervisor", "tecnico")
 
 # Orden de borrado: hijos antes que padres (no hay FKs en 0001, pero usuario → tenant sí).
 TABLAS_TENANT = [
+    "plantilla_aviso",
     "refresh_token",
     "asignacion_supervisor",
     "aviso_revaluacion_causa",

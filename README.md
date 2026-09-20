@@ -11,9 +11,9 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 47 operaciones sobre 46 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 18 archivos en `migrations/versions/`, un solo head: `0015_job_queue_dead_letter`.
-- **Tests:** 409 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Rutas HTTP:** 50 operaciones sobre 49 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 19 archivos en `migrations/versions/`, un solo head: `0016_plantillas_globales`.
+- **Tests:** 419 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -48,8 +48,8 @@ app/
     consultas/          # GET /consultas/* (read models con alcance por rol)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0015, lineales, un head)
-scripts/                # crear_roles.sql, crear_base.sql, administracion.py, generar_schema.py, generar_openapi.py
+migrations/             # Alembic (0001 … 0016, lineales, un head)
+scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
 ```
@@ -82,6 +82,18 @@ cp .env.example .env
 # 5) Migraciones (rol owner, vía DATABASE_URL_MIGRATIONS del ENV_FILE)
 ENV_FILE=.env .venv/Scripts/alembic upgrade head
 ```
+
+```bash
+# 6) Catálogo global de industria (plantillas de definiciones y matrices por operadora; rol owner; idempotente)
+ENV_FILE=.env .venv/Scripts/python scripts/precargar_plantillas.py docs/plantillas/base_v1.json
+```
+
+El contenido de `docs/plantillas/base_v1.json` es una **precarga base a validar con cada
+operadora** antes de un piloto (no la matriz oficial). Al subir `version` de una plantilla
+y volver a correr el script, el reloj del worker (`control_plantillas`) emite
+`PlantillaGlobalActualizada` una vez por tenant con copia local y encola la notificación
+al responsable; la copia nunca se actualiza sola (`GET /v1/consultas/plantillas_globales`
+muestra plantilla y copia lado a lado; `copiar_matriz_global` publica una versión nueva).
 
 ## Administración inicial (CLI, sin endpoints ni pantallas en v1)
 
@@ -204,10 +216,11 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 
 | Pieza | Estado |
 |---|---|
-| Esquema + RLS + FKs compuestas por tenant, unicidades activas y NULL-aware | Hecho (0001–0015) |
+| Esquema + RLS + FKs compuestas por tenant, unicidades activas y NULL-aware | Hecho (0001–0016) |
+| Catálogo y matrices globales de industria, copia opt-in, aviso de versión nueva (no-funcionales 1.5) | Hecho (0016) |
 | Motor de evaluación puro + 5 casos de oro + orquestación decisión/consulta | Hecho |
 | Auth JWT (login/refresh/logout), roles, universo del supervisor, contraseñas por bytes | Hecho |
-| Comandos (31) + consultas (11) + storage (3) + salud (2) | Hecho |
+| Comandos (33) + consultas (12) + storage (3) + salud (2) | Hecho |
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
 | Transporte real a Módulo 2, canal de notificaciones, storage S3, handlers qr/score/validación | Pendiente (declarado, no silencioso) |

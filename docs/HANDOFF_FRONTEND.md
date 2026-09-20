@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0015_job_queue_dead_letter`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0016_plantillas_globales`.
 Prefijo de todas las rutas: `/v1`.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
@@ -137,6 +137,8 @@ alcance) → `{url}` efímera → `GET <url>`.
 | `POST /v1/comandos/dar_de_alta_definicion_de_requisito` | configuracion | `{nombre, categoria: documento\|competencia\|induccion, tipo_sujeto_aplicable, locacion_id?, definicion_global_id?, plazo_retencion_archivo_dias?}` |
 | `POST /v1/comandos/dar_de_baja_definicion_de_requisito` | configuracion | `{requisito_definicion_id}` |
 | `POST /v1/comandos/publicar_version_de_matriz` | configuracion | `{cliente_id, locacion_id, tipo_servicio_id, vigente_desde, lineas:[{requisito_definicion_id, clasificacion, bloqueante_durante_ejecucion}], fuente?, archivo_de_respaldo?, autor?}` |
+| `POST /v1/comandos/copiar_definicion_global` | configuracion | `{definicion_global_id, locacion_id?}` (obligatoria si la definición global es inducción) → `{requisito_definicion_id, copiada_de_version}`; repetida → 409 `definicion_duplicada` |
+| `POST /v1/comandos/copiar_matriz_global` | configuracion | `{matriz_global_id, cliente_id, locacion_id, tipo_servicio_id, vigente_desde}` → publica una versión local (crea las definiciones que falten, reutiliza las copiadas) → `{matriz_version_id, version, copiada_de_version, definiciones_creadas[]}` |
 | `POST /v1/comandos/cargar_requisito_particular` | responsable_legajos | `{commitment_id, requisito_definicion_id, clasificacion, bloqueante_durante_ejecucion}` |
 | `POST /v1/comandos/importar_lote_oc` | responsable_legajos | `{lote_id, origen, filas:[{clave_origen, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta, estado?, …}]}` (incremental por `clave_origen`; no cancela ausentes; idempotente por `lote_id`, sin header) |
 | `POST /v1/comandos/cancelar_oc` | responsable_legajos | `{oc_id?}` o `{clave_origen?}` (uno de los dos) |
@@ -196,6 +198,14 @@ Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}
 | `GET /v1/consultas/log_auditoria` | configuracion, responsable_legajos | `tipo?`, `desde?`, `hasta?`, paginado |
 | `GET /v1/consultas/matriz_vigente` | todos | `cliente_id`, `locacion_id`, `tipo_servicio_id`, `fecha?` |
 | `GET /v1/consultas/incumplimiento_empresa` | todos | — |
+| `GET /v1/consultas/plantillas_globales` | configuracion, responsable_legajos | — → `{definiciones[], matrices[]}`; cada plantilla con `estado` (`sin_copia` / `al_dia` / `actualizacion_disponible`), sus líneas y `copias_locales[]` con las líneas locales, para decidir a mano qué traer |
+
+**Plantillas globales**: la plataforma mantiene el catálogo de industria (`plataforma.*`);
+el tenant copia opt-in. Cuando la plataforma sube la versión de una plantilla copiada, el
+worker emite `PlantillaGlobalActualizada` una vez y encola una notificación al
+responsable; nada se actualiza solo. El frontend debe mostrar la comparación (plantilla
+nueva vs. copia local) desde `plantillas_globales` y ofrecer `copiar_matriz_global` /
+`copiar_definicion_global`.
 
 Visibilidad del supervisor (regla A-04): una decisión es visible sólo si **todos** sus
 sujetos propuestos están en su universo; si uno no lo está, la decisión "no existe" (404).
