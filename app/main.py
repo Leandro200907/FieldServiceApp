@@ -34,6 +34,8 @@ ROUTERS = [
     "app.modules.requisitos.router",
     "app.modules.operacion.router",
     "app.modules.alertas.router",
+    "app.modules.paquete.router",
+    "app.modules.capacidades_router",
     "app.modules.oc.router",
     "app.modules.consultas.router",
     "app.storage.router",

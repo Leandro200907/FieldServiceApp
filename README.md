@@ -1,7 +1,7 @@
 # Módulo 1 — Documentación habilitante (backend)
 
 Backend del Módulo 1 del FSM (habilitación documental de personas, vehículos, equipos y
-empresa para compromisos/OC en Vaca Muerta). Implementa al pie los documentos de diseño
+empresa para compromisos/OC en Vaca Muerta). Implementa el alcance v1 de los documentos de diseño
 del Project (`modulo1-documentacion-habilitante.md`, `modulo1-modelo-dominio.md`,
 `modulo1-especificacion.md`, `modulo1-no-funcionales.md`, `modulo1-arquitectura-tecnica.md`,
 `modulo1-wireframes-api.md`). Las decisiones que esos documentos dejaron abiertas están
@@ -11,9 +11,9 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 66 operaciones sobre 65 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 20 archivos en `migrations/versions/`, un solo head: `0017_alertas_vencimiento`.
-- **Tests:** 448 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Rutas HTTP:** 82 operaciones sobre 81 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 21 archivos en `migrations/versions/`, un solo head: `0018_capacidades_v1`.
+- **Tests:** 460 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -45,11 +45,16 @@ app/
     requisitos/         # definiciones, matrices, requisitos particulares
     operacion/          # custodia, excepciones, constancias, evaluar habilitación
     alertas/            # alerta de vencimiento (agregado, políticas, coalescing, consultas)
+    notificaciones/     # canales mail / Telegram (adaptadores), entrega idempotente, render
+    paquete/            # paquete de entrega público firmado + QR (sin JWT, rate limit)
+    score/              # score de salud documental + snapshot diario
+    exportacion/        # exportar legajo (json/csv) con traza
+    drive/              # carpeta de Drive de solo lectura: proveedor, escaneo, extracción por confianza, bandeja
     oc/                 # importación/cancelación de OC (vista de compromiso)
     consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0017, lineales, un head)
+migrations/             # Alembic (0001 … 0018, lineales, un head)
 scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
@@ -204,12 +209,13 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 - Worker: leases con token (fencing), backoff exponencial (30 s · 2ⁿ⁻¹, tope 1 h), 5
   intentos, dead-letter (`job_queue.estado='fallido'` con `ultimo_error` saneado y
   `fallido_en`). Latidos en `latido_proceso` (el global alimenta readiness).
-- Colas **futuras** (`evidencia_qr`, `score_documental`, `validacion_evidencia`): ningún
+- Colas **futuras** (`evidencia_qr`, `validacion_evidencia`): ningún
   flujo soportado en v1 las produce — `tests/test_colas_futuras.py` lo verifica por
   relevamiento del código y corriendo el E2E principal + una vuelta del worker con cero
   jobs en dead-letter. Si aparece un productor, ese test falla hasta implementar el handler
-  o desactivar el productor. Notificaciones salen por `CanalEnLog` (WARNING) hasta que
-  haya canal externo.
+  o desactivar el productor. Notificaciones: mail/Telegram según `configuracion_canales`
+  del tenant y las variables de plataforma (`SMTP_*`, `TELEGRAM_BOT_TOKEN`); sin canal
+  habilitado quedan en el log con traza `notificacion_envio`.
 - Purga de archivos: dos fases (`purga_pendiente` confirmado → borrado físico fuera de tx →
   `purgado`); borrado físico al menos una vez, confirmación exactamente una vez.
 
@@ -220,10 +226,15 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Esquema + RLS + FKs compuestas por tenant, unicidades activas y NULL-aware | Hecho (0001–0016) |
 | Catálogo y matrices globales de industria, copia opt-in, aviso de versión nueva (no-funcionales 1.5) | Hecho (0016) |
 | Alerta de vencimiento completa: aviso/recordatorio/vencido/escalado, pausa, resolución por verificación, reconocimiento, rol de escalamiento y plazos configurables, coalescing, tablero e historial, OC sin matriz | Hecho (0017) |
+| Notificaciones reales por mail (SMTP) y Telegram (bot), configuración por tenant, vinculación de chat, entrega idempotente con traza | Hecho (0018); WhatsApp diseñado, no activo |
+| Paquete de entrega con link público firmado + QR por entidad (vencimiento, revocación, rate limit, traza de accesos) | Hecho (0018) |
+| Score de salud documental (consulta por rol + snapshot diario por el worker) | Hecho (0018) |
+| Exportación de legajo (JSON / CSV) con traza | Hecho (0018) |
+| Drive de solo lectura: carpeta por tenant, escaneo manual/programado, extracción tipo/sujeto/fecha por confianza, bandeja de excepciones | Hecho (0018; adaptador Google Drive por cuenta de servicio, probado con proveedor simulado) |
 | Motor de evaluación puro + 5 casos de oro + orquestación decisión/consulta | Hecho |
 | Auth JWT (login/refresh/logout), roles, universo del supervisor, contraseñas por bytes | Hecho |
-| Comandos (35) + consultas (26) + storage (3) + salud (2) | Hecho |
+| Comandos (46) + consultas (32) + storage (3) + salud (2) + público (2) | Hecho |
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
-| Transporte real a Módulo 2, canal de notificaciones, storage S3, handlers qr/score/validación | Pendiente (declarado, no silencioso) |
+| Transporte real a Módulo 2, storage S3, `validacion_evidencia` (lectura del contenido) | Pendiente / segunda etapa (declarado, no silencioso) |
 | Gestión de usuarios por API (alta/cambio/reset de contraseña, reactivación) | Pendiente (CLI `scripts/administracion.py`: tenant, usuarios, desactivación) |

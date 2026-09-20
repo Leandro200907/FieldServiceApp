@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0017_alertas_vencimiento`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0018_capacidades_v1`.
 Prefijo de todas las rutas: `/v1`.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
@@ -200,6 +200,31 @@ Las notificaciones salen agrupadas por destinatario (un mensaje con varias alert
 override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_aviso_dias`
 (vía alta/edición de la definición; hoy sólo por base — pendiente comando propio).
 
+### 4.4 ter Capacidades v1: notificaciones, paquete público, score, exportación, Drive
+| Ruta | Rol | Body / query |
+|---|---|---|
+| `POST /v1/comandos/configurar_canales` | configuracion | `{mail_habilitado, telegram_habilitado, remitente_nombre?}` |
+| `POST /v1/comandos/vincular_telegram` | configuracion | `{usuario_id, chat_id\|null}` (el usuario obtiene su chat_id escribiéndole al bot) |
+| `GET /v1/consultas/configuracion_canales` | configuracion, responsable_legajos | → `{mail_habilitado, telegram_habilitado, usuarios_con_telegram, whatsapp: "disenado_no_activo"}` |
+| `POST /v1/comandos/generar_paquete_entrega` | responsable_legajos | `{sujeto_id, dias_validez (1–90)}` → `{paquete_id, url, url_qr, expira_en}` |
+| `POST /v1/comandos/revocar_paquete_entrega` | responsable_legajos | `{paquete_id}` |
+| `GET /v1/consultas/paquetes_entrega` | configuracion, responsable_legajos | `sujeto_id?` → `{items[]}` con accesos y vigencia |
+| `GET /v1/publico/paquete/{token}` | **público (sin JWT)** | → estado de cumplimiento del sujeto (requisitos con `vigente` / `vencido` / `declarado_sin_verificar`), sin archivos; 404 si vencido/revocado/token inválido; 422 `rate_limit` |
+| `GET /v1/publico/paquete/{token}/qr.png` | **público** | PNG del QR que apunta al link |
+| `GET /v1/consultas/score_documental` | configuracion, responsable_legajos, supervisor (alcance) | → `{score, exigidos, cubiertos, sujetos, sujetos_completos, por_tipo_sujeto{}, peores[], historial[]}` |
+| `GET /v1/consultas/exportar_legajo` | responsable_legajos | `sujeto_id`, `formato=json\|csv` → descarga (`Content-Disposition`), deja traza `LegajoExportado` |
+| `POST /v1/comandos/configurar_drive` | configuracion | `{habilitado, carpeta_id, intervalo_horas?}` (intervalo → escaneo programado por el worker) |
+| `POST /v1/comandos/escanear_drive` | responsable_legajos, configuracion | `{motivo?}` → `{vistos, nuevos, importados, bandeja, ya_vistos}` |
+| `POST /v1/comandos/resolver_archivo_drive` | responsable_legajos | `{archivo_drive_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta}` → importa desde la bandeja |
+| `POST /v1/comandos/descartar_archivo_drive` | responsable_legajos | `{archivo_drive_id, motivo?}` |
+| `GET /v1/consultas/configuracion_drive` | configuracion, responsable_legajos | → config + `pendientes_revision` + `convencion_nombre` |
+| `GET /v1/consultas/bandeja_drive` | configuracion, responsable_legajos | `estado` (pendiente_revision por defecto; importado/descartado/todos), paginado → archivos con `confianza`, `extraccion`, `motivo` |
+
+Notas: los documentos importados desde Drive entran como propuestas `declarado` (origen
+`drive`) con el archivo ya adjunto; aparecen en `propuestas_pendientes` y el responsable
+confirma o rechaza. Convención de nombre de archivo: `<sujeto_id>__<requisito>__<AAAA-MM-DD vence>[__<AAAA-MM-DD desde>].pdf|jpg|png`
+(acentos y mayúsculas indistintos). El score cuenta sólo evidencia **verificada**.
+
 ### 4.5 Consultas (`GET /v1/consultas/…`)
 Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}`.
 
@@ -286,8 +311,9 @@ Dominio (422 salvo indicación): `requisito_no_excepcionable`, `excepcion_de_emp
   de contraseña): tenant y usuarios se administran con `scripts/administracion.py`
   (crear-tenant, crear-usuario, desactivar-usuario, listar-usuarios). Un usuario
   desactivado no puede hacer login ni refresh; su access token vigente expira solo.
-- Notificaciones: sin canal externo (quedan en el log del worker). Colas `evidencia_qr`,
-  `score_documental`, `validacion_evidencia`: **futuras** — ningún flujo de v1 las
-  produce (verificado por test); no existe capacidad de QR, score ni validación automática.
+- Notificaciones: mail y Telegram reales dependen de que la plataforma tenga `SMTP_*` /
+  `TELEGRAM_BOT_TOKEN` y de que el tenant habilite el canal; sin eso quedan en el log con
+  traza. WhatsApp está diseñado (misma interfaz) pero no activo. Cola `validacion_evidencia`
+  (lectura del contenido del archivo): segunda etapa.
 - Publicación a Módulo 2: `PublicadorEnLog` (transporte real pendiente).
 - Storage: sólo backend local (`STORAGE_BACKEND=local`); el contrato ya es el de un bucket.

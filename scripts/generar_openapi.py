@@ -46,7 +46,8 @@ RESPUESTAS_COMUNES = {
     "422": {"description": "Validación o regla de dominio"},
     "500": {"description": "Error interno; informar request_id"},
 }
-PUBLICAS = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}"}
+PUBLICAS = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}",
+            "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
 
 
 def _ordenar(obj):

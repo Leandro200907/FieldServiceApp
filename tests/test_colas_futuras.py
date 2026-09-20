@@ -3,9 +3,9 @@
 
 | cola                  | productor en app/ | comando/evento que la encola |
 |-----------------------|-------------------|------------------------------|
-| evidencia_qr          | ninguno           | — (futuro: QR de credencial, 8.x)         |
-| score_documental      | ninguno           | — (futuro: score de calidad documental)   |
-| validacion_evidencia  | ninguno           | — (futuro: validación automática de evidencia) |
+| evidencia_qr          | ninguno           | el QR del paquete se genera al vuelo en GET /publico/paquete/{token}/qr.png (no necesita cola) |
+| score_documental      | score/servicio.encolar_snapshot_diario (reloj) | snapshot diario del score (handler_score_documental) |
+| validacion_evidencia  | ninguno           | — (segunda etapa: validación de contenido) |
 | notificaciones        | alertas/servicio (entregar_notificaciones, avisar_oc_sin_matriz); requisitos/plantillas.control_plantillas | `AlertasDeVencimiento` (coalescido), `OcSinMatriz`, `PlantillaGlobalActualizada` |
 | drenaje_outbox        | (la vuelta del worker drena directo) | — |
 
@@ -25,8 +25,8 @@ from app.worker.cola import COLAS
 from app.worker.outbox import PublicadorEnMemoria
 
 RAIZ = Path(__file__).resolve().parents[1]
-FUTURAS = ("evidencia_qr", "score_documental", "validacion_evidencia")
-SOPORTADAS = ("notificaciones", "drenaje_outbox")
+FUTURAS = ("evidencia_qr", "validacion_evidencia")
+SOPORTADAS = ("notificaciones", "drenaje_outbox", "score_documental")
 
 
 def _productores(cola: str) -> list[str]:

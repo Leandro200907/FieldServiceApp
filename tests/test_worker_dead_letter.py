@@ -93,7 +93,7 @@ def test_fallo_terminal_va_al_dead_letter_en_el_primer_intento(tenant_de_prueba)
     assert fila["estado"] == "fallido" and fila["intentos"] == 1 and fila["ultimo_error"] == "payload inválido" and fila["fallido_en"] == T0
 
 
-@pytest.mark.parametrize("cola", ["evidencia_qr", "score_documental", "validacion_evidencia"])
+@pytest.mark.parametrize("cola", ["evidencia_qr", "validacion_evidencia"])
 def test_cola_sin_handler_no_se_completa_en_silencio(tenant_de_prueba, cola, caplog):
     t = tenant_de_prueba.tenant_id
     jid = _job(t, cola)

@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0017_alertas_vencimiento
+-- head: 0018_capacidades_v1
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -14,11 +14,32 @@ CREATE FUNCTION modulo1.listar_tenants() RETURNS SETOF uuid
     AS $$
             SELECT tenant_id FROM modulo1.tenant ORDER BY creado_en, tenant_id
         $$;
+-- Name: resolver_tenant_por_paquete(text); Type: FUNCTION; Schema: modulo1; Owner: -
+CREATE FUNCTION modulo1.resolver_tenant_por_paquete(p_token_hash text) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'modulo1'
+    AS $$
+            SELECT tenant_id FROM modulo1.paquete_token WHERE token_hash = p_token_hash
+        $$;
 -- Name: resolver_tenant_por_slug(text); Type: FUNCTION; Schema: modulo1; Owner: -
 CREATE FUNCTION modulo1.resolver_tenant_por_slug(p_slug text) RETURNS uuid
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $$
             SELECT tenant_id FROM modulo1.tenant_slug WHERE slug = p_slug
+        $$;
+-- Name: sincronizar_paquete_token(); Type: FUNCTION; Schema: modulo1; Owner: -
+CREATE FUNCTION modulo1.sincronizar_paquete_token() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'modulo1'
+    AS $$
+        BEGIN
+            IF TG_OP = 'DELETE' THEN
+                DELETE FROM modulo1.paquete_token WHERE token_hash = OLD.token_hash;
+                RETURN OLD;
+            END IF;
+            INSERT INTO modulo1.paquete_token (token_hash, tenant_id) VALUES (NEW.token_hash, NEW.tenant_id) ON CONFLICT DO NOTHING;
+            RETURN NEW;
+        END
         $$;
 -- Name: sincronizar_tenant_slug(); Type: FUNCTION; Schema: modulo1; Owner: -
 CREATE FUNCTION modulo1.sincronizar_tenant_slug() RETURNS trigger
@@ -111,6 +132,27 @@ CREATE TABLE modulo1.alerta_vencimiento (
     CONSTRAINT ck_alerta_resuelta_coherente CHECK (((estado = 'resuelta'::text) = (resuelta_en IS NOT NULL)))
 );
 ALTER TABLE ONLY modulo1.alerta_vencimiento FORCE ROW LEVEL SECURITY;
+-- Name: archivo_drive; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.archivo_drive (
+    archivo_drive_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    id_externo text NOT NULL,
+    nombre text NOT NULL,
+    mime text,
+    modificado_externo timestamp with time zone,
+    hash_externo text,
+    visto_en timestamp with time zone DEFAULT now() NOT NULL,
+    estado text NOT NULL,
+    confianza text NOT NULL,
+    extraccion jsonb NOT NULL,
+    motivo text,
+    documento_id uuid,
+    resuelto_por text,
+    resuelto_en timestamp with time zone,
+    CONSTRAINT archivo_drive_confianza_check CHECK ((confianza = ANY (ARRAY['alta'::text, 'media'::text, 'baja'::text]))),
+    CONSTRAINT archivo_drive_estado_check CHECK ((estado = ANY (ARRAY['importado'::text, 'pendiente_revision'::text, 'descartado'::text])))
+);
+ALTER TABLE ONLY modulo1.archivo_drive FORCE ROW LEVEL SECURITY;
 -- Name: asignacion_supervisor; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.asignacion_supervisor (
     asignacion_id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -200,6 +242,29 @@ CREATE TABLE modulo1.configuracion_alertas (
     CONSTRAINT configuracion_alertas_rol_escalamiento_check CHECK ((rol_escalamiento = ANY (ARRAY['configuracion'::text, 'responsable_legajos'::text, 'supervisor'::text])))
 );
 ALTER TABLE ONLY modulo1.configuracion_alertas FORCE ROW LEVEL SECURITY;
+-- Name: configuracion_canales; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.configuracion_canales (
+    tenant_id uuid NOT NULL,
+    mail_habilitado boolean DEFAULT false NOT NULL,
+    telegram_habilitado boolean DEFAULT false NOT NULL,
+    remitente_nombre text,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_por text
+);
+ALTER TABLE ONLY modulo1.configuracion_canales FORCE ROW LEVEL SECURITY;
+-- Name: configuracion_drive; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.configuracion_drive (
+    tenant_id uuid NOT NULL,
+    habilitado boolean DEFAULT false NOT NULL,
+    carpeta_id text,
+    intervalo_horas integer,
+    ultimo_escaneo_en timestamp with time zone,
+    ultimo_escaneo_resultado jsonb,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_por text,
+    CONSTRAINT configuracion_drive_intervalo_horas_check CHECK (((intervalo_horas IS NULL) OR ((intervalo_horas >= 1) AND (intervalo_horas <= 168))))
+);
+ALTER TABLE ONLY modulo1.configuracion_drive FORCE ROW LEVEL SECURITY;
 -- Name: constancia_cliente; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.constancia_cliente (
     constancia_id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -497,6 +562,32 @@ CREATE TABLE modulo1.matriz_requisitos (
     CONSTRAINT ck_matriz_copia_coherente CHECK ((((matriz_global_id IS NULL) AND (copiada_de_version IS NULL)) OR ((matriz_global_id IS NOT NULL) AND (copiada_de_version IS NOT NULL))))
 );
 ALTER TABLE ONLY modulo1.matriz_requisitos FORCE ROW LEVEL SECURITY;
+-- Name: notificacion_envio; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.notificacion_envio (
+    envio_id bigint NOT NULL,
+    tenant_id uuid NOT NULL,
+    job_id bigint NOT NULL,
+    canal text NOT NULL,
+    destinatario text NOT NULL,
+    usuario_id uuid,
+    estado text NOT NULL,
+    proveedor_ref text,
+    error text,
+    intentos integer DEFAULT 1 NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT notificacion_envio_canal_check CHECK ((canal = ANY (ARRAY['mail'::text, 'telegram'::text, 'log'::text]))),
+    CONSTRAINT notificacion_envio_estado_check CHECK ((estado = ANY (ARRAY['enviado'::text, 'fallido'::text])))
+);
+ALTER TABLE ONLY modulo1.notificacion_envio FORCE ROW LEVEL SECURITY;
+-- Name: notificacion_envio_envio_id_seq; Type: SEQUENCE; Schema: modulo1; Owner: -
+CREATE SEQUENCE modulo1.notificacion_envio_envio_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+-- Name: notificacion_envio_envio_id_seq; Type: SEQUENCE OWNED BY; Schema: modulo1; Owner: -
+ALTER SEQUENCE modulo1.notificacion_envio_envio_id_seq OWNED BY modulo1.notificacion_envio.envio_id;
 -- Name: oc; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.oc (
     oc_id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -530,6 +621,43 @@ CREATE TABLE modulo1.outbox_events (
     CONSTRAINT outbox_events_tipo_check CHECK ((tipo = ANY (ARRAY['HabilitacionRequiereRevaluacion'::text, 'CumplimientoEmpresaAfectado'::text])))
 );
 ALTER TABLE ONLY modulo1.outbox_events FORCE ROW LEVEL SECURITY;
+-- Name: paquete_acceso; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.paquete_acceso (
+    acceso_id bigint NOT NULL,
+    tenant_id uuid NOT NULL,
+    paquete_id uuid NOT NULL,
+    accedido_en timestamp with time zone DEFAULT now() NOT NULL,
+    origen_hash text
+);
+ALTER TABLE ONLY modulo1.paquete_acceso FORCE ROW LEVEL SECURITY;
+-- Name: paquete_acceso_acceso_id_seq; Type: SEQUENCE; Schema: modulo1; Owner: -
+CREATE SEQUENCE modulo1.paquete_acceso_acceso_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+-- Name: paquete_acceso_acceso_id_seq; Type: SEQUENCE OWNED BY; Schema: modulo1; Owner: -
+ALTER SEQUENCE modulo1.paquete_acceso_acceso_id_seq OWNED BY modulo1.paquete_acceso.acceso_id;
+-- Name: paquete_entrega; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.paquete_entrega (
+    paquete_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    token_hash text NOT NULL,
+    sujeto_id text NOT NULL,
+    creado_por text NOT NULL,
+    expira_en timestamp with time zone NOT NULL,
+    revocado_en timestamp with time zone,
+    accesos integer DEFAULT 0 NOT NULL,
+    ultimo_acceso_en timestamp with time zone,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE ONLY modulo1.paquete_entrega FORCE ROW LEVEL SECURITY;
+-- Name: paquete_token; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.paquete_token (
+    token_hash text NOT NULL,
+    tenant_id uuid NOT NULL
+);
 -- Name: periodo_custodia; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.periodo_custodia (
     periodo_id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -586,6 +714,17 @@ CREATE TABLE modulo1.requisito_particular (
     CONSTRAINT requisito_particular_clasificacion_check CHECK ((clasificacion = ANY (ARRAY['bloqueante_duro'::text, 'excepcionable'::text])))
 );
 ALTER TABLE ONLY modulo1.requisito_particular FORCE ROW LEVEL SECURITY;
+-- Name: score_snapshot; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.score_snapshot (
+    tenant_id uuid NOT NULL,
+    fecha date NOT NULL,
+    score numeric(5,2) NOT NULL,
+    exigidos integer NOT NULL,
+    cubiertos integer NOT NULL,
+    detalle jsonb NOT NULL,
+    calculado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE ONLY modulo1.score_snapshot FORCE ROW LEVEL SECURITY;
 -- Name: tenant; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.tenant (
     tenant_id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -611,6 +750,7 @@ CREATE TABLE modulo1.usuario (
     sujeto_id text,
     activo boolean DEFAULT true NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    telegram_chat_id text,
     CONSTRAINT ck_usuario_roles_no_vacio CHECK ((array_length(roles, 1) > 0)),
     CONSTRAINT ck_usuario_roles_validos CHECK ((roles <@ ARRAY['configuracion'::text, 'responsable_legajos'::text, 'supervisor'::text, 'tecnico'::text]))
 );
@@ -657,6 +797,10 @@ ALTER TABLE ONLY modulo1.evaluacion_habilitacion ALTER COLUMN secuencia SET DEFA
 ALTER TABLE ONLY modulo1.event_log ALTER COLUMN id SET DEFAULT nextval('modulo1.event_log_id_seq'::regclass);
 -- Name: job_queue id; Type: DEFAULT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.job_queue ALTER COLUMN id SET DEFAULT nextval('modulo1.job_queue_id_seq'::regclass);
+-- Name: notificacion_envio envio_id; Type: DEFAULT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.notificacion_envio ALTER COLUMN envio_id SET DEFAULT nextval('modulo1.notificacion_envio_envio_id_seq'::regclass);
+-- Name: paquete_acceso acceso_id; Type: DEFAULT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_acceso ALTER COLUMN acceso_id SET DEFAULT nextval('modulo1.paquete_acceso_acceso_id_seq'::regclass);
 -- Name: acreditacion_competencia acreditacion_competencia_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.acreditacion_competencia
     ADD CONSTRAINT acreditacion_competencia_pkey PRIMARY KEY (acreditacion_id);
@@ -666,6 +810,9 @@ ALTER TABLE ONLY modulo1.alerta_notificacion
 -- Name: alerta_vencimiento alerta_vencimiento_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.alerta_vencimiento
     ADD CONSTRAINT alerta_vencimiento_pkey PRIMARY KEY (alerta_id);
+-- Name: archivo_drive archivo_drive_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.archivo_drive
+    ADD CONSTRAINT archivo_drive_pkey PRIMARY KEY (archivo_drive_id);
 -- Name: asignacion_supervisor asignacion_supervisor_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.asignacion_supervisor
     ADD CONSTRAINT asignacion_supervisor_pkey PRIMARY KEY (asignacion_id);
@@ -687,6 +834,12 @@ ALTER TABLE ONLY modulo1.aviso_revaluacion
 -- Name: configuracion_alertas configuracion_alertas_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.configuracion_alertas
     ADD CONSTRAINT configuracion_alertas_pkey PRIMARY KEY (tenant_id);
+-- Name: configuracion_canales configuracion_canales_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.configuracion_canales
+    ADD CONSTRAINT configuracion_canales_pkey PRIMARY KEY (tenant_id);
+-- Name: configuracion_drive configuracion_drive_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.configuracion_drive
+    ADD CONSTRAINT configuracion_drive_pkey PRIMARY KEY (tenant_id);
 -- Name: constancia_cliente constancia_cliente_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.constancia_cliente
     ADD CONSTRAINT constancia_cliente_pkey PRIMARY KEY (constancia_id);
@@ -735,12 +888,27 @@ ALTER TABLE ONLY modulo1.lote_importacion
 -- Name: matriz_requisitos matriz_requisitos_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.matriz_requisitos
     ADD CONSTRAINT matriz_requisitos_pkey PRIMARY KEY (matriz_version_id);
+-- Name: notificacion_envio notificacion_envio_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.notificacion_envio
+    ADD CONSTRAINT notificacion_envio_pkey PRIMARY KEY (envio_id);
 -- Name: oc oc_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT oc_pkey PRIMARY KEY (oc_id);
 -- Name: outbox_events outbox_events_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.outbox_events
     ADD CONSTRAINT outbox_events_pkey PRIMARY KEY (evento_id);
+-- Name: paquete_acceso paquete_acceso_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_acceso
+    ADD CONSTRAINT paquete_acceso_pkey PRIMARY KEY (acceso_id);
+-- Name: paquete_entrega paquete_entrega_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_entrega
+    ADD CONSTRAINT paquete_entrega_pkey PRIMARY KEY (paquete_id);
+-- Name: paquete_entrega paquete_entrega_token_hash_key; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_entrega
+    ADD CONSTRAINT paquete_entrega_token_hash_key UNIQUE (token_hash);
+-- Name: paquete_token paquete_token_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_token
+    ADD CONSTRAINT paquete_token_pkey PRIMARY KEY (token_hash);
 -- Name: periodo_custodia periodo_custodia_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.periodo_custodia
     ADD CONSTRAINT periodo_custodia_pkey PRIMARY KEY (periodo_id);
@@ -756,6 +924,9 @@ ALTER TABLE ONLY modulo1.refresh_token
 -- Name: requisito_particular requisito_particular_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.requisito_particular
     ADD CONSTRAINT requisito_particular_pkey PRIMARY KEY (requisito_particular_id);
+-- Name: score_snapshot score_snapshot_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.score_snapshot
+    ADD CONSTRAINT score_snapshot_pkey PRIMARY KEY (tenant_id, fecha);
 -- Name: tenant tenant_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.tenant
     ADD CONSTRAINT tenant_pkey PRIMARY KEY (tenant_id);
@@ -774,6 +945,9 @@ ALTER TABLE ONLY modulo1.alerta_vencimiento
 -- Name: alerta_vencimiento uq_alerta_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.alerta_vencimiento
     ADD CONSTRAINT uq_alerta_tenant_id UNIQUE (tenant_id, alerta_id);
+-- Name: archivo_drive uq_archivo_drive_externo; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.archivo_drive
+    ADD CONSTRAINT uq_archivo_drive_externo UNIQUE (tenant_id, id_externo, hash_externo);
 -- Name: aviso_revaluacion uq_aviso_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.aviso_revaluacion
     ADD CONSTRAINT uq_aviso_tenant_id UNIQUE (tenant_id, aviso_id);
@@ -816,12 +990,18 @@ ALTER TABLE ONLY modulo1.matriz_requisitos
 -- Name: matriz_requisitos uq_matriz_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.matriz_requisitos
     ADD CONSTRAINT uq_matriz_tenant_id UNIQUE (tenant_id, matriz_version_id);
+-- Name: notificacion_envio uq_notificacion_envio; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.notificacion_envio
+    ADD CONSTRAINT uq_notificacion_envio UNIQUE (tenant_id, job_id, canal, destinatario);
 -- Name: oc uq_oc_clave_origen; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT uq_oc_clave_origen UNIQUE (tenant_id, clave_origen);
 -- Name: outbox_events uq_outbox_dedup; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.outbox_events
     ADD CONSTRAINT uq_outbox_dedup UNIQUE (tenant_id, clave_dedup);
+-- Name: paquete_entrega uq_paquete_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_entrega
+    ADD CONSTRAINT uq_paquete_tenant_id UNIQUE (tenant_id, paquete_id);
 -- Name: periodo_custodia uq_periodo_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.periodo_custodia
     ADD CONSTRAINT uq_periodo_tenant_id UNIQUE (tenant_id, periodo_id);
@@ -862,6 +1042,8 @@ CREATE INDEX ix_alerta_notificacion_pendientes ON modulo1.alerta_notificacion US
 CREATE INDEX ix_alerta_vencimiento_abiertas ON modulo1.alerta_vencimiento USING btree (tenant_id, etapa, sujeto_id) WHERE (estado <> 'resuelta'::text);
 -- Name: ix_alerta_vencimiento_sujeto_req; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_alerta_vencimiento_sujeto_req ON modulo1.alerta_vencimiento USING btree (tenant_id, sujeto_id, requisito_definicion_id);
+-- Name: ix_archivo_drive_bandeja; Type: INDEX; Schema: modulo1; Owner: -
+CREATE INDEX ix_archivo_drive_bandeja ON modulo1.archivo_drive USING btree (tenant_id, estado, visto_en);
 -- Name: ix_asignacion_supervisor__sujeto_id; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_asignacion_supervisor__sujeto_id ON modulo1.asignacion_supervisor USING btree (tenant_id, sujeto_id);
 -- Name: ix_asignacion_supervisor_sup; Type: INDEX; Schema: modulo1; Owner: -
@@ -924,6 +1106,8 @@ CREATE INDEX ix_oc_clave_matriz ON modulo1.oc USING btree (tenant_id, cliente_id
 CREATE INDEX ix_oc_tenant_estado ON modulo1.oc USING btree (tenant_id, estado, locacion_id);
 -- Name: ix_outbox_pendientes; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_outbox_pendientes ON modulo1.outbox_events USING btree (creado_en) WHERE (procesado_en IS NULL);
+-- Name: ix_paquete_entrega_sujeto; Type: INDEX; Schema: modulo1; Owner: -
+CREATE INDEX ix_paquete_entrega_sujeto ON modulo1.paquete_entrega USING btree (tenant_id, sujeto_id);
 -- Name: ix_periodo_custodia__custodio_id; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_periodo_custodia__custodio_id ON modulo1.periodo_custodia USING btree (tenant_id, custodio_id);
 -- Name: ix_refresh_token_usuario; Type: INDEX; Schema: modulo1; Owner: -
@@ -952,6 +1136,8 @@ CREATE UNIQUE INDEX uq_latido_proceso ON modulo1.latido_proceso USING btree (nom
 CREATE UNIQUE INDEX uq_periodo_custodia_vigente ON modulo1.periodo_custodia USING btree (custodia_id) WHERE (estado = 'vigente'::text);
 -- Name: uq_tenant_slug; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_tenant_slug ON modulo1.tenant USING btree (slug);
+-- Name: paquete_entrega trg_paquete_token; Type: TRIGGER; Schema: modulo1; Owner: -
+CREATE TRIGGER trg_paquete_token AFTER INSERT OR DELETE ON modulo1.paquete_entrega FOR EACH ROW EXECUTE FUNCTION modulo1.sincronizar_paquete_token();
 -- Name: tenant trg_tenant_slug; Type: TRIGGER; Schema: modulo1; Owner: -
 CREATE TRIGGER trg_tenant_slug AFTER INSERT OR DELETE OR UPDATE OF slug, tenant_id ON modulo1.tenant FOR EACH ROW EXECUTE FUNCTION modulo1.sincronizar_tenant_slug();
 -- Name: acreditacion_competencia acreditacion_competencia_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
@@ -963,12 +1149,21 @@ ALTER TABLE ONLY modulo1.alerta_notificacion
 -- Name: alerta_vencimiento alerta_vencimiento_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.alerta_vencimiento
     ADD CONSTRAINT alerta_vencimiento_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: archivo_drive archivo_drive_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.archivo_drive
+    ADD CONSTRAINT archivo_drive_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: aviso_oc_sin_matriz aviso_oc_sin_matriz_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.aviso_oc_sin_matriz
     ADD CONSTRAINT aviso_oc_sin_matriz_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: configuracion_alertas configuracion_alertas_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.configuracion_alertas
     ADD CONSTRAINT configuracion_alertas_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: configuracion_canales configuracion_canales_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.configuracion_canales
+    ADD CONSTRAINT configuracion_canales_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: configuracion_drive configuracion_drive_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.configuracion_drive
+    ADD CONSTRAINT configuracion_drive_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: constancia_cliente constancia_cliente_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.constancia_cliente
     ADD CONSTRAINT constancia_cliente_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -1017,6 +1212,9 @@ ALTER TABLE ONLY modulo1.alerta_notificacion
 -- Name: aviso_revaluacion_causa fk_arc_aviso; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.aviso_revaluacion_causa
     ADD CONSTRAINT fk_arc_aviso FOREIGN KEY (tenant_id, aviso_id) REFERENCES modulo1.aviso_revaluacion(tenant_id, aviso_id) ON DELETE CASCADE;
+-- Name: archivo_drive fk_archivo_drive__documento_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.archivo_drive
+    ADD CONSTRAINT fk_archivo_drive__documento_id FOREIGN KEY (tenant_id, documento_id) REFERENCES modulo1.documento(tenant_id, documento_id);
 -- Name: asignacion_supervisor fk_asignacion_supervisor__sujeto_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.asignacion_supervisor
     ADD CONSTRAINT fk_asignacion_supervisor__sujeto_id FOREIGN KEY (tenant_id, sujeto_id) REFERENCES modulo1.legajo(tenant_id, sujeto_id);
@@ -1101,6 +1299,12 @@ ALTER TABLE ONLY modulo1.linea_requisito
 -- Name: oc fk_oc__lote_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT fk_oc__lote_id FOREIGN KEY (tenant_id, lote_id) REFERENCES modulo1.lote_importacion(tenant_id, lote_id);
+-- Name: paquete_entrega fk_paquete__sujeto_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_entrega
+    ADD CONSTRAINT fk_paquete__sujeto_id FOREIGN KEY (tenant_id, sujeto_id) REFERENCES modulo1.legajo(tenant_id, sujeto_id);
+-- Name: paquete_acceso fk_paquete_acceso__paquete_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_acceso
+    ADD CONSTRAINT fk_paquete_acceso__paquete_id FOREIGN KEY (tenant_id, paquete_id) REFERENCES modulo1.paquete_entrega(tenant_id, paquete_id);
 -- Name: politica_evento_procesado fk_pep_evento; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.politica_evento_procesado
     ADD CONSTRAINT fk_pep_evento FOREIGN KEY (tenant_id, evento_id) REFERENCES modulo1.event_log(tenant_id, evento_id) ON DELETE CASCADE;
@@ -1149,12 +1353,21 @@ ALTER TABLE ONLY modulo1.matriz_requisitos
 -- Name: matriz_requisitos matriz_requisitos_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.matriz_requisitos
     ADD CONSTRAINT matriz_requisitos_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: notificacion_envio notificacion_envio_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.notificacion_envio
+    ADD CONSTRAINT notificacion_envio_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: oc oc_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT oc_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: outbox_events outbox_events_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.outbox_events
     ADD CONSTRAINT outbox_events_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: paquete_acceso paquete_acceso_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_acceso
+    ADD CONSTRAINT paquete_acceso_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: paquete_entrega paquete_entrega_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.paquete_entrega
+    ADD CONSTRAINT paquete_entrega_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: periodo_custodia periodo_custodia_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.periodo_custodia
     ADD CONSTRAINT periodo_custodia_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -1164,6 +1377,9 @@ ALTER TABLE ONLY modulo1.plantilla_aviso
 -- Name: requisito_particular requisito_particular_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.requisito_particular
     ADD CONSTRAINT requisito_particular_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: score_snapshot score_snapshot_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.score_snapshot
+    ADD CONSTRAINT score_snapshot_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: usuario usuario_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.usuario
     ADD CONSTRAINT usuario_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -1185,6 +1401,10 @@ CREATE POLICY alerta_notificacion_aislamiento ON modulo1.alerta_notificacion USI
 ALTER TABLE modulo1.alerta_vencimiento ENABLE ROW LEVEL SECURITY;
 -- Name: alerta_vencimiento alerta_vencimiento_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY alerta_vencimiento_aislamiento ON modulo1.alerta_vencimiento USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: archivo_drive; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.archivo_drive ENABLE ROW LEVEL SECURITY;
+-- Name: archivo_drive archivo_drive_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY archivo_drive_aislamiento ON modulo1.archivo_drive USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: asignacion_supervisor; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.asignacion_supervisor ENABLE ROW LEVEL SECURITY;
 -- Name: asignacion_supervisor asignacion_supervisor_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
@@ -1213,6 +1433,14 @@ CREATE POLICY aviso_revaluacion_causa_aislamiento ON modulo1.aviso_revaluacion_c
 ALTER TABLE modulo1.configuracion_alertas ENABLE ROW LEVEL SECURITY;
 -- Name: configuracion_alertas configuracion_alertas_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY configuracion_alertas_aislamiento ON modulo1.configuracion_alertas USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: configuracion_canales; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.configuracion_canales ENABLE ROW LEVEL SECURITY;
+-- Name: configuracion_canales configuracion_canales_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY configuracion_canales_aislamiento ON modulo1.configuracion_canales USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: configuracion_drive; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.configuracion_drive ENABLE ROW LEVEL SECURITY;
+-- Name: configuracion_drive configuracion_drive_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY configuracion_drive_aislamiento ON modulo1.configuracion_drive USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: constancia_cliente; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.constancia_cliente ENABLE ROW LEVEL SECURITY;
 -- Name: constancia_cliente constancia_cliente_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
@@ -1277,6 +1505,10 @@ CREATE POLICY lote_importacion_aislamiento ON modulo1.lote_importacion USING ((t
 ALTER TABLE modulo1.matriz_requisitos ENABLE ROW LEVEL SECURITY;
 -- Name: matriz_requisitos matriz_requisitos_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY matriz_requisitos_aislamiento ON modulo1.matriz_requisitos USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: notificacion_envio; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.notificacion_envio ENABLE ROW LEVEL SECURITY;
+-- Name: notificacion_envio notificacion_envio_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY notificacion_envio_aislamiento ON modulo1.notificacion_envio USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: oc; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.oc ENABLE ROW LEVEL SECURITY;
 -- Name: oc oc_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
@@ -1285,6 +1517,14 @@ CREATE POLICY oc_aislamiento ON modulo1.oc USING ((tenant_id = (current_setting(
 ALTER TABLE modulo1.outbox_events ENABLE ROW LEVEL SECURITY;
 -- Name: outbox_events outbox_events_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY outbox_events_aislamiento ON modulo1.outbox_events USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: paquete_acceso; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.paquete_acceso ENABLE ROW LEVEL SECURITY;
+-- Name: paquete_acceso paquete_acceso_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY paquete_acceso_aislamiento ON modulo1.paquete_acceso USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: paquete_entrega; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.paquete_entrega ENABLE ROW LEVEL SECURITY;
+-- Name: paquete_entrega paquete_entrega_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY paquete_entrega_aislamiento ON modulo1.paquete_entrega USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: periodo_custodia; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.periodo_custodia ENABLE ROW LEVEL SECURITY;
 -- Name: periodo_custodia periodo_custodia_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
@@ -1305,6 +1545,10 @@ CREATE POLICY refresh_token_aislamiento ON modulo1.refresh_token USING ((tenant_
 ALTER TABLE modulo1.requisito_particular ENABLE ROW LEVEL SECURITY;
 -- Name: requisito_particular requisito_particular_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY requisito_particular_aislamiento ON modulo1.requisito_particular USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: score_snapshot; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.score_snapshot ENABLE ROW LEVEL SECURITY;
+-- Name: score_snapshot score_snapshot_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY score_snapshot_aislamiento ON modulo1.score_snapshot USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: tenant; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.tenant ENABLE ROW LEVEL SECURITY;
 -- Name: tenant tenant_aislamiento; Type: POLICY; Schema: modulo1; Owner: -

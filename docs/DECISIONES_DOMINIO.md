@@ -396,3 +396,32 @@ total de fuente (anulada, revertida, legajo de baja) resuelve con motivo
 contados desde el hoy real, nunca cierra ni frena `vencido`; (3) el plazo por tipo de
 requisito es un override en `definicion_requisito.plazo_aviso_dias`; (4) "OC nueva sin
 matriz" (3.6) se avisa una vez por OC al rol configuración.
+
+## 16. Score de salud documental (H-01, migración 0018)
+
+Para cada sujeto activo, EXIGIDOS = definiciones activas de su tipo que aparecen en alguna
+línea de matriz vigente hoy o en un requisito particular de OC activa; CUBIERTO = evidencia
+vigente hoy y **verificada** (documento, acreditación, inducción) o constancia del cliente
+vigente. `score = cubiertos / exigidos × 100`, global, por tipo de sujeto y con los diez
+peores. Lo declarado no cuenta (1.10). Consulta con alcance por rol; snapshot diario por
+tenant vía la cola `score_documental` (idempotente por fecha).
+
+## 17. Drive de solo lectura y extracción por confianza (H-01, migración 0018)
+
+Un proveedor (Google Drive, cuenta de servicio de la plataforma, scope readonly), una
+carpeta por tenant, escaneo manual o programado. La extracción v1 es por el nombre del
+archivo (`<sujeto>__<requisito>__<vence>[__<desde>].ext`, acentos indistintos): alta →
+documento `declarado` de origen `drive` con el archivo adjunto y checksum real (entra al
+flujo de propuestas: nunca habilita solo); media/baja → bandeja de excepciones con motivo,
+donde el responsable resuelve a mano o descarta. Cada archivo se recuerda por (id externo,
+hash): re-escanear no duplica. La lectura del contenido (más allá de nombre) es segunda
+etapa, como fija el anexo de alcance.
+
+## 18. Paquete de entrega público y notificaciones (H-01, migración 0018)
+
+Paquete: token aleatorio firmado (HMAC), sólo su hash en la base, vencimiento 1–90 días,
+revocación, traza de accesos, rate limit por token y origen; muestra estados de
+cumplimiento, nunca archivos (1.11). Notificaciones: canales como adaptadores (mail SMTP,
+Telegram bot; WhatsApp diseñado, no activo); habilitación por tenant; entrega
+at-least-once sin duplicados por traza `notificacion_envio` (job, canal, destinatario)
+confirmada en transacción propia (M-07).

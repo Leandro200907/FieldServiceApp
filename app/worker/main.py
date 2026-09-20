@@ -31,6 +31,7 @@ from app.storage.contrato import Storage
 from app.worker import cola as cola_mod
 from app.worker.cola import Job
 from app.modules.requisitos.plantillas import control_plantillas
+from app.modules.score.servicio import encolar_snapshot_diario
 from app.worker.outbox import Publicador, PublicadorEnLog, drenar_outbox
 from app.worker.procesos_reloj import (
     control_retencion,
@@ -57,20 +58,23 @@ class CanalDeNotificaciones(Protocol):
     def enviar(self, tenant_id: str | None, notificacion: dict[str, Any]) -> None: ...
 
 
-class CanalEnLog:
-    """Adaptador de notificaciones de v1 (arquitectura 8.x: los canales son adaptadores
-    detrás de una interfaz). Declarado, no un stub: la notificación se registra en el log
-    del worker con nivel WARNING para que sea visible que no hay canal externo."""
-
-    def enviar(self, tenant_id: str | None, notificacion: dict[str, Any]) -> None:
-        log.warning("notificación sin canal externo (CanalEnLog) tenant=%s tipo=%s", tenant_id, notificacion.get("tipo"))
-
-
 def handler_notificaciones(session: Session, job: Job, contexto: dict[str, Any]) -> None:
-    canal: CanalDeNotificaciones = contexto.get("canal_notificaciones") or CanalEnLog()
+    """Entrega por mail / Telegram (H-01) con traza idempotente por (job, canal, destinatario)
+    en transacciones propias (M-07): el rollback del job nunca "des-envía". Un
+    `canal_notificaciones` en el contexto (tests/compat) reemplaza a los adaptadores reales."""
     if "tipo" not in job.payload:
         raise JobNoProcesable("notificación sin `tipo` en el payload")
-    canal.enviar(job.tenant_id, job.payload)
+    if contexto.get("canal_notificaciones") is not None:
+        contexto["canal_notificaciones"].enviar(job.tenant_id, job.payload)
+        return
+    if not job.tenant_id:
+        raise JobNoProcesable("notificación sin tenant")
+    from app.modules.notificaciones.canales import canales_de_plataforma
+    from app.modules.notificaciones.servicio import entregar
+
+    canales = contexto.get("canales") or canales_de_plataforma()
+    resumen = entregar(job.id, job.tenant_id, job.payload, canales, contexto.get("abrir_sesion") or tenant_session)
+    log.info("notificación job=%s tenant=%s %s", job.id, job.tenant_id, resumen)
 
 
 def handler_drenaje_outbox(session: Session, job: Job, contexto: dict[str, Any]) -> None:
@@ -89,10 +93,21 @@ def handler_no_implementado(nombre: str) -> Handler:
     return handler
 
 
+def handler_score_documental(session: Session, job: Job, contexto: dict[str, Any]) -> None:
+    """Snapshot diario del score de salud documental (H-01)."""
+    from app.modules.score.servicio import guardar_snapshot
+
+    if not job.tenant_id:
+        raise JobNoProcesable("score sin tenant")
+    guardar_snapshot(session, job.tenant_id, ahora_utc())
+
+
 HANDLERS: dict[str, Handler] = {
     "drenaje_outbox": handler_drenaje_outbox,
     "notificaciones": handler_notificaciones,
-    # evidencia_qr / score_documental / validacion_evidencia: sin implementación en v1.
+    "score_documental": handler_score_documental,
+    # evidencia_qr: el QR se genera al vuelo en /publico/paquete/{token}/qr.png (no hace
+    # falta cola). validacion_evidencia: la validación de contenido es segunda etapa.
 }
 
 
@@ -175,15 +190,36 @@ def procesar_cola(
     return procesados
 
 
+def _escaneo_drive_programado(tenant_id: str, ahora: datetime, storage: Storage, contexto: dict[str, Any]) -> dict[str, Any] | None:
+    """Escaneo programado de la carpeta de Drive del tenant (intervalo configurado)."""
+    from app.auth.identidad import Identidad, Rol
+    from app.modules.drive.servicio import escanear, escaneo_programado_pendiente
+
+    with tenant_session(tenant_id) as s:
+        if not escaneo_programado_pendiente(s, tenant_id, ahora):
+            return None
+    proveedor = contexto.get("proveedor_drive")
+    if proveedor is None:
+        from app.modules.drive.proveedor import proveedor_de_plataforma
+
+        proveedor = proveedor_de_plataforma()
+    identidad = Identidad(tenant_id, "worker", frozenset({Rol.RESPONSABLE_LEGAJOS}))  # actor de sistema, rol mínimo
+    with tenant_session(tenant_id) as s:
+        return escanear(s, identidad, proveedor, storage, ahora)
+
+
 def correr_una_vuelta(
     storage: Storage,
     publicador: Publicador,
     handlers: dict[str, Handler] | None = None,
     ahora: datetime | None = None,
     canal_notificaciones: CanalDeNotificaciones | None = None,
+    proveedor_drive: Any | None = None,
+    canales: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     handlers = handlers_completos(handlers)
-    contexto = {"publicador": publicador, "storage": storage, "canal_notificaciones": canal_notificaciones}
+    contexto = {"publicador": publicador, "storage": storage, "canal_notificaciones": canal_notificaciones,
+                "proveedor_drive": proveedor_drive, "canales": canales}
     ahora = ahora or ahora_utc()
     resumen: dict[str, Any] = {"tenants": 0, "outbox_publicados": 0, "jobs": 0}
     for tenant_id in listar_tenants():
@@ -211,6 +247,8 @@ def correr_una_vuelta(
         _reloj("control_vencimientos", lambda s: control_vencimientos(s, tenant_id, ahora))
         _reloj("vencer_excepciones_y_constancias", lambda s: vencer_excepciones_y_constancias(s, tenant_id, ahora))
         _reloj("control_plantillas", lambda s: control_plantillas(s, tenant_id, ahora))
+        _reloj("score_documental", lambda s: encolar_snapshot_diario(s, tenant_id, ahora))
+        _con_latido("escaneo_drive", tenant_id, lambda: _escaneo_drive_programado(tenant_id, ahora, storage, contexto))
         # La retención maneja sus propias transacciones (borrado físico fuera de la tx).
         _con_latido("control_retencion", tenant_id, lambda: control_retencion(tenant_id, storage, ahora))
 

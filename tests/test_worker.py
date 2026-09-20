@@ -363,7 +363,7 @@ def test_correr_una_vuelta_procesa_colas_outbox_y_reloj(tenant_de_prueba):
     with tenant_session(t) as s:
         # notificaciones se completa (CanalEnLog); evidencia_qr no tiene handler en v1:
         # dead-letter visible, nunca "completado sin efecto".
-        estados = dict(s.execute(text("SELECT cola, estado FROM modulo1.job_queue WHERE tenant_id = :t"), {"t": t}).all())
+        estados = dict(s.execute(text("SELECT cola, estado FROM modulo1.job_queue WHERE tenant_id = :t AND cola IN ('notificaciones', 'evidencia_qr')"), {"t": t}).all())
         assert estados == {"notificaciones": "completado", "evidencia_qr": "fallido"}
         nombres = {f[0] for f in s.execute(text("SELECT nombre FROM modulo1.latido_proceso WHERE tenant_id = :t AND ultimo_ok IS NOT NULL"), {"t": t})}
         assert {"drenaje_outbox", "control_vencimientos", "vencer_excepciones_y_constancias", "control_retencion"} <= nombres
