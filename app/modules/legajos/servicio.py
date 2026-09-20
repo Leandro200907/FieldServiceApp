@@ -652,13 +652,19 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
     docs = s.execute(
         text(
             "SELECT documento_id, estado_version, sucede_a FROM modulo1.documento "
-            "WHERE tenant_id = :t AND lote_id = :l ORDER BY creado_en FOR UPDATE"
+            "WHERE tenant_id = :t AND lote_id = :l ORDER BY creado_en, documento_id FOR UPDATE"
         ),
         {"t": t, "l": lote_id},
     ).mappings().all()
 
+    # Dos pasadas: primero TODOS los documentos del lote pasan a terminal y recién después
+    # se restauran antecesores. Si se hiciera en una sola pasada, un documento del lote
+    # que sucede a otro del mismo lote (dos filas del mismo requisito) podría resucitar a
+    # su antecesor-del-lote antes de que éste fuera revertido — y el orden entre ambos es
+    # ambiguo porque comparten `creado_en` (misma transacción).
     revertidos: list[str] = []
     restaurados: list[str] = []
+    eran_vigentes: list[Any] = []
     for d in docs:
         if d["estado_version"] in ("rechazada", "revertida_por_lote"):
             continue
@@ -667,13 +673,16 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
             {"t": t, "d": str(d["documento_id"])},
         )
         revertidos.append(str(d["documento_id"]))
-        # Solo se restaura el antecesor si el documento del lote seguía vigente: si ya
-        # fue sucedido por una carga posterior, esa carga posterior es la vigente y
-        # restaurar dos versiones rompería uq_documento_vigente.
         if d["estado_version"] == "vigente":
-            r = _restaurar_sucedido(s, t, d["sucede_a"])
-            if r:
-                restaurados.append(r)
+            eran_vigentes.append(d["sucede_a"])
+    # Solo se restaura el antecesor si el documento del lote seguía vigente: si ya fue
+    # sucedido por una carga posterior, esa carga posterior es la vigente y restaurar dos
+    # versiones rompería uq_documento_vigente. Los antecesores del propio lote ya son
+    # terminales y la cadena los salta.
+    for sucede_a in eran_vigentes:
+        r = _restaurar_sucedido(s, t, sucede_a)
+        if r:
+            restaurados.append(r)
 
     s.execute(
         text("UPDATE modulo1.lote_importacion SET estado = 'revertido' WHERE tenant_id = :t AND lote_id = :l"),
