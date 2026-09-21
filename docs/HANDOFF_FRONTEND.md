@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0020_outbox_backoff_alerta`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0021_validacion_evidencia`.
 Prefijo de todas las rutas: `/v1`.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
@@ -120,16 +120,43 @@ Todo error, de cualquier status, tiene esta forma exacta:
 | `POST /v1/comandos/reasignar_supervisor` | configuracion, responsable_legajos | `{sujeto_id, supervisor_usuario_id, desde?}` |
 | `POST /v1/comandos/preparar_subida_de_evidencia` | responsable_legajos, tecnico | `{documento_id, nombre_archivo, content_type}` → `{url_subida, content_type, max_bytes, expira_en_seg}` |
 | `POST /v1/comandos/confirmar_subida_de_evidencia` | responsable_legajos, tecnico | `{documento_id}` → `{checksum_sha256, bytes, eventos[]}` |
+| `POST /v1/comandos/invalidar_evidencia` | responsable_legajos | `{documento_id, motivo}` → invalida a mano un archivo ya `confirmado` (Fase 2 punto 2); si el documento no tiene archivo, usar `RechazarPropuesta` en vez de esto para uno `declarado` |
+| `GET /v1/consultas/bandeja_validacion_evidencia` | configuracion, responsable_legajos | `estado` (default/`accion_requerida` = `pendiente`+`invalido`; o `pendiente`/`valido`/`invalido`/`todos`), paginado |
 
 **Flujo de evidencia**: `preparar_subida` → el navegador hace `PUT <url_subida>` con el
 archivo crudo y el mismo `Content-Type` (sin JWT: la URL firmada es el permiso; vence en
 `expira_en_seg`; `max_bytes` se exige) → `confirmar_subida` (mide el archivo real; 422
-`archivo_ausente` / `archivo_vacio` / `archivo_demasiado_grande` si no cierra). Descarga:
+`archivo_ausente` / `archivo_vacio` / `archivo_demasiado_grande` si no cierra; encola la
+validación técnica asincrónica, ver más abajo). Descarga:
 `GET /v1/storage/documentos/{documento_id}/url` (roles responsable/supervisor/técnico, según
-alcance) → `{url}` efímera → `GET <url>`.
+alcance) → `{url}` efímera → `GET <url>` — **sólo si la validación técnica ya dio
+`valido`** (ver 409 `archivo_pendiente_de_validacion` / 422 `archivo_invalido` abajo).
 
 - `PUT /v1/storage/{firma}` y `GET /v1/storage/{firma}` son el "bucket" de desarrollo; en
   producción la URL firmada apuntará al storage real con el mismo flujo.
+
+**Validación técnica de evidencia (Fase 2 punto 2).** `confirmar_subida` encola un job
+asincrónico que verifica ÚNICAMENTE integridad técnica — formato reconocible, el tipo de
+contenido real coincide con el declarado, un PDF se puede abrir, escaneo de malware (hoy
+siempre `no_configurado`: no hay proveedor conectado, nunca se afirma "limpio" sin haber
+escaneado). Eje `archivo_validacion` (`pendiente`/`valido`/`invalido`) **independiente**
+de `estado_confirmacion` — nunca lo mueve solo. Documentos legado (confirmados antes de
+que esto existiera) quedaron `valido` en la migración, así que no se bloquean. Mientras
+está `pendiente`, la descarga responde 409 `archivo_pendiente_de_validacion` (reintentar
+en unos minutos); si da `invalido`, 422 `archivo_invalido`. Dos casos según en qué estaba
+el documento cuando resulta inválido:
+- **declarado** (propuesta sin verificar): se rechaza sola, mismo camino que
+  `RechazarPropuesta` — desaparece de `propuestas_pendientes`, la versión anterior vuelve
+  a `vigente` si había una.
+- **verificado**: el dato SIGUE marcado verificado (nunca se toca solo), pero la
+  descarga queda bloqueada; se notifica a responsable_legajos y se dispara una
+  revaluación de las decisiones que dependían de ese sujeto/requisito (mismo mecanismo
+  que un documento vencido). Recuperación: `preparar_subida` de nuevo sobre ESE
+  documento (reemplaza el archivo, sólo lo permite si está `invalido`) o
+  `invalidar_evidencia` para marcarlo a mano si el chequeo automático no lo detectó.
+
+`GET /v1/consultas/bandeja_validacion_evidencia` es el tablero de seguimiento —
+`archivo_validacion`, `archivo_validacion_motivo`, `archivo_scan_estado` por documento.
 
 ### 4.3 Comandos de requisitos y OC
 | Ruta | Rol | Body |
@@ -349,7 +376,10 @@ Dominio (422 salvo indicación): `requisito_no_excepcionable`, `excepcion_de_emp
 `excepcion_activa_duplicada` (409), `constancia_activa_duplicada` (409),
 `custodia_vigente_duplicada` (409), `definicion_duplicada` (409), `sin_archivo`,
 `archivo_ausente`, `archivo_vacio`, `archivo_demasiado_grande`, `conflicto_de_interes` (403:
-un Supervisor operando sobre sí mismo — excepción, supervisión o custodia propias).
+un Supervisor operando sobre sí mismo — excepción, supervisión o custodia propias),
+`archivo_pendiente_de_validacion` (409: la validación técnica del archivo todavía no
+corrió), `archivo_invalido` (422: la validación técnica dio inválido), `usar_rechazar_propuesta`
+(422: `invalidar_evidencia` sobre un documento todavía `declarado`).
 
 ## 8. Lo que el frontend NO tiene todavía (deudas conocidas del backend v1)
 - No hay endpoints de gestión de usuarios (alta, desactivación, cambio ni restablecimiento

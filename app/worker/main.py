@@ -103,12 +103,20 @@ def handler_score_documental(session: Session, job: Job, contexto: dict[str, Any
     guardar_snapshot(session, job.tenant_id, ahora_utc())
 
 
+def handler_validacion_evidencia(session: Session, job: Job, contexto: dict[str, Any]) -> None:
+    """Verificación técnica de evidencia (reauditoría Fase 2 punto 2)."""
+    from app.modules.evidencia.servicio import procesar
+
+    procesar(session, job, contexto)
+
+
 HANDLERS: dict[str, Handler] = {
     "drenaje_outbox": handler_drenaje_outbox,
     "notificaciones": handler_notificaciones,
     "score_documental": handler_score_documental,
+    "validacion_evidencia": handler_validacion_evidencia,
     # evidencia_qr: el QR se genera al vuelo en /publico/paquete/{token}/qr.png (no hace
-    # falta cola). validacion_evidencia: la validación de contenido es segunda etapa.
+    # falta cola).
 }
 
 
@@ -185,6 +193,15 @@ def procesar_cola(
                     estado = cola_mod.fallar(s, job.id, job.lease_token, error=e, terminal=terminal, ahora=ahora, max_intentos=max_intentos)
                 if estado == "fallido":
                     log.error("job %s (%s) en dead-letter tras %s intento(s)", job.id, nombre_cola, job.intentos)
+                    if nombre_cola == "validacion_evidencia" and job.tenant_id:
+                        # Dead-letter visible y notificado (nunca silencioso, Fase 2 punto 2).
+                        from app.modules.evidencia.servicio import alertar_dead_letter
+
+                        try:
+                            with tenant_session(job.tenant_id) as s:
+                                alertar_dead_letter(s, job.tenant_id, job)
+                        except Exception:
+                            log.exception("no se pudo alertar el dead-letter de validacion_evidencia job=%s", job.id)
             except cola_mod.LeaseAjeno:
                 log.warning("job %s (%s): lease perdido al marcar el fallo", job.id, nombre_cola)
         procesados += 1

@@ -83,6 +83,14 @@ class Documento:
     vigente_hasta: date
     estado_confirmacion: EstadoConfirmacion
     estado_version: EstadoVersionDocumento
+    archivo_requiere_revision: bool = False
+    """True SOLO cuando hay un archivo real adjunto (`archivo_estado='confirmado'`) y su
+    validación técnica (reauditoría Fase 2 punto 2) todavía no llegó a `valido` — pendiente
+    o inválida. Un documento sin archivo adjunto (evidencia solo declarada por metadata,
+    sin subida) nunca activa esto: el motor no exige archivo, solo confía menos en uno que
+    dice tener y no pasó (o no pasa) la verificación técnica. Default False para no romper
+    ninguna construcción existente de `Documento` (acreditación/inducción, que no tienen
+    archivo en absoluto, y cualquier test que no lo pase)."""
 
 
 @dataclass(frozen=True)

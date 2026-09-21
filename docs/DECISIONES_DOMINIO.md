@@ -540,3 +540,36 @@ nunca automático, sólo después de confirmar que la causa de fondo se resolvi�
 `encolar_outbox` (`app/comun/eventos.py`) gana `disponible_en` explícito por el mismo
 motivo que `encolar()` de `job_queue`: sin eso, un reloj controlado (tests, reproceso)
 queda a merced del `now()` real de la base.
+
+## 25. Validación técnica de evidencia — caso A/B, fencing y revaluación (reauditoría Fase 2 punto 2, migración 0021)
+
+Eje independiente `documento.archivo_validacion` (pendiente/valido/invalido), separado de
+`estado_confirmacion` — nunca lo mueve solo (arquitectura-tecnica.md §8.5: "no implica ni
+empuja ninguna confirmación de negocio"). `confirmar_subida` encola `validacion_evidencia`
+con un token de fencing nuevo; el job (`app/modules/evidencia/servicio.py`) verifica
+formato/tipo de contenido real/PDF no corrupto/malware (`no_configurado` sin scanner real)
+y consolida con `UPDATE ... WHERE archivo_validacion_token = :token` — un job viejo cuyo
+archivo se reemplazó o se invalidó a mano no pisa nada (el `UPDATE` no toca ninguna fila).
+
+Dos casos al resultar inválido: **A** (`declarado`, propuesta vigente) reutiliza
+exactamente `RechazarPropuesta`/`DocumentoRechazado`. **B** (`verificado` /
+`confirmado_en_fuente`) nunca toca `estado_confirmacion`; notifica a responsable_legajos y
+dispara la política de revaluación ya existente (`EvidenciaInvalidaPostVerificacion` en
+`EVENTOS_FUENTE`, mismo selector que `DocumentoVencido` — ningún mecanismo nuevo).
+
+Motor puro: `Documento.archivo_requiere_revision` (default `False`, no rompe ninguna
+construcción existente) — `True` SOLO cuando hay archivo real adjunto
+(`archivo_estado='confirmado'`) y su validación no llegó a `valido`; en ese caso
+`evaluar_documento_en_periodo` devuelve `Veredicto.REQUIERE_REVISION` (ya existía el
+enum, sin usar — reservado exactamente para esto, mismo patrón que el `declarado` sin
+confirmar). Acreditación/inducción no tienen archivo: nunca activan el gate.
+
+Descarga (`firmar_descarga`) exige `archivo_validacion = 'valido'` — 409 si `pendiente`
+(reintentar), 422 si `invalido`. Documentos legado (confirmados antes de esta migración)
+quedaron `valido` por el backfill de 0021, con motivo explícito: no se bloquean de golpe.
+
+Recuperación manual: `preparar_subida` reabre el ciclo SOLO sobre un archivo `invalido`
+(reemplazo); `invalidar_evidencia_verificada` (Responsable_legajos) invalida a mano un
+verificado que el chequeo automático no haya cubierto — ambos regeneran el token de
+fencing. Dead-letter del job: nunca silencioso, notifica a `configuracion`
+(`app/worker/main.py`, hook específico de esta cola, no genérico).

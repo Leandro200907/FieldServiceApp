@@ -297,7 +297,8 @@ def _armar_tenant(c, t) -> dict:
         {"clave_origen": f"OC-{t.slug}", **clave, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
     with tenant_session(t.tenant_id) as s:
         s.execute(text("UPDATE modulo1.documento SET clave_storage = :k, archivo_estado = 'confirmado', "
-                       "checksum_archivo = 'ck', archivo_bytes = 1 WHERE documento_id = :d"),
+                       "checksum_archivo = 'ck', archivo_bytes = 1, archivo_validacion = 'valido', "
+                       "archivo_validacion_en = now() WHERE documento_id = :d"),
                   {"k": f"{t.tenant_id}/{doc}/apto.pdf", "d": doc})
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                        "VALUES (:t, :sj, :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "sj": persona, "u": t.usuarios["supervisor"]})
@@ -557,7 +558,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}",
                 "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
-    assert len(paths) == 82
+    assert len(paths) == 84
     for path, ops in paths.items():
         if path in publicas:
             continue

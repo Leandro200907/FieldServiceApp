@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0020_outbox_backoff_alerta
+-- head: 0021_validacion_evidencia
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -337,12 +337,19 @@ CREATE TABLE modulo1.documento (
     archivo_content_type text,
     archivo_bytes bigint,
     archivo_purgado_en timestamp with time zone,
+    archivo_validacion text DEFAULT 'pendiente'::text NOT NULL,
+    archivo_validacion_motivo text,
+    archivo_validacion_en timestamp with time zone,
+    archivo_validacion_token uuid,
+    archivo_scan_estado text,
     CONSTRAINT ck_archivo_clave_del_documento CHECK (((clave_storage IS NULL) OR (clave_storage ~~ ((((tenant_id)::text || '/'::text) || (documento_id)::text) || '/%'::text)))),
     CONSTRAINT ck_archivo_clave_segun_estado CHECK ((((archivo_estado = ANY (ARRAY['sin_archivo'::text, 'purgado'::text])) AND (clave_storage IS NULL)) OR ((archivo_estado <> ALL (ARRAY['sin_archivo'::text, 'purgado'::text])) AND (clave_storage IS NOT NULL)))),
     CONSTRAINT ck_archivo_confirmado_con_checksum CHECK (((archivo_estado <> 'confirmado'::text) OR ((checksum_archivo IS NOT NULL) AND (archivo_bytes IS NOT NULL)))),
     CONSTRAINT ck_vigencia_documento CHECK ((vigente_desde <= vigente_hasta)),
     CONSTRAINT documento_archivo_bytes_check CHECK (((archivo_bytes IS NULL) OR (archivo_bytes >= 0))),
     CONSTRAINT documento_archivo_estado_check CHECK ((archivo_estado = ANY (ARRAY['sin_archivo'::text, 'subida_pendiente'::text, 'confirmado'::text, 'purga_pendiente'::text, 'purgado'::text]))),
+    CONSTRAINT documento_archivo_scan_estado_check CHECK (((archivo_scan_estado IS NULL) OR (archivo_scan_estado = ANY (ARRAY['no_configurado'::text, 'limpio'::text, 'infectado'::text])))),
+    CONSTRAINT documento_archivo_validacion_check CHECK ((archivo_validacion = ANY (ARRAY['pendiente'::text, 'valido'::text, 'invalido'::text]))),
     CONSTRAINT documento_confianza_extraccion_check CHECK ((confianza_extraccion = ANY (ARRAY['alta'::text, 'media'::text, 'baja'::text]))),
     CONSTRAINT documento_estado_confirmacion_check CHECK ((estado_confirmacion = ANY (ARRAY['declarado'::text, 'verificado'::text, 'confirmado_en_fuente'::text]))),
     CONSTRAINT documento_estado_version_check CHECK ((estado_version = ANY (ARRAY['vigente'::text, 'sucedida'::text, 'revertida_por_lote'::text, 'rechazada'::text]))),
@@ -1065,6 +1072,8 @@ CREATE INDEX ix_definicion_requisito_tenant ON modulo1.definicion_requisito USIN
 CREATE INDEX ix_documento__sujeto_id ON modulo1.documento USING btree (tenant_id, sujeto_id);
 -- Name: ix_documento_archivo_estado; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_documento_archivo_estado ON modulo1.documento USING btree (tenant_id, archivo_estado) WHERE (archivo_estado = ANY (ARRAY['subida_pendiente'::text, 'purga_pendiente'::text]));
+-- Name: ix_documento_archivo_validacion; Type: INDEX; Schema: modulo1; Owner: -
+CREATE INDEX ix_documento_archivo_validacion ON modulo1.documento USING btree (tenant_id, archivo_validacion) WHERE ((archivo_estado = 'confirmado'::text) AND (archivo_validacion <> 'valido'::text));
 -- Name: ix_documento_sucede_a; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_documento_sucede_a ON modulo1.documento USING btree (tenant_id, sucede_a);
 -- Name: ix_documento_tenant_sujeto; Type: INDEX; Schema: modulo1; Owner: -

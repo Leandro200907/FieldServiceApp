@@ -6,4 +6,4 @@ base: si difieren, la instancia no está lista (migración atrasada o código vi
 y con lo documentado (README, docs_schema_actual.sql).
 """
 VERSION = "1.0.0-rc1"
-MIGRACION_HEAD = "0020_outbox_backoff_alerta"
+MIGRACION_HEAD = "0021_validacion_evidencia"

@@ -59,6 +59,14 @@ def evaluar_documento_en_periodo(
             motivo=f"{req_id}: dato solo declarado, sin confirmar — no alcanza para probar habilitación (1.10)",
         )
 
+    if documento.archivo_requiere_revision:
+        return VeredictoRequisito(
+            requisito_definicion_id=req_id,
+            veredicto=Veredicto.REQUIERE_REVISION,
+            motivo=f"{req_id}: el archivo adjunto no pasó (o todavía no pasó) la validación técnica — "
+                   f"no alcanza para probar habilitación aunque el dato esté verificado (reauditoría Fase 2 punto 2)",
+        )
+
     if periodo_desde < documento.vigente_desde:
         return VeredictoRequisito(
             requisito_definicion_id=req_id,

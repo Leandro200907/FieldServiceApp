@@ -17,10 +17,48 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad, Rol
+from app.comun.reloj import ahora_utc
 from app.db import tenant_session
 from app.main import app
 from app.storage.local import StorageLocal
 from app.storage.servicio import confirmar_subida, firmar_descarga, preparar_subida
+from app.worker import main as worker_main
+
+
+def _pdf(texto: str) -> bytes:
+    """PDF mínimo válido (mismo builder que tests/test_drive_nivel2_texto.py) con
+    `texto` como contenido — para que la validación técnica (Fase 2 punto 2) lo acepte
+    en los tests que esperan una descarga exitosa, distinguiendo igual el contenido por
+    el `texto` que lleva adentro."""
+    contenido = f"BT /F1 12 Tf 72 712 Td ({texto}) Tj ET".encode("latin-1")
+    objetos = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(contenido)).encode() + b" >>\nstream\n" + contenido + b"\nendstream",
+    ]
+    cuerpo = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, o in enumerate(objetos, start=1):
+        offsets.append(len(cuerpo))
+        cuerpo += f"{i} 0 obj\n".encode() + o + b"\nendobj\n"
+    xref_offset = len(cuerpo)
+    n = len(objetos) + 1
+    xref = f"xref\n0 {n}\n0000000000 65535 f \n".encode()
+    for off in offsets:
+        xref += f"{off:010d} 00000 n \n".encode()
+    cuerpo += xref
+    cuerpo += f"trailer\n<< /Size {n} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode()
+    return bytes(cuerpo)
+
+
+def _validar_pendientes(t, storage) -> int:
+    """Corre el job `validacion_evidencia` de verdad (Fase 2 punto 2) — `ahora=ahora_utc()`
+    porque el productor (`confirmar_subida`) no es un proceso de reloj: encola con la hora
+    real del request, así que hay que procesarlo con la hora real también."""
+    return worker_main.procesar_cola(t.tenant_id, "validacion_evidencia", worker_main.HANDLERS["validacion_evidencia"],
+                                     {"storage": storage}, ahora=ahora_utc())
 
 
 @pytest.fixture
@@ -63,7 +101,8 @@ def _fila(tenant_id: str, documento_id: str) -> dict:
                  "FROM modulo1.documento WHERE documento_id = :d"), {"d": documento_id}).mappings().one())
 
 
-def _subir_completo(api, storage, t, doc: str, contenido: bytes = b"%PDF-1.4 evidencia", rol="responsable_legajos") -> dict:
+def _subir_completo(api, storage, t, doc: str, contenido: bytes | None = None, rol="responsable_legajos", validar: bool = True) -> dict:
+    contenido = _pdf("evidencia") if contenido is None else contenido
     prep = api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers(rol),
                     json={"documento_id": doc, "nombre_archivo": "apto.pdf", "content_type": "application/pdf"})
     assert prep.status_code == 200, prep.text
@@ -71,6 +110,8 @@ def _subir_completo(api, storage, t, doc: str, contenido: bytes = b"%PDF-1.4 evi
     assert put.status_code == 200, put.text
     conf = api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers(rol), json={"documento_id": doc})
     assert conf.status_code == 200, conf.text
+    if validar:
+        _validar_pendientes(t, storage)
     return conf.json()
 
 
@@ -78,14 +119,15 @@ def _subir_completo(api, storage, t, doc: str, contenido: bytes = b"%PDF-1.4 evi
 def test_flujo_preparar_put_confirmar_descargar(api, storage, tenant_de_prueba):
     t = tenant_de_prueba
     doc = _documento(t.tenant_id)
-    conf = _subir_completo(api, storage, t, doc)
+    contenido = _pdf("evidencia")
+    conf = _subir_completo(api, storage, t, doc, contenido)
     fila = _fila(t.tenant_id, doc)
     assert fila["archivo_estado"] == "confirmado"
     assert fila["clave_storage"] == f"{t.tenant_id}/{doc}/apto.pdf"  # derivada en servidor
-    assert fila["archivo_bytes"] == len(b"%PDF-1.4 evidencia") == conf["bytes"]
+    assert fila["archivo_bytes"] == len(contenido) == conf["bytes"]
     assert fila["checksum_archivo"] == conf["checksum_sha256"] == storage.inspeccionar(fila["clave_storage"]).checksum_sha256
     url = api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).json()["url"]
-    assert api.get(url).content == b"%PDF-1.4 evidencia"
+    assert api.get(url).content == contenido
     # confirmar de nuevo es idempotente
     assert api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
                     json={"documento_id": doc}).json()["ya_confirmado"] is True
@@ -119,7 +161,7 @@ def test_adversarial_documento_de_A_no_puede_apuntar_a_clave_de_B(api, storage, 
     """Escenario A-02: el documento de A intenta referenciar el archivo físico de B."""
     ta, tb = dos_tenants
     doc_b = _documento(tb.tenant_id)
-    _subir_completo(api, storage, tb, doc_b, b"secreto de B")
+    _subir_completo(api, storage, tb, doc_b, _pdf("secreto de B"))
     clave_b = _fila(tb.tenant_id, doc_b)["clave_storage"]
     doc_a = _documento(ta.tenant_id)
 
@@ -239,8 +281,8 @@ def test_permisos_de_subida_y_descarga(api, storage, tenant_de_prueba):
     # técnico solo adjunta a su propia propuesta
     assert api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("tecnico"),
                     json={"documento_id": ajeno, "nombre_archivo": "a.pdf", "content_type": "application/pdf"}).status_code == 403
-    _subir_completo(api, storage, t, propio, b"propio", rol="tecnico")
-    _subir_completo(api, storage, t, ajeno, b"ajeno")
+    _subir_completo(api, storage, t, propio, _pdf("propio"), rol="tecnico")
+    _subir_completo(api, storage, t, ajeno, _pdf("ajeno"))
     # supervisor no adjunta
     assert api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("supervisor"),
                     json={"documento_id": ajeno, "nombre_archivo": "a.pdf", "content_type": "application/pdf"}).status_code == 403
@@ -253,7 +295,7 @@ def test_permisos_de_subida_y_descarga(api, storage, tenant_de_prueba):
     assert pedir("tecnico", ajeno).status_code == 403
     r = pedir("tecnico", propio)
     assert r.status_code == 200 and r.json()["eventos"] == ["DescargarArchivoDeEvidencia"]
-    assert api.get(r.json()["url"]).content == b"propio"
+    assert api.get(r.json()["url"]).content == _pdf("propio")
     assert pedir("supervisor", ajeno).status_code == 403
     with tenant_session(t.tenant_id) as s:
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "

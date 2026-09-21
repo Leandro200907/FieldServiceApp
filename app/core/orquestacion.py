@@ -207,7 +207,7 @@ def _cargar_evidencias(
     for req_id, d in definiciones.items():
         por_categoria.setdefault(d["categoria"], []).append(req_id)
 
-    def _doc(fila: Any, id_col: str, sujeto_col: str) -> Documento:
+    def _doc(fila: Any, id_col: str, sujeto_col: str, archivo_requiere_revision: bool = False) -> Documento:
         return Documento(
             documento_id=str(fila[id_col]),
             sujeto_id=str(fila[sujeto_col]),
@@ -216,20 +216,24 @@ def _cargar_evidencias(
             vigente_hasta=fila["vigente_hasta"],
             estado_confirmacion=EstadoConfirmacion(fila["estado_confirmacion"]),
             estado_version=EstadoVersionDocumento.VIGENTE,
+            archivo_requiere_revision=archivo_requiere_revision,
         )
 
     if por_categoria["documento"]:
         for fila in session.execute(
             text(
                 "SELECT documento_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, "
-                "estado_confirmacion FROM modulo1.documento "
+                "estado_confirmacion, archivo_estado, archivo_validacion FROM modulo1.documento "
                 "WHERE tenant_id = :t AND estado_version = 'vigente' "
                 "  AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))"
             ),
             {"t": tenant_id, "ids": por_categoria["documento"]},
         ).mappings():
+            # Sólo cuenta si hay un archivo real adjunto (reauditoría Fase 2 punto 2):
+            # acreditación/inducción no tienen esta columna y nunca activan el gate.
+            requiere = fila["archivo_estado"] == "confirmado" and fila["archivo_validacion"] != "valido"
             evidencias[(str(fila["sujeto_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, "documento_id", "sujeto_id"
+                fila, "documento_id", "sujeto_id", requiere
             )
     if por_categoria["competencia"]:
         for fila in session.execute(

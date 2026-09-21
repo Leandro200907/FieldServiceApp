@@ -41,6 +41,12 @@ class Storage(Protocol):
         cliente). None si no existe."""
         ...
 
+    def leer(self, clave: str) -> bytes:
+        """Bytes reales, sólo para lectura server-side de confianza (validación técnica
+        de evidencia, Fase 2 punto 2) — nunca se expone al cliente; para eso están las
+        URLs prefirmadas. `FileNotFoundError` si no existe."""
+        ...
+
     def borrar(self, clave: str) -> bool:
         """True SOLO si el borrado físico se confirmó (o el archivo ya no existía). Si
         devuelve False el llamador no debe dar el archivo por purgado."""

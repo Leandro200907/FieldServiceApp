@@ -11,9 +11,9 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 83 operaciones sobre 82 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 23 archivos en `migrations/versions/`, un solo head: `0020_outbox_backoff_alerta`.
-- **Tests:** 500 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Rutas HTTP:** 85 operaciones sobre 84 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 24 archivos en `migrations/versions/`, un solo head: `0021_validacion_evidencia`.
+- **Tests:** 519 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -54,7 +54,7 @@ app/
     consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0020, lineales, un head)
+migrations/             # Alembic (0001 … 0021, lineales, un head)
 scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
@@ -209,7 +209,7 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 - Worker: leases con token (fencing), backoff exponencial (30 s · 2ⁿ⁻¹, tope 1 h), 5
   intentos, dead-letter (`job_queue.estado='fallido'` con `ultimo_error` saneado y
   `fallido_en`). Latidos en `latido_proceso` (el global alimenta readiness).
-- Colas **futuras** (`evidencia_qr`, `validacion_evidencia`): ningún
+- Colas **futuras** (`evidencia_qr`): ningún
   flujo soportado en v1 las produce — `tests/test_colas_futuras.py` lo verifica por
   relevamiento del código y corriendo el E2E principal + una vuelta del worker con cero
   jobs en dead-letter. Si aparece un productor, ese test falla hasta implementar el handler
@@ -236,5 +236,6 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Comandos (46) + consultas (32) + storage (3) + salud (2) + público (2) | Hecho |
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
-| Transporte real a Módulo 2 (hoy `PublicadorEnLog`; el drenaje ya tiene backoff/tope de reintentos/alerta obligatoria — 0020), storage S3, `validacion_evidencia` (lectura del contenido) | Pendiente / segunda etapa (declarado, no silencioso) |
+| Validación técnica de evidencia: formato/tipo de contenido real/PDF no corrupto, malware (`no_configurado` sin scanner real), eje `archivo_validacion` independiente de `estado_confirmacion`, caso A (declarado→`RechazarPropuesta`) / caso B (verificado→notifica + revaluación, nunca toca `estado_confirmacion`), bloquea descarga, fencing por token, recuperación manual (reemplazo o `invalidar_evidencia`) | Hecho (0021) |
+| Transporte real a Módulo 2 (hoy `PublicadorEnLog`; el drenaje ya tiene backoff/tope de reintentos/alerta obligatoria — 0020), storage S3, lectura de contenido más allá de tipo/sujeto/fecha (OCR general) | Pendiente / segunda etapa (declarado, no silencioso) |
 | Gestión de usuarios por API (alta/cambio/reset de contraseña, reactivación) | Pendiente (CLI `scripts/administracion.py`: tenant, usuarios, desactivación) |

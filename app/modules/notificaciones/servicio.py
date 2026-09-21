@@ -102,6 +102,16 @@ def render(payload: dict[str, Any]) -> tuple[str, str]:
     if tipo == "OcSinMatriz":
         return (f"OC sin matriz de requisitos: {payload.get('clave_origen')}",
                 f"La OC {payload.get('clave_origen')} no tiene matriz vigente para su cliente / locación / tipo de servicio. Publique una matriz o copie una plantilla.")
+    if tipo == "EvidenciaInvalida":
+        return (f"Evidencia inválida: documento {payload.get('documento_id')}",
+                f"El archivo del documento {payload.get('documento_id')} (sujeto {payload.get('sujeto_id')}) no pasó la "
+                f"validación técnica: {payload.get('motivo')}. El dato sigue marcado como verificado, pero la evidencia "
+                f"no se puede descargar hasta reemplazar el archivo o resolverlo.")
+    if tipo == "ValidacionEvidenciaEstancada":
+        return (f"URGENTE — validación de evidencia estancada (documento {payload.get('documento_id')})",
+                f"El job de validación técnica del documento {payload.get('documento_id')} agotó {payload.get('intentos')} "
+                f"intentos y quedó en dead-letter (job_id {payload.get('job_id')}). Revisar la causa: puede ser un problema "
+                f"de storage, no del archivo en sí.")
     if tipo == "OutboxEstancado":
         return (f"URGENTE — Módulo 2 no se entera de un cambio ({payload.get('evento_tipo')})",
                 f"El evento {payload.get('evento_id')} ({payload.get('evento_tipo')}) agotó {payload.get('intentos')} intentos de "
