@@ -36,7 +36,10 @@ class _Storage:
 
 def _job(t, payload):
     with tenant_session(t.tenant_id) as s:
-        return encolar(s, "notificaciones", payload, tenant_id=t.tenant_id)
+        # disponible_en=T0, no el default de encolar (now() real): estos jobs se procesan
+        # con reloj controlado en T0, y T0 deja de ser "futuro" en cuanto el reloj real lo
+        # alcanza — sin esto, tomar() los descarta por disponible_en > ahora=T0.
+        return encolar(s, "notificaciones", payload, tenant_id=t.tenant_id, disponible_en=T0)
 
 
 def _envios(t, job_id):

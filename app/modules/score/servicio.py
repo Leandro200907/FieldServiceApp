@@ -106,7 +106,10 @@ def guardar_snapshot(session: Session, tenant_id: str, ahora: datetime) -> dict[
 
 
 def encolar_snapshot_diario(session: Session, tenant_id: str, ahora: datetime) -> dict[str, int]:
-    """Reloj: un job `score_documental` por tenant y día (dedup por fecha en el payload)."""
+    """Reloj: un job `score_documental` por tenant y día (dedup por fecha en el payload).
+    `disponible_en=ahora`, no el default de `encolar` (`now()` de la base): el job tiene
+    que quedar disponible para ESTE tick del reloj, sea real o controlado (tests, replay,
+    corridas con reloj adelantado/atrasado)."""
     from app.worker.cola import encolar
 
     hoy = hoy_del_tenant(session, tenant_id, ahora)
@@ -114,5 +117,5 @@ def encolar_snapshot_diario(session: Session, tenant_id: str, ahora: datetime) -
                          {"t": tenant_id, "f": hoy.isoformat()}).first()
     if ya:
         return {"score_jobs": 0}
-    encolar(session, "score_documental", {"fecha": hoy.isoformat()}, tenant_id=tenant_id)
+    encolar(session, "score_documental", {"fecha": hoy.isoformat()}, tenant_id=tenant_id, disponible_en=ahora)
     return {"score_jobs": 1}

@@ -21,6 +21,11 @@ def _post(cliente_api, tenant, rol, comando, body, clave=None):
     return cliente_api.post(f"/v1/comandos/{comando}", json=body, headers=tenant.headers(rol, clave))
 
 
+def _ok(r) -> dict:
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 def _periodos(tenant_id: str, custodia_id: str) -> list[dict]:
     with tenant_session(tenant_id) as s:
         return [
@@ -205,6 +210,72 @@ def test_otorgar_excepcion_solo_sobre_excepcionable_y_revocar(cliente_api, tenan
     assert _post(cliente_api, t, "supervisor", "revocar_excepcion", {"excepcion_id": excepcion_id}).status_code == 409
     ev3 = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-1", "sujetos_propuestos": ["persona_0042"]}).json()
     assert ev3["resultado_de_decision"] == "no_puede_asignarse"
+
+
+def test_revocar_excepcion_respeta_el_universo_y_deja_afuera_al_responsable(cliente_api, tenant_de_prueba):
+    """Dos supervisores con universos disjuntos: el que no administra al sujeto no puede
+    revocar (misma semántica de alcance que otorgar_excepcion — 403, no 404: acá no rige
+    la regla A-04 de ocultar decisiones, la excepción existe y se dice por qué no se
+    puede). responsable_legajos no tiene el comando en la matriz de roles (2.2), ni con
+    alcance total sobre el resto del dominio."""
+    from tests.conftest import token_para
+
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = armar_escenario(s, t.tenant_id, clasificacion_persona="excepcionable")
+        insertar_oc(s, t.tenant_id, "OC-univ", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
+        apoyo.supervisor_de(s, t, "persona_0042")  # el supervisor por defecto del tenant administra a persona_0042
+
+        otro = str(uuid.uuid4())
+        s.execute(text("INSERT INTO modulo1.usuario (usuario_id, tenant_id, email, nombre, password_hash, roles) "
+                       "VALUES (:u, :t, 'ajeno@test', 'ajeno', '$2b$12$B6psVF.t.UCDfwi1heqT0unV5R.Sh8F.uf/BP5LXjF4UBmmG.O1U2', ARRAY['supervisor'])"),
+                  {"u": otro, "t": t.tenant_id})
+        apoyo.legajo(s, t.tenant_id, "persona_ajena")
+        apoyo.supervisor_de(s, t, "persona_ajena", supervisor_usuario_id=otro)  # universo disjunto: no toca a persona_0042
+
+    ev = _ok(_post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-univ", "sujetos_propuestos": ["persona_0042"]}))
+    otorgada = _ok(_post(cliente_api, t, "supervisor", "otorgar_excepcion", {
+        "referencia_evaluacion": ev["referencia_evaluacion"], "sujeto_id": "persona_0042", "requisito_definicion_id": esc["req_apto"],
+        "commitment_id": "OC-univ", "motivo": "cubre curso",
+    }))
+    excepcion_id = otorgada["excepcion_id"]
+
+    r_resp = _post(cliente_api, t, "responsable_legajos", "revocar_excepcion", {"excepcion_id": excepcion_id})
+    assert r_resp.status_code == 403 and r_resp.json()["error"]["codigo"] == "prohibido"
+
+    h_otro = {"Authorization": f"Bearer {token_para(t.tenant_id, otro, ['supervisor'])}"}
+    r_otro = cliente_api.post("/v1/comandos/revocar_excepcion", json={"excepcion_id": excepcion_id}, headers=h_otro)
+    assert r_otro.status_code == 403 and r_otro.json()["error"]["codigo"] == "prohibido"
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT estado FROM modulo1.excepcion WHERE excepcion_id = :e"), {"e": excepcion_id}).scalar() == "otorgada"
+
+    # El supervisor con alcance real sí puede.
+    rev = _post(cliente_api, t, "supervisor", "revocar_excepcion", {"excepcion_id": excepcion_id})
+    assert rev.status_code == 200 and rev.json()["eventos"] == ["ExcepcionRevocada"]
+
+
+def test_revocar_excepcion_idempotente_revalida_el_alcance_en_el_replay(cliente_api, tenant_de_prueba):
+    """El alcance se re-chequea SIEMPRE, también en un replay por Idempotency-Key: un
+    supervisor que perdió el universo entre el primer intento y el replay no puede seguir
+    cobrando la respuesta guardada."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = armar_escenario(s, t.tenant_id, clasificacion_persona="excepcionable")
+        insertar_oc(s, t.tenant_id, "OC-idem-rev", esc["clave"], date(2026, 10, 1), date(2026, 10, 5))
+        apoyo.supervisor_de(s, t, "persona_0042")
+    ev = _ok(_post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-idem-rev", "sujetos_propuestos": ["persona_0042"]}))
+    otorgada = _ok(_post(cliente_api, t, "supervisor", "otorgar_excepcion", {
+        "referencia_evaluacion": ev["referencia_evaluacion"], "sujeto_id": "persona_0042", "requisito_definicion_id": esc["req_apto"],
+        "commitment_id": "OC-idem-rev", "motivo": "cubre curso",
+    }))
+    excepcion_id = otorgada["excepcion_id"]
+    r1 = _post(cliente_api, t, "supervisor", "revocar_excepcion", {"excepcion_id": excepcion_id}, clave="clave-rev-1")
+    assert r1.status_code == 200
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("UPDATE modulo1.asignacion_supervisor SET estado = 'cerrada', hasta = '2026-01-01' "
+                       "WHERE tenant_id = :t AND sujeto_id = 'persona_0042'"), {"t": t.tenant_id})
+    r2 = _post(cliente_api, t, "supervisor", "revocar_excepcion", {"excepcion_id": excepcion_id}, clave="clave-rev-1")
+    assert r2.status_code == 403 and r2.json()["error"]["codigo"] == "prohibido"
 
 
 # --------------------------------------------------------------------------- constancias

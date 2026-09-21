@@ -132,7 +132,11 @@ def revocar_excepcion(
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
-    return _ejecutar(identidad, idempotency_key, lambda s: servicio.revocar_excepcion(s, identidad, **body.model_dump()), ruta="/comandos/revocar_excepcion", body=body)
+    return _ejecutar(
+        identidad, idempotency_key, lambda s: servicio.revocar_excepcion(s, identidad, **body.model_dump()),
+        ruta="/comandos/revocar_excepcion", body=body,
+        prevalidar=lambda s: servicio.prevalidar_revocar_excepcion(s, identidad, **body.model_dump()),
+    )
 
 
 @router.post("/registrar_constancia_del_cliente")

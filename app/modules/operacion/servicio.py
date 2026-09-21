@@ -472,11 +472,38 @@ def otorgar_excepcion(
     return {"excepcion_id": excepcion_id, "eventos": ["ExcepcionOtorgada"]}
 
 
+def _exigir_excepcion_en_alcance(session: Session, identidad: Identidad, excepcion_id: str) -> dict[str, Any]:
+    """La excepción existe, no es sobre uno mismo y su sujeto está en el universo ACTUAL
+    del supervisor (misma semántica de alcance que `prevalidar_otorgar_excepcion`, 2.3 §3:
+    un 403 cuando el sujeto quedó fuera, no un 404 que la esconda — acá no aplica la regla
+    A-04 de decisiones multisujeto, que sí es 404)."""
+    tenant_id = identidad.tenant_id
+    fila = session.execute(
+        text("SELECT sujeto_id FROM modulo1.excepcion WHERE tenant_id = :t AND excepcion_id = :e"),
+        {"t": tenant_id, "e": excepcion_id},
+    ).mappings().first()
+    if fila is None:
+        raise NoEncontrado("Excepción inexistente", {"excepcion_id": excepcion_id})
+    _rechazar_conflicto_de_interes(identidad, fila["sujeto_id"])
+    if not sujeto_en_alcance(session, identidad, fila["sujeto_id"], hoy_del_tenant(session, tenant_id)):
+        raise Prohibido("El sujeto está fuera del universo del supervisor", {"sujeto_id": fila["sujeto_id"]})
+    return dict(fila)
+
+
+def prevalidar_revocar_excepcion(session: Session, identidad: Identidad, *, excepcion_id: str, **_) -> None:
+    """Alcance ACTUAL del supervisor sobre el sujeto de la excepción. Se ejecuta siempre
+    —también antes de un replay idempotente— para que un supervisor que perdió el
+    universo, o que apunta a su propia excepción, no recupere una respuesta almacenada."""
+    identidad.exigir_rol(Rol.SUPERVISOR)
+    _exigir_excepcion_en_alcance(session, identidad, excepcion_id)
+
+
 def revocar_excepcion(
     session: Session, identidad: Identidad, *, excepcion_id: str, motivo: str | None = None
 ) -> dict[str, Any]:
     identidad.exigir_rol(Rol.SUPERVISOR)
     tenant_id = identidad.tenant_id
+    _exigir_excepcion_en_alcance(session, identidad, excepcion_id)
     fila = session.execute(
         text(
             "SELECT estado, sujeto_id, requisito_definicion_id, commitment_id FROM modulo1.excepcion "
@@ -486,7 +513,6 @@ def revocar_excepcion(
     ).mappings().first()
     if fila is None:
         raise NoEncontrado("Excepción inexistente", {"excepcion_id": excepcion_id})
-    _rechazar_conflicto_de_interes(identidad, fila["sujeto_id"])
     if fila["estado"] != "otorgada":
         raise Conflicto("Solo se revoca una excepción otorgada", {"excepcion_id": excepcion_id, "estado": fila["estado"]})
     session.execute(

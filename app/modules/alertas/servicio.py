@@ -313,7 +313,7 @@ def entregar_notificaciones(session: Session, tenant_id: str, ahora: datetime) -
             "alertas": [{"alerta_id": str(i["alerta_id"]), "etapa": i["etapa"], "sujeto_id": i["sujeto_id"], "tipo_sujeto": i["tipo_sujeto"],
                          "requisito": i["requisito"], "vigente_hasta": i["vigente_hasta"].isoformat(), "fuente_tipo": i["fuente_tipo"],
                          "bajo_excepcion": i["bajo_excepcion"]} for i in items],
-        }, tenant_id=tenant_id)
+        }, tenant_id=tenant_id, disponible_en=ahora)  # no el now() de la base: este tick del reloj
         session.execute(text("UPDATE modulo1.alerta_notificacion SET entregada_en = :ahora, job_id = :j WHERE tenant_id = :t AND notificacion_id = ANY(:ids)"),
                         {"ahora": ahora, "j": job_id, "t": tenant_id, "ids": [i["notificacion_id"] for i in items]})
         registrar_evento_interno(session, tenant_id, "NotificacionEmitida",
@@ -338,7 +338,7 @@ def avisar_oc_sin_matriz(session: Session, tenant_id: str, ahora: datetime) -> d
         evento_id = registrar_evento_interno(session, tenant_id, "OcSinMatriz", payload, None)
         session.execute(text("INSERT INTO modulo1.aviso_oc_sin_matriz (tenant_id, oc_id, notificado_en, evento_id) VALUES (:t, :o, :ahora, :e) ON CONFLICT DO NOTHING"),
                         {"t": tenant_id, "o": str(f["oc_id"]), "ahora": ahora, "e": evento_id})
-        encolar(session, "notificaciones", {"tipo": "OcSinMatriz", "destinatario_rol": "configuracion", **payload}, tenant_id=tenant_id)
+        encolar(session, "notificaciones", {"tipo": "OcSinMatriz", "destinatario_rol": "configuracion", **payload}, tenant_id=tenant_id, disponible_en=ahora)
     return {"oc_sin_matriz": len(filas)}
 
 

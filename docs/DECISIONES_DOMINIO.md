@@ -448,3 +448,17 @@ responsable_legajos/configuración para que otro actor autorizado pueda operarla
 Supervisor con alcance real sobre él también puede). Los tres bloqueos son directos
 (comparan contra `identidad.sujeto_id`), no dependen de que el universo lo cubra: quedan
 blindados aunque alguna otra ruta futura deje a un Supervisor dentro de su propio alcance.
+
+## 20. Corrección: alcance faltante en RevocarExcepcion
+
+`revocar_excepcion` tenía el chequeo de rol (Supervisor, matriz 2.2) y, desde §19, el
+bloqueo de auto-revocación, pero **no** validaba que el sujeto de la excepción estuviera
+en el universo del supervisor: cualquier supervisor del tenant podía revocar la excepción
+de cualquier sujeto, dentro o fuera de su alcance. Corregido con la misma semántica que
+`prevalidar_otorgar_excepcion` (2.3 §3): 403 `prohibido` — no 404, la regla A-04 de
+ocultar decisiones multisujeto no aplica a una excepción ya existente referenciada por
+id —, revalidado siempre, también en un replay por Idempotency-Key (`prevalidar_revocar_excepcion`,
+cableado en el router igual que `otorgar_excepcion`). `responsable_legajos` sigue sin el
+comando: la matriz 2.2 de `modulo1-no-funcionales.md` marca `OtorgarExcepcion`/
+`RevocarExcepcion` exclusivos de Supervisor (`—` para el resto de los roles), así que no
+se amplía aunque tenga alcance total en otras capacidades.
