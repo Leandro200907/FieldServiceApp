@@ -64,6 +64,20 @@ def configuracion_canales(identidad: Identidad = Depends(identidad_actual)) -> d
         return notificaciones.configuracion_canales(s, identidad)
 
 
+@router.get("/consultas/envios_notificacion")
+def envios_notificacion(
+    estado: Literal["accion_requerida", "enviado", "fallido", "sin_canal", "registrado_log", "todos"] | None = Query(None),
+    job_id: int | None = Query(None),
+    identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina),
+) -> dict:
+    """Trazabilidad de entregas para seguimiento operativo. Por defecto (`estado` sin
+    pasar, o `accion_requerida`): sólo `sin_canal` / `fallido` — lo que necesita que
+    alguien haga algo. `registrado_log` nunca se cuenta como entrega real; se ve acá sólo
+    con `estado=registrado_log` o `estado=todos`."""
+    with tenant_session(identidad.tenant_id) as s:
+        return notificaciones.envios(s, identidad, p, estado, job_id)
+
+
 # --------------------------------------------------------------------------- score
 
 

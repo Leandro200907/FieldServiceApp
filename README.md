@@ -11,9 +11,9 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 82 operaciones sobre 81 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 21 archivos en `migrations/versions/`, un solo head: `0018_capacidades_v1`.
-- **Tests:** 476 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Rutas HTTP:** 83 operaciones sobre 82 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 22 archivos en `migrations/versions/`, un solo head: `0019_notificacion_sin_canal`.
+- **Tests:** 478 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -54,7 +54,7 @@ app/
     consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0018, lineales, un head)
+migrations/             # Alembic (0001 … 0019, lineales, un head)
 scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
@@ -226,7 +226,7 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Esquema + RLS + FKs compuestas por tenant, unicidades activas y NULL-aware | Hecho (0001–0016) |
 | Catálogo y matrices globales de industria, copia opt-in, aviso de versión nueva (no-funcionales 1.5) | Hecho (0016) |
 | Alerta de vencimiento completa: aviso/recordatorio/vencido/escalado, pausa, resolución por verificación, reconocimiento, rol de escalamiento y plazos configurables, coalescing, tablero e historial, OC sin matriz | Hecho (0017) |
-| Notificaciones reales por mail (SMTP) y Telegram (bot), configuración por tenant, vinculación de chat, entrega idempotente con traza | Hecho (0018); WhatsApp diseñado, no activo |
+| Notificaciones reales por mail (SMTP) y Telegram (bot), configuración por tenant, vinculación de chat, entrega at-least-once con traza por destinatario (`sin_canal`/`registrado_log` propios, nunca pérdida silenciosa ni "log" contado como entrega real) | Hecho (0018/0019); WhatsApp diseñado, no activo |
 | Paquete de entrega con link público firmado + QR por entidad (vencimiento, revocación, rate limit, traza de accesos) | Hecho (0018) |
 | Score de salud documental (consulta por rol + snapshot diario por el worker) | Hecho (0018) |
 | Exportación de legajo (JSON / CSV) con traza | Hecho (0018) |

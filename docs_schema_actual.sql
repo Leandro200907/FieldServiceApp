@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0018_capacidades_v1
+-- head: 0019_notificacion_sin_canal
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -575,8 +575,8 @@ CREATE TABLE modulo1.notificacion_envio (
     error text,
     intentos integer DEFAULT 1 NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT notificacion_envio_canal_check CHECK ((canal = ANY (ARRAY['mail'::text, 'telegram'::text, 'log'::text]))),
-    CONSTRAINT notificacion_envio_estado_check CHECK ((estado = ANY (ARRAY['enviado'::text, 'fallido'::text])))
+    CONSTRAINT notificacion_envio_canal_check CHECK ((canal = ANY (ARRAY['mail'::text, 'telegram'::text, 'log'::text, 'sin_canal'::text]))),
+    CONSTRAINT notificacion_envio_estado_check CHECK ((estado = ANY (ARRAY['enviado'::text, 'fallido'::text, 'sin_canal'::text, 'registrado_log'::text])))
 );
 ALTER TABLE ONLY modulo1.notificacion_envio FORCE ROW LEVEL SECURITY;
 -- Name: notificacion_envio_envio_id_seq; Type: SEQUENCE; Schema: modulo1; Owner: -

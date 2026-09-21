@@ -98,7 +98,51 @@ def test_sin_canal_habilitado_queda_constancia_en_log_sin_llamar_proveedores(cli
     with caplog.at_level(logging.WARNING, logger="modulo1.notificaciones"):
         worker_main.procesar_cola(t.tenant_id, "notificaciones", worker_main.handler_notificaciones, {"canales": {"mail": mail}}, ahora=T0)
     assert mail.enviados == [] and "sin canal externo" in caplog.text
-    assert [(e["canal"], e["estado"]) for e in _envios(t, jid)] == [("log", "enviado")]
+    # `registrado_log`, no `enviado`: una constancia en el log nunca cuenta como entrega real.
+    assert [(e["canal"], e["estado"]) for e in _envios(t, jid)] == [("log", "registrado_log")]
+
+
+def test_destinatario_sin_canal_resoluble_queda_trazado_no_se_pierde(cliente_api, tenant_de_prueba):
+    """El tenant tiene Telegram habilitado (mail no); un destinatario tiene chat_id
+    vinculado y otro no. Antes, el segundo desaparecía sin ninguna fila — ahora queda
+    `sin_canal`, con el resto entregado con normalidad."""
+    t = tenant_de_prueba
+    _ok(_post(cliente_api, t, "configuracion", "configurar_canales", {"mail_habilitado": False, "telegram_habilitado": True}))
+    _ok(_post(cliente_api, t, "configuracion", "vincular_telegram", {"usuario_id": t.usuarios["responsable_legajos"], "chat_id": "777"}))
+    otro = str(uuid.uuid4())
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text("INSERT INTO modulo1.usuario (usuario_id, tenant_id, email, nombre, password_hash, roles) "
+                       "VALUES (:u, :t, 'otro_resp@test', 'otro', '$2b$12$B6psVF.t.UCDfwi1heqT0unV5R.Sh8F.uf/BP5LXjF4UBmmG.O1U2', ARRAY['responsable_legajos'])"),
+                  {"u": otro, "t": t.tenant_id})
+    jid = _job(t, {"tipo": "OcSinMatriz", "destinatario_rol": "responsable_legajos", "clave_origen": "OC-X"})
+    tg = CanalFalso("telegram")
+    n = worker_main.procesar_cola(t.tenant_id, "notificaciones", worker_main.handler_notificaciones, {"canales": {"telegram": tg}}, ahora=T0)
+    assert n == 1  # el job se da por completado: nada quedó pendiente de reintentar
+    envios = {(e["canal"], e["destinatario"]): e["estado"] for e in _envios(t, jid)}
+    assert envios[("telegram", "777")] == "enviado"
+    assert envios[("sin_canal", otro)] == "sin_canal"
+    # un reintento del mismo job no duplica ni reintenta el sin_canal (nada que reintentar)
+    worker_main.procesar_cola(t.tenant_id, "notificaciones", worker_main.handler_notificaciones, {"canales": {"telegram": tg}}, ahora=T0)
+    assert len(tg.enviados) == 1
+
+
+def test_consulta_envios_notificacion_por_defecto_solo_accion_requerida(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    _ok(_post(cliente_api, t, "configuracion", "configurar_canales", {"mail_habilitado": False, "telegram_habilitado": True}))
+    _job(t, {"tipo": "OcSinMatriz", "destinatario_rol": "responsable_legajos", "clave_origen": "OC-Y"})
+    tg = CanalFalso("telegram")
+    worker_main.procesar_cola(t.tenant_id, "notificaciones", worker_main.handler_notificaciones, {"canales": {"telegram": tg}}, ahora=T0)
+    # responsable_legajos no tiene telegram vinculado en el fixture estándar → sin_canal
+    r = cliente_api.get("/v1/consultas/envios_notificacion", headers=t.headers("configuracion"))
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert len(items) == 1 and items[0]["estado"] == "sin_canal" and items[0]["email"] == f"responsable_legajos@{t.slug}.test"
+    r_explicito = cliente_api.get("/v1/consultas/envios_notificacion", params={"estado": "accion_requerida"}, headers=t.headers("responsable_legajos"))
+    assert r_explicito.json()["total"] == 1
+    assert cliente_api.get("/v1/consultas/envios_notificacion", params={"estado": "enviado"}, headers=t.headers("configuracion")).json()["total"] == 0
+    assert cliente_api.get("/v1/consultas/envios_notificacion", params={"estado": "todos"}, headers=t.headers("configuracion")).json()["total"] == 1
+    assert cliente_api.get("/v1/consultas/envios_notificacion", headers=t.headers("tecnico")).status_code == 403
+    assert cliente_api.get("/v1/consultas/envios_notificacion", headers=t.headers("supervisor")).status_code == 403
 
 
 def test_canal_real_no_configurado_falla_visible(cliente_api, tenant_de_prueba, monkeypatch):

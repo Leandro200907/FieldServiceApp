@@ -1,12 +1,31 @@
 """Entrega de notificaciones: configuración por tenant, vinculación de Telegram, render y
 handler idempotente (M-07: un efecto externo no se deshace con rollback).
 
-Regla de entrega (at-least-once sin duplicados): por cada (job, canal, destinatario) hay a
-lo sumo una fila `enviado` en `notificacion_envio`; antes de llamar al proveedor se
-consulta esa traza y después del envío se registra EN SU PROPIA TRANSACCIÓN (commit
-inmediato) — si el lease se pierde o el job falla más tarde, el reintento no reenvía. Los
-fallos quedan como `fallido` (con error saneado) y el job reintenta con backoff; el
-mensaje se considera entregado cuando todos los destinatarios resolubles tienen `enviado`.
+Regla de entrega — **at-least-once, no "sin duplicados" a secas**: por cada (job, canal,
+destinatario) hay a lo sumo una fila en `notificacion_envio`, y antes de llamar al
+proveedor se consulta esa traza para no reenviar en un reintento normal (lease perdido,
+job que falla más tarde). Pero el envío al proveedor y el commit de esa traza son DOS
+transacciones separadas: si el proceso cae justo entre que `canal.enviar()` devuelve éxito
+y ese commit, el reintento no ve la traza y reenvía de verdad — eso sí puede duplicar el
+mensaje en el proveedor externo. `CanalMail` mitiga esto parcialmente con un `Message-ID`
+determinístico (el proveedor de correo puede deduplicar por ese id, no está garantizado);
+`CanalTelegram` no tiene ningún mecanismo de idempotencia en la Bot API, así que ahí la
+ventana no está mitigada. Es una ventana angosta (un crash entre una llamada HTTP y un
+INSERT) pero real; no se afirma "sin duplicados" sin esta salvedad.
+
+Cuatro estados en `notificacion_envio.estado`:
+- `enviado`: salió de verdad por mail o Telegram.
+- `fallido`: el proveedor fue llamado y falló; el job reintenta con backoff.
+- `sin_canal`: el tenant tiene algún canal habilitado, pero ESTE destinatario no tiene
+  email ni `telegram_chat_id` vinculado — no hay ningún destino al que llamar. Antes se
+  perdía en silencio (quedaba fuera del plan sin ninguna fila); ahora queda trazado, sin
+  reintento automático (nada que reintentar hasta que alguien le cargue el dato de
+  contacto), visible por `GET /v1/consultas/envios_notificacion`.
+- `registrado_log`: NINGÚN canal está habilitado para el tenant; la notificación queda
+  como constancia en el log del proceso (`CanalEnLog`), nunca como sustituto de una
+  entrega real. Antes esto se guardaba como `enviado` con `canal='log'`, indistinguible de
+  un envío real en cualquier conteo — ahora es un estado propio: una alerta que "solo
+  quedó en el log" no debe contarse como entregada en producción.
 """
 from __future__ import annotations
 
@@ -19,6 +38,7 @@ from sqlalchemy.orm import Session
 from app.api.errores import ErrorDeDominio, NoEncontrado
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
+from app.comun.paginacion import Pagina, envolver
 from app.modules.notificaciones.canales import Canal, CanalEnLog, CanalNoDisponible
 from app.worker.cola import sanear_error
 
@@ -107,29 +127,61 @@ def _canales_habilitados(session: Session, tenant_id: str) -> tuple[bool, bool]:
 def entregar(job_id: int, tenant_id: str, payload: dict[str, Any], canales: dict[str, Canal], abrir_sesion: Callable[[str], Any]) -> dict[str, int]:
     """Handler de la cola `notificaciones`. Recibe `abrir_sesion` (tenant_session) porque
     cada envío confirma su traza en una transacción propia — ver docstring del módulo.
-    Lanza si algún envío falló (para que el job reintente con backoff)."""
+    Lanza si algún envío falló (para que el job reintente con backoff); `sin_canal` NO
+    lanza — no hay nada que un reintento del job pueda arreglar, sólo cargar el dato de
+    contacto que falta (fuera del ciclo de vida de este job)."""
     with abrir_sesion(tenant_id) as s:
         destinatarios = _destinatarios(s, tenant_id, payload)
         mail_on, tg_on = _canales_habilitados(s, tenant_id)
+    vacio = {"destinatarios": 0, "enviados": 0, "fallidos": 0, "omitidos": 0, "sin_canal": 0, "registrados_log": 0}
     if not destinatarios:
-        return {"destinatarios": 0, "enviados": 0, "fallidos": 0, "omitidos": 0}
+        return vacio
     asunto, texto = render(payload)
-    plan: list[tuple[str, str, str]] = []  # (canal, destino, usuario_id)
+    algun_canal_habilitado = mail_on or tg_on
+    plan: list[tuple[str, str, str]] = []  # (canal, destino, usuario_id) — se intenta un envío real
+    sin_canal_ids: list[str] = []  # usuario_id sin ningún canal resoluble para él
     for d in destinatarios:
+        uid = str(d["usuario_id"])
+        tiene_canal = False
         if mail_on and d["email"]:
-            plan.append(("mail", d["email"], str(d["usuario_id"])))
+            plan.append(("mail", d["email"], uid))
+            tiene_canal = True
         if tg_on and d["telegram_chat_id"]:
-            plan.append(("telegram", d["telegram_chat_id"], str(d["usuario_id"])))
-    if not plan:
-        # sin canal externo habilitado: constancia en el log (CanalEnLog), una vez
-        plan = [("log", d["email"] or str(d["usuario_id"]), str(d["usuario_id"])) for d in destinatarios]
-    enviados = fallidos = omitidos = 0
+            plan.append(("telegram", d["telegram_chat_id"], uid))
+            tiene_canal = True
+        if not tiene_canal:
+            if algun_canal_habilitado:
+                # el tenant tiene canal(es) habilitados; a ESTE destinatario le falta el
+                # dato de contacto (sin email o sin telegram_chat_id) — antes se perdía
+                # en silencio, ahora queda trazado como `sin_canal`.
+                sin_canal_ids.append(uid)
+            else:
+                # ningún canal habilitado para el tenant: constancia en el log, nunca
+                # contada como entrega real (ver docstring del módulo).
+                plan.append(("log", d["email"] or uid, uid))
+    enviados = fallidos = omitidos = sin_canal = registrados_log = 0
     errores: list[str] = []
+
+    for uid in sin_canal_ids:
+        with abrir_sesion(tenant_id) as s:
+            ya = s.execute(text("SELECT 1 FROM modulo1.notificacion_envio WHERE tenant_id = :t AND job_id = :j AND canal = 'sin_canal' AND destinatario = :d"),
+                           {"t": tenant_id, "j": job_id, "d": uid}).first()
+        if ya is not None:
+            omitidos += 1
+            continue
+        with abrir_sesion(tenant_id) as s:
+            s.execute(text(
+                "INSERT INTO modulo1.notificacion_envio (tenant_id, job_id, canal, destinatario, usuario_id, estado, error) "
+                "VALUES (:t, :j, 'sin_canal', :d, :u, 'sin_canal', :err) ON CONFLICT (tenant_id, job_id, canal, destinatario) DO UPDATE SET "
+                "intentos = modulo1.notificacion_envio.intentos + 1"),
+                {"t": tenant_id, "j": job_id, "d": uid, "u": uid, "err": "sin email ni telegram_chat_id vinculado para este destinatario"})
+        sin_canal += 1
+
     for canal_nombre, destino, usuario_id in plan:
         with abrir_sesion(tenant_id) as s:
             ya = s.execute(text("SELECT estado FROM modulo1.notificacion_envio WHERE tenant_id = :t AND job_id = :j AND canal = :c AND destinatario = :d"),
                            {"t": tenant_id, "j": job_id, "c": canal_nombre, "d": destino}).scalar()
-        if ya == "enviado":
+        if ya in ("enviado", "registrado_log"):
             omitidos += 1
             continue
         clave = hashlib.sha256(f"{tenant_id}:{job_id}:{canal_nombre}:{destino}".encode()).hexdigest()[:32]
@@ -140,8 +192,13 @@ def entregar(job_id: int, tenant_id: str, payload: dict[str, Any], canales: dict
             if canal is None:
                 raise CanalNoDisponible(f"canal {canal_nombre} no configurado")
             ref = canal.enviar(destino, asunto, texto, clave)
-            estado, error = "enviado", None
-            enviados += 1
+            error = None
+            if canal_nombre == "log":
+                estado = "registrado_log"
+                registrados_log += 1
+            else:
+                estado = "enviado"
+                enviados += 1
         except Exception as e:  # noqa: BLE001
             ref, estado, error = None, "fallido", sanear_error(e)
             fallidos += 1
@@ -154,4 +211,39 @@ def entregar(job_id: int, tenant_id: str, payload: dict[str, Any], canales: dict
                 {"t": tenant_id, "j": job_id, "c": canal_nombre, "d": destino, "u": usuario_id, "e": estado, "ref": ref, "err": error})
     if fallidos:
         raise RuntimeError(f"{fallidos} envío(s) fallido(s): " + "; ".join(errores)[:300])
-    return {"destinatarios": len(destinatarios), "enviados": enviados, "fallidos": fallidos, "omitidos": omitidos}
+    return {"destinatarios": len(destinatarios), "enviados": enviados, "fallidos": fallidos, "omitidos": omitidos,
+            "sin_canal": sin_canal, "registrados_log": registrados_log}
+
+
+# --------------------------------------------------------------------------- consulta operativa
+
+
+def envios(session: Session, identidad: Identidad, p: Pagina, estado: str | None = None, job_id: int | None = None) -> dict[str, Any]:
+    """Traza de entregas para seguimiento operativo (Fase 2 punto 1): por defecto sólo lo
+    que necesita acción humana (`sin_canal`, `fallido`), para no inundar la vista con
+    envíos exitosos. `estado='todos'` trae todo, incluido `registrado_log` — que sigue sin
+    contarse como entrega real en ningún resumen, sólo se ve acá si se pide explícito."""
+    identidad.exigir_rol(Rol.CONFIGURACION, Rol.RESPONSABLE_LEGAJOS)
+    tenant_id = identidad.tenant_id
+    params: dict[str, Any] = {"t": tenant_id}
+    cond = ""
+    if job_id is not None:
+        cond += " AND n.job_id = :j"
+        params["j"] = job_id
+    if estado == "todos":
+        pass
+    elif not estado or estado == "accion_requerida":
+        cond += " AND n.estado IN ('sin_canal', 'fallido')"
+    else:
+        cond += " AND n.estado = :e"
+        params["e"] = estado
+    sql_base = (
+        "SELECT n.envio_id, n.job_id, n.canal, n.destinatario, n.usuario_id, u.email, u.nombre, "
+        "n.estado, n.proveedor_ref, n.error, n.intentos, n.creado_en "
+        "FROM modulo1.notificacion_envio n LEFT JOIN modulo1.usuario u ON u.tenant_id = n.tenant_id AND u.usuario_id = n.usuario_id "
+        "WHERE n.tenant_id = :t"
+    )
+    total = session.execute(text(f"SELECT count(*) FROM ({sql_base}{cond}) x"), params).scalar()
+    filas = session.execute(text(f"{sql_base}{cond} ORDER BY n.creado_en DESC OFFSET :off LIMIT :lim"),
+                            {**params, "off": p.offset, "lim": p.limit}).mappings().all()
+    return envolver([{k: (str(v) if hasattr(v, "hex") else v) for k, v in dict(f).items()} for f in filas], int(total or 0), p)

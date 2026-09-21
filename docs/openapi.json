@@ -1556,7 +1556,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0018_capacidades_v1"
+    "x-migracion-head": "0019_notificacion_sin_canal"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8226,6 +8226,160 @@
           }
         ],
         "summary": "Documentos"
+      }
+    },
+    "/v1/consultas/envios_notificacion": {
+      "get": {
+        "description": "Trazabilidad de entregas para seguimiento operativo. Por defecto (`estado` sin\npasar, o `accion_requerida`): sólo `sin_canal` / `fallido` — lo que necesita que\nalguien haga algo. `registrado_log` nunca se cuenta como entrega real; se ve acá sólo\ncon `estado=registrado_log` o `estado=todos`.",
+        "operationId": "envios_notificacion_v1_consultas_envios_notificacion_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "accion_requerida",
+                    "enviado",
+                    "fallido",
+                    "sin_canal",
+                    "registrado_log",
+                    "todos"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "job_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Envios Notificacion V1 Consultas Envios Notificacion Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Envios Notificacion",
+        "tags": [
+          "capacidades"
+        ]
       }
     },
     "/v1/consultas/excepciones": {

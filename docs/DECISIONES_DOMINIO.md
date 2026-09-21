@@ -462,3 +462,17 @@ cableado en el router igual que `otorgar_excepcion`). `responsable_legajos` sigu
 comando: la matriz 2.2 de `modulo1-no-funcionales.md` marca `OtorgarExcepcion`/
 `RevocarExcepcion` exclusivos de Supervisor (`—` para el resto de los roles), así que no
 se amplía aunque tenga alcance total en otras capacidades.
+
+## 21. Notificaciones sin pérdida silenciosa (reauditoría Fase 2 punto 1, migración 0019)
+
+Dos correcciones sobre H-01 (migración 0018): (1) un destinatario sin canal resoluble
+(sin email —imposible hoy, `usuario.email` es `NOT NULL`— o, en la práctica, sin
+`telegram_chat_id` vinculado cuando sólo Telegram está habilitado) quedaba fuera del plan
+de envío sin ninguna fila de traza; ahora genera una fila `sin_canal` (nunca se pierde, no
+se reintenta automáticamente — no hay nada que un reintento del job pueda resolver). (2)
+lo que se registraba en el log del proceso por falta de canal habilitado en el tenant se
+contaba como `enviado`, indistinguible de una entrega real en cualquier conteo; ahora es
+`registrado_log`, un estado propio. La afirmación "at-least-once sin duplicados" se
+corrigió a "at-least-once", con la ventana real documentada en el docstring del módulo
+(envío al proveedor y commit de la traza son transacciones separadas). Consulta operativa
+nueva: `GET /v1/consultas/envios_notificacion`, con `sin_canal`/`fallido` por defecto.

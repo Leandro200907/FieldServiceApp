@@ -24,7 +24,7 @@ def test_openapi_json_head_operaciones_seguridad_y_errores(cliente_api):
     assert doc["info"]["x-migracion-head"] == MIGRACION_HEAD and doc["info"]["version"] == VERSION
     real = cliente_api.get("/openapi.json").json()["paths"]
     assert {(p, m) for p, ops in doc["paths"].items() for m in ops} == {(p, m) for p, ops in real.items() for m in ops}
-    assert sum(len(ops) for ops in doc["paths"].values()) == 82
+    assert sum(len(ops) for ops in doc["paths"].values()) == 83
     assert doc["components"]["securitySchemes"]["bearerAuth"] == {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
     assert "ErrorEnvelope" in doc["components"]["schemas"] and "HTTPValidationError" not in doc["components"]["schemas"]
     for path, ops in doc["paths"].items():

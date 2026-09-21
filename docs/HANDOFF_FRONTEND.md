@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0018_capacidades_v1`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0019_notificacion_sin_canal`.
 Prefijo de todas las rutas: `/v1`.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
@@ -206,6 +206,7 @@ override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_a
 | `POST /v1/comandos/configurar_canales` | configuracion | `{mail_habilitado, telegram_habilitado, remitente_nombre?}` |
 | `POST /v1/comandos/vincular_telegram` | configuracion | `{usuario_id, chat_id\|null}` (el usuario obtiene su chat_id escribiéndole al bot) |
 | `GET /v1/consultas/configuracion_canales` | configuracion, responsable_legajos | → `{mail_habilitado, telegram_habilitado, usuarios_con_telegram, whatsapp: "disenado_no_activo"}` |
+| `GET /v1/consultas/envios_notificacion` | configuracion, responsable_legajos | `estado` (default/`accion_requerida` = sólo `sin_canal`+`fallido`; o `enviado`/`fallido`/`sin_canal`/`registrado_log`/`todos`), `job_id?`, paginado → traza de entregas por destinatario, con `email`/`nombre` resueltos |
 | `POST /v1/comandos/generar_paquete_entrega` | responsable_legajos | `{sujeto_id, dias_validez (1–90)}` → `{paquete_id, url, url_qr, expira_en}` |
 | `POST /v1/comandos/revocar_paquete_entrega` | responsable_legajos | `{paquete_id}` |
 | `GET /v1/consultas/paquetes_entrega` | configuracion, responsable_legajos | `sujeto_id?` → `{items[]}` con accesos y vigencia |
@@ -224,6 +225,20 @@ Notas: los documentos importados desde Drive entran como propuestas `declarado` 
 `drive`) con el archivo ya adjunto; aparecen en `propuestas_pendientes` y el responsable
 confirma o rechaza. Convención de nombre de archivo: `<sujeto_id>__<requisito>__<AAAA-MM-DD vence>[__<AAAA-MM-DD desde>].pdf|jpg|png`
 (acentos y mayúsculas indistintos). El score cuenta sólo evidencia **verificada**.
+
+**Notificaciones — semántica honesta de entrega (reauditoría, Fase 2 punto 1).** La
+entrega es **at-least-once, no "sin duplicados" sin matices**: la traza en
+`notificacion_envio` evita reenvíos en reintentos normales, pero el envío al proveedor y
+el commit de esa traza son transacciones separadas — una caída justo entre ambas puede
+duplicar el mensaje externo. `CanalMail` mitiga esto parcialmente con un `Message-ID`
+determinístico; `CanalTelegram` no tiene ningún mecanismo de idempotencia propio en la Bot
+API, así que ahí la ventana no está mitigada. Cuatro estados en `notificacion_envio`:
+`enviado` (salió de verdad), `fallido` (falló, el job reintenta), `sin_canal` (el
+destinatario no tiene email ni Telegram vinculado — se traza, no se pierde, no tiene
+sentido reintentarlo automáticamente hasta que alguien cargue el dato de contacto) y
+`registrado_log` (ningún canal habilitado para el tenant; constancia en el log del
+proceso, **nunca** una entrega real — no la cuenten como tal en ningún dashboard). Usar
+`GET /v1/consultas/envios_notificacion` para el seguimiento operativo.
 
 ### 4.5 Consultas (`GET /v1/consultas/…`)
 Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}`.
