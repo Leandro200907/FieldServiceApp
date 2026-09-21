@@ -1,0 +1,70 @@
+{
+  "prepared_on": "2026-09-20",
+  "status": "design-and-contract-fixtures-authorized-integration-blocked",
+  "backend_closed": false,
+  "declared_commit": "bbf42b5c46e385122b39cb79dc72bdc55df60554",
+  "openapi_info": {
+    "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
+    "title": "Módulo 1 — Documentación habilitante",
+    "version": "1.0.0-rc1",
+    "x-migracion-head": "0015_job_queue_dead_letter"
+  },
+  "operations": 47,
+  "paths": 46,
+  "success_schemas": {
+    "structured": 3,
+    "open_objects": 42,
+    "empty": 2
+  },
+  "sources": [
+    {
+      "file": "docs/openapi.json",
+      "sha256": "7608202069de835c8fbb40acbc0b2e41e1b4535edc15e0be1b1c15087b979e72"
+    },
+    {
+      "file": "docs/HANDOFF_FRONTEND.md",
+      "sha256": "590fc784dc1db725059def548b140ea47e9659de63ca3c835aba5c0efa90ca6b"
+    },
+    {
+      "file": "docs/DECISIONES_DOMINIO.md",
+      "sha256": "7f5d19b7811ff5a769b9fa813d86b97e1da770c646d3ece9dae6a82c0cb89198"
+    },
+    {
+      "file": "README.md",
+      "sha256": "4a8dcbd80a439c99a40300844d5e7690512ca5a6260947fa052b36a5125c537a"
+    },
+    {
+      "file": "especificaciones/modulo1-arquitectura-tecnica.md",
+      "sha256": "317b27e7a001e08d9e012495fff629279297f0b612cb582361d1bf1fa4d7346f"
+    },
+    {
+      "file": "especificaciones/modulo1-documentacion-habilitante.md",
+      "sha256": "ddc3eaf794616aaeab29d61169d8f2dba81ee70ea23b16a6f02e82e169f5979d"
+    },
+    {
+      "file": "especificaciones/modulo1-especificacion.md",
+      "sha256": "14df002fd53249800e697ca566442f14caddeff84e7935fb270fbdad570e612b"
+    },
+    {
+      "file": "especificaciones/modulo1-modelo-dominio.md",
+      "sha256": "e122993b2a0f5d01114c872f6988f06251faf054cf479157fc9143bd9bab4325"
+    },
+    {
+      "file": "especificaciones/modulo1-no-funcionales.md",
+      "sha256": "e487d81c5e89fdc59e04a9621690dec3a49a65883b595b0800ad4eb32c216caa"
+    },
+    {
+      "file": "especificaciones/modulo1-wireframes-api.md",
+      "sha256": "33641020e3dc494440584875fde6fe90e8128c5e5d44fb3d33c75ace3020ef60"
+    },
+    {
+      "file": "INFORME_AUDITORIA_MODULO1_BBF42B5(1).md",
+      "sha256": "6c90e1b72d1d66d60431ee8c70b01dc55e3f0bca1486d87a7356754f60b76718"
+    },
+    {
+      "file": "modulo1-backend-auditoria-bbf42b5(1).zip",
+      "sha256": "abc1204ce2f11f7441c3d4c56e7c42a1d1718a162f7c96da1a1965cf7d3e271e"
+    }
+  ],
+  "updated_on": "2026-09-21"
+}
