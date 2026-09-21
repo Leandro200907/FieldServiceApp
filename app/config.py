@@ -51,8 +51,23 @@ class Settings(BaseSettings):
     # por tenant en la tabla de configuración, esto es solo el fallback de arranque.
     tenant_default_timezone: str = "America/Argentina/Buenos_Aires"
 
+    # Nivel del entorno (reauditoría Fase 2 punto 3): sólo gatilla validaciones de arranque
+    # más estrictas (hoy: PAQUETE_SECRET obligatorio) — nunca cambia comportamiento de
+    # dominio. Default "desarrollo" para no romper ningún entorno existente que no lo fije.
+    entorno: str = "desarrollo"
+
+    # Proxies confiables (reauditoría Fase 2 punto 3): IPs/CIDRs separados por coma del
+    # balanceador/reverse-proxy real frente a la API. Vacío por defecto — sin esto
+    # configurado, `X-Forwarded-For` NUNCA se usa (ver app/comun/red.py); no hay proxy que
+    # confiar en un despliegue de instancia única expuesta directo.
+    proxies_confiables: str = ""
+
 
 settings = Settings()
+
+
+def es_produccion() -> bool:
+    return settings.entorno.strip().lower() == "produccion"
 
 
 def describir_entorno() -> dict[str, str]:

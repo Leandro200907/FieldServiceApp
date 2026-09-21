@@ -476,3 +476,21 @@ contaba como `enviado`, indistinguible de una entrega real en cualquier conteo; 
 corrigió a "at-least-once", con la ventana real documentada en el docstring del módulo
 (envío al proveedor y commit de la traza son transacciones separadas). Consulta operativa
 nueva: `GET /v1/consultas/envios_notificacion`, con `sin_canal`/`fallido` por defecto.
+
+## 22. Endurecimiento del paquete público (reauditoría Fase 2 punto 3, sin migración)
+
+Tres correcciones sobre H-01: (1) `PAQUETE_SECRET` pasa a obligatorio con
+`ENTORNO=produccion` (`PaqueteSecretoFaltante` si falta) — el fallback derivado de
+`JWT_SECRET` queda sólo para desarrollo, porque un `JWT_SECRET` filtrado no debe además
+dar el secreto de paquetes públicos. (2) El "origen" del rate limiter nunca lee
+`X-Forwarded-For` a ciegas: nuevo `app/comun/red.py::origen_real()` sólo lo considera
+cuando la conexión TCP inmediata (`request.client.host`) está en `PROXIES_CONFIABLES`
+(IPs/CIDRs de plataforma); sin esa lista configurada (default), el header se ignora
+siempre y se usa la IP real de la conexión — sin proxy configurado, cualquiera podría
+falsificar su origen con ese header y saltarse el límite por IP. (3) `RateLimiter` en
+memoria gana un barrido periódico (`_barrer`, disparado cada N llamadas o al superar un
+tope de claves) que purga claves sin actividad en la ventana de 60s — antes crecía sin
+cota con cualquier volumen de claves de un solo uso (tokens probados al voleo). Sigue
+siendo de una sola instancia; con más de una, el límite real necesita el proxy o un
+almacén compartido — eso queda fuera de este punto (ver storage/rate-limit multi-instancia
+en el triage de la reauditoría).

@@ -10,6 +10,8 @@ from sqlalchemy import text
 from app.api.errores import ErrorDeDominio, NoEncontrado
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
+from app.comun.red import origen_real
+from app.config import settings
 from app.db import platform_session, tenant_session
 from app.modules.legajos.infra import clave_idempotencia, ejecutar_comando
 from app.modules.paquete import servicio
@@ -52,7 +54,8 @@ def paquetes_entrega(sujeto_id: str | None = Query(None), identidad: Identidad =
 
 
 def _resolver(token: str, request: Request) -> tuple[str, str]:
-    origen = request.client.host if request.client else "?"
+    origen = origen_real(request.client.host if request.client else None,
+                         request.headers.get("x-forwarded-for"), settings.proxies_confiables)
     if not servicio.limiter.permitir(f"origen:{origen}") or not servicio.limiter.permitir(f"token:{token[:16]}"):
         raise ErrorDeDominio("Demasiadas solicitudes; reintentar en un minuto", codigo="rate_limit")
     token_hash = servicio.verificar_token(token)
@@ -69,8 +72,10 @@ def _resolver(token: str, request: Request) -> tuple[str, str]:
 def paquete_publico(token: str, request: Request) -> dict:
     """Sin JWT: quien tiene el link firmado ve el estado de cumplimiento del sujeto (sin archivos)."""
     tenant_id, token_hash = _resolver(token, request)
+    origen = origen_real(request.client.host if request.client else None,
+                         request.headers.get("x-forwarded-for"), settings.proxies_confiables)
     with tenant_session(tenant_id) as s:
-        return servicio.vista_publica(s, tenant_id, token_hash, request.client.host if request.client else None)
+        return servicio.vista_publica(s, tenant_id, token_hash, origen)
 
 
 @router.get("/publico/paquete/{token}/qr.png")
