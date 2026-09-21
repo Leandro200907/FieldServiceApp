@@ -723,6 +723,22 @@ def _exigir_supervisor(s: Session, tenant_id: str, usuario_id: str) -> None:
         raise ErrorDeDominio("El usuario no es un supervisor activo", {"supervisor_usuario_id": usuario_id, "roles": list(fila["roles"] or [])})
 
 
+def _exigir_no_autosupervision(s: Session, tenant_id: str, sujeto_id: str, supervisor_usuario_id: str) -> None:
+    """Auto-supervisión bloqueada: el usuario que sería supervisor no puede ser el mismo
+    que tiene ese `sujeto_id` vinculado (un supervisor con legajo propio no puede ser su
+    propio supervisor)."""
+    propio = s.execute(
+        text("SELECT 1 FROM modulo1.usuario WHERE tenant_id = :t AND usuario_id = :u AND sujeto_id = :sj"),
+        {"t": tenant_id, "u": supervisor_usuario_id, "sj": sujeto_id},
+    ).first()
+    if propio is not None:
+        raise Prohibido(
+            "Un supervisor no puede ser su propio supervisor",
+            {"sujeto_id": sujeto_id, "supervisor_usuario_id": supervisor_usuario_id},
+            codigo="conflicto_de_interes",
+        )
+
+
 def _asignacion_vigente(s: Session, tenant_id: str, sujeto_id: str) -> dict[str, Any] | None:
     fila = s.execute(
         text(
@@ -751,6 +767,7 @@ def asignar_supervisor(s: Session, identidad: Identidad, body: e.AsignarSupervis
     _legajo_activo(s, t, body.sujeto_id, bloquear=True)  # serializa dos primeras asignaciones
     sup = str(body.supervisor_usuario_id)
     _exigir_supervisor(s, t, sup)
+    _exigir_no_autosupervision(s, t, body.sujeto_id, sup)
     if _asignacion_vigente(s, t, body.sujeto_id) is not None:
         raise Conflicto("El sujeto ya tiene un supervisor vigente: usar reasignar_supervisor", {"sujeto_id": body.sujeto_id})
     desde = body.desde or hoy_del_tenant(s, t)
@@ -768,6 +785,7 @@ def reasignar_supervisor(s: Session, identidad: Identidad, body: e.ReasignarSupe
     _legajo_activo(s, t, body.sujeto_id, bloquear=True)
     sup = str(body.supervisor_usuario_id)
     _exigir_supervisor(s, t, sup)
+    _exigir_no_autosupervision(s, t, body.sujeto_id, sup)
     actual = _asignacion_vigente(s, t, body.sujeto_id)
     if actual is None:
         raise Conflicto("El sujeto no tiene supervisor vigente: usar asignar_supervisor", {"sujeto_id": body.sujeto_id})

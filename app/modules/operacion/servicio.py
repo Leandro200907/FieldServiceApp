@@ -128,6 +128,25 @@ def _validar_custodio(session: Session, identidad: Identidad, tipo_recurso: str,
         raise Prohibido("El custodio está fuera del universo del supervisor", {"custodio_id": custodio_id})
 
 
+def _rechazar_autocustodia(identidad: Identidad, *custodio_ids: str | None) -> None:
+    """Un Supervisor puede ser custodio, pero no puede asignarse ni modificarse su propia
+    custodia: lo tiene que hacer otro actor autorizado (otro supervisor con alcance sobre
+    él, responsable_legajos o configuración), y queda auditado como cualquier otro cambio
+    de custodia (identidad.usuario_id en `CustodiaCambiada`)."""
+    if identidad.sujeto_id is None:
+        return
+    if identidad.sujeto_id in custodio_ids:
+        raise Prohibido(
+            "No podés asignarte ni modificarte tu propia custodia; pedíselo a otro supervisor, "
+            "a responsable_legajos o a configuración",
+            {"custodio_id": identidad.sujeto_id},
+            codigo="conflicto_de_interes",
+        )
+
+
+ROLES_CUSTODIA = (Rol.SUPERVISOR, Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
+
+
 def cambiar_custodia(
     session: Session,
     identidad: Identidad,
@@ -137,10 +156,11 @@ def cambiar_custodia(
     custodio_id: str | None,
     desde: date,
 ) -> dict[str, Any]:
-    identidad.exigir_rol(Rol.SUPERVISOR)
+    identidad.exigir_rol(*ROLES_CUSTODIA)
     tenant_id = identidad.tenant_id
     _validar_recurso_custodiable(session, tenant_id, recurso_id, tipo_recurso)
     _validar_custodio(session, identidad, tipo_recurso, custodio_id)
+    _rechazar_autocustodia(identidad, custodio_id)
     custodia_id = _custodia_de(session, tenant_id, recurso_id, tipo_recurso)
 
     vigente = session.execute(
@@ -150,6 +170,8 @@ def cambiar_custodia(
         ),
         {"t": tenant_id, "c": custodia_id},
     ).mappings().first()
+    if vigente is not None:
+        _rechazar_autocustodia(identidad, vigente["custodio_id"])
 
     periodo_cerrado_id: str | None = None
     if vigente is not None:
@@ -221,7 +243,7 @@ def corregir_custodia(
     """Reemplaza un período por otro con los datos corregidos. El viejo queda
     `corregido` (con `corregido_por` → nuevo), nunca se borra. Si el corregido era el
     vigente, el nuevo queda vigente (y por eso no admite `hasta`)."""
-    identidad.exigir_rol(Rol.SUPERVISOR)
+    identidad.exigir_rol(*ROLES_CUSTODIA)
     tenant_id = identidad.tenant_id
     viejo = session.execute(
         text(
@@ -234,6 +256,7 @@ def corregir_custodia(
         raise NoEncontrado("Período de custodia inexistente", {"periodo_id": periodo_id})
     if viejo["estado"] == "corregido":
         raise Conflicto("El período ya fue corregido; corregí el que lo reemplazó", {"periodo_id": periodo_id})
+    _rechazar_autocustodia(identidad, viejo["custodio_id"])
 
     nuevo_estado = viejo["estado"]  # vigente sigue vigente, cerrado sigue cerrado
     nuevo_custodio = custodio_id if custodio_id is not None else viejo["custodio_id"]
@@ -242,6 +265,7 @@ def corregir_custodia(
         {"t": tenant_id, "c": str(viejo["custodia_id"])},
     ).scalar()
     _validar_custodio(session, identidad, tipo_recurso, nuevo_custodio)
+    _rechazar_autocustodia(identidad, nuevo_custodio)
     nuevo_desde = desde if desde is not None else viejo["desde"]
     if nuevo_estado == "vigente":
         if hasta is not None:
@@ -324,12 +348,25 @@ def _rechazar_excepcion_sobre_empresa(session: Session, tenant_id: str, sujeto_i
         )
 
 
+def _rechazar_conflicto_de_interes(identidad: Identidad, sujeto_id: str) -> None:
+    """Un Supervisor con legajo propio nunca decide sobre sí mismo: ni otorga ni revoca
+    una excepción sobre su propio sujeto_id, sea cual sea su alcance (defensa en
+    profundidad, independiente de que el universo lo cubra o no)."""
+    if identidad.sujeto_id is not None and sujeto_id == identidad.sujeto_id:
+        raise Prohibido(
+            "Un supervisor no puede otorgar ni revocar una excepción sobre sí mismo",
+            {"sujeto_id": sujeto_id},
+            codigo="conflicto_de_interes",
+        )
+
+
 def prevalidar_otorgar_excepcion(session: Session, identidad: Identidad, *, referencia_evaluacion: str, sujeto_id: str, **_) -> None:
     """Alcance ACTUAL del supervisor sobre la decisión citada y el sujeto (2.3 §3). Se
     ejecuta siempre —también antes de un replay idempotente— para que un supervisor que
     perdió el universo no recupere una respuesta almacenada."""
     identidad.exigir_rol(Rol.SUPERVISOR)
     _rechazar_excepcion_sobre_empresa(session, identidad.tenant_id, sujeto_id)
+    _rechazar_conflicto_de_interes(identidad, sujeto_id)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     if not decision_visible(session, identidad, referencia_evaluacion, hoy):
         raise NoEncontrado("Evaluación inexistente", {"referencia_evaluacion": referencia_evaluacion})
@@ -449,6 +486,7 @@ def revocar_excepcion(
     ).mappings().first()
     if fila is None:
         raise NoEncontrado("Excepción inexistente", {"excepcion_id": excepcion_id})
+    _rechazar_conflicto_de_interes(identidad, fila["sujeto_id"])
     if fila["estado"] != "otorgada":
         raise Conflicto("Solo se revoca una excepción otorgada", {"excepcion_id": excepcion_id, "estado": fila["estado"]})
     session.execute(

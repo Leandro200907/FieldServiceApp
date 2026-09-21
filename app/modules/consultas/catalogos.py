@@ -49,13 +49,15 @@ def _q(q: str | None, params: dict[str, Any], *columnas: str) -> str:
 
 
 def mi_legajo(session: Session, identidad: Identidad) -> dict[str, Any]:
-    """Vista compuesta del técnico (2.4 / anexo de la vista compuesta): su persona + los
-    vehículos y equipos bajo su custodia vigente, cada uno con su legajo. Sólo rol técnico
-    con `sujeto_id`; nunca datos de otra persona."""
+    """Vista compuesta de quien la pide (2.4 / anexo de la vista compuesta / H-05 ampliado a
+    Supervisor): su persona + los vehículos y equipos bajo su propia custodia vigente, cada
+    uno con su legajo. Cualquier usuario activo con `sujeto_id` propio la tiene —técnico o
+    supervisor, el rol no importa—; siempre sobre sí mismo, nunca sobre datos de otra
+    persona (el filtro es `identidad.sujeto_id`, no un id que el llamador pueda elegir)."""
     from app.modules.consultas.servicio import legajo
 
-    if not identidad.tiene_rol(Rol.TECNICO) or not identidad.sujeto_id:
-        raise Prohibido("Solo un usuario técnico con legajo propio tiene 'mi legajo'")
+    if not identidad.sujeto_id:
+        raise Prohibido("Solo un usuario con legajo propio tiene 'mi legajo'")
     recursos = recursos_bajo_custodia(session, identidad.sujeto_id)
     persona = legajo(session, identidad, identidad.sujeto_id)
     custodiados = []

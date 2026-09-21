@@ -425,3 +425,26 @@ cumplimiento, nunca archivos (1.11). Notificaciones: canales como adaptadores (m
 Telegram bot; WhatsApp diseñado, no activo); habilitación por tenant; entrega
 at-least-once sin duplicados por traza `notificacion_envio` (job, canal, destinatario)
 confirmada en transacción propia (M-07).
+
+## 19. El Supervisor también es trabajador de campo (requisito de dominio nuevo, sin migración)
+
+El rol Supervisor no exime del cumplimiento documental: un Supervisor puede tener un
+legajo de persona vinculado a su usuario (`usuario.sujeto_id`, ya previsto desde la 0002
+como "opcional para supervisor"), aparecer como sujeto propuesto en una evaluación, ser
+evaluado por documentos/competencias/inducciones como cualquier persona, consultar su
+propio legajo compuesto (`mi_legajo`, ya no exclusivo de técnico) y recibir alertas de sus
+propios vencimientos por el mismo canal que un técnico (`alcance_de_sujetos` agrega su
+propio `sujeto_id` y sus recursos bajo custodia al universo de supervisión que ya tenía;
+`_destinatarios` resuelve el canal "titular" por vínculo de `sujeto_id`, sin filtrar por
+rol). Un usuario con roles Técnico + Supervisor acumula: legajo propio + universo de
+supervisión realmente asignado — nunca un universo ampliado ni transitivo.
+
+Separación de funciones, código `conflicto_de_interes` (403), independiente del alcance:
+un Supervisor no puede otorgar ni revocar una excepción sobre sí mismo
+(`otorgar_excepcion`/`revocar_excepcion`), no puede ser su propio supervisor
+(`asignar_supervisor`/`reasignar_supervisor`), y no puede asignarse ni modificarse su
+propia custodia (`cambiar_custodia`/`corregir_custodia`, ampliados a
+responsable_legajos/configuración para que otro actor autorizado pueda operarla; otro
+Supervisor con alcance real sobre él también puede). Los tres bloqueos son directos
+(comparan contra `identidad.sujeto_id`), no dependen de que el universo lo cubra: quedan
+blindados aunque alguna otra ruta futura deje a un Supervisor dentro de su propio alcance.

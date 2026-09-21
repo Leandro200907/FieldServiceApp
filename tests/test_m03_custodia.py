@@ -136,11 +136,16 @@ def test_supervisor_fuera_de_alcance_403(esc):
                             recurso_id=VEH, tipo_recurso="vehiculo", custodio_id=PER, desde=date(2026, 9, 1))
 
 
-def test_solo_supervisor_por_matriz_de_roles(esc):
-    """Matriz 2.2 de no-funcionales: CambiarCustodia es del Supervisor. El responsable de
-    legajos NO opera la custodia aunque tenga todo el tenant en lectura."""
+def test_custodia_amplia_a_responsable_y_configuracion_pero_no_a_tecnico(esc):
+    """Matriz 2.2 ampliada (requisito de dominio: Supervisor también trabajador de campo,
+    conflicto_de_interes): CambiarCustodia sigue siendo del Supervisor, y se amplía a
+    responsable_legajos/configuración para que alguien pueda operar la custodia de un
+    Supervisor sobre sí mismo (que el propio Supervisor no puede hacerse). Técnico sigue
+    sin acceso: no es uno de los actores autorizados."""
+    assert _cambiar(esc, rol="responsable_legajos")()["eventos"] == ["CustodiaCambiada"]
+    assert _cambiar(esc, recurso=EQ, tipo="equipo", custodio=PER2, rol="configuracion")()["eventos"] == ["CustodiaCambiada"]
     with pytest.raises(Prohibido):
-        _cambiar(esc, rol="responsable_legajos")()
+        _cambiar(esc, recurso=EQ, tipo="equipo", custodio=PER2, rol="tecnico")()
 
 
 def test_corregir_valida_el_custodio_nuevo(esc):

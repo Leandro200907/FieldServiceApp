@@ -6,16 +6,24 @@ Dos preguntas distintas, que se responden acá y en ningún otro lado:
 1. ¿Qué roles ven TODO el tenant para esta capacidad? Depende de la capacidad (la matriz
    2.2 no es uniforme: `configuracion` ve el log de auditoría pero no descarga evidencia),
    por eso se pasa explícito en `roles_con_todo`.
-2. ¿Cuál es el universo de un supervisor? Siempre el mismo, sea cual sea la capacidad:
-   los sujetos con `asignacion_supervisor` vigente hacia él, más los vehículos/equipos
-   bajo custodia vigente de esos sujetos (1.5 / 1.5 bis de documentacion-habilitante.md:
-   la custodia es decisión del supervisor, y lo que custodia su gente es suyo de ver).
+2. ¿Cuál es el universo de un supervisor? Siempre lo mismo, sea cual sea la capacidad:
+   su propio legajo si tiene uno vinculado (`identidad.sujeto_id`) más los vehículos/
+   equipos bajo su propia custodia vigente — el Supervisor también puede ser trabajador
+   de campo y el rol no lo exime del cumplimiento documental —, más los sujetos con
+   `asignacion_supervisor` vigente hacia él, más los vehículos/equipos bajo custodia
+   vigente de esos sujetos (1.5 / 1.5 bis de documentacion-habilitante.md: la custodia
+   es decisión del supervisor, y lo que custodia su gente es suyo de ver). El universo
+   de un supervisor NUNCA es transitivo: si uno de sus supervisados es a su vez
+   supervisor de terceros, esos terceros no entran — solo la asignación directa.
 3. Un técnico se ve a sí mismo (`identidad.sujeto_id`) y a los vehículos/equipos bajo su
    custodia vigente (H-05; 1.5 / 1.5 bis: "mi vehículo/equipo asignado" es parte de su
    legajo compuesto). Nunca a otras personas.
+4. Un usuario con roles Técnico + Supervisor acumula: legajo propio y sus recursos bajo
+   custodia, más el universo de supervisión realmente asignado — nunca un universo
+   ampliado ni transitivo por tener los dos roles.
 
-Un supervisor sin asignaciones tiene universo vacío — nunca "todo": el filtro vacío no
-abre el alcance.
+Un supervisor sin asignaciones y sin legajo propio tiene universo vacío — nunca "todo":
+el filtro vacío no abre el alcance.
 """
 from __future__ import annotations
 
@@ -57,10 +65,16 @@ def alcance_de_sujetos(
     """None = sin filtro (ve todo el tenant); lista = solo esos sujeto_id."""
     if identidad.tiene_rol(*roles_con_todo):
         return None
+    propio: list[str] = []
+    if identidad.sujeto_id:
+        propio = [identidad.sujeto_id] + recursos_bajo_custodia(session, identidad.sujeto_id)
     if identidad.tiene_rol(Rol.SUPERVISOR):
-        return universo_del_supervisor(session, identidad, hoy)
+        # Acumula: legajo propio (si lo tiene) + universo de supervisión realmente
+        # asignado, sin duplicar y sin transitividad (universo_del_supervisor ya no
+        # sigue cadenas de supervisor a supervisor).
+        return list(dict.fromkeys(propio + universo_del_supervisor(session, identidad, hoy)))
     if identidad.tiene_rol(Rol.TECNICO) and identidad.sujeto_id:
-        return [identidad.sujeto_id] + recursos_bajo_custodia(session, identidad.sujeto_id)
+        return propio
     return []
 
 

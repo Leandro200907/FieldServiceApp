@@ -130,15 +130,20 @@ def _persona_responsable(session: Session, tenant_id: str, sujeto_id: str, tipo_
 
 
 def _destinatarios(session: Session, tenant_id: str, alerta: dict[str, Any], roles: list[str], hoy: date) -> list[tuple[str, str | None]]:
-    """[(rol, usuario_id|None)]: técnico y supervisor resueltos a un usuario concreto; los
-    roles administrativos van como broadcast (usuario NULL) para no fijar una persona."""
+    """[(rol, usuario_id|None)]: titular y supervisor resueltos a un usuario concreto; los
+    roles administrativos van como broadcast (usuario NULL) para no fijar una persona.
+
+    El canal `"tecnico"` es el del TITULAR del vencimiento (la persona misma, o el
+    custodio si es un recurso) — cualquier usuario activo vinculado a ese sujeto por
+    `sujeto_id`, sea cual sea su rol (H-05/H-06: un Supervisor con legajo propio también
+    recibe la alerta de su propio vencimiento). No se filtra por rol `tecnico`."""
     salida: list[tuple[str, str | None]] = []
     persona = _persona_responsable(session, tenant_id, alerta["sujeto_id"], alerta["tipo_sujeto"])
     for rol in roles:
         if rol == "tecnico":
             if persona:
-                u = session.execute(text("SELECT usuario_id FROM modulo1.usuario WHERE tenant_id = :t AND sujeto_id = :s AND activo AND 'tecnico' = ANY(roles)"),
-                                    {"t": tenant_id, "s": persona}).scalar()
+                u = session.execute(text("SELECT usuario_id FROM modulo1.usuario WHERE tenant_id = :t AND sujeto_id = :s AND activo "
+                                         "ORDER BY usuario_id LIMIT 1"), {"t": tenant_id, "s": persona}).scalar()
                 if u:
                     salida.append(("tecnico", str(u)))
         elif rol == "supervisor":

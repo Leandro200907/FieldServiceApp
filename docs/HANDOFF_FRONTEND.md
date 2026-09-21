@@ -241,7 +241,7 @@ Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}
 | `GET /v1/consultas/log_auditoria` | configuracion, responsable_legajos | `tipo?`, `desde?`, `hasta?`, paginado |
 | `GET /v1/consultas/matriz_vigente` | todos | `cliente_id`, `locacion_id`, `tipo_servicio_id`, `fecha?` |
 | `GET /v1/consultas/incumplimiento_empresa` | todos | — |
-| `GET /v1/consultas/mi_legajo` | tecnico | — → `{persona: <legajo>, recursos_bajo_custodia: [{tipo_recurso, periodo_id, custodia_desde, ...legajo}], resumen}` (H-05: la vista compuesta del técnico) |
+| `GET /v1/consultas/mi_legajo` | cualquier rol con `sujeto_id` propio | — → `{persona: <legajo>, recursos_bajo_custodia: [{tipo_recurso, periodo_id, custodia_desde, ...legajo}], resumen}` (H-05, ampliado: el Supervisor también puede tener legajo propio — ver §4.7) |
 | `GET /v1/consultas/plantillas_globales` | configuracion, responsable_legajos | — → `{definiciones[], matrices[]}`; cada plantilla con `estado` (`sin_copia` / `al_dia` / `actualizacion_disponible`), sus líneas y `copias_locales[]` con las líneas locales, para decidir a mano qué traer |
 
 **Plantillas globales**: la plataforma mantiene el catálogo de industria (`plataforma.*`);
@@ -280,6 +280,29 @@ vista compuesta persona + recursos.
 Visibilidad del supervisor (regla A-04): una decisión es visible sólo si **todos** sus
 sujetos propuestos están en su universo; si uno no lo está, la decisión "no existe" (404).
 
+### 4.7 El Supervisor también es trabajador de campo (requisito de dominio nuevo)
+El rol Supervisor no exime del cumplimiento documental. Con `usuario.sujeto_id` vinculado
+(ya lo permitía el esquema; ver `scripts/administracion.py crear-usuario --sujeto-id`), un
+Supervisor:
+- se ve a sí mismo y a sus recursos bajo custodia en `documentos`/`excepciones`/`sujetos`/etc.
+  además de su universo de supervisión (ambos se suman, nunca de forma transitiva);
+- puede usar `mi_legajo` igual que un técnico;
+- recibe alertas de sus propios vencimientos por el mismo canal "titular" que un técnico
+  (`alerta_notificacion.destinatario_rol = "tecnico"`, resuelto por vínculo de `sujeto_id`,
+  sin filtrar por rol — el nombre del canal quedó igual por compatibilidad del CHECK de la
+  0017, pero no implica rol técnico).
+
+Separación de funciones — nuevo código de error **`conflicto_de_interes`** (403), directo e
+independiente del alcance:
+- `otorgar_excepcion` / `revocar_excepcion`: un Supervisor no puede operar sobre su propio
+  `sujeto_id`.
+- `asignar_supervisor` / `reasignar_supervisor`: un Supervisor no puede quedar asignado
+  como su propio supervisor.
+- `cambiar_custodia` / `corregir_custodia`: **ampliados** — ahora también responsable_legajos
+  y configuración (antes solo supervisor) — para que otro actor pueda operar la custodia de
+  un Supervisor sobre sí mismo, ya que él mismo no puede asignarse ni modificarse su propia
+  custodia (otro supervisor con alcance real también puede).
+
 ## 5. Storage
 - `GET /v1/storage/documentos/{documento_id}/url` — URL firmada de descarga (efímera; no persistirla).
 - `PUT /v1/storage/{firma}` — subida con URL firmada (sin JWT; `Content-Type` y tamaño verificados; si va un Bearer, su tenant debe coincidir).
@@ -304,7 +327,8 @@ Dominio (422 salvo indicación): `requisito_no_excepcionable`, `excepcion_de_emp
 `recurso_no_custodiable`, `custodio_no_permitido`, `custodio_requerido`, `legajo_dado_de_baja`,
 `excepcion_activa_duplicada` (409), `constancia_activa_duplicada` (409),
 `custodia_vigente_duplicada` (409), `definicion_duplicada` (409), `sin_archivo`,
-`archivo_ausente`, `archivo_vacio`, `archivo_demasiado_grande`.
+`archivo_ausente`, `archivo_vacio`, `archivo_demasiado_grande`, `conflicto_de_interes` (403:
+un Supervisor operando sobre sí mismo — excepción, supervisión o custodia propias).
 
 ## 8. Lo que el frontend NO tiene todavía (deudas conocidas del backend v1)
 - No hay endpoints de gestión de usuarios (alta, desactivación, cambio ni restablecimiento
