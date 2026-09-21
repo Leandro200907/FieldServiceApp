@@ -328,13 +328,17 @@ def test_drive_configuracion_y_escaneo_con_bandeja(cliente_api, drive, monkeypat
                               "WHERE tenant_id = :t AND sujeto_id = 'persona_0042' ORDER BY version"), {"t": t.tenant_id}).all()
     assert [d[0] for d in docs] == ["drive", "drive"] and all(d[1] == "declarado" and d[2] is True and d[3] == "confirmado" and d[4] > 0 for d in docs)
     assert [d[5] for d in docs] == ["sucedida", "vigente"]
-    assert sorted(prov.descargas) == ["a1", "a2"]
+    # a1/a2: importados (nivel 1). b1/m1: PDFs que no llegaron a "alta" por nombre — nivel 2
+    # los baja igual para intentar leer el texto (acá, contenido falso, sin capa de texto:
+    # se queda en bandeja con el mismo motivo + el aviso de "requiere OCR"). b2 (jpg) y
+    # b3 (.docx no aceptado) no activan nivel 2: nunca se bajan.
+    assert sorted(prov.descargas) == ["a1", "a2", "b1", "m1"]
     # bandeja: media y bajas con motivo
     band = cliente_api.get("/v1/consultas/bandeja_drive", headers=t.headers("responsable_legajos")).json()
     assert band["total"] == 4
     por_nombre = {i["nombre"]: i for i in band["items"]}
     assert por_nombre["persona_0042__Altura__2027-06-30.pdf"]["confianza"] == "media" and "ambiguo" in por_nombre["persona_0042__Altura__2027-06-30.pdf"]["motivo"]
-    assert por_nombre["persona_9999__Apto_medico__2027-06-30.pdf"]["motivo"] == "sujeto inexistente"
+    assert por_nombre["persona_9999__Apto_medico__2027-06-30.pdf"]["motivo"].startswith("sujeto inexistente")
     assert por_nombre["foto.jpg"]["motivo"] == "el nombre no sigue la convención"
     assert "no aceptado" in por_nombre["persona_0042__Apto_medico__2027-06-30.docx"]["motivo"]
     # re-escaneo: nada nuevo

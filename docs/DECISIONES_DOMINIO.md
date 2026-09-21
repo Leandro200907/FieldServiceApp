@@ -494,3 +494,25 @@ cota con cualquier volumen de claves de un solo uso (tokens probados al voleo). 
 siendo de una sola instancia; con más de una, el límite real necesita el proxy o un
 almacén compartido — eso queda fuera de este punto (ver storage/rate-limit multi-instancia
 en el triage de la reauditoría).
+
+## 23. Drive: segundo nivel de extracción por texto del PDF (reauditoría Fase 2 punto 4, sin migración)
+
+Reclasificación del hallazgo de la reauditoría: la extracción por nombre de archivo (§17)
+YA era lo especificado para la v1 (documentacion-habilitante.md, anexo "Alcance de la
+v1": *"extracción de tipo/sujeto/fecha por confianza"*, con *"lectura completa del
+contenido"* como único ítem de segunda etapa) — no había brecha ahí. Lo que sí faltaba:
+la especificación distingue "tipo/sujeto/fecha" (nivel básico, v1) de "el resto del
+contenido" (segunda etapa), y el código sólo leía el NOMBRE, nunca el documento en sí —
+ni siquiera para esos tres campos básicos.
+
+Corrección: `extraer()` (`app/modules/drive/servicio.py`) queda en dos niveles. Nivel 1
+(nombre de archivo) sin cambios, primero siempre. Nivel 2, sólo si el nivel 1 no llegó a
+"alta" y el archivo es un PDF: texto embebido de las primeras páginas (`pypdf`, sin OCR),
+buscando sobre ESE texto exactamente un sujeto (por `identificador_natural` o
+`sujeto_id`), exactamente un requisito y exactamente una fecha — mismo criterio
+conservador que el nivel 1, cualquier ambigüedad (0 o 2+ de cualquiera de los tres) va a
+bandeja, nunca se adivina. Un PDF sin capa de texto (escaneado como imagen) no tiene nivel
+2: bandeja con motivo explícito de que hace falta OCR. Entre los dos niveles, gana el de
+mayor confianza (a igual rango, el de nivel 2, por mirar contenido real). Leer imágenes
+sueltas (jpg/png) o ir más allá de estos tres campos (OCR general, contenido completo)
+sigue siendo, tal cual decía la especificación, segunda etapa.

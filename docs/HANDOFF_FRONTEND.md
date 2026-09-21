@@ -221,7 +221,13 @@ override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_a
 | `GET /v1/consultas/configuracion_drive` | configuracion, responsable_legajos | → config + `pendientes_revision` + `convencion_nombre` |
 | `GET /v1/consultas/bandeja_drive` | configuracion, responsable_legajos | `estado` (pendiente_revision por defecto; importado/descartado/todos), paginado → archivos con `confianza`, `extraccion`, `motivo` |
 
-Notas: los documentos importados desde Drive entran como propuestas `declarado` (origen
+Notas: la extracción de Drive tiene dos niveles (`bandeja_drive` los distingue por
+`extraccion.nivel`: `nombre_archivo` o `texto_pdf`) — primero por el nombre del archivo; si
+no llega a confianza "alta" y es un PDF, un segundo intento lee el texto embebido de las
+primeras páginas buscando sujeto/requisito/fecha (conservador: ambigüedad va a bandeja, un
+PDF escaneado sin capa de texto también, con motivo explícito de que hace falta OCR —
+lectura de imágenes y OCR general siguen siendo segunda etapa). Los documentos importados
+desde Drive entran como propuestas `declarado` (origen
 `drive`) con el archivo ya adjunto; aparecen en `propuestas_pendientes` y el responsable
 confirma o rechaza. Convención de nombre de archivo: `<sujeto_id>__<requisito>__<AAAA-MM-DD vence>[__<AAAA-MM-DD desde>].pdf|jpg|png`
 (acentos y mayúsculas indistintos). El score cuenta sólo evidencia **verificada**.
