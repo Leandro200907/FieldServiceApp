@@ -93,3 +93,35 @@ def test_password_por_prompt_seguro_y_sin_terminal(monkeypatch):
 def test_la_contrasena_no_se_acepta_por_argv():
     with pytest.raises(SystemExit):
         cli.main(["crear-usuario", "--tenant-slug", "x", "--email", "e", "--nombre", "n", "--rol", "supervisor", "--password", "p"])
+
+
+def test_listar_y_reprocesar_outbox_estancado(tenant_de_prueba, capsys):
+    """Reauditoría Fase 2 punto 5: un evento que agota los reintentos queda estancado,
+    visible por CLI, y se reactiva a mano — nunca desaparece solo."""
+    from datetime import timedelta
+
+    from app.comun.eventos import encolar_outbox
+    from app.comun.reloj import ahora_utc
+    from app.worker.outbox import MAX_INTENTOS_OUTBOX, PublicadorEnMemoria, drenar_outbox
+
+    t = tenant_de_prueba
+    ahora = ahora_utc()
+    with tenant_session(t.tenant_id) as s:
+        encolar_outbox(s, t.tenant_id, "CumplimientoEmpresaAfectado", {"empresa": "x"}, disponible_en=ahora)
+    pub = PublicadorEnMemoria(fallar_con=RuntimeError("módulo 2 caído"))
+    for _ in range(MAX_INTENTOS_OUTBOX):
+        with tenant_session(t.tenant_id) as s:
+            drenar_outbox(s, t.tenant_id, pub, ahora=ahora)
+        ahora += timedelta(hours=6)
+
+    assert cli.main(["listar-outbox-estancado", "--tenant-slug", t.slug]) == 0
+    salida = capsys.readouterr().out
+    assert "CumplimientoEmpresaAfectado" in salida and "módulo 2 caído" in salida
+
+    assert cli.main(["reprocesar-outbox", "--tenant-slug", t.slug]) == 0
+    assert capsys.readouterr().out.strip() == "reactivados: 1"
+
+    assert cli.main(["listar-outbox-estancado", "--tenant-slug", t.slug]) == 0
+    assert capsys.readouterr().out.strip() == ""
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT estancado_en, intentos FROM modulo1.outbox_events")).one() == (None, 0)

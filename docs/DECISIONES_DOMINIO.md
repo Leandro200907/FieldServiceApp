@@ -516,3 +516,27 @@ bandeja, nunca se adivina. Un PDF sin capa de texto (escaneado como imagen) no t
 mayor confianza (a igual rango, el de nivel 2, por mirar contenido real). Leer imágenes
 sueltas (jpg/png) o ir más allá de estos tres campos (OCR general, contenido completo)
 sigue siendo, tal cual decía la especificación, segunda etapa.
+
+## 24. Outbox: backoff, estado estancado, alerta obligatoria y reproceso (reauditoría Fase 2 punto 5, migración 0020)
+
+`drenaje_outbox` es la cola crítica (arquitectura-tecnica.md §8.4: *"una falla persistente
+acá significa que Módulo 2 nunca se entera de un cambio de cumplimiento... lleva más
+reintentos/mayor duración y una alerta obligatoria al agotarse — nunca dead-letter
+silencioso"*) y no tenía ninguna de las tres cosas: reintentaba cada vuelta del worker sin
+backoff, sin tope de intentos (un evento envenenado se reintentaba para siempre) y sin
+ningún mecanismo de alerta. El backoff genérico de `job_queue` (`MAX_INTENTOS`,
+`backoff_seg`) no se aplicaba acá — `drenar_outbox` es un proceso de reloj aparte, no pasa
+por `job_queue`.
+
+Corrección (`app/worker/outbox.py`): `outbox_events` gana `disponible_en` (backoff
+exponencial, mismo esquema que `job_queue` pero con tope de 6 horas y
+`MAX_INTENTOS_OUTBOX=20` — más reintentos y más duración que las colas best-effort),
+`ultimo_error` (saneado) y `estancado_en`. Al agotar los intentos, la fila queda
+`estancado_en` (no se vuelve a tomar sola, nunca se borra ni se esconde) y, en la MISMA
+transacción, se encola una notificación `OutboxEstancado` a `configuracion` — la alerta
+obligatoria. `reprocesar()` (CLI `scripts/administracion.py reprocesar-outbox
+--tenant-slug X [--evento-id Y]`) es el único camino para reactivar un evento estancado —
+nunca automático, sólo después de confirmar que la causa de fondo se resolvió.
+`encolar_outbox` (`app/comun/eventos.py`) gana `disponible_en` explícito por el mismo
+motivo que `encolar()` de `job_queue`: sin eso, un reloj controlado (tests, reproceso)
+queda a merced del `now()` real de la base.

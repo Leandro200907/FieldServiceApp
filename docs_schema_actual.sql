@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0019_notificacion_sin_canal
+-- head: 0020_outbox_backoff_alerta
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -618,6 +618,9 @@ CREATE TABLE modulo1.outbox_events (
     intentos integer DEFAULT 0 NOT NULL,
     clave_dedup text,
     version_contrato text DEFAULT '1.0'::text NOT NULL,
+    disponible_en timestamp with time zone DEFAULT now() NOT NULL,
+    ultimo_error text,
+    estancado_en timestamp with time zone,
     CONSTRAINT outbox_events_tipo_check CHECK ((tipo = ANY (ARRAY['HabilitacionRequiereRevaluacion'::text, 'CumplimientoEmpresaAfectado'::text])))
 );
 ALTER TABLE ONLY modulo1.outbox_events FORCE ROW LEVEL SECURITY;
@@ -1104,6 +1107,8 @@ CREATE INDEX ix_matriz_tenant_clave ON modulo1.matriz_requisitos USING btree (te
 CREATE INDEX ix_oc_clave_matriz ON modulo1.oc USING btree (tenant_id, cliente_id, locacion_id, tipo_servicio_id);
 -- Name: ix_oc_tenant_estado; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_oc_tenant_estado ON modulo1.oc USING btree (tenant_id, estado, locacion_id);
+-- Name: ix_outbox_disponibles; Type: INDEX; Schema: modulo1; Owner: -
+CREATE INDEX ix_outbox_disponibles ON modulo1.outbox_events USING btree (tenant_id, disponible_en) WHERE ((procesado_en IS NULL) AND (estancado_en IS NULL));
 -- Name: ix_outbox_pendientes; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_outbox_pendientes ON modulo1.outbox_events USING btree (creado_en) WHERE (procesado_en IS NULL);
 -- Name: ix_paquete_entrega_sujeto; Type: INDEX; Schema: modulo1; Owner: -

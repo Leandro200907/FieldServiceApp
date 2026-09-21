@@ -129,6 +129,26 @@ def listar_usuarios(tenant_slug: str) -> list[dict]:
         ).mappings()]
 
 
+def listar_outbox_estancado(tenant_slug: str) -> list[dict]:
+    """Eventos del outbox hacia Módulo 2 que agotaron los reintentos (reauditoría Fase 2
+    punto 5): nunca desaparecen solos, quedan acá hasta reprocesarlos a mano."""
+    from app.worker.outbox import estancados
+
+    tenant_id = _tenant_id(tenant_slug)
+    with tenant_session(tenant_id) as s:
+        return estancados(s, tenant_id)
+
+
+def reprocesar_outbox(tenant_slug: str, evento_id: str | None) -> int:
+    """Saca del estado estancado un evento puntual, o todos los del tenant si no se pasa
+    `evento_id` — SOLO después de confirmar que la causa de fondo ya se resolvió."""
+    from app.worker.outbox import reprocesar
+
+    tenant_id = _tenant_id(tenant_slug)
+    with tenant_session(tenant_id) as s:
+        return reprocesar(s, tenant_id, evento_id)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Administración inicial de Módulo 1 (tenants y usuarios)")
     sub = parser.add_subparsers(dest="que", required=True)
@@ -147,6 +167,11 @@ def main(argv: list[str] | None = None) -> int:
     pd.add_argument("--email", required=True)
     pl = sub.add_parser("listar-usuarios")
     pl.add_argument("--tenant-slug", required=True)
+    poe = sub.add_parser("listar-outbox-estancado")
+    poe.add_argument("--tenant-slug", required=True)
+    pro = sub.add_parser("reprocesar-outbox")
+    pro.add_argument("--tenant-slug", required=True)
+    pro.add_argument("--evento-id", help="sólo ese evento; si se omite, reprocesa TODOS los estancados del tenant")
     args = parser.parse_args(argv)
 
     try:
@@ -160,6 +185,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.que == "listar-usuarios":
             for u in listar_usuarios(args.tenant_slug):
                 print(f"{u['usuario_id']}  {u['email']}  {','.join(u['roles'])}  {'activo' if u['activo'] else 'INACTIVO'}")
+        elif args.que == "listar-outbox-estancado":
+            for e in listar_outbox_estancado(args.tenant_slug):
+                print(f"{e['evento_id']}  {e['tipo']}  intentos={e['intentos']}  estancado_en={e['estancado_en']}  ultimo_error={e['ultimo_error']}")
+        elif args.que == "reprocesar-outbox":
+            n = reprocesar_outbox(args.tenant_slug, args.evento_id)
+            print(f"reactivados: {n}")
     except PasswordDemasiadoLarga as e:
         print(f"{e.codigo}: {e}", file=sys.stderr)  # sin la contraseña
         return 2

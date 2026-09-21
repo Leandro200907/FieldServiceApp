@@ -228,7 +228,7 @@ def correr_una_vuelta(
 
         def _drenar() -> int:
             with tenant_session(tenant_id) as s:
-                n = drenar_outbox(s, tenant_id, publicador)
+                n = drenar_outbox(s, tenant_id, publicador, ahora=ahora)
                 latir(s, "drenaje_outbox", tenant_id, True, {"publicados": n})
                 return n
 

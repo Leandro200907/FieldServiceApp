@@ -148,16 +148,51 @@ def test_outbox_drena_marca_procesado_e_idempotente(tenant_de_prueba):
     assert len(pub.eventos) == 2
 
 
-def test_outbox_publicador_falla_deja_pendiente_y_cuenta_intento(tenant_de_prueba):
+def test_outbox_publicador_falla_deja_pendiente_con_backoff_y_cuenta_intento(tenant_de_prueba):
     t = tenant_de_prueba.tenant_id
+    ahora = ahora_utc()
     with tenant_session(t) as s:
-        encolar_outbox(s, t, "CumplimientoEmpresaAfectado", {"empresa": "x"})
+        encolar_outbox(s, t, "CumplimientoEmpresaAfectado", {"empresa": "x"}, disponible_en=ahora)
     with tenant_session(t) as s:
-        assert drenar_outbox(s, t, PublicadorEnMemoria(fallar_con=RuntimeError("caído"))) == 0
+        assert drenar_outbox(s, t, PublicadorEnMemoria(fallar_con=RuntimeError("caído")), ahora=ahora) == 0
     with tenant_session(t) as s:
-        fila = s.execute(text("SELECT procesado_en, intentos FROM modulo1.outbox_events")).first()
-        assert fila[0] is None and fila[1] == 1
-        assert drenar_outbox(s, t, PublicadorEnMemoria()) == 1
+        fila = s.execute(text("SELECT procesado_en, intentos, disponible_en, ultimo_error, estancado_en FROM modulo1.outbox_events")).mappings().one()
+        assert fila["procesado_en"] is None and fila["intentos"] == 1 and fila["estancado_en"] is None
+        assert fila["disponible_en"] == ahora + timedelta(seconds=30) and fila["ultimo_error"] == "RuntimeError: caído"
+        # antes de que venza el backoff, no se reintenta
+        assert drenar_outbox(s, t, PublicadorEnMemoria(), ahora=ahora + timedelta(seconds=29)) == 0
+    with tenant_session(t) as s:
+        assert drenar_outbox(s, t, PublicadorEnMemoria(), ahora=ahora + timedelta(seconds=30)) == 1
+
+
+def test_outbox_agota_reintentos_queda_estancado_y_alerta(tenant_de_prueba):
+    from app.worker.outbox import MAX_INTENTOS_OUTBOX, estancados, reprocesar
+
+    t = tenant_de_prueba.tenant_id
+    ahora = ahora_utc()
+    with tenant_session(t) as s:
+        encolar_outbox(s, t, "CumplimientoEmpresaAfectado", {"empresa": "x"}, disponible_en=ahora)
+    pub = PublicadorEnMemoria(fallar_con=RuntimeError("módulo 2 caído"))
+    for _ in range(MAX_INTENTOS_OUTBOX):
+        with tenant_session(t) as s:
+            drenar_outbox(s, t, pub, ahora=ahora)
+        ahora += timedelta(hours=6)  # más que cualquier backoff: siempre disponible para el próximo intento
+    with tenant_session(t) as s:
+        fila = s.execute(text("SELECT intentos, estancado_en, ultimo_error FROM modulo1.outbox_events")).mappings().one()
+        assert fila["intentos"] == MAX_INTENTOS_OUTBOX and fila["estancado_en"] is not None
+        # estancado: no se vuelve a tomar aunque el reloj avance mucho más
+        assert drenar_outbox(s, t, PublicadorEnMemoria(), ahora=ahora + timedelta(days=30)) == 0
+        # la alerta obligatoria quedó encolada en la misma corrida que estancó
+        job = s.execute(text("SELECT payload FROM modulo1.job_queue WHERE tenant_id = :t AND cola = 'notificaciones' "
+                             "AND payload->>'tipo' = 'OutboxEstancado'"), {"t": t}).mappings().first()
+        assert job is not None and job["payload"]["intentos"] == MAX_INTENTOS_OUTBOX
+    with tenant_session(t) as s:
+        assert estancados(s, t)[0]["intentos"] == MAX_INTENTOS_OUTBOX
+        assert reprocesar(s, t) == 1
+        fila = s.execute(text("SELECT intentos, estancado_en, disponible_en, ultimo_error FROM modulo1.outbox_events")).mappings().one()
+        assert fila["intentos"] == 0 and fila["estancado_en"] is None and fila["ultimo_error"] is None
+    with tenant_session(t) as s:
+        assert drenar_outbox(s, t, PublicadorEnMemoria(), ahora=ahora) == 1  # reprocesado: ahora sí se publica
 
 
 # --- procesos de reloj ---------------------------------------------------------------

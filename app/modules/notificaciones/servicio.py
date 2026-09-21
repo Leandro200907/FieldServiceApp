@@ -102,6 +102,12 @@ def render(payload: dict[str, Any]) -> tuple[str, str]:
     if tipo == "OcSinMatriz":
         return (f"OC sin matriz de requisitos: {payload.get('clave_origen')}",
                 f"La OC {payload.get('clave_origen')} no tiene matriz vigente para su cliente / locación / tipo de servicio. Publique una matriz o copie una plantilla.")
+    if tipo == "OutboxEstancado":
+        return (f"URGENTE — Módulo 2 no se entera de un cambio ({payload.get('evento_tipo')})",
+                f"El evento {payload.get('evento_id')} ({payload.get('evento_tipo')}) agotó {payload.get('intentos')} intentos de "
+                f"publicación hacia Módulo 2 y quedó estancado — Módulo 2 NO se enteró de este cambio de cumplimiento. "
+                f"Último error: {payload.get('error')}. Revisar la causa y reprocesar con "
+                f"`scripts/administracion.py reprocesar-outbox --evento-id {payload.get('evento_id')}` una vez resuelta.")
     return (f"Notificación {tipo}", "\n".join(f"{k}: {v}" for k, v in payload.items() if k != "tipo"))
 
 

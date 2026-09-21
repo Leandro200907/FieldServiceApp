@@ -12,8 +12,8 @@ sesiones en [BITACORA.md](BITACORA.md).
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
 - **Rutas HTTP:** 83 operaciones sobre 82 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 22 archivos en `migrations/versions/`, un solo head: `0019_notificacion_sin_canal`.
-- **Tests:** 498 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Migraciones:** 23 archivos en `migrations/versions/`, un solo head: `0020_outbox_backoff_alerta`.
+- **Tests:** 500 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -54,7 +54,7 @@ app/
     consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0019, lineales, un head)
+migrations/             # Alembic (0001 … 0020, lineales, un head)
 scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
@@ -236,5 +236,5 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Comandos (46) + consultas (32) + storage (3) + salud (2) + público (2) | Hecho |
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
-| Transporte real a Módulo 2, storage S3, `validacion_evidencia` (lectura del contenido) | Pendiente / segunda etapa (declarado, no silencioso) |
+| Transporte real a Módulo 2 (hoy `PublicadorEnLog`; el drenaje ya tiene backoff/tope de reintentos/alerta obligatoria — 0020), storage S3, `validacion_evidencia` (lectura del contenido) | Pendiente / segunda etapa (declarado, no silencioso) |
 | Gestión de usuarios por API (alta/cambio/reset de contraseña, reactivación) | Pendiente (CLI `scripts/administracion.py`: tenant, usuarios, desactivación) |

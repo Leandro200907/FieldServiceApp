@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0019_notificacion_sin_canal`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0020_outbox_backoff_alerta`.
 Prefijo de todas las rutas: `/v1`.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
@@ -361,5 +361,8 @@ un Supervisor operando sobre sí mismo — excepción, supervisión o custodia p
   `TELEGRAM_BOT_TOKEN` y de que el tenant habilite el canal; sin eso quedan en el log con
   traza. WhatsApp está diseñado (misma interfaz) pero no activo. Cola `validacion_evidencia`
   (lectura del contenido del archivo): segunda etapa.
-- Publicación a Módulo 2: `PublicadorEnLog` (transporte real pendiente).
+- Publicación a Módulo 2: `PublicadorEnLog` (transporte real pendiente); el drenaje en sí ya
+  tiene backoff, tope de reintentos y alerta obligatoria (notificación tipo
+  `OutboxEstancado`, a `configuracion`, vía el mismo canal que cualquier otra alerta) si un
+  evento se queda estancado.
 - Storage: sólo backend local (`STORAGE_BACKEND=local`); el contrato ya es el de un bucket.

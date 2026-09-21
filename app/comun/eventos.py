@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -61,18 +62,21 @@ def registrar_evento(
 
 
 def encolar_outbox(
-    session: Session, tenant_id: str, tipo: str, payload: dict[str, Any], clave_dedup: str | None = None
+    session: Session, tenant_id: str, tipo: str, payload: dict[str, Any], clave_dedup: str | None = None,
+    disponible_en: datetime | None = None,
 ) -> bool:
-    """True si se insertó; False si `clave_dedup` ya existía (replay idempotente)."""
+    """True si se insertó; False si `clave_dedup` ya existía (replay idempotente).
+    `disponible_en=None` → `now()` de la base (comportamiento normal); un valor explícito
+    es para reloj controlado (tests, reproceso) — igual que `encolar()` de `job_queue`."""
     if tipo not in EVENTOS_OUTBOX:
         raise ValueError(f"{tipo} no es un evento de outbox (solo {sorted(EVENTOS_OUTBOX)})")
     datos = {"version_contrato": VERSION_CONTRATO, "tenant_id": str(tenant_id), **payload}
     fila = session.execute(
         text(
-            "INSERT INTO modulo1.outbox_events (tenant_id, tipo, payload, clave_dedup, version_contrato) "
-            "VALUES (:t, :tipo, CAST(:p AS jsonb), :k, :v) "
+            "INSERT INTO modulo1.outbox_events (tenant_id, tipo, payload, clave_dedup, version_contrato, disponible_en) "
+            "VALUES (:t, :tipo, CAST(:p AS jsonb), :k, :v, COALESCE(:d, now())) "
             "ON CONFLICT (tenant_id, clave_dedup) DO NOTHING RETURNING evento_id"
         ),
-        {"t": tenant_id, "tipo": tipo, "p": _json(datos), "k": clave_dedup, "v": VERSION_CONTRATO},
+        {"t": tenant_id, "tipo": tipo, "p": _json(datos), "k": clave_dedup, "v": VERSION_CONTRATO, "d": disponible_en},
     ).first()
     return fila is not None
