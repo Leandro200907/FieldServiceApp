@@ -16,6 +16,16 @@ describe('role navigation boundaries', () => {
     expect(canOpen(team!, ['supervisor'])).toBe(true);
   });
 
+  it('exposes documentary planning prototypes only to their intended roles', () => {
+    const calendar = pages.find(page => page.id === 'calendario-vigencias');
+    const backlog = pages.find(page => page.id === 'proyeccion-backlog');
+    expect(canOpen(calendar!, ['tecnico'])).toBe(true);
+    expect(canOpen(backlog!, ['tecnico'])).toBe(false);
+    expect(canOpen(backlog!, ['supervisor'])).toBe(true);
+    expect(canOpen(backlog!, ['responsable_legajos'])).toBe(true);
+    expect(canOpen(calendar!, ['configuracion'])).toBe(false);
+  });
+
   it('does not infer access from unknown roles', () => {
     expect(pages.some(page => canOpen(page, ['superadmin']))).toBe(false);
   });

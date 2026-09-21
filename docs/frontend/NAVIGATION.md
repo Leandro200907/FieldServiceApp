@@ -9,9 +9,9 @@ Configuración es un contexto administrativo autorizado; no se agrega un nuevo a
 | Contexto | Entrada tras login | Menú principal | Acciones contextuales | Pendiente explícito |
 |---|---|---|---|---|
 | C | `/configuracion` · accesos administrativos, sin KPIs fabricados | Matrices/definiciones, Supervisión, Auditoría, Perfil | Alta/baja definición, publicar versión, asignar/reasignar supervisor | Catálogos y selectores; Drive, canales, políticas de alerta, plantillas |
-| R | `/propuestas` · bandeja | Propuestas, Legajos, Vencimientos, OC y cobertura, Matrices (consulta), Supervisión, Auditoría, Perfil | Cargar/confirmar/rechazar, acreditación/inducción, evaluar y registrar decisión, particulares, constancias | Buscador de sujetos, lotes documentales, exportación, consultas auxiliares |
-| S | `/equipo-supervisado` · universo asignado | **Mi legajo** (contexto personal), **Equipo supervisado** (responsabilidad), Vencimientos, OC y cobertura, Custodias, Perfil | Consultar su estado documental sin presumir habilitación; gestionar únicamente el universo autorizado | G-17/SEL-33 para separar acceso propio y universo; consultas/historiales pendientes |
-| T | `/mi-legajo` | Mi legajo compuesto, Perfil | Proponer renovación y adjuntar; descargar evidencia propia | Vista completa persona + vehículo vigente + equipos bajo custodia bloqueada G-05/G-16; notificaciones/QR según contrato futuro |
+| R | `/propuestas` · bandeja | Propuestas, Legajos, Vencimientos, **Calendario documental**, **Proyección del backlog**, OC y cobertura, Matrices (consulta), Supervisión, Auditoría, Perfil | Cargar/confirmar/rechazar, acreditación/inducción, evaluar y registrar decisión, particulares, constancias | G-18 mantiene las dos proyecciones como diseño no integrado; buscadores, lotes y exportación pendientes |
+| S | `/equipo-supervisado` · universo asignado | **Mi legajo** (contexto personal), **Equipo supervisado** (responsabilidad), Vencimientos, **Calendario documental**, **Proyección del backlog**, OC y cobertura, Custodias, Perfil | Consultar su estado documental sin presumir habilitación; gestionar únicamente el universo autorizado | G-17/SEL-33 y G-18; proyección sin disponibilidad ni asignación |
+| T | `/mi-legajo` | Mi legajo compuesto, **Calendario documental propio**, Perfil | Proponer renovación y adjuntar; descargar evidencia propia | Calendario limitado a persona/recursos propios y no integrado G-18; vista compuesta bloqueada G-05/G-16 |
 
 Durante I1 esas entradas muestran estructura/estado de integración, sin datos simulados. Perfil y logout son accesibles desde encabezado. Menús solo aparecen con la capacidad necesaria; rutas directas usan el mismo guard. Dentro del catálogo de diseño se puede inspeccionar cualquier lámina, claramente fuera de una sesión real. La vista del Técnico mantiene las tres secciones visibles en diseño. Para Supervisor, «Mi legajo» y «Equipo supervisado» son contextos separados; ninguno usa identificadores libres ni presume habilitación por el rol.
 
@@ -30,6 +30,8 @@ Durante I1 esas entradas muestran estructura/estado de integración, sin datos s
 | S-07 OC y cobertura | `/oc` y `/oc/:commitmentId` | R/S | No usar oc_id como commitment_id; actualmente corresponde a clave_origen, pendiente schema |
 | S-08 Decisiones | `/oc/:commitmentId/decisiones/:referencia?` | R/S | Crear solo R; consultar S con alcance servidor |
 | S-09 Vencimientos | `/vencimientos` | R/S | días/offset/limit; no listado de alertas |
+| S-09A Calendario documental | `/calendario-vigencias` | R/S/T | Q-DOC-01/Q-DOC-03 pendientes; empresa solo dentro del alcance R; mock temporal visible |
+| S-09B Proyección documental | `/proyeccion-backlog` | R/S | Q-DOC-02/Q-DOC-03 pendientes; una fila por OC; sin disponibilidad ni acciones de Módulo 2 |
 | S-10 Auditoría | `/auditoria` | C/R | Filtros tipo/desde/hasta y paginación |
 | S-11 Supervisión | `/supervision` | C/R | Selectores de persona/supervisor bloqueados; sin entrada libre de IDs |
 | S-12 Custodias/excepciones | `/custodias`; excepción dentro de S-08 | S | Históricos/selectores pendientes; no pantalla operativa en I1 |

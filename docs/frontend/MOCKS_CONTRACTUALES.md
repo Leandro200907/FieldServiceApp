@@ -13,15 +13,16 @@ Se entregan ocho fixtures en `mocks/fixtures.json`, separadas de las láminas de
 
 Ejecutar `python mocks/validate_fixtures.py` desde el paquete extraído. El script verifica hash de baseline, existencia de operación/status y campos/tipos/requeridos de los schemas usados, incluidos `$ref`, arrays y nullable. Es un verificador acotado de estas fixtures, **no un validador general OpenAPI/JSON Schema**; falla ante keywords nuevas no soportadas. Al integrar MSW se requiere validación completa compatible con OpenAPI 3.1 y el nuevo contrato.
 
-No se crearon handlers MSW ni una aplicación React en esta entrega. Las fixtures son un insumo reutilizable para la foundation autorizada, pendiente de ubicar el repositorio. No producen login real ni deben intentar llamar al backend con tokens sintéticos.
+La foundation implementa handlers MSW únicamente para autenticación/perfil. Además, las pantallas S-09A/S-09B usan un segundo conjunto **local y separado** de mocks contractuales temporales mediante `DocumentationPlanningAccess`. Estos objetos se identifican con `source="temporary-contract-mock"`, no interceptan HTTP, no entran al cliente generado y serán reemplazados después de recibir `docs/PROYECCION_DOCUMENTAL.md` y el nuevo OpenAPI.
 
 ## Exclusiones intencionales
 
-- Sin filas de legajos, propuestas, matrices, cobertura, decisiones, vehículos o equipos: faltan schemas de respuesta.
+- Sin filas definitivas de legajos, propuestas, matrices, cobertura o decisiones: faltan schemas de respuesta. Los sujetos/OC visibles en S-09A/S-09B son ejemplos temporales rotulados dentro del prototipo, no fixtures que pretendan pertenecer a la baseline.
 - Sin mocks de consultas propuestas SEL-01…32 ni de vista compuesta G-16: no existen en la baseline.
 - Sin 401 de login/refresh: el OpenAPI recibido no los publica; G-11 exige corregirlo. El cliente futuro debe manejar el HTTP inesperado sin fingir contrato completo.
 - Sin respuestas de upload/download: G-03 pendiente.
 - Sin motores simulados de habilitación, custodia, vencimientos o alertas.
+- Sin cálculo local de riesgo, obligatoriedad o disponibilidad: los estados de S-09A/S-09B ya vienen fijados en el mock temporal para probar la presentación.
 
 ## Catálogo de estados de presentación
 

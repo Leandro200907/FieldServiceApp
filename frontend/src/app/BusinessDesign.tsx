@@ -1,5 +1,7 @@
 import type { Page } from './capabilities';
 import { Badge, BlockedSelector, Pending } from '../ui/States';
+import { CalendarDocumentalScreen } from '../features/documentation-planning/CalendarDocumentalScreen';
+import { BacklogProjectionScreen } from '../features/documentation-planning/BacklogProjectionScreen';
 
 const selectors: Partial<Record<Page['id'], Array<[string, string]>>> = {
   legajos: [['Sujeto', 'SEL-01 · consulta de sujetos pendiente']],
@@ -10,6 +12,8 @@ const selectors: Partial<Record<Page['id'], Array<[string, string]>>> = {
   configuracion: [['Definición local', 'SEL-13 · catálogo pendiente']],
 };
 export function BusinessDesign({ page, technicalNotes = false, roles = [] }: { page: Page; technicalNotes?: boolean; roles?: readonly string[] }) {
+  if (page.id === 'calendario-vigencias') return <><CalendarDocumentalScreen roles={roles} />{technicalNotes && <p className="technical-note">G-18 / Q-DOC-01 / Q-DOC-03 · Prototipo con acceso reemplazable y mock contractual temporal; sin llamada al cliente OpenAPI.</p>}</>;
+  if (page.id === 'proyeccion-backlog') return <><BacklogProjectionScreen roles={roles} />{technicalNotes && <p className="technical-note">G-18 / Q-DOC-02 / Q-DOC-03 · Proyección visual no integrada; no contiene funciones del Módulo 2.</p>}</>;
   if (page.id === 'mi-legajo' && roles.includes('supervisor') && !roles.includes('tecnico')) return <>
     <Pending title="Tu legajo personal está pendiente de integración">Este contexto representa tu situación documental como persona potencialmente operativa. Tener rol Supervisor no demuestra que estés documentalmente habilitado. La habilitación debe venir expresamente del backend.</Pending>
     <section className="panel resource-panel"><div className="panel-top"><span className="section-number">01</span><Badge tone="warning">Integración bloqueada</Badge></div><h3>Mi condición documental</h3><p>Identidad, documentos, competencias, inducciones y veredicto explícito del servidor para la persona asociada al usuario.</p><div className="resource-placeholder" aria-hidden="true"><span /><span /><span /></div></section>

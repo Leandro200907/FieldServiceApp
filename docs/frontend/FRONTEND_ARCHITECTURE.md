@@ -50,6 +50,7 @@ El generador y cliente se apoyan en [openapi-typescript](https://openapi-ts.dev/
 | `frontend/src/features/legajos/`, `evidencias/`, `propuestas/` | Recorridos documentales |
 | `frontend/src/features/matrices/`, `oc/`, `decisiones/` | Configuración y operación |
 | `frontend/src/features/vencimientos/`, `auditoria/`, `supervision/` | Lecturas y administración autorizada |
+| `frontend/src/features/documentation-planning/` | Puerto reemplazable, contratos temporales y prototipos S-09A/S-09B; no cliente HTTP ni reglas de dominio |
 | `frontend/src/ui/` | Botones, campos, tablas, paneles, estados, colores y tipografía |
 | `frontend/src/mocks/` | Handlers por operación y fixtures verificadas; no motor de dominio |
 | `frontend/tests/contract/`, `tests/e2e/` | Checks de contrato y recorridos críticos |
@@ -125,7 +126,9 @@ MSW en entorno explícito de desarrollo; modo real falla ante endpoint desconoci
 
 Los wireframes son **diseños sin datos**, separados de handlers HTTP. Los casos 401 de login/refresh y transferencia binaria son conflictos de contrato; pueden probarse a nivel transporte pero no venderse como mocks conformes al OpenAPI original.
 
-Flags propuestos de UI: `drive`, `notifications`, `documentPackageQr`, `documentScore`, `legajoExport`, `alertConfiguration`, `alertLifecycle`, `globalTemplates`, `module2Integration`, `documentBatchImport`, `typedBusinessViews`, `signedEvidence`, `technicianCompositeView`. Todos inactivos al empezar I1. Se pueden dividir por pantalla al cerrar G-01. Ninguno se enciende por detectar un número de versión o una cola existente. Sin endpoint de capacidades, usar manifiesto de release revisado junto al contrato, no sondas sobre rutas inventadas.
+Excepción controlada para S-09A/S-09B: se admiten ejemplos de dominio dentro de un adaptador local `DocumentationPlanningAccess`, identificados como `temporary-contract-mock` y rotulados en la propia pantalla. Su objetivo es validar jerarquía, estados y explicación; no derivan del OpenAPI auditado, no interceptan HTTP y no se importan desde `src/api`. Las tres operaciones propuestas permanecen únicamente en API_GAPS §8 hasta recibir `docs/PROYECCION_DOCUMENTAL.md` y un OpenAPI actualizado. Reemplazar el adaptador es obligatorio antes de habilitar integración.
+
+Flags propuestos de UI: `drive`, `notifications`, `documentPackageQr`, `documentScore`, `legajoExport`, `alertConfiguration`, `alertLifecycle`, `globalTemplates`, `module2Integration`, `documentBatchImport`, `typedBusinessViews`, `signedEvidence`, `technicianCompositeView`, `documentationCalendarIntegration`, `backlogDocumentationIntegration`. Todos los flags de integración permanecen inactivos. Los prototipos S-09A/S-09B pueden renderizarse con su marca temporal sin encenderlos. Ninguno se enciende por detectar un número de versión o una cola existente. Sin endpoint de capacidades, usar manifiesto de release revisado junto al contrato, no sondas sobre rutas inventadas.
 
 ## Sistema visual y responsive
 

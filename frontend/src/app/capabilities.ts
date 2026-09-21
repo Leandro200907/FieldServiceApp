@@ -8,7 +8,7 @@ export type Role = keyof typeof roleLabels;
 export function knownRoles(roles: readonly string[]): Role[] {
   return [...new Set(roles.filter((role): role is Role => Object.hasOwn(roleLabels, role)))];
 }
-export type PageId = 'propuestas' | 'legajos' | 'mi-legajo' | 'equipo-supervisado' | 'vencimientos' | 'oc' | 'matrices' | 'supervision' | 'auditoria' | 'custodias' | 'configuracion' | 'perfil';
+export type PageId = 'propuestas' | 'legajos' | 'mi-legajo' | 'equipo-supervisado' | 'vencimientos' | 'calendario-vigencias' | 'proyeccion-backlog' | 'oc' | 'matrices' | 'supervision' | 'auditoria' | 'custodias' | 'configuracion' | 'perfil';
 export interface Page { id: PageId; label: string; description: string; roles: readonly Role[]; gaps: string[] }
 export const pages: Page[] = [
   { id: 'configuracion', label: 'Configuración', description: 'Definiciones locales y administración documental.', roles: ['configuracion'], gaps: ['G-01', 'G-02'] },
@@ -17,6 +17,8 @@ export const pages: Page[] = [
   { id: 'mi-legajo', label: 'Mi legajo', description: 'Tu condición documental como persona potencialmente operativa.', roles: ['tecnico', 'supervisor'], gaps: ['G-05', 'G-16', 'G-17'] },
   { id: 'equipo-supervisado', label: 'Equipo supervisado', description: 'Personas y recursos dentro de tu universo asignado.', roles: ['supervisor'], gaps: ['G-01', 'G-17', 'SEL-33'] },
   { id: 'vencimientos', label: 'Vencimientos', description: 'Evidencia vencida o próxima a vencer dentro de tu alcance.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'H-02'] },
+  { id: 'calendario-vigencias', label: 'Calendario documental', description: 'Intervalos documentales por empresa, persona, vehículo y equipo.', roles: ['responsable_legajos', 'supervisor', 'tecnico'], gaps: ['G-01', 'G-18', 'Q-DOC-01', 'Q-DOC-03'] },
+  { id: 'proyeccion-backlog', label: 'Proyección del backlog', description: 'Riesgo documental proyectado por OC, sin disponibilidad ni asignación.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'G-18', 'Q-DOC-02', 'Q-DOC-03'] },
   { id: 'oc', label: 'OC y cobertura', description: 'Consulta de cobertura y decisiones registradas.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'G-07', 'SEL-18', 'SEL-19'] },
   { id: 'matrices', label: 'Matrices', description: 'Requisitos por cliente, locación y tipo de servicio.', roles: ['configuracion', 'responsable_legajos'], gaps: ['G-01', 'SEL-09', 'SEL-10', 'SEL-11', 'SEL-12'] },
   { id: 'supervision', label: 'Supervisión', description: 'Asignación e historial de supervisores.', roles: ['configuracion', 'responsable_legajos'], gaps: ['G-01', 'SEL-26', 'SEL-27'] },

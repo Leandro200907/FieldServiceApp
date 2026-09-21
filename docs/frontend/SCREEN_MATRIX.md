@@ -18,6 +18,8 @@ C = Configuración; R = Responsable; S = Supervisor; T = Técnico. Los roles efe
 | S-07 Backlog/cobertura | R/S | OC, cobertura, particulares/cancelar | O-09, O-11, O-32, O-33; O-37 C/R | Presente con brecha semántica | G-01/G-02/G-04/G-07/G-14 |
 | S-08 Evaluación/decisiones | R crea; R/S consultan | Elegir sujetos, persistir, consultar | O-17, O-20, O-27, O-30, O-31, O-34, O-35 | Presente; no consulta puntual supervisor | G-01/G-02/G-07; constancia R, excepción S |
 | S-09 Vencimientos | R/S | Filtrar días y abrir legajo | O-42, O-38 | Lectura de evidencia, no máquina de alertas | G-01/H-02 |
+| S-09A Calendario documental de vigencias | R/S/T según alcance | Explorar intervalos por empresa/persona/vehículo/equipo y explicar un tramo | Operaciones faltantes Q-DOC-01/Q-DOC-03 | Diseño con mock contractual temporal; no integrado | G-18; empresa solo R; obligatoriedad solo con contexto matriz/OC |
+| S-09B Proyección documental del backlog | R/S | Una fila por OC, riesgo y capacidad documental potencial | Operaciones faltantes Q-DOC-02/Q-DOC-03 | Diseño con mock contractual temporal; no integrado | G-18; advertencia de no disponibilidad; sin funciones Módulo 2 |
 | S-10 Auditoría | C/R | Filtrar y paginar eventos | O-39 | Presente | G-01; no es monitor de infraestructura |
 | S-11 Supervisión | C/R | Asignar/reasignar e historial | O-06, O-24, O-36 | Presente sin directorio completo | G-01/G-02 |
 | S-12 Custodias/excepciones | S | Cambiar/corregir/revocar | O-08, O-14, O-20, O-31 | Comandos presentes; faltan consultas | G-01/G-02/G-13/G-15 |
@@ -25,7 +27,7 @@ C = Configuración; R = Responsable; S = Supervisor; T = Técnico. Los roles efe
 | S-14 Configuración | C | Entrada administrativa y parámetros | O-15, O-16, O-23, O-37 | Núcleo local; integraciones ausentes | G-01/G-02/H-01/H-02/H-04 |
 | S-15 Diseños pendientes | Roles según API_GAPS | Drive/canales/QR/score/exportación/alertas/plantillas/M2 | Ninguna operación soportada para esos recorridos completos | Ausente/incompleto | Flags OFF; no endpoints propuestos |
 
-**Presente no significa certificado ni integrable con mocks estrictos.** En I1 solo auth/perfil y transporte tienen base suficiente; las vistas de negocio esperan sus schemas. Ningún «vacío» de pantalla sustituye un schema desconocido.
+**Presente no significa certificado ni integrable con mocks estrictos.** En I1 solo auth/perfil y transporte tienen base suficiente. S-09A/S-09B son prototipos explícitos con contrato local temporal y no se contabilizan como operaciones backend. Ningún «vacío» de pantalla sustituye un schema desconocido.
 
 ## 2. Catálogo completo por operación
 

@@ -20,7 +20,9 @@ npm run dev
 
 La aplicación abre en `http://127.0.0.1:5173`. El proxy local envía `/v1` al backend configurado.
 
-Para explorar el layout sin backend, establecer `VITE_ENABLE_MOCKS=true` en `.env.local`. En el formulario de ingreso se puede usar cualquier empresa y contraseña; el texto anterior a `@` elige uno de estos perfiles sintéticos: `configuracion`, `responsable_legajos`, `supervisor` o `tecnico`. El modo de prueba implementa únicamente login, refresh y perfil. No simula legajos ni reglas de dominio.
+Para explorar el layout sin backend, establecer `VITE_ENABLE_MOCKS=true` en `.env.local`. En el formulario de ingreso se puede usar cualquier empresa y contraseña; el texto anterior a `@` elige uno de estos perfiles sintéticos: `configuracion`, `responsable_legajos`, `supervisor` o `tecnico`. MSW implementa únicamente login, refresh y perfil. El calendario y la proyección del backlog usan una capa local aparte con mocks contractuales temporales, siempre rotulados como no integrados; no interceptan endpoints ni simulan reglas de dominio.
+
+Los adaptadores temporales viven en `src/features/documentation-planning/`. No deben migrarse al cliente API por copia: al llegar `docs/PROYECCION_DOCUMENTAL.md` y el nuevo `openapi.json`, se compara el contrato, se regeneran tipos y se reemplaza `DocumentationPlanningAccess` con un adaptador real.
 
 ## Comprobaciones
 
