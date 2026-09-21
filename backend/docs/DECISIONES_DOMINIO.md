@@ -1,0 +1,575 @@
+# Decisiones de dominio cerradas en implementación
+
+Reglas que la especificación deja implícitas o que el código tuvo que resolver, cerradas
+contra el texto de los documentos de diseño (`Escritorio/Ticketera/modulo1-*.md`).
+Cada una tiene su test de aceptación en `tests/test_reglas_cerradas.py`. Cambiar una de
+estas reglas exige releer la cita y justificar contra ella.
+
+## 1. Propuesta del técnico (`ProponerDocumento` / `RechazarPropuesta`)
+
+**Cita.** especificacion.md 2.2, invariantes de Documento: *"Al **declarar** o confirmar
+una versión nueva del mismo requisito+sujeto, la anterior pasa a `sucedida` en la misma
+operación"*; *"`rechazada` es terminal … ni participa de la invariante de 'a lo sumo un
+vigente' — es como si nunca hubiera llegado a ser candidata"*; *"El motor siempre filtra
+primero por `estado_version = vigente` y recién ahí mira `estado_confirmacion`"*.
+documentacion-habilitante.md 1.10 / modelo-dominio.md 2.4: lo declarado nunca prueba la
+habilitación; *"una renovación propuesta y no confirmada no cierra nada, solo pausa"*.
+
+**Regla definitiva.**
+- La propuesta entra como versión `vigente` + `declarado` + `origen_propuesta=true` y
+  sucede al vigente anterior (guardando `sucede_a`). Mientras está pendiente, el motor
+  ve esa versión y devuelve `requiere_revision` para ese requisito: el sujeto no prueba
+  habilitación hasta que el Responsable confirme. **Consecuencia deliberada de la spec**:
+  proponer una renovación temprano degrada el veredicto del sujeto hasta la revisión —
+  por eso existe la alerta "propuesta pendiente hace más de N días" (habilitante 2.x).
+- `RechazarPropuesta` → `rechazada` (terminal) y se restaura el **antecesor no terminal
+  más cercano** siguiendo la cadena `sucede_a` (una `sucedida`). Si la antecesora
+  inmediata ya es terminal (p. ej. un lote revertido después de la propuesta) se sigue
+  subiendo; una versión terminal nunca se resucita.
+- Solo se rechaza una propuesta `vigente`; una propuesta ya sucedida por otra versión
+  devuelve 409 (la sucesión ya la dejó fuera de juego, y "rechazarla" no cambiaría nada).
+
+**Código.** `app/modules/legajos/servicio.py::_insertar_version_documento`,
+`rechazar_propuesta`, `_restaurar_sucedido`. Migración `0003_legajos_documento_sucede_a`.
+
+## 2. Agregación del veredicto de la OC (`evaluar_compromiso`)
+
+**Citas.** documentacion-habilitante.md 1.12: *"Se evalúa primero la empresa. Si no está
+habilitada, bloquea toda la OC"*; *"para cada tipo de recurso que la matriz exige … se
+pregunta si existe al menos un legajo individual de ese tipo que cumpla todos los
+requisitos que le aplican. Nunca se compone el cumplimiento entre varios legajos
+parciales"*. 1.8: la empresa es *"siempre una"* y *"siempre evaluada"*. 1.9: `vence
+durante el trabajo` *"Avisa siempre; bloquea solo si el requisito está marcado
+`bloqueante_durante_ejecucion`"*; `requiere revisión` *"No habilita ni bloquea en
+firme"*. 1.6: la OT queda *"asignada bajo excepción"*. especificacion.md 4.1: *"si
+`resultado_de_decision = puede_asignarse_bajo_excepcion`, entonces
+`veredicto_de_cumplimiento` no puede ser `habilitado`"*; regla temporal: *"`version_matriz`
+es la vigente a `periodo_desde` (el día de ingreso)"*.
+
+**Regla definitiva.**
+- Por requisito se calcula un veredicto (motor puro, sin cambios) y una **asignabilidad**:
+  `habilitado` → asignable; `vence_durante_el_trabajo` y la línea no es
+  `bloqueante_durante_ejecucion` → asignable (avisa, no bloquea); cualquier otro caso →
+  asignable solo si hay excepción `otorgada` con efecto (`excepcion_tiene_efecto`).
+  Constancia del cliente vigente y aplicable vuelve `habilitado` un requisito
+  `bloqueante_duro` (4.5); sobre excepcionable no tiene efecto.
+- Por sujeto: veredicto = peor de sus requisitos; asignable = **todos** sus requisitos
+  asignables; `bajo_excepcion` = asignable y al menos un requisito depende de excepción.
+- Representante por tipo exigido (1.12): primero asignable por sí mismo, después
+  asignable bajo excepción, después no asignable; dentro de cada clase, el de menor
+  severidad. Así un sujeto `no_habilitado` bajo excepción cubre la OC por delante de uno
+  `vence_durante_el_trabajo` bloqueante, y si nadie cubre, el motivo apunta al menos grave.
+- Global: `veredicto_de_cumplimiento` = **peor** entre empresa y representantes (nunca más
+  favorable que ellos). `resultado_de_decision` = `no_puede_asignarse` si la empresa o
+  algún tipo exigido no tiene representante asignable (o no hay legajo de empresa
+  cuando la matriz le exige requisitos, o no hay legajos activos del tipo);
+  `puede_asignarse_bajo_excepcion` si todos son asignables y alguno depende de
+  excepción (⇒ el global no es `habilitado`, se cumple `ck_excepcion_nunca_verde` por
+  construcción); `puede_asignarse` en el resto.
+- `requiere_revision` no es asignable: la decisión en firme es `no_puede_asignarse`
+  (la spec pide "completar o confirmar el dato antes de decidir"; no existe un cuarto
+  resultado de decisión).
+- La versión de matriz (y la clasificación que rige para excepciones/constancias) es la
+  vigente al `vigencia_desde` de la OC, **no a hoy**. "Hoy" (fecha civil del tenant)
+  solo decide vencimientos de constancias/excepciones, que son hechos del presente.
+
+**Casos borde que estaban mal cubiertos antes de esta revisión.**
+1. Sujeto A `vence_durante` bloqueante + sujeto B `no_habilitado` bajo excepción: elegía A
+   (menor severidad) y daba `no_puede_asignarse`; ahora cubre B bajo excepción.
+2. `bloqueante_durante_ejecucion=false` se ignoraba: un requisito que vence durante la OT
+   bloqueaba siempre. Ahora avisa y deja asignar.
+3. Sin legajo de empresa con requisitos de empresa en la matriz: se omitía la empresa y
+   podía dar `puede_asignarse`. Ahora `no_habilitado`.
+4. Matriz elegida por "hoy": una OC de septiembre evaluada en octubre usaba la matriz de
+   octubre. Ahora usa la vigente al día de ingreso.
+
+**Código.** `app/core/orquestacion.py` (`_evaluar_requisito`, `_evaluar_sujeto`,
+`_clave_mejor_sujeto`, `evaluar_compromiso`, `clasificacion_vigente`).
+
+## 3. Lotes (`ImportarLote` / `RevertirLote`)
+
+**Citas.** especificacion.md 2.5: *"Al revertir, todos los Documentos … creados por ese
+`lote_id` se marcan `revertida_por_lote` en la misma operación — no puede quedar un
+subconjunto sin marcar"*; 2.2 máquina de estados: `vigente ──[RevertirLote]──►
+revertida_por_lote`. modelo-dominio.md 2.11 políticas: *"Fila que matchea un documento
+existente, con vigencia posterior → renovación (nueva versión, se guarda la anterior)"*;
+*"coincide con lo que ya hay → no hace nada, no duplica"*; *"contradice un dato ya
+`verificado` con vigencia no posterior → nunca se sobreescribe solo … un dato de menor
+confianza nunca pisa uno de mayor confianza sin que una persona lo confirme"*; 2.12:
+*"Revertir sin borrar"*.
+
+**Regla definitiva.**
+- Revertir marca `revertida_por_lote` **todos** los documentos del lote que no sean ya
+  terminales, estuvieran `vigente` o `sucedida`. Restaura el antecesor (cadena
+  `sucede_a`, antecesor no terminal más cercano) **solo** para los que seguían `vigente`:
+  si hubo una carga manual posterior, esa carga es una decisión humana más reciente y
+  queda vigente; el lote se anula igual (auditoría completa), sin resucitar dos versiones
+  (`uq_documento_vigente`).
+- Reimportación, contra el vigente del mismo (sujeto, requisito): mismas fechas y mismo
+  número (o número ausente) → `sin_cambios` (cuenta como aceptada, no crea versión);
+  `vigente_hasta` posterior → nueva versión; no posterior y el vigente está
+  `verificado`/`confirmado_en_fuente` → fila rechazada con
+  `conflicto_con_dato_verificado`; no posterior y el vigente es solo `declarado` → nueva
+  versión (misma confianza, la planilla es el dato más reciente).
+- No hace falta conservar más historia: `sucede_a` + `lote_id` + `estado_version`
+  alcanzan para reconstruir y revertir con seguridad; la información nunca se borra.
+
+**Código.** `app/modules/legajos/servicio.py::_politica_reimportacion`, `importar_lote`,
+`revertir_lote`, `_restaurar_sucedido`.
+
+## 4. Universo del supervisor — fuente única
+
+**Citas.** no-funcionales.md 2.2 (matriz) y 2.3 (visibilidad); habilitante 1.5 / 1.5 bis
+(la custodia la administra el supervisor).
+
+**Regla definitiva.** `app/auth/alcance.py` es la única implementación: universo =
+sujetos con `asignacion_supervisor` vigente hacia el usuario (`desde <= hoy`) ∪
+vehículos/equipos con `periodo_custodia` vigente cuyo custodio está en ese conjunto. Un
+supervisor sin asignaciones ve vacío, nunca todo. Lo único que varía por capacidad es
+**qué roles ven todo** (`roles_con_todo`): lectura de consultas → responsable +
+configuración; descarga de evidencia → solo responsable (matriz 2.2). `consultas/acceso.py`
+reexporta; `storage/servicio.py` llama a `sujeto_en_alcance`. Las dos implementaciones
+anteriores tenían la misma semántica (mismas condiciones, misma JOIN de custodia); la
+única divergencia real era la lista de roles con todo, que ahora es explícita.
+
+## Puntos que la especificación no permite decidir sola
+
+1. **Calendario de la locación** (4.1: *"en el calendario de la locación de ese
+   compromiso"*). No hay dato de zona horaria por locación en el modelo; se usa
+   `tenant.zona_horaria`. Correcto mientras todas las locaciones del tenant estén en la
+   misma zona (caso Vaca Muerta). Si aparece un tenant multi-zona, hace falta
+   `locacion.zona_horaria` y un cambio en `evaluar_compromiso`.
+2. **Propuesta y veredicto intermedio.** La spec dice que la propuesta sucede al vigente
+   y que lo declarado no prueba; la consecuencia (el sujeto queda `requiere_revision`
+   hasta la revisión, aunque el documento anterior siguiera vigente) es literal pero
+   operativamente incómoda. Está implementada tal cual; si se quiere "el anterior sigue
+   probando hasta que se confirme o rechace la propuesta", es un cambio de dominio (dos
+   vigentes por (sujeto, requisito) o un estado nuevo), no de implementación.
+3. **Excepción sobre un requisito de empresa.** 1.6 habla de excepciones del supervisor
+   sobre documentos excepcionables sin distinguir familia de sujeto; modelo-dominio 2.4
+   solo aclara que un bloqueante duro de empresa no admite excepción. Se implementa la
+   regla general (excepcionable de empresa admite excepción). Confirmar si se desea
+   restringir.
+4. **`requiere_revision` como decisión.** No existe un resultado de decisión "pendiente";
+   se mapea a `no_puede_asignarse`. Si Módulo 2 necesita distinguir "bloqueado" de
+   "falta confirmar un dato", debería leer `veredicto_de_cumplimiento`, no solo
+   `resultado_de_decision`.
+5. **`sin_cambios` en lotes**: la spec dice "no hace nada, no duplica" pero no si cuenta
+   como fila aceptada o rechazada. Se cuenta como aceptada (no es un error) y se informa
+   aparte en `filas_sin_cambios`.
+
+## 5. Concurrencia — dónde protege la base y dónde la lógica
+
+Revisado en la sesión 4 (`tests/test_robustez.py`, sección 6).
+
+| Carrera | Invariante | Protección en la base | Protección en código |
+|---|---|---|---|
+| Dos versiones nuevas del mismo (sujeto, requisito) | ≤ 1 vigente | `uq_documento_vigente` | lock de la fila `legajo` (`_bloquear_legajo`) antes del vigente: el segundo escritor ve la versión del primero y la sucede. Sin ese ancla, READ COMMITTED re-evaluaba el `FOR UPDATE` sobre el vigente ya sucedido, devolvía vacío y el segundo chocaba contra el índice (500). |
+| Confirmar y rechazar la misma propuesta | transiciones desde estado origen | — | `FOR UPDATE` por PK del documento; el segundo re-lee el estado nuevo → 409 |
+| Revertir lote vs carga manual | ≤ 1 vigente | `uq_documento_vigente` | ambos toman el lock de `legajo` (revertir: legajos ordenados alfabéticamente → documentos; carga: legajo → documento). Orden fijo = sin deadlock. |
+| Dos primeras asignaciones de supervisor | ≤ 1 vigente por sujeto | `uq_asignacion_supervisor_vigente` | lock de `legajo` en asignar/reasignar → el segundo ve la vigente → 409 |
+| Dos evaluaciones de la misma OC | ninguna (inmutables) | — | dos filas, cada una consistente con su propio snapshot (4.1: "toda corrección es una evaluación nueva") |
+| Primera versión de matriz para una clave | sin dos v1 | `uq_matriz_clave_version` | `IntegrityError` → 409 en `publicar_version_de_matriz` |
+| Cambio de custodia concurrente | ≤ 1 período vigente | `uq_periodo_custodia_vigente` | lock de `custodia_recurso` (ancla) antes del período vigente |
+
+Red de seguridad global: `app/api/errores.py` traduce cualquier `IntegrityError` no anticipado
+a **409 `conflicto_concurrencia`** (la transacción ya fue revertida por `tenant_session`).
+Ninguna invariante crítica depende solo de Python: las que importan tienen índice/CHECK.
+
+**Riesgos abiertos (aceptados):**
+- `ImportarLote` toma el lock de cada legajo fila por fila (a través de
+  `_insertar_version_documento`), no de todos al inicio; un lote grande concurrente con
+  otro lote sobre los mismos sujetos en orden distinto podría deadlockear → Postgres
+  aborta uno → 409 reintentable. No se serializa por tenant a propósito (bloquearía
+  toda la carga masiva).
+- `evaluar_compromiso` no bloquea nada: una evaluación puede leer un documento que otro
+  comando está sucediendo en ese instante. Es consistente con el snapshot que persiste y
+  con `HabilitacionRequiereRevaluacion` como mecanismo de corrección.
+
+## 6. Contrato HTTP — orden de validación y autorización
+
+FastAPI valida el body **antes** de ejecutar el handler, donde corre `exigir_rol`. Por
+eso un body inválido con un rol incorrecto responde **422**, no 403. No es filtración
+(el esquema es público en `/openapi.json`) y todas las rutas protegidas responden 401 sin
+token antes de cualquier otra cosa (`test_contrato_http_todas_las_rutas_estan_protegidas`).
+
+## 7. Modo consulta vs. modo decisión y alcance del supervisor (A-04, cerrado 2026-09-19)
+
+**Citas.** modelo-dominio 2.1: *"Puntual: sujetos propuestos + un compromiso → veredicto.
+Los recursos propuestos los declara el módulo 2 … Barrido: toda la vista de compromiso ×
+todos los legajos → cobertura. Siempre en modo consulta"*; *"Consulta: no persiste, no
+crea tareas, no emite eventos. Decisión: persiste el snapshot, emite el evento y devuelve
+`referencia_evaluacion`"*. habilitante 1.5/1.5 bis: *"el motor evalúa siempre sobre los
+sujetos propuestos que recibe"* (un parámetro). no-funcionales 2.2: *"Verificar
+habilitación (**modo consulta**, antes de asignar)"* → responsable y supervisor;
+*"cobertura del backlog"* → supervisor **"su universo"**. no-funcionales 2.3: el supervisor
+ve *"las Evaluaciones de habilitación … cuyo sujeto caiga dentro"* de su universo.
+
+**Regla definitiva.**
+| | Decisión — `POST /comandos/evaluar_habilitacion` | Consulta — `GET /consultas/cobertura_oc` |
+|---|---|---|
+| Entrada | `commitment_id` + `sujetos_propuestos[]` (≥1; sin duplicados; legajos activos del tenant; nunca la empresa, que entra siempre implícita) | `commitment_id` |
+| Cálculo | Empresa + **cada** propuesto entero. Todos deben ser asignables y cada tipo exigido debe estar presente | Empresa + mejor candidato asignable por tipo (1.12) |
+| Candidatos | los propuestos | responsable: todo el tenant; supervisor: **solo su universo** |
+| Persiste / emite | Sí: `evaluacion_habilitacion` + `evaluacion_sujeto_propuesto` (relación normalizada, FKs compuestas por tenant) + `EvaluacionDeHabilitacionRealizada`, misma transacción | **Nunca** |
+| Roles | **solo responsable de legajos** (y la identidad técnica de Módulo 2 cuando se integre). Supervisor → 403 (mínimo privilegio: la matriz solo le da "modo consulta") | responsable, supervisor |
+
+**Historial** (`backlog_oc.ultima_decision`, `decisiones_oc`, `decision`): el supervisor ve
+una decisión solo si **todos** sus sujetos propuestos están en su universo; si uno queda
+afuera la decisión entera no existe para él (404, sin filtrado parcial). La empresa no
+interviene en el universo. `otorgar_excepcion` aplica lo mismo: la decisión citada tiene
+que ser visible y el sujeto tiene que estar en el universo (403).
+
+**`ultima_decision` del backlog** es la última decisión **global** de la OC. Para el
+supervisor se devuelve solo si es visible; si no, `null` — nunca se sustituye por una
+decisión anterior visible (se presentaría como "última" algo que no lo es).
+
+**Excepciones sobre la empresa — DESHABILITADAS (cierre seguro).** Una excepción sobre un
+requisito de la empresa afecta a toda la dotación y ningún rol tiene hoy ese alcance
+definido (la empresa nunca está en el universo de un supervisor, y solo el supervisor
+otorga excepciones). `otorgar_excepcion` con un sujeto de tipo empresa responde 422
+`excepcion_de_empresa_deshabilitada` antes de cualquier chequeo de alcance, para
+cualquier supervisor. Queda así hasta que el dominio defina qué rol puede afectar
+globalmente a la empresa (ver "Puntos que la especificación no permite decidir sola",
+ítem 3). Coherente con 2.4 de modelo-dominio ("para un bloqueante duro de empresa no
+existe excepción").
+
+**`evaluacion_sujeto_propuesto.tipo_sujeto_al_proponer`** es un snapshot deliberado del
+tipo del legajo al decidir (parte de la foto inmutable de 4.1, CHECK sobre el enum); el
+tipo vivo se lee siempre de `legajo.tipo_sujeto`.
+
+**Código.** `app/core/orquestacion.py` (`_evaluar`, `cobertura_de_oc`,
+`decidir_habilitacion`, `_validar_sujetos_propuestos`), `app/auth/alcance.py`
+(`filtro_decisiones_visibles`, `decision_visible`), `app/modules/consultas/servicio.py`,
+`app/modules/operacion/servicio.py`. Migración `0006_evaluacion_sujetos`. Tests:
+`tests/test_a04_alcance_evaluacion.py`.
+
+## 8. Política de revaluación y outbox (A-07, cerrado 2026-09-19)
+
+Implementación declarativa de la tabla 7.2 en `app/core/revaluacion.py::EVENTOS_FUENTE`
+(único lugar donde se decide qué evento marca qué decisiones). Definiciones:
+- **Decisión vigente**: última decisión de un commitment (`ORDER BY creado_en DESC,
+  secuencia DESC` — `secuencia` BIGSERIAL desempata de forma determinista; `creado_en` lo
+  genera la base, nunca el cliente) con OC activa y `vigencia_hasta ≥ hoy`.
+- **Marcar** = `aviso_revaluacion` (uno abierto por evaluación; coalescing: nuevas causas se
+  suman en `aviso_revaluacion_causa`, única por `(aviso, evento_id)`, sin repetir el
+  evento) + un `HabilitacionRequiereRevaluacion` en outbox por apertura
+  (`clave_dedup = hrr:{referencia}:{aviso_id}`, UNIQUE por tenant). Nunca crea decisiones.
+- **Idempotencia por evento causal**: `politica_evento_procesado (tenant_id, evento_id)`;
+  reprocesar un evento antiguo no reabre un aviso cerrado.
+- **Despachador**: `registrar_evento` despacha solo eventos fuente; los producidos por la
+  política (`AvisoDeRevaluacion*`, `CumplimientoEmpresa*`) van por `registrar_evento_interno`.
+
+| Evento | HRR | Selector |
+|---|---|---|
+| DocumentoVerificado | sí | decisiones que proponen al sujeto; empresa → todas |
+| DocumentoCargado (cualquier estado) | **no** | el productor emite además `DocumentoVerificado` cuando la carga ya viene verificada (verificación implícita, evento canónico) |
+| LoteRevertido | sí | sujetos de los documentos revertidos |
+| LegajoDadoDeBaja | sí | decisiones que proponen al sujeto |
+| MatrizVersionPublicada | sí | decisiones bajo la versión que se cierra (`version_anterior_id`) |
+| RequisitoParticularCargado | sí | decisiones del commitment |
+| Excepcion Otorgada/Revocada/Regularizada/Vencida | sí | decisión citada (si existe) + vigentes del commitment con el sujeto |
+| Constancia Registrada/Revocada/Vencida | sí | específica: commitment; general: OCs del cliente con el sujeto |
+| CustodiaCambiada | **condicional** | solo decisiones con `origen_sujetos = custodia_por_defecto` que proponen el recurso; `explicito` nunca. `origen_sujetos` lo fija exclusivamente el servidor: el body público lo rechaza con 422 (`extra=forbid`) |
+| CompromisoModificado / CompromisoCancelado | sí | `referencias_afectadas` capturadas por el productor ANTES del cambio; payload con `tipo_cambio` — con `cancelacion` el consumidor **invalida**, nunca crea una decisión. `importar_lote_oc` emite UN `CompromisoModificado` por OC y transacción solo si cambia una entrada de la evaluación (`cliente_id`, `locacion_id`, `tipo_servicio_id`, `vigencia_desde`, `vigencia_hasta`); OC nueva, reimportación idéntica o cambio solo de `referencia` no emiten. El evento audita `campos_modificados`, `anterior` y `nuevo` |
+| Vencimiento de documento de empresa (reloj) | outbox `CumplimientoEmpresaAfectado` | `aviso_incumplimiento_empresa` (uno abierto por tenant) con causas normalizadas (una activa por requisito); payload flaco con `aviso_id`; el consumidor consulta `GET /consultas/incumplimiento_empresa`. Marca internamente las decisiones vigentes sin HRR (2.9). Se regulariza solo cuando la reevaluación de TODAS las causas activas no encuentra ninguna incumplida |
+| Resto de 7.2 (Cargado, Rechazado, Sucedido, Acreditación/Inducción, LoteAplicado, LegajoCreado, Supervisor*, Definicion*, EvaluacionRealizada, Tarea, CustodiaCorregida, ConstanciaReemplazada, Alerta*, ArchivoPurgado, Aviso*) | no | tests negativos uno por uno |
+
+`EvaluacionDeHabilitacionRealizada` no genera HRR pero cierra, en la misma transacción,
+los avisos abiertos de decisiones anteriores del mismo commitment (`AvisoDeRevaluacionCerrado`
+por la vía interna), nunca de otra OC.
+
+Ambigüedad registrada: acreditaciones e inducciones también son entradas del snapshot pero
+la tabla 7.2 no les asigna HRR; se respeta la tabla.
+
+## 9. Semántica del borrado físico (A-05)
+
+`storage.borrar()` es **al menos una vez** e idempotente (borrar una clave ausente es
+éxito). Están garantizados exactamente una confirmación en la base y un solo
+`ArchivoPurgado`; una sola llamada física NO.
+
+## 10. Integridad multi-tenant por claves foráneas compuestas (M-01, migración 0011)
+
+Toda relación entre tablas tenant-scoped referencia `(tenant_id, id_padre)`; el padre
+tiene `UNIQUE (tenant_id, id)`. RLS filtra lo que se lee; la FK prueba además que padre e
+hijo son del mismo tenant aunque un bug o un endpoint nuevo se saltee la validación.
+`ON DELETE` se conserva salvo dos correcciones: `custodia_recurso → periodo_custodia` y
+`event_log → aviso_revaluacion_causa` dejan de ser CASCADE (historial y auditoría no se
+borran por arrastre). Ningún CASCADE nuevo. Las migraciones que agregan FKs suspenden
+`FORCE ROW LEVEL SECURITY` dentro de su transacción para que la validación de filas
+existentes sea un escaneo real y no "cero filas visibles".
+
+**Excepciones intencionales (sin FK):** `usuario.sujeto_id` (el usuario técnico puede
+existir antes de importar su legajo; se valida en servicio), `acreditacion.evidencias[]`
+(array; `_exigir_documentos_del_sujeto`), `*_por` (texto de auditoría), `cliente_id` /
+`locacion_id` / `tipo_servicio_id` (maestros externos no modelados en Módulo 1),
+`aviso_revaluacion_causa.entidad_id` (polimórfico), `idempotency_keys.actor_id`,
+`job_queue.tenant_id` nullable (jobs de sistema).
+
+## 11. Unicidad de filas ACTIVAS: excepciones y constancias (M-02, migración 0012)
+
+Claves de negocio, sólo sobre el estado realmente activo (las filas históricas —
+`revocada`, `vencida`, `regularizada`, `reemplazada`— no participan y pueden ser muchas):
+
+| Fila activa | Clave de negocio | Índice único parcial |
+|---|---|---|
+| excepción `otorgada` | (tenant, sujeto, requisito, commitment) | `uq_excepcion_activa` |
+| constancia `vigente` **general** (`commitment_id IS NULL`) | (tenant, sujeto, requisito, cliente) | `uq_constancia_general_activa` |
+| constancia `vigente` **específica** | (tenant, sujeto, requisito, cliente, commitment) | `uq_constancia_especifica_activa` |
+
+La general y la específica son claves distintas a propósito: una constancia general no
+reemplaza a una específica ni al revés (el `IS NOT DISTINCT FROM` del servicio ya lo
+trataba así; los dos índices lo fijan en la base sin ambigüedad por NULL).
+
+Reglas de servicio: (1) se bloquea el **legajo del sujeto** (`FOR UPDATE`) como ancla
+estable antes de decidir, así dos creaciones "primeras" concurrentes se serializan y la
+segunda ve lo que hizo la primera (excepción → 409 `conflicto`; constancia → reemplazo
+legítimo con `reemplazada_por`); (2) la fila anterior sale de `vigente` **antes** del
+INSERT nuevo y `reemplazada_por` se apunta después; (3) una colisión residual (23505
+sobre esos índices) se traduce a 409 de dominio estable —`excepcion_activa_duplicada`,
+`constancia_activa_duplicada`—, nunca 500. Ninguna fila activa "gana" por orden
+arbitrario: gana la transacción que tomó el ancla primero. La migración aborta con
+diagnóstico si encuentra duplicados activos previos; no elige ni borra ninguno.
+
+## 12. Custodia: validaciones y autorización (M-03)
+
+FKs (0011, sin CASCADE): `custodia_recurso (tenant, recurso_id) → legajo`,
+`periodo_custodia (tenant, custodio_id) → legajo`, `periodo_custodia (tenant, custodia_id)
+→ custodia_recurso`. El recurso no se repite en `periodo_custodia`: vive en el agregado
+`custodia_recurso`, así que la FK compuesta por tenant lo cubre a través de la custodia.
+
+Antes de cambiar o corregir una custodia el servicio valida, en este orden: rol
+Supervisor (matriz 2.2 de no-funcionales: **solo** el Supervisor opera la custodia; el
+Responsable de legajos no, aunque tenga todo el tenant en lectura); recurso existente en
+el tenant, del tipo declarado (`vehiculo`/`equipo`, coincidiendo con `tipo_sujeto` del
+legajo) y no dado de baja (`recurso_no_custodiable`, `legajo_dado_de_baja`); custodio
+existente, `persona`, no dado de baja y dentro del universo del supervisor que opera
+(`custodio_no_permitido`, `legajo_dado_de_baja`, 403); custodio vacío sólo para equipo
+(`sin_custodio_personal`, documentacion-habilitante 1.5 bis → `custodio_requerido` para
+vehículo). IDs de otro tenant son 404 (RLS + FK compuesta), nunca un cruce.
+
+Nunca dos vigentes: el legajo del recurso se bloquea `FOR UPDATE` como ancla (dos
+primeras custodias concurrentes se serializan; la segunda ve el período de la primera y
+cae en la regla "`desde` posterior al vigente" o lo cierra y abre el suyo); el índice
+parcial `uq_periodo_custodia_vigente` es la red residual y se traduce a 409
+`custodia_vigente_duplicada`. El historial (`cerrado`, `corregido`) nunca se borra ni se
+arrastra por CASCADE.
+
+## 13. Unicidad NULL-aware de la definición de requisito (M-04, migración 0013)
+
+Clave de negocio completa: `(tenant_id, nombre, categoria, tipo_sujeto_aplicable,
+locacion_id)`, con `UNIQUE NULLS NOT DISTINCT` (`uq_definicion_clave_negocio`). Antes,
+con el UNIQUE clásico, dos definiciones iguales con `locacion_id` NULL —todo lo que no es
+inducción— no chocaban en la base. La clave cubre **todas** las filas, activas o dadas de
+baja: dar de baja no libera el nombre (el servicio ya respondía 409 sin mirar `activa`).
+Misma clave en distinta locación o distinto tenant: permitido. Carrera entre dos altas:
+la base decide, la que pierde recibe 409 `definicion_duplicada` (nunca 500). La migración
+aborta con diagnóstico si encuentra duplicados NULL-aware y no borra ni elige ninguno.
+
+## 14. Plantillas globales de industria (H-04, migración 0016)
+
+`plataforma.definicion_requisito_global` y `plataforma.matriz_global` (+ líneas) son
+propiedad de la plataforma, versionadas, sin `tenant_id`; el motor nunca las lee. La copia
+local guarda `definicion_global_id`/`matriz_global_id` y `copiada_de_version`. Copiar una
+matriz publica una versión local por el mismo `publicar_version_de_matriz` (caso de oro 6.3
+incluido), reutilizando copias locales existentes de cada definición (misma locación para
+inducciones) y creando las que falten. Una definición global de inducción exige elegir
+`locacion_id` al copiar. `control_plantillas` (reloj) emite `PlantillaGlobalActualizada`
+una sola vez por (tenant, plantilla, versión nueva) y encola notificación al responsable;
+la actualización nunca se aplica sola. La precarga base (`docs/plantillas/base_v1.json`)
+es contenido a validar con cada operadora, no la matriz oficial.
+
+## 15. Alerta de vencimiento (H-02, migración 0017)
+
+Agregado `alerta_vencimiento`, una por (tenant, fuente_tipo, fuente_id) con `etapa` y
+`estado` como dimensiones independientes (especificación 4.6). `app/core/alertas.py` es la
+función pura (fecha + parámetros → etapa); todo efecto es política del reloj
+(`sincronizar`): abrir, avanzar, `DocumentoVencido` (entra al mapa de revaluación A-07 como
+cambio de entrada del snapshot), `AlertaEscalada` al rol configurable, notificaciones
+pendientes por destinatario (técnico y supervisor resueltos a usuario; roles
+administrativos como broadcast) y entrega coalescida en un job por destinatario y corrida.
+Decisiones de implementación: (1) una fuente sucedida por una versión **declarada** no
+resuelve la alerta — sigue sobre la fecha original hasta `vencido` si no se verifica (1.10);
+sólo `DocumentoVerificado` que cubre el requisito resuelve (`verificacion`), y la ausencia
+total de fuente (anulada, revertida, legajo de baja) resuelve con motivo
+`fuente_reemplazada_o_anulada`; (2) el reconocimiento silencia `reconocimiento_dias`
+contados desde el hoy real, nunca cierra ni frena `vencido`; (3) el plazo por tipo de
+requisito es un override en `definicion_requisito.plazo_aviso_dias`; (4) "OC nueva sin
+matriz" (3.6) se avisa una vez por OC al rol configuración.
+
+## 16. Score de salud documental (H-01, migración 0018)
+
+Para cada sujeto activo, EXIGIDOS = definiciones activas de su tipo que aparecen en alguna
+línea de matriz vigente hoy o en un requisito particular de OC activa; CUBIERTO = evidencia
+vigente hoy y **verificada** (documento, acreditación, inducción) o constancia del cliente
+vigente. `score = cubiertos / exigidos × 100`, global, por tipo de sujeto y con los diez
+peores. Lo declarado no cuenta (1.10). Consulta con alcance por rol; snapshot diario por
+tenant vía la cola `score_documental` (idempotente por fecha).
+
+## 17. Drive de solo lectura y extracción por confianza (H-01, migración 0018)
+
+Un proveedor (Google Drive, cuenta de servicio de la plataforma, scope readonly), una
+carpeta por tenant, escaneo manual o programado. La extracción v1 es por el nombre del
+archivo (`<sujeto>__<requisito>__<vence>[__<desde>].ext`, acentos indistintos): alta →
+documento `declarado` de origen `drive` con el archivo adjunto y checksum real (entra al
+flujo de propuestas: nunca habilita solo); media/baja → bandeja de excepciones con motivo,
+donde el responsable resuelve a mano o descarta. Cada archivo se recuerda por (id externo,
+hash): re-escanear no duplica. La lectura del contenido (más allá de nombre) es segunda
+etapa, como fija el anexo de alcance.
+
+## 18. Paquete de entrega público y notificaciones (H-01, migración 0018)
+
+Paquete: token aleatorio firmado (HMAC), sólo su hash en la base, vencimiento 1–90 días,
+revocación, traza de accesos, rate limit por token y origen; muestra estados de
+cumplimiento, nunca archivos (1.11). Notificaciones: canales como adaptadores (mail SMTP,
+Telegram bot; WhatsApp diseñado, no activo); habilitación por tenant; entrega
+at-least-once sin duplicados por traza `notificacion_envio` (job, canal, destinatario)
+confirmada en transacción propia (M-07).
+
+## 19. El Supervisor también es trabajador de campo (requisito de dominio nuevo, sin migración)
+
+El rol Supervisor no exime del cumplimiento documental: un Supervisor puede tener un
+legajo de persona vinculado a su usuario (`usuario.sujeto_id`, ya previsto desde la 0002
+como "opcional para supervisor"), aparecer como sujeto propuesto en una evaluación, ser
+evaluado por documentos/competencias/inducciones como cualquier persona, consultar su
+propio legajo compuesto (`mi_legajo`, ya no exclusivo de técnico) y recibir alertas de sus
+propios vencimientos por el mismo canal que un técnico (`alcance_de_sujetos` agrega su
+propio `sujeto_id` y sus recursos bajo custodia al universo de supervisión que ya tenía;
+`_destinatarios` resuelve el canal "titular" por vínculo de `sujeto_id`, sin filtrar por
+rol). Un usuario con roles Técnico + Supervisor acumula: legajo propio + universo de
+supervisión realmente asignado — nunca un universo ampliado ni transitivo.
+
+Separación de funciones, código `conflicto_de_interes` (403), independiente del alcance:
+un Supervisor no puede otorgar ni revocar una excepción sobre sí mismo
+(`otorgar_excepcion`/`revocar_excepcion`), no puede ser su propio supervisor
+(`asignar_supervisor`/`reasignar_supervisor`), y no puede asignarse ni modificarse su
+propia custodia (`cambiar_custodia`/`corregir_custodia`, ampliados a
+responsable_legajos/configuración para que otro actor autorizado pueda operarla; otro
+Supervisor con alcance real sobre él también puede). Los tres bloqueos son directos
+(comparan contra `identidad.sujeto_id`), no dependen de que el universo lo cubra: quedan
+blindados aunque alguna otra ruta futura deje a un Supervisor dentro de su propio alcance.
+
+## 20. Corrección: alcance faltante en RevocarExcepcion
+
+`revocar_excepcion` tenía el chequeo de rol (Supervisor, matriz 2.2) y, desde §19, el
+bloqueo de auto-revocación, pero **no** validaba que el sujeto de la excepción estuviera
+en el universo del supervisor: cualquier supervisor del tenant podía revocar la excepción
+de cualquier sujeto, dentro o fuera de su alcance. Corregido con la misma semántica que
+`prevalidar_otorgar_excepcion` (2.3 §3): 403 `prohibido` — no 404, la regla A-04 de
+ocultar decisiones multisujeto no aplica a una excepción ya existente referenciada por
+id —, revalidado siempre, también en un replay por Idempotency-Key (`prevalidar_revocar_excepcion`,
+cableado en el router igual que `otorgar_excepcion`). `responsable_legajos` sigue sin el
+comando: la matriz 2.2 de `modulo1-no-funcionales.md` marca `OtorgarExcepcion`/
+`RevocarExcepcion` exclusivos de Supervisor (`—` para el resto de los roles), así que no
+se amplía aunque tenga alcance total en otras capacidades.
+
+## 21. Notificaciones sin pérdida silenciosa (reauditoría Fase 2 punto 1, migración 0019)
+
+Dos correcciones sobre H-01 (migración 0018): (1) un destinatario sin canal resoluble
+(sin email —imposible hoy, `usuario.email` es `NOT NULL`— o, en la práctica, sin
+`telegram_chat_id` vinculado cuando sólo Telegram está habilitado) quedaba fuera del plan
+de envío sin ninguna fila de traza; ahora genera una fila `sin_canal` (nunca se pierde, no
+se reintenta automáticamente — no hay nada que un reintento del job pueda resolver). (2)
+lo que se registraba en el log del proceso por falta de canal habilitado en el tenant se
+contaba como `enviado`, indistinguible de una entrega real en cualquier conteo; ahora es
+`registrado_log`, un estado propio. La afirmación "at-least-once sin duplicados" se
+corrigió a "at-least-once", con la ventana real documentada en el docstring del módulo
+(envío al proveedor y commit de la traza son transacciones separadas). Consulta operativa
+nueva: `GET /v1/consultas/envios_notificacion`, con `sin_canal`/`fallido` por defecto.
+
+## 22. Endurecimiento del paquete público (reauditoría Fase 2 punto 3, sin migración)
+
+Tres correcciones sobre H-01: (1) `PAQUETE_SECRET` pasa a obligatorio con
+`ENTORNO=produccion` (`PaqueteSecretoFaltante` si falta) — el fallback derivado de
+`JWT_SECRET` queda sólo para desarrollo, porque un `JWT_SECRET` filtrado no debe además
+dar el secreto de paquetes públicos. (2) El "origen" del rate limiter nunca lee
+`X-Forwarded-For` a ciegas: nuevo `app/comun/red.py::origen_real()` sólo lo considera
+cuando la conexión TCP inmediata (`request.client.host`) está en `PROXIES_CONFIABLES`
+(IPs/CIDRs de plataforma); sin esa lista configurada (default), el header se ignora
+siempre y se usa la IP real de la conexión — sin proxy configurado, cualquiera podría
+falsificar su origen con ese header y saltarse el límite por IP. (3) `RateLimiter` en
+memoria gana un barrido periódico (`_barrer`, disparado cada N llamadas o al superar un
+tope de claves) que purga claves sin actividad en la ventana de 60s — antes crecía sin
+cota con cualquier volumen de claves de un solo uso (tokens probados al voleo). Sigue
+siendo de una sola instancia; con más de una, el límite real necesita el proxy o un
+almacén compartido — eso queda fuera de este punto (ver storage/rate-limit multi-instancia
+en el triage de la reauditoría).
+
+## 23. Drive: segundo nivel de extracción por texto del PDF (reauditoría Fase 2 punto 4, sin migración)
+
+Reclasificación del hallazgo de la reauditoría: la extracción por nombre de archivo (§17)
+YA era lo especificado para la v1 (documentacion-habilitante.md, anexo "Alcance de la
+v1": *"extracción de tipo/sujeto/fecha por confianza"*, con *"lectura completa del
+contenido"* como único ítem de segunda etapa) — no había brecha ahí. Lo que sí faltaba:
+la especificación distingue "tipo/sujeto/fecha" (nivel básico, v1) de "el resto del
+contenido" (segunda etapa), y el código sólo leía el NOMBRE, nunca el documento en sí —
+ni siquiera para esos tres campos básicos.
+
+Corrección: `extraer()` (`app/modules/drive/servicio.py`) queda en dos niveles. Nivel 1
+(nombre de archivo) sin cambios, primero siempre. Nivel 2, sólo si el nivel 1 no llegó a
+"alta" y el archivo es un PDF: texto embebido de las primeras páginas (`pypdf`, sin OCR),
+buscando sobre ESE texto exactamente un sujeto (por `identificador_natural` o
+`sujeto_id`), exactamente un requisito y exactamente una fecha — mismo criterio
+conservador que el nivel 1, cualquier ambigüedad (0 o 2+ de cualquiera de los tres) va a
+bandeja, nunca se adivina. Un PDF sin capa de texto (escaneado como imagen) no tiene nivel
+2: bandeja con motivo explícito de que hace falta OCR. Entre los dos niveles, gana el de
+mayor confianza (a igual rango, el de nivel 2, por mirar contenido real). Leer imágenes
+sueltas (jpg/png) o ir más allá de estos tres campos (OCR general, contenido completo)
+sigue siendo, tal cual decía la especificación, segunda etapa.
+
+## 24. Outbox: backoff, estado estancado, alerta obligatoria y reproceso (reauditoría Fase 2 punto 5, migración 0020)
+
+`drenaje_outbox` es la cola crítica (arquitectura-tecnica.md §8.4: *"una falla persistente
+acá significa que Módulo 2 nunca se entera de un cambio de cumplimiento... lleva más
+reintentos/mayor duración y una alerta obligatoria al agotarse — nunca dead-letter
+silencioso"*) y no tenía ninguna de las tres cosas: reintentaba cada vuelta del worker sin
+backoff, sin tope de intentos (un evento envenenado se reintentaba para siempre) y sin
+ningún mecanismo de alerta. El backoff genérico de `job_queue` (`MAX_INTENTOS`,
+`backoff_seg`) no se aplicaba acá — `drenar_outbox` es un proceso de reloj aparte, no pasa
+por `job_queue`.
+
+Corrección (`app/worker/outbox.py`): `outbox_events` gana `disponible_en` (backoff
+exponencial, mismo esquema que `job_queue` pero con tope de 6 horas y
+`MAX_INTENTOS_OUTBOX=20` — más reintentos y más duración que las colas best-effort),
+`ultimo_error` (saneado) y `estancado_en`. Al agotar los intentos, la fila queda
+`estancado_en` (no se vuelve a tomar sola, nunca se borra ni se esconde) y, en la MISMA
+transacción, se encola una notificación `OutboxEstancado` a `configuracion` — la alerta
+obligatoria. `reprocesar()` (CLI `scripts/administracion.py reprocesar-outbox
+--tenant-slug X [--evento-id Y]`) es el único camino para reactivar un evento estancado —
+nunca automático, sólo después de confirmar que la causa de fondo se resolvió.
+`encolar_outbox` (`app/comun/eventos.py`) gana `disponible_en` explícito por el mismo
+motivo que `encolar()` de `job_queue`: sin eso, un reloj controlado (tests, reproceso)
+queda a merced del `now()` real de la base.
+
+## 25. Validación técnica de evidencia — caso A/B, fencing y revaluación (reauditoría Fase 2 punto 2, migración 0021)
+
+Eje independiente `documento.archivo_validacion` (pendiente/valido/invalido), separado de
+`estado_confirmacion` — nunca lo mueve solo (arquitectura-tecnica.md §8.5: "no implica ni
+empuja ninguna confirmación de negocio"). `confirmar_subida` encola `validacion_evidencia`
+con un token de fencing nuevo; el job (`app/modules/evidencia/servicio.py`) verifica
+formato/tipo de contenido real/PDF no corrupto/malware (`no_configurado` sin scanner real)
+y consolida con `UPDATE ... WHERE archivo_validacion_token = :token` — un job viejo cuyo
+archivo se reemplazó o se invalidó a mano no pisa nada (el `UPDATE` no toca ninguna fila).
+
+Dos casos al resultar inválido: **A** (`declarado`, propuesta vigente) reutiliza
+exactamente `RechazarPropuesta`/`DocumentoRechazado`. **B** (`verificado` /
+`confirmado_en_fuente`) nunca toca `estado_confirmacion`; notifica a responsable_legajos y
+dispara la política de revaluación ya existente (`EvidenciaInvalidaPostVerificacion` en
+`EVENTOS_FUENTE`, mismo selector que `DocumentoVencido` — ningún mecanismo nuevo).
+
+Motor puro: `Documento.archivo_requiere_revision` (default `False`, no rompe ninguna
+construcción existente) — `True` SOLO cuando hay archivo real adjunto
+(`archivo_estado='confirmado'`) y su validación no llegó a `valido`; en ese caso
+`evaluar_documento_en_periodo` devuelve `Veredicto.REQUIERE_REVISION` (ya existía el
+enum, sin usar — reservado exactamente para esto, mismo patrón que el `declarado` sin
+confirmar). Acreditación/inducción no tienen archivo: nunca activan el gate.
+
+Descarga (`firmar_descarga`) exige `archivo_validacion = 'valido'` — 409 si `pendiente`
+(reintentar), 422 si `invalido`. Documentos legado (confirmados antes de esta migración)
+quedaron `valido` por el backfill de 0021, con motivo explícito: no se bloquean de golpe.
+
+Recuperación manual: `preparar_subida` reabre el ciclo SOLO sobre un archivo `invalido`
+(reemplazo); `invalidar_evidencia_verificada` (Responsable_legajos) invalida a mano un
+verificado que el chequeo automático no haya cubierto — ambos regeneran el token de
+fencing. Dead-letter del job: nunca silencioso, notifica a `configuracion`
+(`app/worker/main.py`, hook específico de esta cola, no genérico).
