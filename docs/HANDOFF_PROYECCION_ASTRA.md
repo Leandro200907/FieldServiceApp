@@ -212,3 +212,35 @@ dos campos en ese escenario puntual.
 - No se renombra ningún campo del contrato existente.
 - No se agregan endpoints nuevos a los ya implementados.
 - No se toca nada de Módulo 2.
+
+## 8. Addendum — cuarto endpoint: `detalle_proyeccion_documental` (Q-DOC-03)
+
+El punto 7 de arriba describe ESTE commit puntual, no el estado final: después de esta
+entrega se identificó (vía revisión del frontend ya integrado,
+`realDocumentationPlanningAccess` en `FieldServiceApp`, commit `b942c7e`) que faltaba un
+cuarto endpoint de detalle genérico. Diseñado en `docs/PROYECCION_DOCUMENTAL.md` §15 e
+implementado en la rama `backend/detalle-proyeccion-documental`:
+
+`GET /v1/consultas/detalle_proyeccion_documental?referencia=…`
+
+- **Cambio aditivo sobre las 3 rutas de este documento**: `calendario_vigencias`,
+  `proyeccion_documental` y `proyeccion_documental_backlog` suman un campo nuevo,
+  `referencia: string`, a cada ítem/response (`evidencia:{categoria}:{id}` o
+  `oc:{commitment_id}`) — ningún campo existente cambió de nombre ni de tipo.
+- **Roles**: según la rama de `referencia`, no un rol único — `evidencia:` usa los mismos
+  que `calendario_vigencias` (incluye técnico), `oc:` usa los mismos que
+  `proyeccion_documental`/`_backlog` (sin técnico).
+- **Respuesta**: unión discriminada por `tipo` (`"evidencia" | "oc"`), completamente
+  tipada. La rama `oc` es literalmente `proyeccion_documental` con `tipo` agregado — cero
+  lógica nueva. La rama `evidencia` es la pieza nueva: agrega `aplicabilidad`
+  (`"exigida_por_oc" | "informativa"`) y `matrices_aplicables[]`, resolviendo el "contexto
+  de aplicabilidad" que pedía Q-DOC-01 (§2.4 de este documento) para UN ítem puntual, a
+  demanda — `calendario_vigencias` como lista sigue sin cruzar matriz/OC, sin cambios.
+- Diff de operaciones vs el commit de la sección 5: **89 operaciones sobre 88 paths**
+  (antes 88/87) — una sola alta, `GET /v1/consultas/detalle_proyeccion_documental`; nada
+  existente cambió de forma.
+- Tests: 11 nuevos en `tests/test_proyeccion_documental.py` (detalle en
+  `docs/PROYECCION_DOCUMENTAL.md` §15.4), contra PostgreSQL real. Suite completa: **581
+  passed, 0 failed**.
+- Sigue sin declararse integrado a ninguna pantalla — misma disciplina que el resto de
+  este documento.

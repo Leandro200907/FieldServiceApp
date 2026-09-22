@@ -3241,6 +3241,258 @@
         "title": "DescartarArchivoDriveResponse",
         "type": "object"
       },
+      "DetalleEvidenciaResponse": {
+        "properties": {
+          "advertencia": {
+            "title": "Advertencia",
+            "type": "string"
+          },
+          "aplicabilidad": {
+            "enum": [
+              "exigida_por_oc",
+              "informativa"
+            ],
+            "title": "Aplicabilidad",
+            "type": "string"
+          },
+          "archivo_validacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion"
+          },
+          "categoria": {
+            "enum": [
+              "documento",
+              "competencia",
+              "induccion"
+            ],
+            "title": "Categoria",
+            "type": "string"
+          },
+          "estado_confirmacion": {
+            "title": "Estado Confirmacion",
+            "type": "string"
+          },
+          "hoy": {
+            "format": "date",
+            "title": "Hoy",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
+          },
+          "matrices_aplicables": {
+            "items": {
+              "$ref": "#/components/schemas/MatrizAplicable"
+            },
+            "title": "Matrices Aplicables",
+            "type": "array"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo": {
+            "const": "evidencia",
+            "title": "Tipo",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "vigente_desde": {
+            "format": "date",
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "format": "date",
+            "title": "Vigente Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo",
+          "referencia",
+          "categoria",
+          "id",
+          "sujeto_id",
+          "tipo_sujeto",
+          "identificador_natural",
+          "requisito_definicion_id",
+          "requisito",
+          "vigente_desde",
+          "vigente_hasta",
+          "estado_confirmacion",
+          "archivo_validacion",
+          "hoy",
+          "aplicabilidad",
+          "matrices_aplicables",
+          "advertencia"
+        ],
+        "title": "DetalleEvidenciaResponse",
+        "type": "object"
+      },
+      "DetalleOcResponse": {
+        "properties": {
+          "advertencia": {
+            "title": "Advertencia",
+            "type": "string"
+          },
+          "causas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CausaProyeccion"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causas"
+          },
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "estado": {
+            "enum": [
+              "sin_matriz",
+              "pendiente_de_planificacion",
+              "bloqueo_confirmado",
+              "requiere_revision",
+              "riesgo_documental",
+              "sin_riesgos_detectados"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "estado_por_dia": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Por Dia"
+          },
+          "hasta": {
+            "format": "date",
+            "title": "Hasta",
+            "type": "string"
+          },
+          "hoy": {
+            "format": "date",
+            "title": "Hoy",
+            "type": "string"
+          },
+          "intervalos": {
+            "items": {
+              "$ref": "#/components/schemas/IntervaloProyeccion"
+            },
+            "title": "Intervalos",
+            "type": "array"
+          },
+          "matriz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatrizInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oc": {
+            "$ref": "#/components/schemas/OcInfo"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
+          "sujetos": {
+            "$ref": "#/components/schemas/SujetosOrigen"
+          },
+          "tipo": {
+            "const": "oc",
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commitment_id",
+          "referencia",
+          "oc",
+          "hoy",
+          "desde",
+          "hasta",
+          "sujetos",
+          "matriz",
+          "estado",
+          "intervalos",
+          "advertencia",
+          "tipo"
+        ],
+        "title": "DetalleOcResponse",
+        "type": "object"
+      },
       "DocumentoCargadoResponse": {
         "description": "cargar_documento / proponer_documento (comparten el núcleo `_insertar_version_documento`).",
         "properties": {
@@ -4961,6 +5213,10 @@
             ],
             "title": "Primer Quiebre"
           },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
           "vigencia_desde": {
             "format": "date",
             "title": "Vigencia Desde",
@@ -4974,6 +5230,7 @@
         },
         "required": [
           "commitment_id",
+          "referencia",
           "vigencia_desde",
           "vigencia_hasta",
           "estado",
@@ -5024,6 +5281,10 @@
               }
             ],
             "title": "Identificador Natural"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
           },
           "requisito": {
             "anyOf": [
@@ -5078,7 +5339,8 @@
           "vigente_hasta",
           "estado_confirmacion",
           "archivo_validacion",
-          "dias_para_vencer"
+          "dias_para_vencer",
+          "referencia"
         ],
         "title": "ItemCalendario",
         "type": "object"
@@ -5493,6 +5755,38 @@
           "limit"
         ],
         "title": "MatricesResponse",
+        "type": "object"
+      },
+      "MatrizAplicable": {
+        "properties": {
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "origen_calculo": {
+            "enum": [
+              "ultima_decision_visible",
+              "candidatos_del_alcance"
+            ],
+            "title": "Origen Calculo",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "commitment_id",
+          "matriz_version_id",
+          "version",
+          "origen_calculo"
+        ],
+        "title": "MatrizAplicable",
         "type": "object"
       },
       "MatrizGlobalConCopias": {
@@ -6617,12 +6911,17 @@
           "oc": {
             "$ref": "#/components/schemas/OcInfo"
           },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
           "sujetos": {
             "$ref": "#/components/schemas/SujetosOrigen"
           }
         },
         "required": [
           "commitment_id",
+          "referencia",
           "oc",
           "hoy",
           "desde",
@@ -15606,6 +15905,118 @@
           }
         ],
         "summary": "Definiciones Requisito"
+      }
+    },
+    "/v1/consultas/detalle_proyeccion_documental": {
+      "get": {
+        "operationId": "detalle_proyeccion_documental_v1_consultas_detalle_proyeccion_documental_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "referencia",
+            "required": true,
+            "schema": {
+              "title": "Referencia",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "evidencia": "#/components/schemas/DetalleEvidenciaResponse",
+                      "oc": "#/components/schemas/DetalleOcResponse"
+                    },
+                    "propertyName": "tipo"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DetalleEvidenciaResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DetalleOcResponse"
+                    }
+                  ],
+                  "title": "Response Detalle Proyeccion Documental V1 Consultas Detalle Proyeccion Documental Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Detalle Proyeccion Documental",
+        "tags": [
+          "proyeccion"
+        ]
       }
     },
     "/v1/consultas/documentos": {

@@ -137,6 +137,7 @@ def calendario_vigencias(
         if d["requisito_definicion_id"] is not None:
             d["requisito_definicion_id"] = str(d["requisito_definicion_id"])
         d["dias_para_vencer"] = (d["vigente_hasta"] - hoy).days
+        d["referencia"] = f"evidencia:{d['categoria']}:{d['id']}"
         items.append(d)
     salida = envolver(items, int(total or 0), p)
     salida["hoy"] = hoy
@@ -283,6 +284,7 @@ def proyeccion_documental(
     conjunto = conjunto_de_sujetos(session, identidad, commitment_id, hoy)
     salida: dict[str, Any] = {
         "commitment_id": commitment_id,
+        "referencia": f"oc:{commitment_id}",
         "hoy": hoy,
         "oc": {"cliente_id": str(oc["cliente_id"]), "locacion_id": str(oc["locacion_id"]),
                "tipo_servicio_id": str(oc["tipo_servicio_id"]),
@@ -374,6 +376,7 @@ def proyeccion_documental_backlog(
         hasta = min(oc["vigencia_hasta"], desde + timedelta(days=horizonte_dias))
         fila: dict[str, Any] = {
             "commitment_id": commitment_id,
+            "referencia": f"oc:{commitment_id}",
             "vigencia_desde": oc["vigencia_desde"], "vigencia_hasta": oc["vigencia_hasta"],
             "origen_calculo": conjunto["origen"],
         }
@@ -417,3 +420,116 @@ def proyeccion_documental_backlog(
     salida["horizonte_dias"] = horizonte_dias
     salida["advertencia"] = ADVERTENCIA
     return salida
+
+
+# --------------------------------------------------------------------------- detalle_proyeccion_documental (Q-DOC-03)
+
+
+def _oc_activas_superpuestas(session: Session, tenant_id: str, desde: date, hasta: date) -> list[dict[str, Any]]:
+    """OC activas cuya vigencia se superpone con `[desde, hasta]` — mismo universo por
+    defecto que `proyeccion_documental_backlog` (`estado_oc='activo'`)."""
+    filas = session.execute(
+        text(
+            "SELECT oc_id, clave_origen, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta "
+            "FROM modulo1.oc WHERE tenant_id = :t AND estado = 'activo' "
+            "AND vigencia_desde <= :hasta AND vigencia_hasta >= :desde ORDER BY clave_origen"
+        ),
+        {"t": tenant_id, "desde": desde, "hasta": hasta},
+    ).mappings().all()
+    return [dict(f) for f in filas]
+
+
+def _matrices_aplicables(
+    session: Session, identidad: Identidad, tenant_id: str, hoy: date,
+    sujeto_id: str, tipo_sujeto: str, requisito_definicion_id: str | None,
+    vigente_desde: date, vigente_hasta: date,
+) -> list[dict[str, Any]]:
+    """Punto 15.2: para cada OC activa candidata, reutiliza `conjunto_de_sujetos` (4.1/4.2)
+    y `_tipos_y_requisitos` (motor por OC) tal cual existen — ninguna regla nueva, sólo se
+    los invoca con `sujeto_id`/`requisito_definicion_id` fijos en vez de recorrer todos."""
+    if requisito_definicion_id is None:
+        return []
+    matches: list[dict[str, Any]] = []
+    for oc in _oc_activas_superpuestas(session, tenant_id, vigente_desde, vigente_hasta):
+        commitment_id = oc["clave_origen"]
+        conjunto = conjunto_de_sujetos(session, identidad, commitment_id, hoy)
+        if sujeto_id not in conjunto["sujeto_ids"]:
+            continue
+        resultado_tipos = _tipos_y_requisitos(session, tenant_id, commitment_id, oc)
+        if resultado_tipos is None:
+            continue
+        requisitos_por_tipo, _nombres, version_matriz = resultado_tipos
+        if requisito_definicion_id in requisitos_por_tipo.get(tipo_sujeto, []):
+            matches.append({
+                "commitment_id": commitment_id,
+                "matriz_version_id": version_matriz["matriz_version_id"],
+                "version": version_matriz["version"],
+                "origen_calculo": conjunto["origen"],
+            })
+    return matches
+
+
+def _detalle_evidencia(session: Session, identidad: Identidad, referencia: str) -> dict[str, Any]:
+    identidad.exigir_rol(*ROLES_CALENDARIO)
+    resto = referencia[len("evidencia:"):]
+    partes = resto.split(":", 1)
+    if len(partes) != 2 or partes[0] not in ("documento", "competencia", "induccion") or not partes[1]:
+        raise ErrorDeDominio("referencia inválida", {"referencia": referencia})
+    categoria, id_ = partes
+    tenant_id = identidad.tenant_id
+    hoy = hoy_del_tenant(session, tenant_id)
+    fila = session.execute(
+        text(_SQL_CALENDARIO + "SELECT * FROM evidencia WHERE categoria = :categoria AND id::text = :id"),
+        {"t": tenant_id, "categoria": categoria, "id": id_},
+    ).mappings().first()
+    if fila is None:
+        raise NoEncontrado("Evidencia inexistente", {"referencia": referencia})
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    if alcance is not None and fila["sujeto_id"] not in alcance:
+        # Nunca 403: no se revela que el recurso existe fuera del alcance propio.
+        raise NoEncontrado("Evidencia inexistente", {"referencia": referencia})
+    d = dict(fila)
+    requisito_definicion_id = str(d["requisito_definicion_id"]) if d["requisito_definicion_id"] is not None else None
+    matrices = _matrices_aplicables(
+        session, identidad, tenant_id, hoy, d["sujeto_id"], d["tipo_sujeto"],
+        requisito_definicion_id, d["vigente_desde"], d["vigente_hasta"],
+    )
+    return {
+        "tipo": "evidencia",
+        "referencia": referencia,
+        "categoria": d["categoria"],
+        "id": str(d["id"]),
+        "sujeto_id": d["sujeto_id"],
+        "tipo_sujeto": d["tipo_sujeto"],
+        "identificador_natural": d["identificador_natural"],
+        "requisito_definicion_id": requisito_definicion_id,
+        "requisito": d["requisito"],
+        "vigente_desde": d["vigente_desde"],
+        "vigente_hasta": d["vigente_hasta"],
+        "estado_confirmacion": d["estado_confirmacion"],
+        "archivo_validacion": d["archivo_validacion"],
+        "hoy": hoy,
+        "aplicabilidad": "exigida_por_oc" if matrices else "informativa",
+        "matrices_aplicables": matrices,
+        "advertencia": ADVERTENCIA,
+    }
+
+
+def _detalle_oc(session: Session, identidad: Identidad, referencia: str) -> dict[str, Any]:
+    commitment_id = referencia[len("oc:"):]
+    salida = proyeccion_documental(session, identidad, commitment_id)
+    salida["tipo"] = "oc"
+    salida["referencia"] = referencia
+    return salida
+
+
+def detalle_proyeccion_documental(session: Session, identidad: Identidad, referencia: str) -> dict[str, Any]:
+    """Punto 15: detalle genérico por referencia opaca, emitida sin cambios por
+    `calendario_vigencias` (`evidencia:{categoria}:{id}`) y por `proyeccion_documental`/
+    `proyeccion_documental_backlog` (`oc:{commitment_id}`). El rol se valida DESPUÉS de
+    parsear el prefijo, nunca antes."""
+    if referencia.startswith("evidencia:"):
+        return _detalle_evidencia(session, identidad, referencia)
+    if referencia.startswith("oc:"):
+        return _detalle_oc(session, identidad, referencia)
+    raise ErrorDeDominio("referencia inválida", {"referencia": referencia})

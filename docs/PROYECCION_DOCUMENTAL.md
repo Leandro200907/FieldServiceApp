@@ -10,7 +10,7 @@ commit). No hay endpoints, no hay migración, no se regeneró `docs/openapi.json
 3. `GET /v1/consultas/proyeccion_documental?commitment_id=…`
 
 Los tres de arriba ya están implementados y en `main` (ver punto 14). Este documento suma
-un cuarto, **diseñado en el punto 15 y todavía sin implementar**:
+un cuarto, diseñado e implementado en el punto 15:
 
 4. `GET /v1/consultas/detalle_proyeccion_documental?referencia=…` (Q-DOC-03)
 
@@ -131,8 +131,8 @@ aplicabilidad" (matriz/OC o ausencia explícita) y un estado `sin_evidencia`: **
 no se puede cumplir con este endpoint tal como está diseñado**, porque cruzar contra
 matriz/OC es precisamente lo que este endpoint decide no hacer (punto 2, arriba). Opción
 (b) — un cuarto endpoint explícito, de detalle puntual, que sí haga ese cruce pero
-únicamente para UN ítem a la vez (nunca para la lista completa) — queda diseñada en el
-punto 15 (`detalle_proyeccion_documental`, Q-DOC-03). Sigue sin implementar.
+únicamente para UN ítem a la vez (nunca para la lista completa) — implementado en el
+punto 15 (`detalle_proyeccion_documental`, Q-DOC-03).
 
 ## 3. `GET /v1/consultas/calendario_vigencias`
 
@@ -700,11 +700,10 @@ resueltas en el código, no sólo en el diseño:
    reemplazó al otro.
 
 La decisión del punto 2.1 (endpoint combinado calendario+matriz/OC) ya no está abierta:
-quedó diseñada como el punto 15, `detalle_proyeccion_documental` (Q-DOC-03) — **diseño
-nuevo, todavía sin implementar**, a la espera de aprobación antes de tocar código, mismo
-patrón que el resto de este documento.
+quedó diseñada e **implementada** como el punto 15, `detalle_proyeccion_documental`
+(Q-DOC-03).
 
-## 15. `GET /v1/consultas/detalle_proyeccion_documental` (Q-DOC-03, diseño — sin implementar)
+## 15. `GET /v1/consultas/detalle_proyeccion_documental` (Q-DOC-03, implementado)
 
 Responde al gap que Astra señaló sobre el frontend ya integrado (`realDocumentationPlanningAccess`,
 commit `b942c7e` de `FieldServiceApp`): un endpoint de detalle **genérico**, que reciba una
@@ -743,11 +742,13 @@ del backend. Ningún dato nuevo queda expuesto: `documento_id`/`commitment_id` y
 en las listas sin cifrar, así que empaquetarlos en `referencia` no cambia el modelo de
 confianza.
 
-**Parseo** (server-side, único lugar): separar por `:` con límite 2 para la rama
-`evidencia` (`categoria` e `id` propio nunca llevan `:`, pero por si acaso no se confía en
-eso) y con límite 1 para la rama `oc` (`commitment_id`/`clave_origen` sí podría, en teoría,
-contener `:`). Una referencia que no matchea ningún prefijo, o cuya `categoria` no es una
-de las tres válidas, es 400 (`ErrorDeDominio`, `referencia inválida`) — nunca un 500.
+**Parseo** (server-side, único lugar): el prefijo (`evidencia:`/`oc:`) decide la rama; para
+`evidencia:` el resto se separa por `:` con límite 1 (`categoria`, `id` — `id` propio
+podría en teoría contener `:`, no se confía en que no pase); para `oc:` el resto entero
+(sin volver a separar) es el `commitment_id`, que también podría contener `:`. Una
+referencia que no matchea ningún prefijo, o cuya `categoria` no es una de las tres
+válidas, es 422 (`ErrorDeDominio`, `referencia inválida` — mismo status que el resto de
+las validaciones de estos endpoints, p. ej. `estado inválido`) — nunca un 500.
 
 ### 15.2 Contrato
 
@@ -872,23 +873,31 @@ evidencia todavía de que haga falta (no optimizar sin medir).
 - No inventa un rol nuevo ni una regla de alcance nueva: hereda los roles y el alcance de
   los tres endpoints existentes, rama por rama.
 
-### 15.4 Tests previstos (cuando se implemente)
+### 15.4 Tests (`tests/test_proyeccion_documental.py`, contra PostgreSQL real)
 
-- rama `oc`: el body coincide EXACTAMENTE con `proyeccion_documental?commitment_id=…` para
-  la misma OC, salvo `tipo`/`referencia` de más (regresión de no-duplicar el motor);
-- rama `oc`: técnico → 403, igual que en `proyeccion_documental` directo;
-- rama `evidencia`: `aplicabilidad = "informativa"` cuando ninguna OC activa exige ese
-  requisito para ese sujeto (incluye el caso "no hay ninguna OC activa" y el caso "hay OC
-  activas pero ninguna exige este requisito puntual");
-- rama `evidencia`: `aplicabilidad = "exigida_por_oc"` con una OC que sí lo exige, y con
-  más de una (`matrices_aplicables` con más de un elemento);
-- rama `evidencia`: sujeto fuera del alcance de quien consulta → 404, nunca 403, nunca
-  expone `sujeto_id` ni `requisito` de otro alcance;
-- rama `evidencia`: `categoria`/`id` inexistente → 404;
-- `referencia` malformada (sin prefijo válido, `categoria` inválida) → 400;
-- `referencia` de la rama equivocada para el rol (técnico + `oc:…`) → 403, verificado
-  DESPUÉS de un parseo exitoso, no antes;
-- `calendario_vigencias` y `proyeccion_documental_backlog` exponen `referencia` con el
-  formato exacto, y ese mismo string funciona sin modificación como parámetro de este
-  endpoint (test de integración de punta a punta: listar → tomar `referencia` de la
-  primera fila → pedir detalle → 200).
+- `test_detalle_rama_oc_coincide_con_proyeccion_documental`: el body coincide EXACTAMENTE
+  con `proyeccion_documental?commitment_id=…` para la misma OC, salvo `tipo` de más
+  (regresión de no-duplicar el motor); confirma además la simetría de `referencia` en
+  `ProyeccionDocumentalResponse`;
+- `test_detalle_rama_oc_tecnico_403`: técnico → 403, igual que en `proyeccion_documental`
+  directo;
+- `test_detalle_rama_evidencia_informativa_sin_ninguna_oc_activa`: `aplicabilidad =
+  "informativa"` cuando ninguna OC activa exige ese requisito para ese sujeto;
+- `test_detalle_rama_evidencia_exigida_por_oc` / `test_detalle_rama_evidencia_exigida_por_mas_de_una_oc`:
+  `aplicabilidad = "exigida_por_oc"` con una OC que sí lo exige, y con más de una
+  (`matrices_aplicables` con más de un elemento);
+- `test_detalle_rama_evidencia_sujeto_fuera_de_alcance_da_404`: sujeto fuera del alcance de
+  quien consulta → 404, nunca 403, nunca expone `sujeto_id` ni `requisito` de otro alcance;
+- `test_detalle_rama_evidencia_categoria_id_inexistente_da_404`: `categoria`/`id`
+  inexistente → 404;
+- `test_detalle_referencia_malformada_da_422`: sin prefijo válido, sin `id`, `categoria`
+  inválida → 422 (cuatro variantes);
+- `test_detalle_rama_evidencia_tecnico_ve_su_propia_referencia`: `evidencia:` sí admite
+  técnico (mismo rol que `calendario_vigencias`), a diferencia de `oc:`;
+- `test_detalle_backlog_expone_referencia_punta_a_punta`: `proyeccion_documental_backlog`
+  expone `referencia` con el formato exacto, y ese mismo string funciona sin modificación
+  como parámetro de este endpoint (listar → tomar `referencia` → pedir detalle → 200);
+- `test_detalle_no_escribe_nada`: ninguna rama persiste, crea tareas ni emite eventos.
+
+Corridos junto al resto de la suite de proyección: **41 tests en
+`tests/test_proyeccion_documental.py`, 581 en la suite completa, 0 fallados.**
