@@ -5,5 +5,5 @@ export const featureFlags = Object.freeze({
   alertLifecycle: false, globalTemplates: false, module2Integration: false,
   documentBatchImport: false, typedBusinessViews: false, signedEvidence: false,
   technicianCompositeView: false,
-  documentationCalendarIntegration: false, backlogDocumentationIntegration: false,
+  documentationCalendarIntegration: true, backlogDocumentationIntegration: true,
 });
