@@ -113,7 +113,8 @@ class ProyeccionDocumentalResponse(BaseModel):
     sujetos: SujetosOrigen
     matriz: MatrizInfo | None
     estado: Literal["sin_matriz", "pendiente_de_planificacion", "bloqueo_confirmado",
-                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados"]
+                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados",
+                    "vigencia_finalizada"]
     intervalos: list[IntervaloProyeccion]
     causas: list[CausaProyeccion] | None = None
     estado_por_dia: dict[str, str] | None = None

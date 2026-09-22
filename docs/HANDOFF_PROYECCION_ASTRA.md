@@ -256,12 +256,16 @@ internas, sin campos nuevos ni renombrados:
    `referencia` de negocio de la OC, distinta de `referencia` = la referencia opaca del
    punto 8), `cliente_id`, `locacion_id`. Antes sólo traía `commitment_id`
    (`clave_origen`) — no alcanzaba para mostrar "OC 45000218 · Cliente Norte" sin otro GET.
-2. **`ItemBacklog.estado` suma un 7º valor**: `vigencia_finalizada` — una OC activa cuya
-   vigencia ya terminó antes de la ventana evaluada. Antes reusaba
-   `pendiente_de_planificacion` para este caso (mentira semántica según la auditoría);
-   ahora tiene su propio valor. **`ProyeccionDocumentalResponse.estado` (el endpoint
-   puntual) sigue con los 6 de siempre** — no es simétrico todavía, ver la nota del punto
-   B-03 en `docs/PROYECCION_DOCUMENTAL.md` §16.
+2. **`estado` suma un 7º valor, en LOS DOS endpoints**: `vigencia_finalizada` — una OC
+   cuya vigencia ya terminó antes de la ventana evaluada. `ItemBacklog.estado` ya lo tenía
+   (B-07: antes reusaba `pendiente_de_planificacion`, mentira semántica según la
+   auditoría). Tras una segunda revisión externa que señaló la asimetría,
+   `ProyeccionDocumentalResponse.estado` (el endpoint puntual) ahora también lo admite:
+   antes daba 422 (`hasta` no puede ser anterior a `desde`, por el default de B-03) para
+   una OC ya terminada; ahora da 200 con `vigencia_finalizada` — mismo criterio que el
+   backlog, `matriz` poblada, `intervalos: []`. Un `hasta` EXPLÍCITO que quede antes de
+   `desde` sigue siendo 422 (eso es un pedido mal formado, no un hecho de la OC). Ver
+   `docs/PROYECCION_DOCUMENTAL.md` §16, nota de B-03.
 3. **`capacidad_documental_potencial(_hoy)` y `estado` pueden variar para la misma OC**
    frente a lo que ya se haya visto/cacheado antes de este commit, si esa OC tiene
    constancias o excepciones otorgadas en juego (B-02): antes el motor las ignoraba por
@@ -271,5 +275,5 @@ internas, sin campos nuevos ni renombrados:
    datos de evidencia, si hay una constancia/excepción vigente de por medio.
 
 Diff de operaciones: **ninguna** — los 10 hallazgos no agregan ni sacan rutas, sólo tocan
-schemas existentes (aditivo) y corrigen cálculo. Suite completa tras esta tanda: **599
-passed, 0 failed**.
+schemas existentes (aditivo) y corrigen cálculo. Suite completa tras esta tanda (incluida
+la simetría B-03/B-07 de la segunda revisión): **601 passed, 0 failed**.

@@ -442,6 +442,43 @@ def test_proyeccion_hasta_explicito_por_encima_del_tope_sigue_dando_422(cliente_
     assert r.status_code == 422
 
 
+def test_proyeccion_oc_ya_vencida_da_vigencia_finalizada_no_422(cliente_api, tenant_de_prueba, hoy):
+    """Seguimiento de la auditoría externa (observación B-03 vs B-07, 2026-09-22, opción
+    A elegida explícitamente): el endpoint puntual ahora es simétrico con el backlog para
+    una OC cuya vigencia ya terminó — 200 con `vigencia_finalizada`, no 422. `matriz`
+    viaja poblada (hay matriz y candidatos resueltos; lo único que falta es ventana)."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, oc_desde=hoy - timedelta(days=60), oc_hasta=hoy - timedelta(days=10))
+        insertar_legajo(s, t.tenant_id, "persona_puntual_vencida", "persona")
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=esc["commitment_id"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["estado"] == "vigencia_finalizada"
+    assert body["intervalos"] == []
+    assert body["matriz"] is not None and body["matriz"]["matriz_version_id"] == esc["matriz_id"]
+    assert body["causas"] == [{"motivo": "La vigencia de la OC ya terminó antes del inicio de la ventana evaluada",
+                                "tipo_sujeto": None, "requisito_definicion_id": None,
+                                "sujetos_que_pierden_cobertura": None, "sujetos_que_mantienen_cobertura": None}]
+    # mismo estado que ve el backlog para la misma OC — ya no hay asimetría entre los dos.
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["estado"] == "vigencia_finalizada"
+
+
+def test_proyeccion_hasta_explicito_anterior_a_desde_en_oc_activa_sigue_dando_422(cliente_api, tenant_de_prueba, hoy):
+    """Contraparte del test anterior: si la OC NO terminó (sigue activa) y quien consulta
+    pide un `hasta` explícito anterior a `desde`, eso sigue siendo 422 — es un pedido mal
+    formado de quien consulta, no un hecho estructural de la OC (la distinción que hace
+    `vigencia_ya_finalizada` en `servicio.py`)."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, oc_hasta=hoy + timedelta(days=60))
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental",
+             commitment_id=esc["commitment_id"], hasta=(hoy - timedelta(days=1)).isoformat())
+    assert r.status_code == 422
+
+
 # --------------------------------------------------------------------------- proyeccion_documental_backlog
 
 

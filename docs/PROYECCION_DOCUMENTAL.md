@@ -912,8 +912,8 @@ evidencia todavía de que haga falta (no optimizar sin medir).
   como parámetro de este endpoint (listar → tomar `referencia` → pedir detalle → 200);
 - `test_detalle_no_escribe_nada`: ninguna rama persiste, crea tareas ni emite eventos.
 
-Corridos junto al resto de la suite de proyección: al cierre de este documento, **65
-tests en `tests/test_proyeccion_documental.py`, 599 en la suite completa, 0 fallados**
+Corridos junto al resto de la suite de proyección: al cierre de este documento, **51
+tests en `tests/test_proyeccion_documental.py`, 601 en la suite completa, 0 fallados**
 (incluye las correcciones del punto 16).
 
 ## 16. Correcciones de la auditoría externa (2026-09-22)
@@ -944,10 +944,21 @@ B-10). Verificados uno por uno contra el código antes de tocar nada — 9 eran 
 - **B-03 (P1, `proyeccion_documental`)**: el default de `hasta` era la vigencia completa
   de la OC — cualquier OC de más de 366 días explotaba 422 con la llamada más obvia (sin
   parámetros). Corregido: el default ahora se recorta a `min(oc.vigencia_hasta, desde +
-  366)`; un `hasta` explícito por encima del tope sigue dando 422 igual que antes. Nota:
-  esta corrección NO se extendió al caso simétrico de una OC ya terminada sin `hasta`
-  explícito (sigue dando 422 vía `hasta < desde` en `_exigir_rango`) — el backlog sí
-  resuelve ese caso (B-07), el endpoint puntual todavía no; queda pendiente si hace falta.
+  366)`; un `hasta` explícito por encima del tope sigue dando 422 igual que antes.
+  **Seguimiento (observación de una segunda revisión externa, 2026-09-22)**: esto dejaba
+  un caso simétrico sin resolver — una OC ya terminada sin `hasta` explícito seguía dando
+  422 en el endpoint puntual, mientras el backlog ya lo resolvía con `vigencia_finalizada`
+  (B-07). Decisión explícita, opción A (simetría, no documentar la asimetría): el
+  endpoint puntual también devuelve 200 con `estado = vigencia_finalizada` para ese
+  caso — `matriz` viaja poblada (ya está resuelta en ese punto), `intervalos: []`, mismo
+  texto de `causas` que usa el backlog. La distinción es POR QUÉ `hasta < desde`: si es
+  por el default (la vigencia de la OC ya pasó), es un hecho estructural →
+  `vigencia_finalizada`, 200; si `hasta` fue explícito, sigue siendo 422 — ahí es un pedido
+  mal formado de quien consulta, no un hecho de la OC (`vigencia_ya_finalizada` en
+  `servicio.py`). `ProyeccionDocumentalResponse.estado` (y por herencia `DetalleOcResponse`
+  del punto 15) suma el 7º valor. 2 tests nuevos:
+  `test_proyeccion_oc_ya_vencida_da_vigencia_finalizada_no_422` (y su contraparte,
+  confirmando que el `hasta` explícito en una OC activa SIGUE dando 422).
 - **B-05 (P2, `proyeccion_documental_backlog`)**: el backlog sólo traía `commitment_id`
   (la clave técnica) — el frontend no podía armar "OC 45000218 · Cliente Norte" sin otro
   GET. `ItemBacklog` suma `oc_referencia` (columna `oc.referencia`, nullable), `cliente_id`

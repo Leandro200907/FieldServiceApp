@@ -3414,7 +3414,8 @@
               "bloqueo_confirmado",
               "requiere_revision",
               "riesgo_documental",
-              "sin_riesgos_detectados"
+              "sin_riesgos_detectados",
+              "vigencia_finalizada"
             ],
             "title": "Estado",
             "type": "string"
@@ -6885,7 +6886,8 @@
               "bloqueo_confirmado",
               "requiere_revision",
               "riesgo_documental",
-              "sin_riesgos_detectados"
+              "sin_riesgos_detectados",
+              "vigencia_finalizada"
             ],
             "title": "Estado",
             "type": "string"

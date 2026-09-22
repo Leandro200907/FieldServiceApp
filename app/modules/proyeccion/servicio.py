@@ -282,6 +282,7 @@ def proyeccion_documental(
         raise NoEncontrado("OC inexistente", {"commitment_id": commitment_id})
     hoy = hoy_del_tenant(session, tenant_id)
     desde = desde or max(hoy, oc["vigencia_desde"])
+    hasta_explicito = hasta is not None
     # B-03: el default de `hasta` es la vigencia de la OC, pero recortado al tope de 366
     # días — antes una OC de más de un año explotaba 422 con la llamada más obvia (sin
     # parámetros). Un `hasta` explícito que exceda el tope sigue dando 422 en `_exigir_rango`.
@@ -289,7 +290,16 @@ def proyeccion_documental(
     if desde < oc["vigencia_desde"]:
         raise ErrorDeDominio("`desde` no puede ser anterior a la vigencia de la OC",
                              {"desde": str(desde), "oc_vigencia_desde": str(oc["vigencia_desde"])})
-    _exigir_rango(desde, hasta, hoy)
+    # B-03/B-07 (observación de seguimiento de la auditoría externa, 2026-09-22, opción A
+    # elegida explícitamente): una OC cuya vigencia ya terminó antes de `desde` da
+    # `hasta < desde` únicamente por el DEFAULT (`hasta` = `oc.vigencia_hasta`, en el
+    # pasado) — eso es un hecho estructural de la OC, no un pedido inválido, y se resuelve
+    # más abajo como `vigencia_finalizada` (mismo criterio que ya usa el backlog, B-07).
+    # Un `hasta` explícito que quede antes de `desde` SIGUE siendo 422: ahí sí es un
+    # pedido mal formado de quien consulta, no un hecho de la OC.
+    vigencia_ya_finalizada = not hasta_explicito and hasta < desde
+    if not vigencia_ya_finalizada:
+        _exigir_rango(desde, hasta, hoy)
 
     conjunto = conjunto_de_sujetos(session, identidad, commitment_id, hoy)
     salida: dict[str, Any] = {
@@ -323,6 +333,15 @@ def proyeccion_documental(
         salida["matriz"] = {**version_matriz_pendiente, "tipos_exigidos": sorted(requisitos_por_tipo_pendiente)}
         salida["intervalos"] = []
         salida["causas"] = _causa_sin_evaluar("No hay decisión visible para esta OC ni candidatos en el alcance de quien consulta")
+        return salida
+    if vigencia_ya_finalizada:
+        # Hay matriz Y candidatos (si no, ya se salió arriba) — lo único que falta es una
+        # ventana real que evaluar: la vigencia de la OC ya terminó antes de `desde`.
+        requisitos_por_tipo_vf, _nombres_vf, _clasif_vf, version_matriz_vf = resultado_tipos
+        salida["estado"] = "vigencia_finalizada"
+        salida["matriz"] = {**version_matriz_vf, "tipos_exigidos": sorted(requisitos_por_tipo_vf)}
+        salida["intervalos"] = []
+        salida["causas"] = _causa_sin_evaluar("La vigencia de la OC ya terminó antes del inicio de la ventana evaluada")
         return salida
 
     requisitos_por_tipo, nombres, clasificaciones, version_matriz = resultado_tipos
