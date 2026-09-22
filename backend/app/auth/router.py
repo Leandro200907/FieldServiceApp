@@ -7,16 +7,19 @@ credenciales malas es el mismo 401 genérico: no se revela si el slug o el email
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.errores import NoAutenticado
+from app.api.errores import ErrorDeDominio, NoAutenticado
 from app.auth import jwt as tokens
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
 from app.auth.passwords import MAX_BYTES, bytes_de, hashear_password, verificar_password
+from app.comun.ratelimit import RateLimiter
+from app.comun.red import origen_real
+from app.config import settings
 from app.db import platform_session, tenant_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -24,6 +27,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Hash "de relleno" para que un email inexistente cueste lo mismo que una password mala
 # (evita el oráculo por tiempo de respuesta). Se calcula una vez al importar.
 _HASH_SENUELO = hashear_password("senuelo-no-es-una-password-valida")
+
+# B-08 (auditoría externa 2026-09-22): login no tenía ningún rate limit — a diferencia
+# del link público de paquetes (`app/modules/paquete/servicio.py`), quedaba abierto a
+# fuerza bruta de contraseña. Por origen (`app/comun/red.py`, mismo criterio anti-spoof
+# que paquetes: sólo confía en X-Forwarded-For detrás de un proxy conocido). Mismo
+# `max_por_minuto` por defecto que paquetes (30) — bcrypt ya encarece cada intento; el
+# límite es defensa en profundidad, no la única barrera, y un tope más bajo deja poco
+# margen a una suite de tests con muchos login reales seguidos desde el mismo origen.
+_limiter_login = RateLimiter(max_por_minuto=30)
 
 
 # --------------------------------------------------------------------------- schemas
@@ -75,7 +87,11 @@ class LogoutResponse(BaseModel):
 
 
 @router.post("/login", response_model=ParDeTokens)
-def login(body: LoginRequest) -> ParDeTokens:
+def login(body: LoginRequest, request: Request) -> ParDeTokens:
+    origen = origen_real(request.client.host if request.client else None,
+                         request.headers.get("x-forwarded-for"), settings.proxies_confiables)
+    if not _limiter_login.permitir(f"origen:{origen}"):
+        raise ErrorDeDominio("Demasiados intentos; reintentar en un minuto", codigo="rate_limit")
     with platform_session() as s:
         tenant_id = s.execute(
             text("SELECT modulo1.resolver_tenant_por_slug(:slug)"), {"slug": body.tenant_slug}

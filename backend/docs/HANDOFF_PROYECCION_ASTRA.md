@@ -212,3 +212,68 @@ dos campos en ese escenario puntual.
 - No se renombra ningún campo del contrato existente.
 - No se agregan endpoints nuevos a los ya implementados.
 - No se toca nada de Módulo 2.
+
+## 8. Addendum — cuarto endpoint: `detalle_proyeccion_documental` (Q-DOC-03)
+
+El punto 7 de arriba describe ESTE commit puntual, no el estado final: después de esta
+entrega se identificó (vía revisión del frontend ya integrado,
+`realDocumentationPlanningAccess` en `FieldServiceApp`, commit `b942c7e`) que faltaba un
+cuarto endpoint de detalle genérico. Diseñado en `docs/PROYECCION_DOCUMENTAL.md` §15 e
+implementado en la rama `backend/detalle-proyeccion-documental`:
+
+`GET /v1/consultas/detalle_proyeccion_documental?referencia=…`
+
+- **Cambio aditivo sobre las 3 rutas de este documento**: `calendario_vigencias`,
+  `proyeccion_documental` y `proyeccion_documental_backlog` suman un campo nuevo,
+  `referencia: string`, a cada ítem/response (`evidencia:{categoria}:{id}` o
+  `oc:{commitment_id}`) — ningún campo existente cambió de nombre ni de tipo.
+- **Roles**: según la rama de `referencia`, no un rol único — `evidencia:` usa los mismos
+  que `calendario_vigencias` (incluye técnico), `oc:` usa los mismos que
+  `proyeccion_documental`/`_backlog` (sin técnico).
+- **Respuesta**: unión discriminada por `tipo` (`"evidencia" | "oc"`), completamente
+  tipada. La rama `oc` es literalmente `proyeccion_documental` con `tipo` agregado — cero
+  lógica nueva. La rama `evidencia` es la pieza nueva: agrega `aplicabilidad`
+  (`"exigida_por_oc" | "informativa"`) y `matrices_aplicables[]`, resolviendo el "contexto
+  de aplicabilidad" que pedía Q-DOC-01 (§2.4 de este documento) para UN ítem puntual, a
+  demanda — `calendario_vigencias` como lista sigue sin cruzar matriz/OC, sin cambios.
+- Diff de operaciones vs el commit de la sección 5: **89 operaciones sobre 88 paths**
+  (antes 88/87) — una sola alta, `GET /v1/consultas/detalle_proyeccion_documental`; nada
+  existente cambió de forma.
+- Tests: 11 nuevos en `tests/test_proyeccion_documental.py` (detalle en
+  `docs/PROYECCION_DOCUMENTAL.md` §15.4), contra PostgreSQL real. Suite completa: **581
+  passed, 0 failed**.
+- Sigue sin declararse integrado a ninguna pantalla — misma disciplina que el resto de
+  este documento.
+
+## 9. Addendum — correcciones de auditoría externa (2026-09-22): 3 cambios de contrato
+
+Una auditoría externa (Grok) sobre el backlog/proyección encontró 10 hallazgos; el detalle
+completo de los 9 confirmados y su corrección está en `docs/PROYECCION_DOCUMENTAL.md` §16.
+Acá sólo los que **cambian el contrato HTTP** — el resto son correcciones de cálculo
+internas, sin campos nuevos ni renombrados:
+
+1. **`ItemBacklog` suma 3 campos** (aditivo): `oc_referencia` (string o `null` — la
+   `referencia` de negocio de la OC, distinta de `referencia` = la referencia opaca del
+   punto 8), `cliente_id`, `locacion_id`. Antes sólo traía `commitment_id`
+   (`clave_origen`) — no alcanzaba para mostrar "OC 45000218 · Cliente Norte" sin otro GET.
+2. **`estado` suma un 7º valor, en LOS DOS endpoints**: `vigencia_finalizada` — una OC
+   cuya vigencia ya terminó antes de la ventana evaluada. `ItemBacklog.estado` ya lo tenía
+   (B-07: antes reusaba `pendiente_de_planificacion`, mentira semántica según la
+   auditoría). Tras una segunda revisión externa que señaló la asimetría,
+   `ProyeccionDocumentalResponse.estado` (el endpoint puntual) ahora también lo admite:
+   antes daba 422 (`hasta` no puede ser anterior a `desde`, por el default de B-03) para
+   una OC ya terminada; ahora da 200 con `vigencia_finalizada` — mismo criterio que el
+   backlog, `matriz` poblada, `intervalos: []`. Un `hasta` EXPLÍCITO que quede antes de
+   `desde` sigue siendo 422 (eso es un pedido mal formado, no un hecho de la OC). Ver
+   `docs/PROYECCION_DOCUMENTAL.md` §16, nota de B-03.
+3. **`capacidad_documental_potencial(_hoy)` y `estado` pueden variar para la misma OC**
+   frente a lo que ya se haya visto/cacheado antes de este commit, si esa OC tiene
+   constancias o excepciones otorgadas en juego (B-02): antes el motor las ignoraba por
+   completo. Esto es una corrección de EXACTITUD, no un campo nuevo — ningún tipo de dato
+   cambia, pero un número que antes daba 0 candidatos puede ahora dar 1 (o un `estado`
+   `bloqueo_confirmado` puede pasar a `sin_riesgos_detectados`) para la misma OC, mismos
+   datos de evidencia, si hay una constancia/excepción vigente de por medio.
+
+Diff de operaciones: **ninguna** — los 10 hallazgos no agregan ni sacan rutas, sólo tocan
+schemas existentes (aditivo) y corrigen cálculo. Suite completa tras esta tanda (incluida
+la simetría B-03/B-07 de la segunda revisión): **601 passed, 0 failed**.

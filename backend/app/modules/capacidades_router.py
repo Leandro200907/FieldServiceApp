@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, pagina
+from app.comun.reloj import ahora_utc
 from app.db import tenant_session
 from app.modules.drive import servicio as drive
 from app.modules.exportacion import servicio as exportacion
@@ -268,7 +269,7 @@ def configurar_drive(body: ConfigurarDriveBody, identidad: Identidad = Depends(i
 @router.post("/comandos/escanear_drive", response_model=EscanearDriveResponse)
 def escanear_drive(body: EscanearDriveBody, identidad: Identidad = Depends(identidad_actual), clave: str | None = Depends(clave_idempotencia)) -> EscanearDriveResponse:
     resultado = ejecutar_comando(identidad, clave, (Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION),
-                                 lambda s: drive.escanear(s, identidad, _proveedor_drive(), _storage()),
+                                 lambda s: drive.escanear(s, identidad, _proveedor_drive(), _storage(), ahora_utc()),
                                  ruta="/comandos/escanear_drive", body=body.model_dump(mode="json"))
     return EscanearDriveResponse(**resultado)
 

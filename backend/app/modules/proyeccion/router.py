@@ -1,12 +1,12 @@
-"""GET /v1/consultas/calendario_vigencias, proyeccion_documental_backlog y
-proyeccion_documental (docs/PROYECCION_DOCUMENTAL.md)."""
+"""GET /v1/consultas/calendario_vigencias, proyeccion_documental_backlog,
+proyeccion_documental y detalle_proyeccion_documental (docs/PROYECCION_DOCUMENTAL.md)."""
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal, Union
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad
@@ -33,6 +33,7 @@ class ItemCalendario(BaseModel):
     estado_confirmacion: str
     archivo_validacion: str | None
     dias_para_vencer: int
+    referencia: str
 
 
 class CalendarioVigenciasResponse(BaseModel):
@@ -104,6 +105,7 @@ class IntervaloProyeccion(BaseModel):
 
 class ProyeccionDocumentalResponse(BaseModel):
     commitment_id: str
+    referencia: str
     oc: OcInfo
     hoy: date
     desde: date
@@ -111,7 +113,8 @@ class ProyeccionDocumentalResponse(BaseModel):
     sujetos: SujetosOrigen
     matriz: MatrizInfo | None
     estado: Literal["sin_matriz", "pendiente_de_planificacion", "bloqueo_confirmado",
-                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados"]
+                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados",
+                    "vigencia_finalizada"]
     intervalos: list[IntervaloProyeccion]
     causas: list[CausaProyeccion] | None = None
     estado_por_dia: dict[str, str] | None = None
@@ -135,10 +138,15 @@ def proyeccion_documental(
 
 class ItemBacklog(BaseModel):
     commitment_id: str
+    referencia: str
+    oc_referencia: str | None
+    cliente_id: str
+    locacion_id: str
     vigencia_desde: date
     vigencia_hasta: date
     estado: Literal["sin_matriz", "pendiente_de_planificacion", "bloqueo_confirmado",
-                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados"]
+                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados",
+                    "vigencia_finalizada"]
     primer_quiebre: date | None
     capacidad_documental_potencial_hoy: dict[str, int]
     origen_calculo: Literal["ultima_decision_visible", "candidatos_del_alcance"]
@@ -166,3 +174,54 @@ def proyeccion_documental_backlog(
         return ProyeccionDocumentalBacklogResponse(**servicio.proyeccion_documental_backlog(
             s, identidad, p, estado_oc=estado_oc, estados=estado, horizonte_dias=horizonte_dias,
         ))
+
+
+# --------------------------------------------------------------------------- detalle_proyeccion_documental (Q-DOC-03)
+
+
+class MatrizAplicable(BaseModel):
+    commitment_id: str
+    matriz_version_id: str
+    version: int
+    origen_calculo: Literal["ultima_decision_visible", "candidatos_del_alcance"]
+
+
+class DetalleEvidenciaResponse(BaseModel):
+    tipo: Literal["evidencia"]
+    referencia: str
+    categoria: Literal["documento", "competencia", "induccion"]
+    id: str
+    sujeto_id: str
+    tipo_sujeto: str
+    identificador_natural: str | None
+    requisito_definicion_id: str | None
+    requisito: str | None
+    vigente_desde: date
+    vigente_hasta: date
+    estado_confirmacion: str
+    archivo_validacion: str | None
+    hoy: date
+    aplicabilidad: Literal["exigida_por_oc", "informativa"]
+    matrices_aplicables: list[MatrizAplicable]
+    advertencia: str
+
+
+class DetalleOcResponse(ProyeccionDocumentalResponse):
+    tipo: Literal["oc"]
+
+
+DetalleProyeccionDocumentalResponse = Annotated[
+    Union[DetalleEvidenciaResponse, DetalleOcResponse], Field(discriminator="tipo")
+]
+
+
+@router.get("/consultas/detalle_proyeccion_documental", response_model=DetalleProyeccionDocumentalResponse)
+def detalle_proyeccion_documental(
+    referencia: str = Query(...),
+    identidad: Identidad = Depends(identidad_actual),
+) -> DetalleEvidenciaResponse | DetalleOcResponse:
+    with tenant_session(identidad.tenant_id) as s:
+        resultado = servicio.detalle_proyeccion_documental(s, identidad, referencia)
+    if resultado["tipo"] == "evidencia":
+        return DetalleEvidenciaResponse(**resultado)
+    return DetalleOcResponse(**resultado)

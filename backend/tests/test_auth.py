@@ -240,3 +240,28 @@ def test_yo_token_firmado_con_otro_secreto(cliente_api, tenant_de_prueba):
 def test_yo_rechaza_esquema_no_bearer(cliente_api, tenant_de_prueba):
     r = cliente_api.get("/v1/auth/yo", headers={"Authorization": f"Basic {tenant_de_prueba.token('supervisor')}"})
     assert r.status_code == 401
+
+
+def test_login_rate_limit_por_origen(cliente_api, tenant_de_prueba, monkeypatch):
+    """B-08 (auditoría externa 2026-09-22): login no tenía ningún rate limit — a
+    diferencia del link público de paquetes, quedaba abierto a fuerza bruta de
+    contraseña sin límite. Se reemplaza el limiter compartido por uno descartable de
+    límite bajo (`monkeypatch`) para no dejar estado que afecte a otros tests del mismo
+    proceso — el limiter real de producción es de una sola instancia por diseño."""
+    import app.auth.router as auth_router
+    from app.comun.ratelimit import RateLimiter
+
+    monkeypatch.setattr(auth_router, "_limiter_login", RateLimiter(max_por_minuto=3))
+    t = tenant_de_prueba
+    for _ in range(3):
+        r = _login(cliente_api, t, "responsable_legajos", password="password-incorrecta")
+        assert r.status_code == 401
+    r = _login(cliente_api, t, "responsable_legajos", password="password-incorrecta")
+    assert r.status_code == 422
+    assert r.json()["error"]["codigo"] == "rate_limit"
+    # una vez agotado el límite, ni siquiera la contraseña CORRECTA pasa — el límite es
+    # por origen, no por si las credenciales son válidas (si no, un atacante distinguiría
+    # "existe" de "no existe" por si el rate limit se activa antes o después).
+    _fijar_password(t, "responsable_legajos")
+    r2 = _login(cliente_api, t, "responsable_legajos")
+    assert r2.status_code == 422 and r2.json()["error"]["codigo"] == "rate_limit"

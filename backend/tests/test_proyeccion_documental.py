@@ -16,8 +16,10 @@ from tests import apoyo
 from tests.test_orquestacion import (
     clave_de_matriz,
     decidir,
+    insertar_constancia,
     insertar_definicion,
     insertar_documento,
+    insertar_excepcion,
     insertar_legajo,
     insertar_matriz,
     insertar_oc,
@@ -361,6 +363,122 @@ def test_proyeccion_desde_explicito_anterior_a_vigencia_de_oc_da_422(cliente_api
     assert r.status_code == 422
 
 
+# --------------------------------------------------------------------------- B-01/B-02/B-03 (auditoría externa 2026-09-22)
+
+
+def test_proyeccion_alta_a_mitad_de_ventana_quiebra_en_vigente_desde(cliente_api, tenant_de_prueba, hoy):
+    """B-01 end-to-end: un alta a mitad de la ventana pedida corta el intervalo justo en
+    `vigente_desde`, en vez de quedar roja todo el tramo hasta el próximo vencimiento."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, oc_hasta=hoy + timedelta(days=30))
+        insertar_legajo(s, t.tenant_id, "persona_alta_tardia", "persona")
+        insertar_documento(s, t.tenant_id, "persona_alta_tardia", esc["req"], hoy + timedelta(days=15), hoy + timedelta(days=200))
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=esc["commitment_id"])
+    body = r.json()
+    intervalos = body["intervalos"]
+    assert len(intervalos) == 2
+    assert intervalos[0]["estado"] == "bloqueo_confirmado" and intervalos[0]["hasta"] == (hoy + timedelta(days=14)).isoformat()
+    assert intervalos[1]["estado"] == "sin_riesgos_detectados" and intervalos[1]["desde"] == (hoy + timedelta(days=15)).isoformat()
+
+
+def test_proyeccion_constancia_vigente_rescata_bloqueo(cliente_api, tenant_de_prueba, hoy):
+    """B-02 end-to-end: sin la constancia esto sería `bloqueo_confirmado`
+    (`test_proyeccion_bloqueo_confirmado_desde_el_primer_dia`) — con una constancia
+    general vigente del cliente, `proyeccion_documental` deja de contradecir a
+    `cobertura_oc` para la misma OC."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)  # bloqueante_duro por defecto
+        insertar_legajo(s, t.tenant_id, "persona_constancia", "persona")
+        insertar_constancia(s, t.tenant_id, "persona_constancia", esc["req"], esc["clave"]["c"], None)
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=esc["commitment_id"])
+    body = r.json()
+    assert body["estado"] == "sin_riesgos_detectados"
+    assert body["intervalos"][0]["capacidad_documental_potencial"] == {"persona": 1}
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["estado"] == "sin_riesgos_detectados"
+
+
+def test_proyeccion_excepcion_otorgada_habilita_capacidad_sin_volver_verde_el_documento(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, clasificacion="excepcionable")
+        insertar_legajo(s, t.tenant_id, "persona_excepcion", "persona")
+        base = decidir(s, t.tenant_id, esc["commitment_id"], ahora_utc(), sujetos=["persona_excepcion"], usuario="test")
+        insertar_excepcion(s, t.tenant_id, base["referencia_evaluacion"], "persona_excepcion", esc["req"], esc["commitment_id"])
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=esc["commitment_id"])
+    body = r.json()
+    assert body["sujetos"]["origen"] == "ultima_decision_visible"
+    assert body["estado"] == "sin_riesgos_detectados"
+    assert body["intervalos"][0]["capacidad_documental_potencial"] == {"persona": 1}
+
+
+def test_proyeccion_oc_larga_sin_hasta_explicito_no_da_422(cliente_api, tenant_de_prueba, hoy):
+    """B-03: antes, cualquier OC de más de 366 días explotaba 422 con la llamada más
+    obvia (sin parámetros) porque el default de `hasta` era la vigencia completa de la
+    OC. Ahora el default se recorta al tope — un `hasta` explícito sigue validándose."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        clave = clave_de_matriz()
+        req = insertar_definicion(s, t.tenant_id, "Apto médico larga", "persona")
+        insertar_matriz(s, t.tenant_id, clave, {req: "bloqueante_duro"}, vigente_desde=hoy - timedelta(days=365))
+        commitment_id = f"OC-{uuid.uuid4().hex[:8]}"
+        insertar_oc(s, t.tenant_id, commitment_id, clave, hoy - timedelta(days=10), hoy + timedelta(days=500))
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=commitment_id)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["desde"] == hoy.isoformat()
+    assert body["hasta"] == (hoy + timedelta(days=366)).isoformat()
+
+
+def test_proyeccion_hasta_explicito_por_encima_del_tope_sigue_dando_422(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, oc_hasta=hoy + timedelta(days=500))
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental",
+             commitment_id=esc["commitment_id"], hasta=(hoy + timedelta(days=400)).isoformat())
+    assert r.status_code == 422
+
+
+def test_proyeccion_oc_ya_vencida_da_vigencia_finalizada_no_422(cliente_api, tenant_de_prueba, hoy):
+    """Seguimiento de la auditoría externa (observación B-03 vs B-07, 2026-09-22, opción
+    A elegida explícitamente): el endpoint puntual ahora es simétrico con el backlog para
+    una OC cuya vigencia ya terminó — 200 con `vigencia_finalizada`, no 422. `matriz`
+    viaja poblada (hay matriz y candidatos resueltos; lo único que falta es ventana)."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, oc_desde=hoy - timedelta(days=60), oc_hasta=hoy - timedelta(days=10))
+        insertar_legajo(s, t.tenant_id, "persona_puntual_vencida", "persona")
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=esc["commitment_id"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["estado"] == "vigencia_finalizada"
+    assert body["intervalos"] == []
+    assert body["matriz"] is not None and body["matriz"]["matriz_version_id"] == esc["matriz_id"]
+    assert body["causas"] == [{"motivo": "La vigencia de la OC ya terminó antes del inicio de la ventana evaluada",
+                                "tipo_sujeto": None, "requisito_definicion_id": None,
+                                "sujetos_que_pierden_cobertura": None, "sujetos_que_mantienen_cobertura": None}]
+    # mismo estado que ve el backlog para la misma OC — ya no hay asimetría entre los dos.
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["estado"] == "vigencia_finalizada"
+
+
+def test_proyeccion_hasta_explicito_anterior_a_desde_en_oc_activa_sigue_dando_422(cliente_api, tenant_de_prueba, hoy):
+    """Contraparte del test anterior: si la OC NO terminó (sigue activa) y quien consulta
+    pide un `hasta` explícito anterior a `desde`, eso sigue siendo 422 — es un pedido mal
+    formado de quien consulta, no un hecho estructural de la OC (la distinción que hace
+    `vigencia_ya_finalizada` en `servicio.py`)."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, oc_hasta=hoy + timedelta(days=60))
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental",
+             commitment_id=esc["commitment_id"], hasta=(hoy - timedelta(days=1)).isoformat())
+    assert r.status_code == 422
+
+
 # --------------------------------------------------------------------------- proyeccion_documental_backlog
 
 
@@ -451,6 +569,64 @@ def test_backlog_paginacion_real(cliente_api, tenant_de_prueba, hoy):
     assert {f["commitment_id"] for f in pagina1["items"]}.isdisjoint({f["commitment_id"] for f in pagina2["items"]})
 
 
+def test_backlog_expone_oc_referencia_cliente_y_locacion(cliente_api, tenant_de_prueba, hoy):
+    """B-05: sin esto, el frontend no puede armar "OC 45000218 · Cliente Norte" sin otro
+    GET — sólo tenía `commitment_id` (la clave técnica, `clave_origen`)."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)
+        insertar_legajo(s, t.tenant_id, "persona_b05", "persona")
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["cliente_id"] == esc["clave"]["c"]
+    assert fila["locacion_id"] == esc["clave"]["l"]
+    assert fila["oc_referencia"] is None  # `insertar_oc` no la carga en este escenario — el campo existe igual, nullable
+
+
+def test_backlog_evidencia_acotada_a_candidatos_no_pierde_cobertura(cliente_api, tenant_de_prueba, hoy):
+    """B-06 (parcial — ver HANDOFF/doc para lo que queda pendiente): acotar la carga de
+    evidencia al conjunto de candidatos de la OC no puede perder cobertura de un
+    candidato real. Con `supervisor` (universo acotado vía `alcance_de_sujetos`), un
+    sujeto CON evidencia del mismo requisito pero fuera de su universo no es candidato —
+    tiene que seguir sin contar, y el que sí está en el universo tiene que seguir
+    cubriendo, sin que la evidencia del ajeno se filtre ni se pierda."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)
+        insertar_legajo(s, t.tenant_id, "persona_candidata", "persona")
+        insertar_documento(s, t.tenant_id, "persona_candidata", esc["req"], hoy - timedelta(days=5), hoy + timedelta(days=90))
+        apoyo.supervisor_de(s, t, "persona_candidata", desde=hoy - timedelta(days=1))
+        # mismo requisito, evidencia vigente, pero FUERA del universo del supervisor.
+        insertar_legajo(s, t.tenant_id, "persona_fuera_del_universo", "persona")
+        insertar_documento(s, t.tenant_id, "persona_fuera_del_universo", esc["req"], hoy - timedelta(days=5), hoy + timedelta(days=90))
+    r = _get(cliente_api, t, "supervisor", "proyeccion_documental", commitment_id=esc["commitment_id"])
+    body = r.json()
+    assert body["sujetos"]["sujeto_ids"] == ["persona_candidata"]
+    assert body["estado"] == "sin_riesgos_detectados"
+    assert body["intervalos"][0]["capacidad_documental_potencial"] == {"persona": 1}
+    assert "persona_fuera_del_universo" not in r.text
+
+
+def test_backlog_oc_ya_vencida_no_es_pendiente_de_planificacion(cliente_api, tenant_de_prueba, hoy):
+    """B-07: antes, una OC activa cuya vigencia ya terminó entraba al backlog con el
+    MISMO estado que "todavía no hay candidatos ni decisión" — mentira semántica según
+    la auditoría externa. Ahora tiene su propio estado estructural."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy, oc_desde=hoy - timedelta(days=60), oc_hasta=hoy - timedelta(days=10))
+        insertar_legajo(s, t.tenant_id, "persona_vencida", "persona")
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog")
+    fila = next(f for f in r.json()["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["estado"] == "vigencia_finalizada"
+    assert fila["primer_quiebre"] is None
+    assert fila["capacidad_documental_potencial_hoy"] == {}
+    assert fila["motivos_resumidos"] == ["La vigencia de la OC ya terminó antes del inicio de la ventana evaluada"]
+    filtrado = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog", estado="vigencia_finalizada").json()
+    assert esc["commitment_id"] in {f["commitment_id"] for f in filtrado["items"]}
+    sin_filtro_pendiente = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog", estado="pendiente_de_planificacion").json()
+    assert esc["commitment_id"] not in {f["commitment_id"] for f in sin_filtro_pendiente["items"]}
+
+
 # --------------------------------------------------------------------------- transversal
 
 
@@ -495,3 +671,162 @@ def test_aislamiento_entre_tenants(cliente_api, dos_tenants, hoy):
     assert r_otro_tenant.status_code == 404
     r_calendario_tb = _get(cliente_api, tb, "responsable_legajos", "calendario_vigencias")
     assert "persona_a" not in r_calendario_tb.text
+
+
+# --------------------------------------------------------------------------- detalle_proyeccion_documental (Q-DOC-03)
+
+
+def test_detalle_rama_oc_coincide_con_proyeccion_documental(cliente_api, tenant_de_prueba, hoy):
+    """Regresión de no-duplicar el motor: el body de la rama `oc` es EXACTAMENTE el de
+    `proyeccion_documental?commitment_id=…`, más `tipo`."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)
+        insertar_legajo(s, t.tenant_id, "persona_detalle_oc", "persona")
+        insertar_documento(s, t.tenant_id, "persona_detalle_oc", esc["req"], hoy - timedelta(days=5), hoy + timedelta(days=90))
+    directo = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=esc["commitment_id"]).json()
+    detalle = _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=f"oc:{esc['commitment_id']}").json()
+    assert detalle == {**directo, "tipo": "oc"}
+    assert directo["referencia"] == f"oc:{esc['commitment_id']}"  # simetría del punto 15.1
+
+
+def test_detalle_rama_oc_tecnico_403(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)
+    r = _get(cliente_api, t, "tecnico", "detalle_proyeccion_documental", referencia=f"oc:{esc['commitment_id']}")
+    assert r.status_code == 403
+
+
+def test_detalle_rama_evidencia_informativa_sin_ninguna_oc_activa(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        req = insertar_definicion(s, t.tenant_id, "Requisito sin ninguna OC", "persona")
+        insertar_legajo(s, t.tenant_id, "persona_informativa", "persona")
+        insertar_documento(s, t.tenant_id, "persona_informativa", req, hoy - timedelta(days=5), hoy + timedelta(days=90))
+    cal = _get(cliente_api, t, "responsable_legajos", "calendario_vigencias", desde=hoy.isoformat(), hasta=(hoy + timedelta(days=90)).isoformat())
+    item = next(i for i in cal.json()["items"] if i["sujeto_id"] == "persona_informativa")
+    assert item["referencia"] == f"evidencia:documento:{item['id']}"
+    r = _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=item["referencia"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["tipo"] == "evidencia"
+    assert body["aplicabilidad"] == "informativa"
+    assert body["matrices_aplicables"] == []
+    assert body["sujeto_id"] == "persona_informativa"
+    assert body["advertencia"]
+
+
+def test_detalle_rama_evidencia_exigida_por_oc(cliente_api, tenant_de_prueba, hoy):
+    """El requisito de la evidencia coincide con el que exige la matriz de una OC activa,
+    y el sujeto es candidato de esa OC (sin decisión → cae a candidatos del alcance)."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)
+        insertar_legajo(s, t.tenant_id, "persona_exigida", "persona")
+        insertar_documento(s, t.tenant_id, "persona_exigida", esc["req"], hoy - timedelta(days=5), hoy + timedelta(days=90))
+    cal = _get(cliente_api, t, "responsable_legajos", "calendario_vigencias", desde=hoy.isoformat(), hasta=(hoy + timedelta(days=90)).isoformat())
+    item = next(i for i in cal.json()["items"] if i["sujeto_id"] == "persona_exigida")
+    r = _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=item["referencia"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["aplicabilidad"] == "exigida_por_oc"
+    assert len(body["matrices_aplicables"]) == 1
+    aplicable = body["matrices_aplicables"][0]
+    assert aplicable["commitment_id"] == esc["commitment_id"]
+    assert aplicable["matriz_version_id"] == esc["matriz_id"]
+    assert aplicable["origen_calculo"] == "candidatos_del_alcance"
+
+
+def test_detalle_rama_evidencia_exigida_por_mas_de_una_oc(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        req = insertar_definicion(s, t.tenant_id, "Apto médico compartido", "persona")
+        insertar_legajo(s, t.tenant_id, "persona_multi_oc", "persona")
+        insertar_documento(s, t.tenant_id, "persona_multi_oc", req, hoy - timedelta(days=5), hoy + timedelta(days=90))
+        clave1 = clave_de_matriz()
+        insertar_matriz(s, t.tenant_id, clave1, {req: "bloqueante_duro"}, vigente_desde=hoy - timedelta(days=365))
+        commitment_1 = f"OC-{uuid.uuid4().hex[:8]}"
+        insertar_oc(s, t.tenant_id, commitment_1, clave1, hoy - timedelta(days=30), hoy + timedelta(days=60))
+        clave2 = clave_de_matriz()
+        insertar_matriz(s, t.tenant_id, clave2, {req: "bloqueante_duro"}, vigente_desde=hoy - timedelta(days=365))
+        commitment_2 = f"OC-{uuid.uuid4().hex[:8]}"
+        insertar_oc(s, t.tenant_id, commitment_2, clave2, hoy - timedelta(days=30), hoy + timedelta(days=60))
+    cal = _get(cliente_api, t, "responsable_legajos", "calendario_vigencias", desde=hoy.isoformat(), hasta=(hoy + timedelta(days=90)).isoformat())
+    item = next(i for i in cal.json()["items"] if i["sujeto_id"] == "persona_multi_oc")
+    r = _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=item["referencia"])
+    ids = {a["commitment_id"] for a in r.json()["matrices_aplicables"]}
+    assert ids == {commitment_1, commitment_2}
+
+
+def test_detalle_rama_evidencia_sujeto_fuera_de_alcance_da_404(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        req = insertar_definicion(s, t.tenant_id, "Apto médico ajeno", "persona")
+        insertar_legajo(s, t.tenant_id, "persona_ajena_detalle", "persona")
+        doc_id = insertar_documento(s, t.tenant_id, "persona_ajena_detalle", req, hoy - timedelta(days=5), hoy + timedelta(days=90))
+    referencia = f"evidencia:documento:{doc_id}"
+    r = _get(cliente_api, t, "tecnico", "detalle_proyeccion_documental", referencia=referencia)
+    assert r.status_code == 404
+    assert "persona_ajena_detalle" not in r.text
+    assert "Apto médico ajeno" not in r.text
+
+
+def test_detalle_rama_evidencia_categoria_id_inexistente_da_404(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    r = _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental",
+              referencia=f"evidencia:documento:{uuid.uuid4()}")
+    assert r.status_code == 404
+
+
+def test_detalle_referencia_malformada_da_422(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    for referencia in ("no-tiene-prefijo-valido", "evidencia:documento", "evidencia:tipo_invalido:abc", "evidencia:documento:"):
+        r = _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=referencia)
+        assert r.status_code == 422, (referencia, r.text)
+
+
+def test_detalle_rama_evidencia_tecnico_ve_su_propia_referencia(cliente_api, tenant_de_prueba, hoy):
+    """`evidencia:` usa el mismo rol que `calendario_vigencias` (incluye técnico)."""
+    t = tenant_de_prueba
+    yo = t.sujeto_tecnico
+    with tenant_session(t.tenant_id) as s:
+        apoyo.legajo(s, t.tenant_id, yo)
+        req = insertar_definicion(s, t.tenant_id, "Apto médico propio", "persona")
+        doc_id = insertar_documento(s, t.tenant_id, yo, req, hoy - timedelta(days=5), hoy + timedelta(days=5))
+    r = _get(cliente_api, t, "tecnico", "detalle_proyeccion_documental", referencia=f"evidencia:documento:{doc_id}")
+    assert r.status_code == 200, r.text
+    assert r.json()["sujeto_id"] == yo
+
+
+def test_detalle_backlog_expone_referencia_punta_a_punta(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)
+        insertar_legajo(s, t.tenant_id, "persona_backlog_ref", "persona")
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["referencia"] == f"oc:{esc['commitment_id']}"
+    r = _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=fila["referencia"])
+    assert r.status_code == 200, r.text
+    assert r.json()["commitment_id"] == esc["commitment_id"]
+
+
+def test_detalle_no_escribe_nada(cliente_api, tenant_de_prueba, hoy):
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)
+        insertar_legajo(s, t.tenant_id, "persona_detalle_write", "persona")
+        doc_id = insertar_documento(s, t.tenant_id, "persona_detalle_write", esc["req"], hoy - timedelta(days=5), hoy + timedelta(days=5))
+        antes = {
+            tabla: s.execute(text(f"SELECT count(*) FROM modulo1.{tabla}")).scalar()
+            for tabla in ("event_log", "outbox_events", "evaluacion_habilitacion")
+        }
+    _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=f"evidencia:documento:{doc_id}")
+    _get(cliente_api, t, "responsable_legajos", "detalle_proyeccion_documental", referencia=f"oc:{esc['commitment_id']}")
+    with tenant_session(t.tenant_id) as s:
+        despues = {
+            tabla: s.execute(text(f"SELECT count(*) FROM modulo1.{tabla}")).scalar()
+            for tabla in ("event_log", "outbox_events", "evaluacion_habilitacion")
+        }
+    assert antes == despues
