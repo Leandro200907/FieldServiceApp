@@ -98,6 +98,39 @@ haber alguien que lo cubra hoy mismo (ver puntos 6 y 7: `bloqueo_confirmado` com
 es siempre sobre el primer intervalo del rango, nunca uno posterior — eso es
 `riesgo_documental`).
 
+### 2.1 Declaración de alcance de `calendario_vigencias` (confirmación explícita)
+
+**`calendario_vigencias` es exclusivamente un calendario general de vencimientos de
+evidencia registrada.** Por diseño (no por omisión):
+
+- **No cruza contra ninguna matriz ni ninguna OC.** No sabe, y no puede saber al
+  responder, si un requisito es exigido, opcional o irrelevante para ningún compromiso.
+  Consultarlo NO reemplaza a `proyeccion_documental`/`proyeccion_documental_backlog`, que
+  son las únicas dos consultas que sí resuelven esa pregunta.
+- **No emite ni puede emitir un estado `sin_evidencia`.** Sólo devuelve filas que
+  provienen de evidencia YA REGISTRADA (`documento`/`acreditacion_competencia`/
+  `induccion` existentes) — la ausencia total de un dato no es una fila de este endpoint,
+  es la ausencia de una fila. Detectar "falta evidencia para el requisito X de la OC Y" es
+  exactamente lo que hace `proyeccion_documental` (vía `bloqueo_confirmado`/
+  `causas[].motivo`), nunca `calendario_vigencias`.
+- **No puede presentar ninguna evidencia como obligatoria.** Cada fila trae el hecho
+  crudo (`sujeto_id`, `requisito`, `vigente_desde/hasta`, `estado_confirmacion`,
+  `archivo_validacion`, `dias_para_vencer`) sin ningún campo de "obligatoriedad" ni de
+  "contexto de matriz/OC" — porque no tiene ese dato. Un consumidor que necesite saber si
+  un vencimiento es exigible tiene que cruzarlo con `proyeccion_documental`/`_backlog`
+  para ESA OC puntual; `calendario_vigencias` nunca inventa esa respuesta por su cuenta.
+
+Esto es una respuesta directa a la especificación previa del frontend (Q-DOC-01,
+`docs/frontend/API_GAPS.md`), que pedía que cada ítem del calendario trajera "contexto de
+aplicabilidad" (matriz/OC o ausencia explícita) y un estado `sin_evidencia`: **ese pedido
+no se puede cumplir con este endpoint tal como está diseñado**, porque cruzar contra
+matriz/OC es precisamente lo que este endpoint decide no hacer (punto 2, arriba). Si se
+necesita esa combinación en una sola respuesta, es una decisión de producto pendiente —
+options: (a) el frontend arma la combinación en el cliente, cruzando
+`calendario_vigencias` con `proyeccion_documental_backlog`/`proyeccion_documental` por
+`sujeto_id`/`commitment_id`; o (b) se diseña un cuarto endpoint explícito para eso (fuera
+del alcance de este documento; no implementado). No se resuelve acá.
+
 ## 3. `GET /v1/consultas/calendario_vigencias`
 
 **Rol**: `responsable_legajos` (todo el tenant), `supervisor` (su universo) y `técnico`
@@ -153,6 +186,41 @@ incluyen técnico en su matriz de roles.
 `pendiente`/`valido`/`invalido`/`null` si el requisito no tiene archivo. No agrega
 `estado` resumen (ese vocabulario es sólo de los otros dos endpoints, punto 6) — acá cada
 fila es un hecho suelto, no una conclusión sobre una OC.
+
+### 3.1 Decisión explícita: los 4 "estados visuales" (verificada/próxima a vencer/vencida/declarada)
+
+El frontend (mock temporal, Q-DOC-01) imaginó un campo `estado` de calendario con 5
+valores: `verificada`, `proxima_a_vencer`, `vencida`, `declarada`, `sin_evidencia`.
+`sin_evidencia` ya queda resuelto en el punto 2.1 (nunca es una fila de este endpoint).
+Para los otros 4, la decisión, campo por campo:
+
+- **`declarada`, `verificada`, `vencida`: presentación INEQUÍVOCA de campos ya devueltos,
+  el frontend los deriva — no hace falta que el backend agregue nada.** Fórmulas exactas,
+  sin ningún número a inventar:
+  - `declarada` ⟺ `estado_confirmacion === "declarado"`.
+  - `vencida` ⟺ `dias_para_vencer < 0` (equivalente a `vigente_hasta < hoy`).
+  - `verificada` ⟺ `estado_confirmacion !== "declarado"` Y NO `vencida`.
+  Ninguna de las tres necesita un umbral: son funciones directas y sin ambigüedad de
+  campos que ya viajan en cada ítem (`estado_confirmacion`, `dias_para_vencer`).
+- **`proxima_a_vencer` es la EXCEPCIÓN y NO se resuelve así.** Definir "próxima" exige un
+  umbral en días, y ese umbral **ya existe como concepto de dominio**:
+  `plazo_aviso_dias` (`modulo1.configuracion_alertas`, con override opcional por
+  `definicion_requisito.plazo_aviso_dias` — el mismo mecanismo que ya usa
+  `app/core/alertas.py`/`ParametrosAlerta` para decidir cuándo abrir una Alerta de
+  Vencimiento). **El frontend NO debe inventar un número de días propio para esto** — ni
+  hardcodeado ni configurable en el cliente. Mientras `calendario_vigencias` no lo calcule
+  server-side (no lo hace hoy: es deliberadamente genérico, sin cruzar contra
+  `configuracion_alertas` ni `definicion_requisito.plazo_aviso_dias` por sujeto/requisito),
+  `proxima_a_vencer` **no es un estado disponible** en esta consulta. Si hace falta
+  mostrarlo, hay dos caminos — ninguno es "el frontend decide un número":
+  1. Ampliar `calendario_vigencias` (cambio de contrato, requiere aprobación) para que
+     cada ítem traiga el mismo `plazo_aviso_dias` resuelto que ya usa el motor de alertas,
+     y el frontend compare `dias_para_vencer <= plazo_aviso_dias` con el valor que le
+     llegó — nunca uno propio.
+  2. Cruzar del lado del cliente contra `GET /v1/consultas/configuracion_alertas` (ya
+     existente, ver `docs/HANDOFF_FRONTEND.md`) para el plazo del tenant, y contra
+     `definiciones_requisito` para el override por requisito si lo hay — más trabajo en el
+     cliente, pero sigue sin inventar ningún número: usa el mismo dato que ya existe.
 
 ## 4. Última evaluación visible como conjunto de sujetos
 
@@ -539,6 +607,10 @@ consultas si queda ahí):**
 - `sin_matriz` cuando no hay matriz vigente al día de ingreso — nunca un 422 como hoy
   (verificar explícitamente que NO se propaga `sin_matriz_vigente` como excepción);
 - `pendiente_de_planificacion` sin ninguna decisión ni candidatos;
+- **`matriz` no es `null` en `pendiente_de_planificacion` cuando SÍ hay matriz vigente**
+  (`matriz_version_id`/`version`/`tipos_exigidos` reales) — `matriz` es `null` únicamente
+  cuando `estado = sin_matriz`; test de regresión dedicado, con su contraparte
+  (`sin_matriz` ⟹ `matriz` es `null`) en el mismo archivo;
 - `bloqueo_confirmado` desde el primer día cuando ya hoy no hay cobertura;
 - `requiere_revision` con un documento declarado sin confirmar, y por separado con un
   archivo con `archivo_validacion` pendiente/inválido (Fase 2 punto 2) — confirmar que
@@ -611,11 +683,18 @@ condición es que la Fase 2 (ya cerrada) esté efectivamente en el head que se u
 
 ---
 
-**Pendiente de tu decisión antes de implementar** (no bloquea aprobar este documento, pero
-sí el código):
-1. ¿El endpoint puntual (`proyeccion_documental`) vive en `app/modules/consultas/` junto a
-   `cobertura_oc`, o en un módulo nuevo (`app/modules/proyeccion/`) dado el tamaño del
-   cálculo de quiebres? Este documento no lo fija.
-2. ¿`calendario_vigencias` reemplaza a `tablero_vencimientos` o conviven? Tal como está
-   diseñado acá, son complementarios (rango explícito vs. "próximos N días"), pero es una
-   decisión de producto, no técnica.
+## 14. Decisiones ya resueltas (histórico)
+
+Las dos decisiones que este documento dejaba pendientes antes de implementar quedaron
+resueltas en el código, no sólo en el diseño:
+
+1. **Ubicación del endpoint puntual**: vive en un módulo nuevo, `app/modules/proyeccion/`
+   (`servicio.py` + `router.py`), separado de `app/modules/consultas/` — el motor de
+   quiebres (`app/core/proyeccion.py`) justificaba el módulo aparte.
+2. **`calendario_vigencias` vs `tablero_vencimientos`**: conviven. `tablero_vencimientos`
+   sigue existiendo tal cual (responsable_legajos/supervisor, "próximos N días");
+   `calendario_vigencias` es la versión con rango explícito y ampliada a técnico — ninguno
+   reemplazó al otro.
+
+Sigue abierta, en cambio, la decisión del punto 2.1 (endpoint combinado
+calendario+matriz/OC): esa no se resuelve en este documento a propósito.

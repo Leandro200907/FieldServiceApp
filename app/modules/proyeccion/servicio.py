@@ -303,8 +303,12 @@ def proyeccion_documental(
         )
         return salida
     if not conjunto["candidatos"]:
+        # Hay matriz resuelta (si no, ya se salió arriba con `sin_matriz`) — se informa
+        # igual: `pendiente_de_planificacion` es "falta el conjunto de sujetos", no "no
+        # se sabe qué exige la OC". `matriz` sólo es `null` cuando el estado es `sin_matriz`.
+        requisitos_por_tipo_pendiente, _nombres_pendiente, version_matriz_pendiente = resultado_tipos
         salida["estado"] = "pendiente_de_planificacion"
-        salida["matriz"] = None
+        salida["matriz"] = {**version_matriz_pendiente, "tipos_exigidos": sorted(requisitos_por_tipo_pendiente)}
         salida["intervalos"] = []
         salida["causas"] = _causa_sin_evaluar("No hay decisión visible para esta OC ni candidatos en el alcance de quien consulta")
         return salida

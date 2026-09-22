@@ -170,6 +170,41 @@ def test_proyeccion_pendiente_de_planificacion_sin_candidatos(cliente_api, tenan
     assert fila["motivos_resumidos"] == ["No hay decisión visible para esta OC ni candidatos en el alcance de quien consulta"]
 
 
+def test_proyeccion_pendiente_de_planificacion_con_matriz_informa_matriz_no_null(cliente_api, tenant_de_prueba, hoy):
+    """Contrato explícito: `matriz` es `null` SOLO cuando `estado = sin_matriz`. Si hay
+    matriz vigente pero el conjunto de sujetos está vacío (`pendiente_de_planificacion`),
+    `matriz` tiene que traer `matriz_version_id`, `version` y `tipos_exigidos` reales —
+    el motivo de "pendiente" es la falta de sujetos, no la falta de matriz, y el frontend
+    necesita saber qué exige la OC aunque todavía no haya a quién evaluar."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        esc = _escenario_oc(s, t.tenant_id, hoy)  # matriz sí, ningún candidato de tipo persona
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=esc["commitment_id"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["estado"] == "pendiente_de_planificacion"
+    assert body["matriz"] is not None
+    assert body["matriz"]["matriz_version_id"] == esc["matriz_id"]
+    assert body["matriz"]["version"] == 1
+    assert body["matriz"]["tipos_exigidos"] == ["persona"]
+
+
+def test_proyeccion_sin_matriz_es_el_unico_caso_con_matriz_null(cliente_api, tenant_de_prueba, hoy):
+    """Contraparte del test anterior: sin matriz vigente, `matriz` SÍ tiene que ser `null`
+    — no hay `matriz_version_id`/`version`/`tipos_exigidos` que informar porque no hay
+    ninguna matriz resuelta, a diferencia de `pendiente_de_planificacion`."""
+    t = tenant_de_prueba
+    with tenant_session(t.tenant_id) as s:
+        clave = clave_de_matriz()
+        commitment_id = f"OC-{uuid.uuid4().hex[:8]}"
+        insertar_oc(s, t.tenant_id, commitment_id, clave, hoy - timedelta(days=5), hoy + timedelta(days=5))
+    r = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental", commitment_id=commitment_id)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["estado"] == "sin_matriz"
+    assert body["matriz"] is None
+
+
 def test_proyeccion_bloqueo_confirmado_desde_el_primer_dia(cliente_api, tenant_de_prueba, hoy):
     t = tenant_de_prueba
     with tenant_session(t.tenant_id) as s:
