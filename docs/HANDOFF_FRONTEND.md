@@ -317,6 +317,25 @@ para el diseño completo (estados, precedencia, puntos de quiebre, ejemplos).
 | `GET /v1/consultas/calendario_vigencias` | responsable_legajos, supervisor (su universo), **técnico** (su propio legajo + custodia — amplía la matriz de `tablero_vencimientos`) | `desde?`, `hasta?` (default hoy→+30, máx. 366 días), `tipo_sujeto?`, `categoria?`, `estado?` (`vigente\|vencido\|todos`), `q?`, paginado |
 | `GET /v1/consultas/proyeccion_documental` | responsable_legajos, supervisor (alcance vía última decisión visible o candidatos del universo) | `commitment_id` (obligatorio), `desde?`, `hasta?`, `detalle?` (`resumen\|diario`) |
 | `GET /v1/consultas/proyeccion_documental_backlog` | responsable_legajos, supervisor (una OC entra sólo si al menos un candidato de su conjunto está en su universo) | `estado_oc?` (`activo` por defecto), `estado?` (repetible, uno de los 6 estados), `horizonte_dias?` (default 30, máx. 366), paginado |
+| `GET /v1/consultas/detalle_proyeccion_documental` | según la rama de `referencia` — `evidencia:…` usa los roles de `calendario_vigencias` (incluye técnico); `oc:…` usa los de `proyeccion_documental` (sin técnico) | `referencia` (obligatorio, string opaco — ver abajo) |
+
+**Q-DOC-03, `detalle_proyeccion_documental` (nuevo, diseño en `docs/PROYECCION_DOCUMENTAL.md`
+§15).** Detalle genérico por referencia opaca, para no tener que reconstruirla del lado del
+cliente: `calendario_vigencias`, `proyeccion_documental` y `proyeccion_documental_backlog`
+ahora suman un campo `referencia` a cada ítem/response (`evidencia:{categoria}:{id}` o
+`oc:{commitment_id}`) — reenviar ese valor tal cual como query param. Respuesta con `tipo`
+discriminador (`"evidencia" | "oc"`):
+- `tipo: "oc"` es literalmente el body de `proyeccion_documental?commitment_id=…` con
+  `tipo`/`referencia` agregados — ninguna diferencia de datos.
+- `tipo: "evidencia"` es nuevo: además de los campos crudos que ya trae
+  `calendario_vigencias`, agrega `aplicabilidad` (`"exigida_por_oc" | "informativa"`) y
+  `matrices_aplicables[]` (`commitment_id`, `matriz_version_id`, `version`,
+  `origen_calculo`) — el "contexto de aplicabilidad" que pedía Q-DOC-01, calculado a
+  demanda para ESE ítem puntual, nunca para la lista completa (`calendario_vigencias`
+  sigue sin cruzar matriz/OC fila por fila, por diseño — ver §2.1 del documento de diseño).
+- `referencia` malformada o `categoria` inválida → 422; evidencia inexistente o fuera del
+  alcance de quien consulta → 404 (nunca 403, nunca revela su existencia); rama equivocada
+  para el rol (p. ej. técnico + `oc:…`) → 403, igual que llamando el endpoint directo.
 
 - Las tres respuestas llevan `advertencia` con el texto exacto fijo — `capacidad_documental_potencial` **nunca** es una promesa de disponibilidad, ver el documento de diseño §5.
 - Vocabulario cerrado de 6 estados (`sin_matriz`, `pendiente_de_planificacion`,

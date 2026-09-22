@@ -22,8 +22,6 @@ import hashlib
 import hmac
 import os
 import secrets
-import threading
-import time
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -34,6 +32,7 @@ from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
 from app.auth.alcance import sujeto_en_alcance
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
+from app.comun.ratelimit import RateLimiter
 from app.comun.reloj import ahora_utc, hoy_del_tenant
 from app.config import es_produccion, settings
 
@@ -69,42 +68,6 @@ def verificar_token(token: str) -> str | None:
     if not hmac.compare_digest(esperado, token):
         return None
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-class RateLimiter:
-    """Ventana deslizante simple en memoria: `max_por_minuto` por clave. Con cota de
-    memoria (punto 3 de la reauditoría): sin esto, muchas claves distintas de un solo uso
-    (por ejemplo, un atacante probando tokens al voleo) hacían crecer el diccionario para
-    siempre — nada purgaba una clave que ya no se volvía a consultar. Cada llamada cuenta
-    para un barrido periódico que saca las claves sin actividad en la ventana."""
-
-    def __init__(self, max_por_minuto: int = 30, max_claves: int = 5000, cada: int = 1000):
-        self.max = max_por_minuto
-        self.max_claves = max_claves
-        self._cada = cada
-        self._golpes: dict[str, list[float]] = {}
-        self._lock = threading.Lock()
-        self._llamadas = 0
-
-    def permitir(self, clave: str, ahora: float | None = None) -> bool:
-        t = ahora if ahora is not None else time.monotonic()
-        with self._lock:
-            self._llamadas += 1
-            if self._llamadas >= self._cada or len(self._golpes) > self.max_claves:
-                self._barrer(t)
-                self._llamadas = 0
-            lista = [x for x in self._golpes.get(clave, []) if t - x < 60]
-            if len(lista) >= self.max:
-                self._golpes[clave] = lista
-                return False
-            lista.append(t)
-            self._golpes[clave] = lista
-            return True
-
-    def _barrer(self, t: float) -> None:
-        vacias = [c for c, xs in self._golpes.items() if not any(t - x < 60 for x in xs)]
-        for c in vacias:
-            del self._golpes[c]
 
 
 limiter = RateLimiter()
