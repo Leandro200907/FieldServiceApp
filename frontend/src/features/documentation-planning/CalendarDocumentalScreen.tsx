@@ -4,6 +4,7 @@ import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import type { ItemCalendario, SubjectKind, VisualCalendarState } from './contracts';
 import { deriveVisualState } from './contracts';
 import { calendarAccess, isCalendarIntegrated } from './access';
+import { addDays, dayPosition, todayIso } from './dates';
 import { documentationScopeFor } from './scope';
 import { usePrototypeRead } from './usePrototypeRead';
 import './planning.css';
@@ -11,24 +12,11 @@ import './planning.css';
 const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };
 const kindLabels: Record<SubjectKind, string> = { empresa: 'Empresa', persona: 'Persona', vehiculo: 'Vehículo', equipo: 'Equipo' };
 
-function addDays(iso: string, days: number): string {
-  const date = new Date(`${iso}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 // Posición proporcional REAL dentro del rango pedido — nunca coordenadas fijas por ítem.
 function trackPosition(item: ItemCalendario, from: string, to: string): [number, number] {
-  const start = new Date(`${from}T00:00:00Z`).getTime();
-  const end = new Date(`${to}T00:00:00Z`).getTime();
-  const span = Math.max(end - start, 1);
-  const itemFrom = Math.max(new Date(`${item.vigente_desde}T00:00:00Z`).getTime(), start);
-  const itemTo = Math.min(new Date(`${item.vigente_hasta}T00:00:00Z`).getTime(), end);
-  const left = ((itemFrom - start) / span) * 100;
-  const width = Math.max(((itemTo - itemFrom) / span) * 100, 2);
-  return [left, width];
+  const start = dayPosition(item.vigente_desde, from, to);
+  const end = dayPosition(item.vigente_hasta, from, to);
+  return [start, Math.max(end - start, 2)];
 }
 
 function Detail({ item }: { item: ItemCalendario }) {
@@ -46,13 +34,13 @@ function Detail({ item }: { item: ItemCalendario }) {
   </aside>;
 }
 
-function TimelineRow({ item, from, to, selected, onSelect }: { item: ItemCalendario; from: string; to: string; selected: boolean; onSelect: () => void }) {
+function TimelineRow({ item, from, to, todayLeft, selected, onSelect }: { item: ItemCalendario; from: string; to: string; todayLeft: number; selected: boolean; onSelect: () => void }) {
   const state = deriveVisualState(item);
   const [left, width] = trackPosition(item, from, to);
   const label = `${item.identificador_natural || item.sujeto_id}, ${item.requisito || 'requisito'}: ${visualStateLabels[state]}`;
   return <div className="timeline-row">
     <div className="timeline-subject"><span className="subject-kind">{kindLabels[item.tipo_sujeto as SubjectKind] || item.tipo_sujeto}</span><strong>{item.identificador_natural || item.sujeto_id}</strong><small>{item.requisito || '—'}</small></div>
-    <div className="timeline-track"><span className="today-line" aria-hidden="true" /><button className={`timeline-segment status-${state} ${selected ? 'selected' : ''}`} style={{ left: `${left}%`, width: `${width}%` }} onClick={onSelect} aria-label={label}><span>{visualStateLabels[state]}</span></button></div>
+    <div className="timeline-track"><span className="today-line" aria-hidden="true" style={{ left: `${todayLeft}%` }} /><button className={`timeline-segment status-${state} ${selected ? 'selected' : ''}`} style={{ left: `${left}%`, width: `${width}%` }} onClick={onSelect} aria-label={label}><span>{visualStateLabels[state]}</span></button></div>
   </div>;
 }
 
@@ -67,6 +55,9 @@ export function CalendarDocumentalScreen({ roles }: { roles: readonly string[] }
   const integrated = isCalendarIntegrated();
   if (!scope) return <Pending title="Sin rol reconocido para esta vista">Tu sesión no tiene un rol habilitado para el calendario documental.</Pending>;
   const selected = calendar.data?.items.find(item => item.id === selectedId) ?? null;
+  // F-01: la marca de "hoy" se ubica con el `hoy` que devuelve el backend (autoridad real
+  // sobre la fecha del tenant — F-03), nunca con una posición fija.
+  const todayLeft = dayPosition(calendar.data?.hoy ?? from, from, to);
   return <>
     {integrated
       ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Calendario general de vencimientos</strong><p>No cruza contra matriz ni OC — no confirma obligatoriedad. Ver proyección documental para eso.</p></div></div>
@@ -82,7 +73,7 @@ export function CalendarDocumentalScreen({ roles }: { roles: readonly string[] }
     {calendar.loading ? <LoadingState /> : calendar.error ? <ErrorState message={calendar.error.message} requestId={calendar.error instanceof ApiFailure && calendar.error.detail.referenceSource === 'server' ? calendar.error.detail.requestId : undefined} /> : <div className="calendar-layout">
       <section className="timeline-card" aria-label="Calendario documental">
         <div className="timeline-scale"><span>{from}</span><span>{to}</span></div>
-        {calendar.data?.items.map(item => <TimelineRow key={item.id} item={item} from={from} to={to} selected={selectedId === item.id} onSelect={() => setSelectedId(item.id)} />)}
+        {calendar.data?.items.map(item => <TimelineRow key={item.id} item={item} from={from} to={to} todayLeft={todayLeft} selected={selectedId === item.id} onSelect={() => setSelectedId(item.id)} />)}
         {calendar.data?.items.length === 0 && <p className="empty-inline">No hay vencimientos registrados en este rango para la orientación elegida.</p>}
       </section>
       {selected && <Detail item={selected} />}

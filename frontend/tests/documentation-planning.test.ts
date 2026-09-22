@@ -12,6 +12,17 @@ describe('temporary documentary planning mock (real contract shape)', () => {
     }
   });
 
+  it('F-02: filtra por vigente_hasta dentro del rango (lo que VENCE), no por solapamiento de vigencia — mismo criterio que `calendario_vigencias` real', async () => {
+    // cal-emp-01: vigente_desde 2026-09-01, vigente_hasta 2026-10-18 — vigente durante
+    // este rango, pero no VENCE en él. El filtro viejo (solapamiento) lo incluía; el
+    // real (`vigente_hasta BETWEEN desde AND hasta`) no.
+    const dentroDeVigencia = await temporaryMockAccess.readCalendar({ from: '2026-09-05', to: '2026-09-10' });
+    expect(dentroDeVigencia.items.find(item => item.id === 'cal-emp-01')).toBeUndefined();
+    // el mismo ítem SÍ aparece cuando el rango cubre su vencimiento real (10-18).
+    const enSuVencimiento = await temporaryMockAccess.readCalendar({ from: '2026-10-15', to: '2026-10-20' });
+    expect(enSuVencimiento.items.find(item => item.id === 'cal-emp-01')).toBeDefined();
+  });
+
   it('derives declarada/vencida/verificada without ever needing proxima_a_vencer or sin_evidencia', async () => {
     const calendar = await temporaryMockAccess.readCalendar({ from: '2026-09-01', to: '2026-10-31' });
     const states = new Set(calendar.items.map(deriveVisualState));

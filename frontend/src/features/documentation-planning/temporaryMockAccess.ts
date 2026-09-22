@@ -70,8 +70,14 @@ const detailByCommitment = new Map<string, ProyeccionDocumentalResponse>(
   }),
 );
 
+// F-02 (auditoría externa 2026-09-22): el mock filtraba por SOLAPAMIENTO de vigencia
+// (cualquier ítem vigente durante el rango). El backend real filtra
+// `vigente_hasta BETWEEN :desde AND :hasta` — sólo lo que VENCE en el rango
+// (docs/PROYECCION_DOCUMENTAL.md §3, `app/modules/proyeccion/servicio.py`). Con el
+// filtro viejo, al prender el flag el calendario cambiaba de semántica (o se vaciaba)
+// sin que el mock lo hubiera anticipado.
 function withinRange(item: ItemCalendario, from: string, to: string) {
-  return item.vigente_desde <= to && item.vigente_hasta >= from;
+  return item.vigente_hasta >= from && item.vigente_hasta <= to;
 }
 
 export const temporaryMockAccess: DocumentationPlanningAccess = {
