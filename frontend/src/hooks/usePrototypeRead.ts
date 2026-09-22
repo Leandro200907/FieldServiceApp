@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+// Compartido entre features (antes vivía sólo en documentation-planning; mi-legajo lo
+// necesita igual, sin duplicar el hook).
 export function usePrototypeRead<T>(load: () => Promise<T>, dependencies: readonly unknown[]) {
   const [state, setState] = useState<{ data?: T; error?: Error; loading: boolean }>({ loading: true });
   useEffect(() => {

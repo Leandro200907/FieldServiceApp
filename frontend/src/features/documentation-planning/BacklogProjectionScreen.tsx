@@ -5,7 +5,7 @@ import type { ProjectionState, ProyeccionDocumentalResponse } from './contracts'
 import { backlogAccess, isBacklogIntegrated } from './access';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
-import { usePrototypeRead } from './usePrototypeRead';
+import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
 
 const stateLabels: Record<ProjectionState, string> = {

@@ -9,6 +9,7 @@ import type { Page, Role } from './capabilities';
 import { BusinessDesign } from './BusinessDesign';
 import { DesignCatalog } from './DesignCatalog';
 import { isBacklogIntegrated, isCalendarIntegrated } from '../features/documentation-planning/access';
+import { isMiLegajoIntegrated } from '../features/mi-legajo/access';
 import { Badge, ErrorState, LoadingState, Pending } from '../ui/States';
 
 // F-09 (auditoría externa 2026-09-22): antes este badge era incondicional para toda
@@ -20,7 +21,8 @@ import { Badge, ErrorState, LoadingState, Pending } from '../ui/States';
 function IntegrationBadge({ page }: { page: Page | undefined }) {
   if (!page || page.id === 'perfil') return null;
   const integrated = (page.id === 'calendario-vigencias' && isCalendarIntegrated())
-    || (page.id === 'proyeccion-backlog' && isBacklogIntegrated());
+    || (page.id === 'proyeccion-backlog' && isBacklogIntegrated())
+    || (page.id === 'mi-legajo' && isMiLegajoIntegrated());
   return integrated ? <Badge tone="accent">Conectado al backend</Badge> : <Badge tone="warning">Pendiente de integración</Badge>;
 }
 

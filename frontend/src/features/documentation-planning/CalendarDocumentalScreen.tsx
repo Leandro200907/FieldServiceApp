@@ -7,7 +7,7 @@ import { calendarAccess, isCalendarIntegrated } from './access';
 import { addDays, dayPosition, todayIso } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
-import { usePrototypeRead } from './usePrototypeRead';
+import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
 
 const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };

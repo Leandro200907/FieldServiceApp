@@ -14,7 +14,11 @@ export const pages: Page[] = [
   { id: 'configuracion', label: 'Configuración', description: 'Definiciones locales y administración documental.', roles: ['configuracion'], gaps: ['G-01', 'G-02'] },
   { id: 'propuestas', label: 'Propuestas', description: 'Revisión de documentación presentada por técnicos.', roles: ['responsable_legajos'], gaps: ['G-01', 'G-03'] },
   { id: 'legajos', label: 'Legajos', description: 'Documentación de personas, vehículos, equipos y empresa.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'SEL-01'] },
-  { id: 'mi-legajo', label: 'Mi legajo', description: 'Tu condición documental como persona potencialmente operativa.', roles: ['tecnico', 'supervisor'], gaps: ['G-05', 'G-16', 'G-17'] },
+  // G-05/G-16 ya no son gaps de contrato — GET /v1/consultas/mi_legajo tiene adaptador
+  // real (`realMiLegajoAccess.ts`), detrás de `featureFlags.technicianCompositeView`
+  // (hoy `false`, decisión de producto, no gap de API). G-17 (separar "Mi legajo" de
+  // "Equipo supervisado") sigue abierto, sin relación con esto.
+  { id: 'mi-legajo', label: 'Mi legajo', description: 'Tu condición documental como persona potencialmente operativa.', roles: ['tecnico', 'supervisor'], gaps: ['G-17'] },
   { id: 'equipo-supervisado', label: 'Equipo supervisado', description: 'Personas y recursos dentro de tu universo asignado.', roles: ['supervisor'], gaps: ['G-01', 'G-17', 'SEL-33'] },
   { id: 'vencimientos', label: 'Vencimientos', description: 'Evidencia vencida o próxima a vencer dentro de tu alcance.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'H-02'] },
   // F-08 (auditoría externa 2026-09-22): Q-DOC-01/02/03 y G-18 ya no son gaps de

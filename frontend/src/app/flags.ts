@@ -4,6 +4,6 @@ export const featureFlags = Object.freeze({
   documentScore: false, legajoExport: false, alertConfiguration: false,
   alertLifecycle: false, globalTemplates: false, module2Integration: false,
   documentBatchImport: false, typedBusinessViews: false, signedEvidence: false,
-  technicianCompositeView: false,
+  technicianCompositeView: true,
   documentationCalendarIntegration: true, backlogDocumentationIntegration: true,
 });
