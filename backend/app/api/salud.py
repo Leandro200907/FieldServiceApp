@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.comun.reloj import ahora_utc
@@ -28,9 +29,14 @@ log = logging.getLogger("modulo1.salud")
 router = APIRouter(prefix="/salud", tags=["salud"])
 
 
-@router.get("/vivo")
-def vivo() -> dict:
-    return {"ok": True, "version": VERSION}
+class VivoResponse(BaseModel):
+    ok: bool
+    version: str
+
+
+@router.get("/vivo", response_model=VivoResponse)
+def vivo() -> VivoResponse:
+    return VivoResponse(ok=True, version=VERSION)
 
 
 def _chequeo_db() -> tuple[str, str]:

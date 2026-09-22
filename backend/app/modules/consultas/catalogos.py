@@ -58,14 +58,16 @@ def mi_legajo(session: Session, identidad: Identidad) -> dict[str, Any]:
 
     if not identidad.sujeto_id:
         raise Prohibido("Solo un usuario con legajo propio tiene 'mi legajo'")
-    recursos = recursos_bajo_custodia(session, identidad.sujeto_id)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    recursos = recursos_bajo_custodia(session, identidad.sujeto_id, hoy)
     persona = legajo(session, identidad, identidad.sujeto_id)
     custodiados = []
     for r in recursos:
         periodo = session.execute(text(
             "SELECT c.tipo_recurso, p.periodo_id::text, p.desde FROM modulo1.periodo_custodia p "
             "JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
-            "WHERE p.tenant_id = :t AND c.recurso_id = :r AND p.estado = 'vigente'"), {"t": identidad.tenant_id, "r": r}).mappings().first()
+            "WHERE p.tenant_id = :t AND c.recurso_id = :r AND p.estado = 'vigente' AND p.desde <= :hoy"),
+            {"t": identidad.tenant_id, "r": r, "hoy": hoy}).mappings().first()
         custodiados.append({"tipo_recurso": periodo["tipo_recurso"], "periodo_id": periodo["periodo_id"], "custodia_desde": periodo["desde"],
                             **legajo(session, identidad, r)})
     return {"hoy": persona["hoy"], "persona": persona, "recursos_bajo_custodia": custodiados,

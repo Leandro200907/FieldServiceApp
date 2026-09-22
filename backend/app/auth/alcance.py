@@ -47,7 +47,7 @@ _SQL_UNIVERSO = """
     SELECT c.recurso_id
     FROM modulo1.periodo_custodia p
     JOIN modulo1.custodia_recurso c ON c.custodia_id = p.custodia_id
-    WHERE p.estado = 'vigente' AND p.custodio_id IN (SELECT sujeto_id FROM personas)
+    WHERE p.estado = 'vigente' AND p.desde <= :hoy AND p.custodio_id IN (SELECT sujeto_id FROM personas)
 """
 
 
@@ -67,7 +67,7 @@ def alcance_de_sujetos(
         return None
     propio: list[str] = []
     if identidad.sujeto_id:
-        propio = [identidad.sujeto_id] + recursos_bajo_custodia(session, identidad.sujeto_id)
+        propio = [identidad.sujeto_id] + recursos_bajo_custodia(session, identidad.sujeto_id, hoy)
     if identidad.tiene_rol(Rol.SUPERVISOR):
         # Acumula: legajo propio (si lo tiene) + universo de supervisión realmente
         # asignado, sin duplicar y sin transitividad (universo_del_supervisor ya no
@@ -78,12 +78,15 @@ def alcance_de_sujetos(
     return []
 
 
-def recursos_bajo_custodia(session: Session, custodio_id: str) -> list[str]:
-    """Vehículos/equipos con período de custodia vigente a nombre de la persona."""
+def recursos_bajo_custodia(session: Session, custodio_id: str, hoy: date) -> list[str]:
+    """Vehículos/equipos con período de custodia vigente Y YA INICIADA (`desde <= hoy`) a
+    nombre de la persona. Un período `vigente` con `desde` futuro (cambiar_custodia
+    permite planificar) todavía no es de esta persona hoy."""
     return [f[0] for f in session.execute(text(
         "SELECT c.recurso_id FROM modulo1.periodo_custodia p "
         "JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
-        "WHERE p.estado = 'vigente' AND p.custodio_id = :cu ORDER BY c.recurso_id"), {"cu": custodio_id}).all()]
+        "WHERE p.estado = 'vigente' AND p.desde <= :hoy AND p.custodio_id = :cu ORDER BY c.recurso_id"),
+        {"cu": custodio_id, "hoy": hoy}).all()]
 
 
 def sujeto_en_alcance(
