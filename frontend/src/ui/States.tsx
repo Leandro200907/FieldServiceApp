@@ -11,7 +11,7 @@ export function LoadingState() {
   return <div className="state" role="status" aria-busy="true"><div><h3>Cargando información</h3><p>Esperando la respuesta del servidor.</p><div className="skeleton" /><div className="skeleton skeleton-short" /></div></div>;
 }
 export function EmptyState() {
-  return <div className="state"><div><h3>No hay resultados para estos filtros</h3><p>Este estado se utiliza únicamente después de una respuesta válida que confirme una lista vacía.</p></div></div>;
+  return <div className="state"><div><h3>No hay resultados para estos filtros</h3><p>Probá con otros filtros o volvé a consultar más tarde.</p></div></div>;
 }
 export function ErrorState({ message, requestId, onRetry }: { message: string; requestId?: string | null; onRetry?: () => void }) {
   const [copied, setCopied] = useState(false);

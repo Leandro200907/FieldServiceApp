@@ -30,8 +30,8 @@ const backlog: BacklogProjection['rows'] = [
   { reference: 'BACK-01', ocLabel: 'OC 45000218', customerLabel: 'Cliente Norte', plannedFrom: '2026-09-24', plannedTo: '2026-09-30', state: 'sin_riesgos_detectados', firstRiskDay: null, reasons: ['La última evaluación no detectó cortes de vigencia dentro del período previsto.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 12, vehiculos: 4, equipos: 9 } },
   { reference: 'BACK-02', ocLabel: 'OC 45000221', customerLabel: 'Operadora Sierra', plannedFrom: '2026-09-27', plannedTo: '2026-10-04', state: 'riesgo_documental', firstRiskDay: '2026-09-29', reasons: ['Dos aptos médicos vencen durante la ventana prevista.', 'Una VTV no cubre el último día planificado.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 7, vehiculos: 2, equipos: 6 } },
   { reference: 'BACK-03', ocLabel: 'OC 45000224', customerLabel: 'Energía del Sur', plannedFrom: '2026-09-22', plannedTo: '2026-09-26', state: 'bloqueo_confirmado', firstRiskDay: '2026-09-22', reasons: ['La evaluación vigente confirmó evidencia obligatoria vencida para el contexto de la OC.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 0, vehiculos: 0, equipos: 0 } },
-  { reference: 'BACK-04', ocLabel: 'OC 45000231', customerLabel: 'Cliente Norte', plannedFrom: null, plannedTo: null, state: 'pendiente_planificacion', firstRiskDay: null, reasons: ['No hay fechas previstas suficientes para proyectar cobertura documental.'], evaluationBasis: 'pendiente_planificacion', potentialCapacity: { personas: 0, vehiculos: 0, equipos: 0 } },
-  { reference: 'BACK-05', ocLabel: 'OC 45000236', customerLabel: 'Operadora Central', plannedFrom: '2026-10-05', plannedTo: '2026-10-10', state: 'sin_matriz', firstRiskDay: null, reasons: ['No existe una matriz publicada aplicable al contexto informado.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 0, vehiculos: 0, equipos: 0 } },
+  { reference: 'BACK-04', ocLabel: 'OC 45000231', customerLabel: 'Cliente Norte', plannedFrom: '2026-10-01', plannedTo: '2026-10-06', state: 'pendiente_planificacion', firstRiskDay: null, reasons: ['No hay una evaluación visible ni un conjunto de candidatos confirmado para proyectar.'], evaluationBasis: 'pendiente_planificacion', potentialCapacity: null },
+  { reference: 'BACK-05', ocLabel: 'OC 45000236', customerLabel: 'Operadora Central', plannedFrom: '2026-10-05', plannedTo: '2026-10-10', state: 'sin_matriz', firstRiskDay: null, reasons: ['No existe una matriz publicada aplicable al contexto informado.'], evaluationBasis: 'pendiente_planificacion', potentialCapacity: null },
   { reference: 'BACK-06', ocLabel: 'OC 45000240', customerLabel: 'Servicios Patagónicos', plannedFrom: '2026-10-12', plannedTo: '2026-10-18', state: 'requiere_revision', firstRiskDay: '2026-10-12', reasons: ['La evaluación contiene evidencia declarada pendiente de verificación.', 'El contexto de locación requiere confirmación.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 3, vehiculos: 1, equipos: 2 } },
 ];
 
@@ -54,28 +54,30 @@ const explanations = new Map<string, DocumentationExplanation>([
     source: TEMPORARY_CONTRACT_SOURCE,
     reference: row.reference,
     title: `${row.ocLabel} · ${row.customerLabel}`,
-    summary: row.evaluationBasis === 'ultima_evaluacion' ? 'Proyección basada en la última evaluación documental disponible.' : 'No se proyecta riesgo hasta recibir fechas de planificación.',
+    summary: row.evaluationBasis === 'ultima_evaluacion' ? 'Proyección basada en la última evaluación documental disponible.' : 'No se proyecta riesgo hasta contar con un conjunto de candidatos confirmado.',
     reasons: row.reasons,
     applicability: row.state === 'sin_matriz' ? { kind: 'none', label: 'Sin matriz aplicable confirmada' } : { kind: 'oc', label: row.ocLabel },
     evaluationLabel: row.evaluationBasis === 'ultima_evaluacion' ? 'Utiliza la última evaluación' : 'Pendiente de planificación',
   } as DocumentationExplanation] as const),
 ]);
 
-function allowedKinds(scope: DocumentationScope) {
-  if (scope === 'responsible') return new Set(['empresa', 'persona', 'vehiculo', 'equipo']);
-  return new Set(['persona', 'vehiculo', 'equipo']);
+// Explicit fictional membership for the prototype, not an authorization rule.
+const technicianReferences = new Set(['CAL-PER-01', 'CAL-VEH-01', 'CAL-EQP-01']);
+function visibleInterval(item: CalendarInterval, scope: DocumentationScope) {
+  if (scope === 'responsible') return true;
+  if (scope === 'technician') return technicianReferences.has(item.reference);
+  return item.subjectKind !== 'empresa';
 }
 
 export const temporaryMockAccess: DocumentationPlanningAccess = {
   async readCalendar(query: CalendarQuery): Promise<CalendarProjection> {
-    const allowed = allowedKinds(query.scope);
     return {
       source: TEMPORARY_CONTRACT_SOURCE,
       asOf: '2026-09-21',
       from: query.from,
       to: query.to,
       scopeLabel: scopeLabels[query.scope],
-      intervals: intervals.filter(item => allowed.has(item.subjectKind) && (!query.subjectKind || item.subjectKind === query.subjectKind)),
+      intervals: intervals.filter(item => visibleInterval(item, query.scope) && item.from <= query.to && item.to >= query.from && (!query.subjectKind || item.subjectKind === query.subjectKind)),
     };
   },
   async readBacklogProjection(query: BacklogQuery): Promise<BacklogProjection> {
@@ -89,7 +91,7 @@ export const temporaryMockAccess: DocumentationPlanningAccess = {
   },
   async readExplanation(query: ExplanationQuery): Promise<DocumentationExplanation> {
     const calendarItem = intervals.find(item => item.reference === query.reference);
-    if (calendarItem && !allowedKinds(query.scope).has(calendarItem.subjectKind)) throw new Error('El detalle queda fuera del alcance visible para este rol.');
+    if (calendarItem && !visibleInterval(calendarItem, query.scope)) throw new Error('El detalle queda fuera del alcance visible para este rol.');
     if (query.scope === 'technician' && backlog.some(item => item.reference === query.reference)) throw new Error('La proyección del backlog no está disponible para este rol.');
     const detail = explanations.get(query.reference);
     if (!detail) throw new Error('El mock temporal no contiene el detalle solicitado.');

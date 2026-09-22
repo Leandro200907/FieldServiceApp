@@ -1,4 +1,10 @@
+> Actualización 2026-09-22: `db400e6` ya incorpora consultas auxiliares y respuestas tipadas. Las afirmaciones históricas de ausencia o respuesta genérica deben leerse con esta actualización. No se cierran gaps automáticamente: contrato candidato en `frontend/contracts/modulo1/review-db400e6/`.
+>
+> `mi_legajo` existe, pero su integración está bloqueada por A-01 (transferencia futura de custodia). `sujetos` acumula alcance propio y supervisado; no confirma por sí sola una lista exclusivamente del equipo. SEL-33 sigue pendiente de distinción contractual. Q-DOC-01/02/03 siguen sin endpoint implementado. No ingresar UUID libres.
+
 # FieldServiceApp — Brechas y conflictos API
+
+> Actualización de recepción: backend `98a9c5d` agrega 38 operaciones (85 total), pero no las tres consultas de proyección. Ver [BACKEND_REVIEW_98A9C5D.md](BACKEND_REVIEW_98A9C5D.md) para diferencias, conflictos y secuencia vigente. Las afirmaciones de ausencia basadas en bbf42b5 son históricas y requieren revisión por selector. G-01 y G-18 siguen abiertos.
 
 Actualizado 21/09/2026 · Baseline bbf42b5 · Todos los hallazgos abiertos salvo evidencia futura de cierre.
 

@@ -31,3 +31,15 @@ describe('temporary documentary planning contracts', () => {
     await expect(temporaryMockAccess.readExplanation({ scope: 'technician', reference: 'BACK-01' })).rejects.toThrow(/no está disponible/);
   });
 });
+
+it('limits the technician prototype to one own person and denies another person detail', async () => {
+  const data = await temporaryMockAccess.readCalendar({ scope: 'technician', from: '2026-09-01', to: '2026-10-31' });
+  expect(data.intervals.filter(item => item.subjectKind === 'persona')).toHaveLength(1);
+  await expect(temporaryMockAccess.readExplanation({ scope: 'technician', reference: 'CAL-PER-02' })).rejects.toThrow(/fuera del alcance/);
+});
+it('does not present unknown capacity as zero', async () => {
+  const data = await temporaryMockAccess.readBacklogProjection({ scope: 'responsible', from: '2026-09-01', to: '2026-10-31' });
+  for (const row of data.rows.filter(row => ['sin_matriz', 'pendiente_planificacion'].includes(row.state))) {
+    expect(row.potentialCapacity).toBeNull();
+  }
+});

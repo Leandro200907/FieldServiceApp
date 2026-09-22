@@ -1,5 +1,7 @@
 # FieldServiceApp — Plan de inicio del frontend del Módulo 1
 
+> Actualización de recepción: backend `98a9c5d` agrega 38 operaciones (85 total), pero no las tres consultas de proyección. Ver [BACKEND_REVIEW_98A9C5D.md](BACKEND_REVIEW_98A9C5D.md) para diferencias, conflictos y secuencia vigente. Las afirmaciones de ausencia basadas en bbf42b5 son históricas y requieren revisión por selector. G-01 y G-18 siguen abiertos.
+
 Plan actualizado tras confirmación de continuidad · Actualizado 21/09/2026 · Integrador responsable: Astra
 
 ## 1. Decisión y límites

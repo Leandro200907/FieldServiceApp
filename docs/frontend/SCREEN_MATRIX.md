@@ -1,5 +1,7 @@
 # FieldServiceApp — Matriz de pantallas y operaciones
 
+> Actualización de recepción: backend `98a9c5d` agrega 38 operaciones (85 total), pero no las tres consultas de proyección. Ver [BACKEND_REVIEW_98A9C5D.md](BACKEND_REVIEW_98A9C5D.md) para diferencias, conflictos y secuencia vigente. Las afirmaciones de ausencia basadas en bbf42b5 son históricas y requieren revisión por selector. G-01 y G-18 siguen abiertos.
+
 Actualizado 21/09/2026 · Baseline bbf42b5 · 47 operaciones verificadas contra el archivo recibido.
 
 C = Configuración; R = Responsable; S = Supervisor; T = Técnico. Los roles efectivos proceden de código/handoff contrastados con no funcionales §2.2, porque OpenAPI solo expresa autenticación y no autorización por rol. «Alcance» siempre lo aplica el servidor. Las diferencias se registran, no se heredan como permisos nuevos.

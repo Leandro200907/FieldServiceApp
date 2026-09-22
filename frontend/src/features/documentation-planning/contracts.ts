@@ -52,7 +52,7 @@ export interface BacklogProjectionRow {
   firstRiskDay: string | null;
   reasons: string[];
   evaluationBasis: 'ultima_evaluacion' | 'pendiente_planificacion';
-  potentialCapacity: PotentialCapacity;
+  potentialCapacity: PotentialCapacity | null;
 }
 
 export interface BacklogProjection {
