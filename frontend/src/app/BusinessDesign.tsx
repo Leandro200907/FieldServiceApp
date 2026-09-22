@@ -13,8 +13,8 @@ const selectors: Partial<Record<Page['id'], Array<[string, string]>>> = {
   configuracion: [['Definición local', 'SEL-13 · catálogo existente; integración pendiente']],
 };
 export function BusinessDesign({ page, technicalNotes = false, roles = [] }: { page: Page; technicalNotes?: boolean; roles?: readonly string[] }) {
-  if (page.id === 'calendario-vigencias') return <><CalendarDocumentalScreen roles={roles} />{technicalNotes && <p className="technical-note">G-18 / Q-DOC-01 / Q-DOC-03 · Prototipo con acceso reemplazable y mock contractual temporal; sin llamada al cliente OpenAPI.</p>}</>;
-  if (page.id === 'proyeccion-backlog') return <><BacklogProjectionScreen roles={roles} />{technicalNotes && <p className="technical-note">G-18 / Q-DOC-02 / Q-DOC-03 · Proyección visual no integrada; no contiene funciones del Módulo 2.</p>}</>;
+  if (page.id === 'calendario-vigencias') return <><CalendarDocumentalScreen roles={roles} />{technicalNotes && <p className="technical-note">Q-DOC-01 · GET /v1/consultas/calendario_vigencias implementado y con adaptador real (`realDocumentationPlanningAccess`); activación detrás de `featureFlags.documentationCalendarIntegration` (hoy `false`). Q-DOC-03 (detalle de tramo por referencia) sigue sin endpoint — la vista sólo puede mostrar los campos crudos del ítem, no una explicación de exigibilidad.</p>}</>;
+  if (page.id === 'proyeccion-backlog') return <><BacklogProjectionScreen roles={roles} />{technicalNotes && <p className="technical-note">Q-DOC-02 · GET /v1/consultas/proyeccion_documental_backlog y GET /v1/consultas/proyeccion_documental (detalle) implementados y con adaptador real; activación detrás de `featureFlags.backlogDocumentationIntegration` (hoy `false`). No contiene funciones del Módulo 2.</p>}</>;
   if (page.id === 'mi-legajo') return <>
     <Pending title="Tu legajo compuesto está pendiente de integración">La consulta compuesta ya existe, pero espera la corrección de custodias por fecha. Reunirá tu persona, los vehículos vigentes y los equipos bajo tu custodia. La falta de conexión no significa que no tengas recursos asignados.</Pending>
     <div className="composite-grid">{[

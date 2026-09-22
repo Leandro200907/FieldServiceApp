@@ -1,99 +1,104 @@
 import type {
-  BacklogProjection,
   BacklogQuery,
-  CalendarInterval,
-  CalendarProjection,
   CalendarQuery,
-  DocumentationExplanation,
+  CalendarioVigenciasResponse,
   DocumentationPlanningAccess,
-  DocumentationScope,
-  ExplanationQuery,
+  ItemBacklog,
+  ItemCalendario,
+  ProjectionDetailQuery,
+  ProyeccionDocumentalBacklogResponse,
+  ProyeccionDocumentalResponse,
 } from './contracts';
-import { TEMPORARY_CONTRACT_SOURCE } from './contracts';
 
-const scopeLabels: Record<DocumentationScope, string> = {
-  responsible: 'Empresa completa dentro del alcance documental autorizado',
-  supervisor: 'Equipo supervisado; no incluye sujetos fuera del universo asignado',
-  technician: 'Mi persona y recursos propios autorizados',
-};
+// Mock de desarrollo (`VITE_ENABLE_MOCKS=true`) con la FORMA REAL del contrato — no una
+// forma propia. Sirve para explorar layout sin backend; nunca decide reglas de dominio
+// (los estados/capacidades de abajo son ejemplos fijos, no un cálculo). Se usa sólo cuando
+// `featureFlags.documentationCalendarIntegration`/`backlogDocumentationIntegration` están
+// en `false` — ver `access.ts`.
+const HOY = '2026-09-21';
+const ADVERTENCIA = 'Proyección documental calculada con la información registrada a la fecha. No garantiza disponibilidad ni asignación operativa.';
 
-const intervals: CalendarInterval[] = [
-  { reference: 'CAL-EMP-01', subjectKind: 'empresa', subjectLabel: 'Empresa de servicios', requirementLabel: 'Registro de proveedor', from: '2026-09-01', to: '2026-10-18', state: 'verificada', applicability: { kind: 'matriz', label: 'Matriz publicada · Cliente Norte / Base Añelo' } },
-  { reference: 'CAL-PER-01', subjectKind: 'persona', subjectLabel: 'Marina López', requirementLabel: 'Apto médico', from: '2026-09-08', to: '2026-09-27', state: 'proxima_a_vencer', applicability: { kind: 'oc', label: 'OC 45000218 · intervención prevista' } },
-  { reference: 'CAL-PER-02', subjectKind: 'persona', subjectLabel: 'Diego Suárez', requirementLabel: 'Inducción de locación', from: '2026-08-18', to: '2026-09-17', state: 'vencida', applicability: { kind: 'matriz', label: 'Matriz publicada · Locación Sierra' } },
-  { reference: 'CAL-VEH-01', subjectKind: 'vehiculo', subjectLabel: 'Unidad VX-23', requirementLabel: 'VTV', from: '2026-09-01', to: '2026-09-20', state: 'vencida', applicability: { kind: 'oc', label: 'OC 45000221 · requisito particular' } },
-  { reference: 'CAL-EQP-01', subjectKind: 'equipo', subjectLabel: 'Detector multigás EQ-144', requirementLabel: 'Calibración informada', from: '2026-09-15', to: '2026-10-12', state: 'declarada', applicability: { kind: 'none', label: 'Sin matriz u OC que la establezca como obligación' } },
-  { reference: 'CAL-EQP-02', subjectKind: 'equipo', subjectLabel: 'Medidor de presión EQ-087', requirementLabel: 'Certificado de calibración', from: '2026-09-21', to: '2026-10-25', state: 'sin_evidencia', applicability: { kind: 'matriz', label: 'Matriz publicada · Servicio de medición' } },
+const items: ItemCalendario[] = [
+  { categoria: 'documento', id: 'cal-emp-01', sujeto_id: 'empresa-001', tipo_sujeto: 'empresa', identificador_natural: 'Empresa de servicios', requisito_definicion_id: 'req-registro-proveedor', requisito: 'Registro de proveedor', vigente_desde: '2026-09-01', vigente_hasta: '2026-10-18', estado_confirmacion: 'verificado', archivo_validacion: 'valido', dias_para_vencer: 27 },
+  { categoria: 'documento', id: 'cal-per-01', sujeto_id: 'persona-marina', tipo_sujeto: 'persona', identificador_natural: 'Marina López', requisito_definicion_id: 'req-apto-medico', requisito: 'Apto médico', vigente_desde: '2026-08-01', vigente_hasta: '2026-09-27', estado_confirmacion: 'verificado', archivo_validacion: 'valido', dias_para_vencer: 6 },
+  { categoria: 'induccion', id: 'cal-per-02', sujeto_id: 'persona-diego', tipo_sujeto: 'persona', identificador_natural: 'Diego Suárez', requisito_definicion_id: 'req-induccion-locacion', requisito: 'Inducción de locación', vigente_desde: '2026-08-18', vigente_hasta: '2026-09-17', estado_confirmacion: 'verificado', archivo_validacion: null, dias_para_vencer: -4 },
+  { categoria: 'documento', id: 'cal-veh-01', sujeto_id: 'vehiculo-vx23', tipo_sujeto: 'vehiculo', identificador_natural: 'Unidad VX-23', requisito_definicion_id: 'req-vtv', requisito: 'VTV', vigente_desde: '2026-08-01', vigente_hasta: '2026-09-20', estado_confirmacion: 'confirmado_en_fuente', archivo_validacion: 'invalido', dias_para_vencer: -1 },
+  { categoria: 'competencia', id: 'cal-eqp-01', sujeto_id: 'equipo-eq144', tipo_sujeto: 'equipo', identificador_natural: 'Detector multigás EQ-144', requisito_definicion_id: 'req-calibracion-informada', requisito: 'Calibración informada', vigente_desde: '2026-09-15', vigente_hasta: '2026-10-12', estado_confirmacion: 'declarado', archivo_validacion: null, dias_para_vencer: 21 },
+  { categoria: 'documento', id: 'cal-eqp-02', sujeto_id: 'equipo-eq087', tipo_sujeto: 'equipo', identificador_natural: 'Medidor de presión EQ-087', requisito_definicion_id: 'req-certificado-calibracion', requisito: 'Certificado de calibración', vigente_desde: '2026-08-21', vigente_hasta: '2026-10-25', estado_confirmacion: 'verificado', archivo_validacion: 'pendiente', dias_para_vencer: 34 },
 ];
 
-const backlog: BacklogProjection['rows'] = [
-  { reference: 'BACK-01', ocLabel: 'OC 45000218', customerLabel: 'Cliente Norte', plannedFrom: '2026-09-24', plannedTo: '2026-09-30', state: 'sin_riesgos_detectados', firstRiskDay: null, reasons: ['La última evaluación no detectó cortes de vigencia dentro del período previsto.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 12, vehiculos: 4, equipos: 9 } },
-  { reference: 'BACK-02', ocLabel: 'OC 45000221', customerLabel: 'Operadora Sierra', plannedFrom: '2026-09-27', plannedTo: '2026-10-04', state: 'riesgo_documental', firstRiskDay: '2026-09-29', reasons: ['Dos aptos médicos vencen durante la ventana prevista.', 'Una VTV no cubre el último día planificado.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 7, vehiculos: 2, equipos: 6 } },
-  { reference: 'BACK-03', ocLabel: 'OC 45000224', customerLabel: 'Energía del Sur', plannedFrom: '2026-09-22', plannedTo: '2026-09-26', state: 'bloqueo_confirmado', firstRiskDay: '2026-09-22', reasons: ['La evaluación vigente confirmó evidencia obligatoria vencida para el contexto de la OC.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 0, vehiculos: 0, equipos: 0 } },
-  { reference: 'BACK-04', ocLabel: 'OC 45000231', customerLabel: 'Cliente Norte', plannedFrom: '2026-10-01', plannedTo: '2026-10-06', state: 'pendiente_planificacion', firstRiskDay: null, reasons: ['No hay una evaluación visible ni un conjunto de candidatos confirmado para proyectar.'], evaluationBasis: 'pendiente_planificacion', potentialCapacity: null },
-  { reference: 'BACK-05', ocLabel: 'OC 45000236', customerLabel: 'Operadora Central', plannedFrom: '2026-10-05', plannedTo: '2026-10-10', state: 'sin_matriz', firstRiskDay: null, reasons: ['No existe una matriz publicada aplicable al contexto informado.'], evaluationBasis: 'pendiente_planificacion', potentialCapacity: null },
-  { reference: 'BACK-06', ocLabel: 'OC 45000240', customerLabel: 'Servicios Patagónicos', plannedFrom: '2026-10-12', plannedTo: '2026-10-18', state: 'requiere_revision', firstRiskDay: '2026-10-12', reasons: ['La evaluación contiene evidencia declarada pendiente de verificación.', 'El contexto de locación requiere confirmación.'], evaluationBasis: 'ultima_evaluacion', potentialCapacity: { personas: 3, vehiculos: 1, equipos: 2 } },
+const backlogItems: ItemBacklog[] = [
+  { commitment_id: 'OC-45000218', vigencia_desde: '2026-09-24', vigencia_hasta: '2026-09-30', estado: 'sin_riesgos_detectados', primer_quiebre: null, capacidad_documental_potencial_hoy: { persona: 12, vehiculo: 4, equipo: 9 }, origen_calculo: 'ultima_decision_visible', motivos_resumidos: [] },
+  { commitment_id: 'OC-45000221', vigencia_desde: '2026-09-27', vigencia_hasta: '2026-10-04', estado: 'riesgo_documental', primer_quiebre: '2026-09-29', capacidad_documental_potencial_hoy: { persona: 7, vehiculo: 2 }, origen_calculo: 'ultima_decision_visible', motivos_resumidos: ['Apto médico: persona_0077 vence el 2026-09-29 sin candidato de respaldo detrás.'] },
+  { commitment_id: 'OC-45000224', vigencia_desde: '2026-09-22', vigencia_hasta: '2026-09-26', estado: 'bloqueo_confirmado', primer_quiebre: '2026-09-22', capacidad_documental_potencial_hoy: { persona: 0, vehiculo: 1 }, origen_calculo: 'ultima_decision_visible', motivos_resumidos: ['VTV: ningún candidato de tipo vehiculo lo cubre en este tramo.'] },
+  { commitment_id: 'OC-45000231', vigencia_desde: '2026-10-01', vigencia_hasta: '2026-10-06', estado: 'pendiente_de_planificacion', primer_quiebre: null, capacidad_documental_potencial_hoy: {}, origen_calculo: 'candidatos_del_alcance', motivos_resumidos: ['No hay decisión visible para esta OC ni candidatos en el alcance de quien consulta'] },
+  { commitment_id: 'OC-45000236', vigencia_desde: '2026-10-05', vigencia_hasta: '2026-10-10', estado: 'sin_matriz', primer_quiebre: null, capacidad_documental_potencial_hoy: {}, origen_calculo: 'candidatos_del_alcance', motivos_resumidos: ['No hay matriz vigente para (cliente_id, locacion_id, tipo_servicio_id) al día de ingreso de la OC'] },
+  { commitment_id: 'OC-45000240', vigencia_desde: '2026-10-12', vigencia_hasta: '2026-10-18', estado: 'requiere_revision', primer_quiebre: '2026-10-12', capacidad_documental_potencial_hoy: { persona: 3, vehiculo: 1 }, origen_calculo: 'ultima_decision_visible', motivos_resumidos: ['Inducción de locación: depende de un documento que requiere revisión, no se cuenta como cobertura real.'] },
 ];
 
-const explanations = new Map<string, DocumentationExplanation>([
-  ...intervals.map(item => [item.reference, {
-    source: TEMPORARY_CONTRACT_SOURCE,
-    reference: item.reference,
-    title: `${item.requirementLabel} · ${item.subjectLabel}`,
-    summary: item.applicability.kind === 'none'
-      ? 'Evidencia observada con fines informativos. No se presenta como requisito obligatorio.'
-      : `Tramo proyectado entre ${item.from} y ${item.to}.`,
-    reasons: [
-      item.state === 'sin_evidencia' ? 'No se encontró evidencia verificada que cubra el intervalo.' : `Estado temporal propuesto: ${item.state.replaceAll('_', ' ')}.`,
-      item.applicability.label,
-    ],
-    applicability: item.applicability,
-    evaluationLabel: 'Detalle temporal de mock · pendiente de contrato backend',
-  } as DocumentationExplanation] as const),
-  ...backlog.map(row => [row.reference, {
-    source: TEMPORARY_CONTRACT_SOURCE,
-    reference: row.reference,
-    title: `${row.ocLabel} · ${row.customerLabel}`,
-    summary: row.evaluationBasis === 'ultima_evaluacion' ? 'Proyección basada en la última evaluación documental disponible.' : 'No se proyecta riesgo hasta contar con un conjunto de candidatos confirmado.',
-    reasons: row.reasons,
-    applicability: row.state === 'sin_matriz' ? { kind: 'none', label: 'Sin matriz aplicable confirmada' } : { kind: 'oc', label: row.ocLabel },
-    evaluationLabel: row.evaluationBasis === 'ultima_evaluacion' ? 'Utiliza la última evaluación' : 'Pendiente de planificación',
-  } as DocumentationExplanation] as const),
-]);
+const detailByCommitment = new Map<string, ProyeccionDocumentalResponse>(
+  backlogItems.map(row => {
+    // `intervalos[].estado` sólo admite el subconjunto de 3 (docs/PROYECCION_DOCUMENTAL.md
+    // §6) — nunca los 3 exclusivos de resumen (`sin_matriz`/`pendiente_de_planificacion`/
+    // `riesgo_documental`). Mapeo explícito y exhaustivo, no un cast.
+    let intervalos: ProyeccionDocumentalResponse['intervalos'] = [];
+    if (row.estado === 'bloqueo_confirmado' || row.estado === 'requiere_revision' || row.estado === 'sin_riesgos_detectados') {
+      intervalos = [{ desde: row.vigencia_desde, hasta: row.vigencia_hasta, estado: row.estado, capacidad_documental_potencial: row.capacidad_documental_potencial_hoy }];
+    } else if (row.estado === 'riesgo_documental') {
+      intervalos = [
+        { desde: row.vigencia_desde, hasta: row.vigencia_desde, estado: 'sin_riesgos_detectados', capacidad_documental_potencial: row.capacidad_documental_potencial_hoy },
+        { desde: row.vigencia_hasta, hasta: row.vigencia_hasta, estado: 'bloqueo_confirmado', capacidad_documental_potencial: row.capacidad_documental_potencial_hoy, causas: row.motivos_resumidos.map(motivo => ({ motivo, tipo_sujeto: null, requisito_definicion_id: null, sujetos_que_pierden_cobertura: null, sujetos_que_mantienen_cobertura: null })) },
+      ];
+    }
+    const sinIntervalos = row.estado === 'sin_matriz' || row.estado === 'pendiente_de_planificacion';
+    const detail: ProyeccionDocumentalResponse = {
+      commitment_id: row.commitment_id,
+      hoy: HOY,
+      oc: { cliente_id: 'cliente-mock', locacion_id: 'locacion-mock', tipo_servicio_id: 'servicio-mock', vigencia_desde: row.vigencia_desde, vigencia_hasta: row.vigencia_hasta },
+      desde: row.vigencia_desde,
+      hasta: row.vigencia_hasta,
+      sujetos: { origen: row.origen_calculo, referencia_evaluacion: row.origen_calculo === 'ultima_decision_visible' ? `ref-${row.commitment_id}` : null, evaluada_en: row.origen_calculo === 'ultima_decision_visible' ? '2026-09-15T10:00:00Z' : null, sujeto_ids: [] },
+      matriz: row.estado === 'sin_matriz' ? null : { matriz_version_id: `matriz-${row.commitment_id}`, version: 1, tipos_exigidos: Object.keys(row.capacidad_documental_potencial_hoy) },
+      estado: row.estado,
+      intervalos,
+      causas: sinIntervalos && row.motivos_resumidos[0]
+        ? [{ motivo: row.motivos_resumidos[0], tipo_sujeto: null, requisito_definicion_id: null, sujetos_que_pierden_cobertura: null, sujetos_que_mantienen_cobertura: null }]
+        : undefined,
+      advertencia: ADVERTENCIA,
+    };
+    return [row.commitment_id, detail];
+  }),
+);
 
-// Explicit fictional membership for the prototype, not an authorization rule.
-const technicianReferences = new Set(['CAL-PER-01', 'CAL-VEH-01', 'CAL-EQP-01']);
-function visibleInterval(item: CalendarInterval, scope: DocumentationScope) {
-  if (scope === 'responsible') return true;
-  if (scope === 'technician') return technicianReferences.has(item.reference);
-  return item.subjectKind !== 'empresa';
+function withinRange(item: ItemCalendario, from: string, to: string) {
+  return item.vigente_desde <= to && item.vigente_hasta >= from;
 }
 
 export const temporaryMockAccess: DocumentationPlanningAccess = {
-  async readCalendar(query: CalendarQuery): Promise<CalendarProjection> {
+  async readCalendar(query: CalendarQuery): Promise<CalendarioVigenciasResponse> {
+    const filtered = items.filter(item => withinRange(item, query.from, query.to) && (!query.subjectKind || item.tipo_sujeto === query.subjectKind));
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 50;
     return {
-      source: TEMPORARY_CONTRACT_SOURCE,
-      asOf: '2026-09-21',
-      from: query.from,
-      to: query.to,
-      scopeLabel: scopeLabels[query.scope],
-      intervals: intervals.filter(item => visibleInterval(item, query.scope) && item.from <= query.to && item.to >= query.from && (!query.subjectKind || item.subjectKind === query.subjectKind)),
+      hoy: HOY, desde: query.from, hasta: query.to,
+      items: filtered.slice(offset, offset + limit),
+      total: filtered.length, offset, limit,
+      advertencia: ADVERTENCIA,
     };
   },
-  async readBacklogProjection(query: BacklogQuery): Promise<BacklogProjection> {
+  async readBacklogProjection(query: BacklogQuery): Promise<ProyeccionDocumentalBacklogResponse> {
+    const filtered = backlogItems.filter(row => !query.estado || query.estado.includes(row.estado));
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 50;
     return {
-      source: TEMPORARY_CONTRACT_SOURCE,
-      asOf: '2026-09-21',
-      scopeLabel: scopeLabels[query.scope],
-      warning: 'No garantiza disponibilidad ni asignación operativa',
-      rows: query.scope === 'supervisor' ? backlog.slice(0, 6) : backlog,
+      hoy: HOY, horizonte_dias: query.horizonteDias ?? 30,
+      items: filtered.slice(offset, offset + limit),
+      total: filtered.length, offset, limit,
+      advertencia: ADVERTENCIA,
     };
   },
-  async readExplanation(query: ExplanationQuery): Promise<DocumentationExplanation> {
-    const calendarItem = intervals.find(item => item.reference === query.reference);
-    if (calendarItem && !visibleInterval(calendarItem, query.scope)) throw new Error('El detalle queda fuera del alcance visible para este rol.');
-    if (query.scope === 'technician' && backlog.some(item => item.reference === query.reference)) throw new Error('La proyección del backlog no está disponible para este rol.');
-    const detail = explanations.get(query.reference);
+  async readProjectionDetail(query: ProjectionDetailQuery): Promise<ProyeccionDocumentalResponse> {
+    const detail = detailByCommitment.get(query.commitmentId);
     if (!detail) throw new Error('El mock temporal no contiene el detalle solicitado.');
     return detail;
   },

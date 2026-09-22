@@ -1,40 +1,92 @@
-import { useState } from 'react';
-import { Badge, ErrorState, LoadingState } from '../../ui/States';
-import type { CalendarInterval, DocumentationExplanation, EvidenceIntervalState, SubjectKind } from './contracts';
-import { temporaryMockAccess } from './temporaryMockAccess';
+import { useMemo, useState } from 'react';
+import { ApiFailure } from '../../api';
+import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
+import type { ItemCalendario, SubjectKind, VisualCalendarState } from './contracts';
+import { deriveVisualState } from './contracts';
+import { calendarAccess, isCalendarIntegrated } from './access';
 import { documentationScopeFor } from './scope';
 import { usePrototypeRead } from './usePrototypeRead';
 import './planning.css';
 
-const intervalLabels: Record<EvidenceIntervalState, string> = {
-  verificada: 'Verificada', proxima_a_vencer: 'Próxima a vencer', vencida: 'Vencida', declarada: 'Declarada', sin_evidencia: 'Sin evidencia',
-};
+const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };
 const kindLabels: Record<SubjectKind, string> = { empresa: 'Empresa', persona: 'Persona', vehiculo: 'Vehículo', equipo: 'Equipo' };
 
-function Detail({ detail }: { detail: DocumentationExplanation }) {
-  return <aside className="planning-detail" aria-live="polite"><div className="panel-top"><p className="eyebrow">Detalle del tramo</p><Badge tone={detail.applicability.kind === 'none' ? 'warning' : 'accent'}>{detail.applicability.kind === 'none' ? 'No obligatorio sin contexto' : `Contexto ${detail.applicability.kind.toUpperCase()}`}</Badge></div><h3>{detail.title}</h3><p>{detail.summary}</p><dl><dt>Aplicabilidad</dt><dd>{detail.applicability.label}</dd><dt>Base</dt><dd>{detail.evaluationLabel}</dd></dl><h4>Motivos explicables</h4><ul>{detail.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul></aside>;
+function addDays(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+// Posición proporcional REAL dentro del rango pedido — nunca coordenadas fijas por ítem.
+function trackPosition(item: ItemCalendario, from: string, to: string): [number, number] {
+  const start = new Date(`${from}T00:00:00Z`).getTime();
+  const end = new Date(`${to}T00:00:00Z`).getTime();
+  const span = Math.max(end - start, 1);
+  const itemFrom = Math.max(new Date(`${item.vigente_desde}T00:00:00Z`).getTime(), start);
+  const itemTo = Math.min(new Date(`${item.vigente_hasta}T00:00:00Z`).getTime(), end);
+  const left = ((itemFrom - start) / span) * 100;
+  const width = Math.max(((itemTo - itemFrom) / span) * 100, 2);
+  return [left, width];
 }
 
-function TimelineRow({ interval, selected, onSelect }: { interval: CalendarInterval; selected: boolean; onSelect: () => void }) {
-  const positions: Record<string, [number, number]> = {
-    'CAL-EMP-01': [4, 78], 'CAL-PER-01': [18, 34], 'CAL-PER-02': [2, 31], 'CAL-VEH-01': [6, 34], 'CAL-EQP-01': [31, 51], 'CAL-EQP-02': [42, 50],
-  };
-  const [left, width] = positions[interval.reference] || [10, 45];
-  return <div className="timeline-row"><div className="timeline-subject"><span className="subject-kind">{kindLabels[interval.subjectKind]}</span><strong>{interval.subjectLabel}</strong><small>{interval.requirementLabel}</small></div><div className="timeline-track"><span className="today-line" aria-hidden="true" /><button className={`timeline-segment status-${interval.state} ${selected ? 'selected' : ''}`} style={{ left: `${left}%`, width: `${width}%` }} onClick={onSelect} aria-label={`${interval.subjectLabel}, ${interval.requirementLabel}: ${intervalLabels[interval.state]}`}><span>{intervalLabels[interval.state]}</span></button></div></div>;
+function Detail({ item }: { item: ItemCalendario }) {
+  const state = deriveVisualState(item);
+  return <aside className="planning-detail" aria-live="polite">
+    <div className="panel-top"><p className="eyebrow">Detalle del tramo</p><Badge tone={state === 'vencida' ? 'warning' : 'accent'}>{visualStateLabels[state]}</Badge></div>
+    <h3>{item.requisito || 'Requisito sin nombre'} · {item.identificador_natural || item.sujeto_id}</h3>
+    <dl>
+      <dt>Categoría</dt><dd>{item.categoria}</dd>
+      <dt>Vigencia</dt><dd>{item.vigente_desde} — {item.vigente_hasta} ({item.dias_para_vencer >= 0 ? `vence en ${item.dias_para_vencer} días` : `venció hace ${Math.abs(item.dias_para_vencer)} días`})</dd>
+      <dt>Confirmación</dt><dd>{item.estado_confirmacion}</dd>
+      {item.archivo_validacion && <><dt>Archivo</dt><dd>{item.archivo_validacion}</dd></>}
+    </dl>
+    <p className="detail-note">Este calendario es general — no confirma si este vencimiento es exigible para ninguna OC. Para eso, consultá la proyección documental de la OC puntual.</p>
+  </aside>;
+}
+
+function TimelineRow({ item, from, to, selected, onSelect }: { item: ItemCalendario; from: string; to: string; selected: boolean; onSelect: () => void }) {
+  const state = deriveVisualState(item);
+  const [left, width] = trackPosition(item, from, to);
+  const label = `${item.identificador_natural || item.sujeto_id}, ${item.requisito || 'requisito'}: ${visualStateLabels[state]}`;
+  return <div className="timeline-row">
+    <div className="timeline-subject"><span className="subject-kind">{kindLabels[item.tipo_sujeto as SubjectKind] || item.tipo_sujeto}</span><strong>{item.identificador_natural || item.sujeto_id}</strong><small>{item.requisito || '—'}</small></div>
+    <div className="timeline-track"><span className="today-line" aria-hidden="true" /><button className={`timeline-segment status-${state} ${selected ? 'selected' : ''}`} style={{ left: `${left}%`, width: `${width}%` }} onClick={onSelect} aria-label={label}><span>{visualStateLabels[state]}</span></button></div>
+  </div>;
 }
 
 export function CalendarDocumentalScreen({ roles }: { roles: readonly string[] }) {
   const scope = documentationScopeFor(roles);
   const [kind, setKind] = useState<SubjectKind | 'all'>('all');
-  const [selected, setSelected] = useState('CAL-PER-01');
-  const calendar = usePrototypeRead(() => temporaryMockAccess.readCalendar({ scope, from: '2026-09-01', to: '2026-10-31', subjectKind: kind === 'all' ? undefined : kind }), [scope, kind]);
-  const detail = usePrototypeRead(() => temporaryMockAccess.readExplanation({ scope, reference: selected }), [scope, selected]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const from = useMemo(() => todayIso(), []);
+  const to = useMemo(() => addDays(from, 40), [from]);
+  const calendar = usePrototypeRead(() => calendarAccess().readCalendar({ from, to, subjectKind: kind === 'all' ? undefined : kind }), [from, to, kind]);
   const companyAllowed = scope === 'responsible';
+  const integrated = isCalendarIntegrated();
+  if (!scope) return <Pending title="Sin rol reconocido para esta vista">Tu sesión no tiene un rol habilitado para el calendario documental.</Pending>;
+  const selected = calendar.data?.items.find(item => item.id === selectedId) ?? null;
   return <>
-    <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Las fechas, sujetos y motivos son ejemplos temporales. No provienen del backend ni reemplazan el contrato pendiente.</p></div></div>
-    <section className="panel planning-toolbar"><div><p className="eyebrow">Alcance visible</p><strong>{calendar.data?.scopeLabel || 'Resolviendo alcance del prototipo…'}</strong></div><div className="orientation-tabs" aria-label="Orientación del calendario"><button className={kind === 'all' ? 'active' : ''} onClick={() => setKind('all')}>Todos</button>{(Object.keys(kindLabels) as SubjectKind[]).map(item => <button key={item} disabled={item === 'empresa' && !companyAllowed} title={item === 'empresa' && !companyAllowed ? 'Fuera del alcance de este rol' : undefined} className={kind === item ? 'active' : ''} onClick={() => setKind(item)}>{kindLabels[item]}</button>)}</div></section>
-    <div className="planning-legend">{(Object.keys(intervalLabels) as EvidenceIntervalState[]).map(state => <span key={state}><i className={`legend-dot status-${state}`} />{intervalLabels[state]}</span>)}<span className="today-key"><i />Hoy · 21 sep</span></div>
-    {calendar.loading ? <LoadingState /> : calendar.error ? <ErrorState message={calendar.error.message} /> : <div className="calendar-layout"><section className="timeline-card" aria-label="Calendario documental"><div className="timeline-scale"><span>1 sep</span><span>15 sep</span><strong>Hoy</strong><span>15 oct</span><span>31 oct</span></div>{calendar.data?.intervals.map(interval => <TimelineRow key={interval.reference} interval={interval} selected={selected === interval.reference} onSelect={() => setSelected(interval.reference)} />)}{calendar.data?.intervals.length === 0 && <p className="empty-inline">No hay tramos temporales en este mock para la orientación elegida.</p>}</section>{detail.loading ? <LoadingState /> : detail.error ? <ErrorState message={detail.error.message} /> : detail.data && <Detail detail={detail.data} />}</div>}
+    {integrated
+      ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Calendario general de vencimientos</strong><p>No cruza contra matriz ni OC — no confirma obligatoriedad. Ver proyección documental para eso.</p></div></div>
+      : <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Las fechas, sujetos y motivos son ejemplos temporales. El contrato de forma ya es el real (`docs/openapi.json`); el dato todavía no viene del backend.</p></div></div>}
+    <section className="panel planning-toolbar">
+      <div><p className="eyebrow">Rango consultado</p><strong>{from} — {to}</strong></div>
+      <div className="orientation-tabs" aria-label="Orientación del calendario">
+        <button className={kind === 'all' ? 'active' : ''} onClick={() => setKind('all')}>Todos</button>
+        {(Object.keys(kindLabels) as SubjectKind[]).map(item => <button key={item} disabled={item === 'empresa' && !companyAllowed} title={item === 'empresa' && !companyAllowed ? 'Fuera del alcance de este rol' : undefined} className={kind === item ? 'active' : ''} onClick={() => setKind(item)}>{kindLabels[item]}</button>)}
+      </div>
+    </section>
+    <div className="planning-legend">{(Object.keys(visualStateLabels) as VisualCalendarState[]).map(state => <span key={state}><i className={`legend-dot status-${state}`} />{visualStateLabels[state]}</span>)}{calendar.data && <span className="today-key"><i />Hoy · {calendar.data.hoy}</span>}</div>
+    {calendar.loading ? <LoadingState /> : calendar.error ? <ErrorState message={calendar.error.message} requestId={calendar.error instanceof ApiFailure && calendar.error.detail.referenceSource === 'server' ? calendar.error.detail.requestId : undefined} /> : <div className="calendar-layout">
+      <section className="timeline-card" aria-label="Calendario documental">
+        <div className="timeline-scale"><span>{from}</span><span>{to}</span></div>
+        {calendar.data?.items.map(item => <TimelineRow key={item.id} item={item} from={from} to={to} selected={selectedId === item.id} onSelect={() => setSelectedId(item.id)} />)}
+        {calendar.data?.items.length === 0 && <p className="empty-inline">No hay vencimientos registrados en este rango para la orientación elegida.</p>}
+      </section>
+      {selected && <Detail item={selected} />}
+    </div>}
     <section className="module-boundary"><strong>Límite con Módulo 2</strong><span>Sin arrastrar ni asignar recursos</span><span>Sin modificar fechas</span><span>Sin crear OT</span><span>Sin ejecución, tiempos reales, firma ni certificados</span></section>
   </>;
 }
