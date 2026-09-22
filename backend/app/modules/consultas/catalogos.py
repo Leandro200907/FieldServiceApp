@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.errores import ErrorDeDominio, Prohibido
-from app.auth.alcance import ROLES_CON_TODO_LECTURA, alcance_de_sujetos, recursos_bajo_custodia
+from app.auth.alcance import ROLES_CON_TODO_LECTURA, alcance_de_sujetos, periodo_custodia_efectivo, recursos_bajo_custodia
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
@@ -63,11 +63,7 @@ def mi_legajo(session: Session, identidad: Identidad) -> dict[str, Any]:
     persona = legajo(session, identidad, identidad.sujeto_id)
     custodiados = []
     for r in recursos:
-        periodo = session.execute(text(
-            "SELECT c.tipo_recurso, p.periodo_id::text, p.desde FROM modulo1.periodo_custodia p "
-            "JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
-            "WHERE p.tenant_id = :t AND c.recurso_id = :r AND p.estado = 'vigente' AND p.desde <= :hoy"),
-            {"t": identidad.tenant_id, "r": r, "hoy": hoy}).mappings().first()
+        periodo = periodo_custodia_efectivo(session, identidad.tenant_id, r, hoy)
         custodiados.append({"tipo_recurso": periodo["tipo_recurso"], "periodo_id": periodo["periodo_id"], "custodia_desde": periodo["desde"],
                             **legajo(session, identidad, r)})
     return {"hoy": persona["hoy"], "persona": persona, "recursos_bajo_custodia": custodiados,

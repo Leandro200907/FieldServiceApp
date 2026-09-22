@@ -63,12 +63,15 @@ def test_login_y_refresh_documentan_401_pero_no_exigen_bearer():
         assert op["responses"]["401"]["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/ErrorEnvelope"}
 
 
-def test_storage_firmado_no_declara_bearer_obligatorio_ni_401():
+def test_storage_firmado_no_exige_bearer_pero_documenta_401_si_se_manda_uno_invalido():
+    """Auditoría externa (AUDITORIA_DB400E6, hallazgo A-03): el bearer es opcional —
+    `security == []` — pero SI se manda uno inválido, `_exigir_tenant_del_token` sí puede
+    lanzar 401. "Opcional" es "ausente está bien", no "cualquier valor está bien"."""
     doc = json.loads(ARCHIVO.read_text(encoding="utf-8"))
     for metodo in ("put", "get"):
         op = doc["paths"]["/v1/storage/{firma}"][metodo]
         assert op["security"] == []
-        assert "401" not in op["responses"]
+        assert op["responses"]["401"]["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/ErrorEnvelope"}
 
 
 def test_openapi_json_sin_hosts_ni_rutas_internas_y_canonico():

@@ -17723,6 +17723,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -17803,6 +17813,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
           },
           "403": {
             "content": {
