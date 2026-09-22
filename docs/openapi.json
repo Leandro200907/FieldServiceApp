@@ -1,6 +1,454 @@
 {
   "components": {
     "schemas": {
+      "AlertaHistorialItem": {
+        "properties": {
+          "abierta_en": {
+            "format": "date",
+            "title": "Abierta En",
+            "type": "string"
+          },
+          "alerta_id": {
+            "title": "Alerta Id",
+            "type": "string"
+          },
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "destinatarios_notificados_en_esta_etapa": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destinatarios Notificados En Esta Etapa"
+          },
+          "escalada_en": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalada En"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "etapa": {
+            "title": "Etapa",
+            "type": "string"
+          },
+          "etapa_desde": {
+            "format": "date",
+            "title": "Etapa Desde",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "$ref": "#/components/schemas/EventoAlerta"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "fuente_id": {
+            "title": "Fuente Id",
+            "type": "string"
+          },
+          "fuente_tipo": {
+            "title": "Fuente Tipo",
+            "type": "string"
+          },
+          "reconocida_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconocida Hasta"
+          },
+          "requisito": {
+            "title": "Requisito",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "resuelta_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta En"
+          },
+          "resuelta_motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta Motivo"
+          },
+          "resuelta_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta Ref"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "ultima_accion_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Accion En"
+          },
+          "ultima_accion_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Accion Ref"
+          },
+          "ultima_accion_tipo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Accion Tipo"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "alerta_id",
+          "fuente_tipo",
+          "fuente_id",
+          "sujeto_id",
+          "tipo_sujeto",
+          "requisito_definicion_id",
+          "requisito",
+          "vigente_hasta",
+          "etapa",
+          "estado",
+          "bajo_excepcion",
+          "ultima_accion_tipo",
+          "ultima_accion_en",
+          "ultima_accion_ref",
+          "reconocida_hasta",
+          "destinatarios_notificados_en_esta_etapa",
+          "abierta_en",
+          "etapa_desde",
+          "escalada_en",
+          "resuelta_en",
+          "resuelta_motivo",
+          "resuelta_ref",
+          "eventos"
+        ],
+        "title": "AlertaHistorialItem",
+        "type": "object"
+      },
+      "AlertaVencimiento": {
+        "properties": {
+          "abierta_en": {
+            "format": "date",
+            "title": "Abierta En",
+            "type": "string"
+          },
+          "alerta_id": {
+            "title": "Alerta Id",
+            "type": "string"
+          },
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "destinatarios_notificados_en_esta_etapa": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destinatarios Notificados En Esta Etapa"
+          },
+          "escalada_en": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalada En"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "etapa": {
+            "title": "Etapa",
+            "type": "string"
+          },
+          "etapa_desde": {
+            "format": "date",
+            "title": "Etapa Desde",
+            "type": "string"
+          },
+          "fuente_id": {
+            "title": "Fuente Id",
+            "type": "string"
+          },
+          "fuente_tipo": {
+            "title": "Fuente Tipo",
+            "type": "string"
+          },
+          "reconocida_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconocida Hasta"
+          },
+          "requisito": {
+            "title": "Requisito",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "resuelta_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta En"
+          },
+          "resuelta_motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta Motivo"
+          },
+          "resuelta_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta Ref"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "ultima_accion_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Accion En"
+          },
+          "ultima_accion_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Accion Ref"
+          },
+          "ultima_accion_tipo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Accion Tipo"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "alerta_id",
+          "fuente_tipo",
+          "fuente_id",
+          "sujeto_id",
+          "tipo_sujeto",
+          "requisito_definicion_id",
+          "requisito",
+          "vigente_hasta",
+          "etapa",
+          "estado",
+          "bajo_excepcion",
+          "ultima_accion_tipo",
+          "ultima_accion_en",
+          "ultima_accion_ref",
+          "reconocida_hasta",
+          "destinatarios_notificados_en_esta_etapa",
+          "abierta_en",
+          "etapa_desde",
+          "escalada_en",
+          "resuelta_en",
+          "resuelta_motivo",
+          "resuelta_ref"
+        ],
+        "title": "AlertaVencimiento",
+        "type": "object"
+      },
+      "AlertasAbiertasResponse": {
+        "properties": {
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertaVencimiento"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "por_etapa": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Por Etapa",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "hoy",
+          "por_etapa"
+        ],
+        "title": "AlertasAbiertasResponse",
+        "type": "object"
+      },
       "AltaDeSujeto": {
         "properties": {
           "identificador_natural": {
@@ -38,6 +486,305 @@
         "title": "AltaDeSujeto",
         "type": "object"
       },
+      "ArchivoEnBandejaDrive": {
+        "properties": {
+          "archivo_drive_id": {
+            "title": "Archivo Drive Id",
+            "type": "string"
+          },
+          "confianza": {
+            "title": "Confianza",
+            "type": "string"
+          },
+          "documento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento Id"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "extraccion": {
+            "additionalProperties": true,
+            "title": "Extraccion",
+            "type": "object"
+          },
+          "id_externo": {
+            "title": "Id Externo",
+            "type": "string"
+          },
+          "mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime"
+          },
+          "modificado_externo": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modificado Externo"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "resuelto_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto En"
+          },
+          "resuelto_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto Por"
+          },
+          "visto_en": {
+            "format": "date-time",
+            "title": "Visto En",
+            "type": "string"
+          }
+        },
+        "required": [
+          "archivo_drive_id",
+          "id_externo",
+          "nombre",
+          "mime",
+          "modificado_externo",
+          "visto_en",
+          "estado",
+          "confianza",
+          "extraccion",
+          "motivo",
+          "documento_id",
+          "resuelto_por",
+          "resuelto_en"
+        ],
+        "title": "ArchivoEnBandejaDrive",
+        "type": "object"
+      },
+      "AsignacionSupervisionHistorial": {
+        "properties": {
+          "asignacion_id": {
+            "title": "Asignacion Id",
+            "type": "string"
+          },
+          "asignada_por": {
+            "title": "Asignada Por",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "desde": {
+            "title": "Desde",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hasta"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "supervisor_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Nombre"
+          },
+          "supervisor_usuario_id": {
+            "title": "Supervisor Usuario Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asignacion_id",
+          "sujeto_id",
+          "supervisor_usuario_id",
+          "supervisor_nombre",
+          "desde",
+          "hasta",
+          "estado",
+          "asignada_por",
+          "creado_en"
+        ],
+        "title": "AsignacionSupervisionHistorial",
+        "type": "object"
+      },
+      "AsignacionSupervisorItem": {
+        "properties": {
+          "asignacion_id": {
+            "title": "Asignacion Id",
+            "type": "string"
+          },
+          "asignada_por": {
+            "title": "Asignada Por",
+            "type": "string"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hasta"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "supervisor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor"
+          },
+          "supervisor_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Email"
+          },
+          "supervisor_usuario_id": {
+            "title": "Supervisor Usuario Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asignacion_id",
+          "sujeto_id",
+          "supervisor_usuario_id",
+          "supervisor",
+          "supervisor_email",
+          "desde",
+          "hasta",
+          "estado",
+          "asignada_por",
+          "creado_en"
+        ],
+        "title": "AsignacionSupervisorItem",
+        "type": "object"
+      },
+      "AsignacionesSupervisorResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AsignacionSupervisorItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "AsignacionesSupervisorResponse",
+        "type": "object"
+      },
       "AsignarSupervisor": {
         "properties": {
           "desde": {
@@ -70,6 +817,125 @@
         "title": "AsignarSupervisor",
         "type": "object"
       },
+      "AsignarSupervisorResponse": {
+        "properties": {
+          "asignacion_id": {
+            "title": "Asignacion Id",
+            "type": "string"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asignacion_id",
+          "sujeto_id",
+          "desde",
+          "eventos"
+        ],
+        "title": "AsignarSupervisorResponse",
+        "type": "object"
+      },
+      "AvisoIncumplimiento": {
+        "properties": {
+          "abierto_en": {
+            "title": "Abierto En",
+            "type": "string"
+          },
+          "aviso_id": {
+            "title": "Aviso Id",
+            "type": "string"
+          },
+          "causas": {
+            "items": {
+              "$ref": "#/components/schemas/CausaIncumplimiento"
+            },
+            "title": "Causas",
+            "type": "array"
+          },
+          "causas_activas": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Causas Activas",
+            "type": "array"
+          },
+          "desde": {
+            "title": "Desde",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "regularizado_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regularizado En"
+          }
+        },
+        "required": [
+          "aviso_id",
+          "estado",
+          "desde",
+          "abierto_en",
+          "regularizado_en",
+          "causas",
+          "causas_activas"
+        ],
+        "title": "AvisoIncumplimiento",
+        "type": "object"
+      },
+      "BacklogOcResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OcBacklogItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "BacklogOcResponse",
+        "type": "object"
+      },
       "BajaDeSujeto": {
         "properties": {
           "sujeto_id": {
@@ -82,6 +948,37 @@
           "sujeto_id"
         ],
         "title": "BajaDeSujeto",
+        "type": "object"
+      },
+      "BandejaDriveResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ArchivoEnBandejaDrive"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "BandejaDriveResponse",
         "type": "object"
       },
       "BandejaValidacionEvidenciaResponse": {
@@ -150,6 +1047,43 @@
           "desde"
         ],
         "title": "CambiarCustodiaBody",
+        "type": "object"
+      },
+      "CambiarCustodiaResponse": {
+        "properties": {
+          "custodia_id": {
+            "title": "Custodia Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "periodo_cerrado_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodo Cerrado Id"
+          },
+          "periodo_id": {
+            "title": "Periodo Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "custodia_id",
+          "periodo_id",
+          "eventos"
+        ],
+        "title": "CambiarCustodiaResponse",
         "type": "object"
       },
       "CancelarOC": {
@@ -325,6 +1259,306 @@
         "title": "CargarRequisitoParticular",
         "type": "object"
       },
+      "CargarRequisitoParticularResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "requisito_particular_id": {
+            "title": "Requisito Particular Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_particular_id",
+          "eventos"
+        ],
+        "title": "CargarRequisitoParticularResponse",
+        "type": "object"
+      },
+      "CausaIncumplimiento": {
+        "properties": {
+          "causa_id": {
+            "title": "Causa Id",
+            "type": "string"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "registrada_en": {
+            "format": "date-time",
+            "title": "Registrada En",
+            "type": "string"
+          },
+          "regularizada_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regularizada En"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "causa_id",
+          "requisito_definicion_id",
+          "nombre",
+          "estado",
+          "desde",
+          "registrada_en",
+          "regularizada_en"
+        ],
+        "title": "CausaIncumplimiento",
+        "type": "object"
+      },
+      "CoberturaOcResponse": {
+        "properties": {
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "modo": {
+            "title": "Modo",
+            "type": "string"
+          },
+          "oc": {
+            "$ref": "#/components/schemas/OcResumenCobertura"
+          },
+          "por_sujeto": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__consultas__router__SujetoEvaluado"
+            },
+            "title": "Por Sujeto",
+            "type": "array"
+          },
+          "requisitos_faltantes": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__consultas__router__RequisitoFaltante"
+            },
+            "title": "Requisitos Faltantes",
+            "type": "array"
+          },
+          "resultado_de_decision": {
+            "title": "Resultado De Decision",
+            "type": "string"
+          },
+          "veredicto_de_cumplimiento": {
+            "title": "Veredicto De Cumplimiento",
+            "type": "string"
+          },
+          "version_matriz": {
+            "$ref": "#/components/schemas/VersionMatrizEvaluada"
+          }
+        },
+        "required": [
+          "commitment_id",
+          "oc",
+          "modo",
+          "veredicto_de_cumplimiento",
+          "resultado_de_decision",
+          "por_sujeto",
+          "requisitos_faltantes",
+          "version_matriz"
+        ],
+        "title": "CoberturaOcResponse",
+        "type": "object"
+      },
+      "ConfiguracionAlertasResponse": {
+        "properties": {
+          "escalamiento_dias": {
+            "title": "Escalamiento Dias",
+            "type": "integer"
+          },
+          "plazo_aviso_dias": {
+            "title": "Plazo Aviso Dias",
+            "type": "integer"
+          },
+          "plazos_por_requisito": {
+            "items": {
+              "$ref": "#/components/schemas/PlazoPorRequisito"
+            },
+            "title": "Plazos Por Requisito",
+            "type": "array"
+          },
+          "reconocimiento_dias": {
+            "title": "Reconocimiento Dias",
+            "type": "integer"
+          },
+          "rol_escalamiento": {
+            "title": "Rol Escalamiento",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plazo_aviso_dias",
+          "escalamiento_dias",
+          "rol_escalamiento",
+          "reconocimiento_dias",
+          "plazos_por_requisito"
+        ],
+        "title": "ConfiguracionAlertasResponse",
+        "type": "object"
+      },
+      "ConfiguracionCanalesResponse": {
+        "properties": {
+          "actualizado_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actualizado En"
+          },
+          "mail_habilitado": {
+            "title": "Mail Habilitado",
+            "type": "boolean"
+          },
+          "remitente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remitente Nombre"
+          },
+          "telegram_habilitado": {
+            "title": "Telegram Habilitado",
+            "type": "boolean"
+          },
+          "usuarios_con_telegram": {
+            "title": "Usuarios Con Telegram",
+            "type": "integer"
+          },
+          "whatsapp": {
+            "title": "Whatsapp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mail_habilitado",
+          "telegram_habilitado",
+          "remitente_nombre",
+          "actualizado_en",
+          "usuarios_con_telegram",
+          "whatsapp"
+        ],
+        "title": "ConfiguracionCanalesResponse",
+        "type": "object"
+      },
+      "ConfiguracionDriveResponse": {
+        "properties": {
+          "carpeta_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carpeta Id"
+          },
+          "convencion_nombre": {
+            "title": "Convencion Nombre",
+            "type": "string"
+          },
+          "habilitado": {
+            "title": "Habilitado",
+            "type": "boolean"
+          },
+          "intervalo_horas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intervalo Horas"
+          },
+          "pendientes_revision": {
+            "title": "Pendientes Revision",
+            "type": "integer"
+          },
+          "proveedor": {
+            "title": "Proveedor",
+            "type": "string"
+          },
+          "ultimo_escaneo_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Escaneo En"
+          },
+          "ultimo_escaneo_resultado": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Escaneo Resultado"
+          }
+        },
+        "required": [
+          "habilitado",
+          "carpeta_id",
+          "intervalo_horas",
+          "ultimo_escaneo_en",
+          "ultimo_escaneo_resultado",
+          "proveedor",
+          "pendientes_revision",
+          "convencion_nombre"
+        ],
+        "title": "ConfiguracionDriveResponse",
+        "type": "object"
+      },
       "ConfigurarAlertasBody": {
         "properties": {
           "escalamiento_dias": {
@@ -362,6 +1596,50 @@
         "title": "ConfigurarAlertasBody",
         "type": "object"
       },
+      "ConfigurarAlertasResponse": {
+        "properties": {
+          "escalamiento_dias": {
+            "title": "Escalamiento Dias",
+            "type": "integer"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "plazo_aviso_dias": {
+            "title": "Plazo Aviso Dias",
+            "type": "integer"
+          },
+          "plazos_por_requisito": {
+            "items": {
+              "$ref": "#/components/schemas/PlazoPorRequisito"
+            },
+            "title": "Plazos Por Requisito",
+            "type": "array"
+          },
+          "reconocimiento_dias": {
+            "title": "Reconocimiento Dias",
+            "type": "integer"
+          },
+          "rol_escalamiento": {
+            "title": "Rol Escalamiento",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plazo_aviso_dias",
+          "escalamiento_dias",
+          "rol_escalamiento",
+          "reconocimiento_dias",
+          "plazos_por_requisito",
+          "eventos"
+        ],
+        "title": "ConfigurarAlertasResponse",
+        "type": "object"
+      },
       "ConfigurarCanalesBody": {
         "properties": {
           "mail_habilitado": {
@@ -388,6 +1666,67 @@
           }
         },
         "title": "ConfigurarCanalesBody",
+        "type": "object"
+      },
+      "ConfigurarCanalesResponse": {
+        "properties": {
+          "actualizado_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actualizado En"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "mail_habilitado": {
+            "title": "Mail Habilitado",
+            "type": "boolean"
+          },
+          "remitente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remitente Nombre"
+          },
+          "telegram_habilitado": {
+            "title": "Telegram Habilitado",
+            "type": "boolean"
+          },
+          "usuarios_con_telegram": {
+            "title": "Usuarios Con Telegram",
+            "type": "integer"
+          },
+          "whatsapp": {
+            "title": "Whatsapp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mail_habilitado",
+          "telegram_habilitado",
+          "remitente_nombre",
+          "actualizado_en",
+          "usuarios_con_telegram",
+          "whatsapp",
+          "eventos"
+        ],
+        "title": "ConfigurarCanalesResponse",
         "type": "object"
       },
       "ConfigurarDriveBody": {
@@ -426,6 +1765,92 @@
         "title": "ConfigurarDriveBody",
         "type": "object"
       },
+      "ConfigurarDriveResponse": {
+        "properties": {
+          "carpeta_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carpeta Id"
+          },
+          "convencion_nombre": {
+            "title": "Convencion Nombre",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "habilitado": {
+            "title": "Habilitado",
+            "type": "boolean"
+          },
+          "intervalo_horas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intervalo Horas"
+          },
+          "pendientes_revision": {
+            "title": "Pendientes Revision",
+            "type": "integer"
+          },
+          "proveedor": {
+            "title": "Proveedor",
+            "type": "string"
+          },
+          "ultimo_escaneo_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Escaneo En"
+          },
+          "ultimo_escaneo_resultado": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Escaneo Resultado"
+          }
+        },
+        "required": [
+          "habilitado",
+          "carpeta_id",
+          "intervalo_horas",
+          "ultimo_escaneo_en",
+          "ultimo_escaneo_resultado",
+          "proveedor",
+          "pendientes_revision",
+          "convencion_nombre",
+          "eventos"
+        ],
+        "title": "ConfigurarDriveResponse",
+        "type": "object"
+      },
       "ConfirmarDocumento": {
         "properties": {
           "documento_id": {
@@ -440,6 +1865,35 @@
         "title": "ConfirmarDocumento",
         "type": "object"
       },
+      "ConfirmarDocumentoResponse": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "excepciones_regularizadas": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excepciones Regularizadas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "documento_id",
+          "excepciones_regularizadas",
+          "eventos"
+        ],
+        "title": "ConfirmarDocumentoResponse",
+        "type": "object"
+      },
       "ConfirmarSubida": {
         "properties": {
           "documento_id": {
@@ -452,6 +1906,331 @@
           "documento_id"
         ],
         "title": "ConfirmarSubida",
+        "type": "object"
+      },
+      "ConfirmarSubidaResponse": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "checksum_sha256": {
+            "title": "Checksum Sha256",
+            "type": "string"
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventos"
+          },
+          "ya_confirmado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ya Confirmado"
+          }
+        },
+        "required": [
+          "documento_id",
+          "checksum_sha256",
+          "bytes"
+        ],
+        "title": "ConfirmarSubidaResponse",
+        "type": "object"
+      },
+      "ConstanciaItem": {
+        "properties": {
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "commitment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commitment Id"
+          },
+          "constancia_id": {
+            "title": "Constancia Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "emisor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emisor"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "evidencia": {
+            "title": "Evidencia",
+            "type": "string"
+          },
+          "reemplazada_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reemplazada Por"
+          },
+          "registrada_por": {
+            "title": "Registrada Por",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "vigencia": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigencia"
+          }
+        },
+        "required": [
+          "constancia_id",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "requisito",
+          "cliente_id",
+          "commitment_id",
+          "estado",
+          "emisor",
+          "evidencia",
+          "vigencia",
+          "reemplazada_por",
+          "registrada_por",
+          "creado_en"
+        ],
+        "title": "ConstanciaItem",
+        "type": "object"
+      },
+      "ConstanciasResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConstanciaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "ConstanciasResponse",
+        "type": "object"
+      },
+      "CopiaLocalDefinicion": {
+        "properties": {
+          "activa": {
+            "title": "Activa",
+            "type": "boolean"
+          },
+          "copiada_de_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copiada De Version"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "locacion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Id"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "nombre",
+          "locacion_id",
+          "copiada_de_version",
+          "activa",
+          "estado"
+        ],
+        "title": "CopiaLocalDefinicion",
+        "type": "object"
+      },
+      "CopiaLocalMatriz": {
+        "properties": {
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "copiada_de_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copiada De Version"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "lineas": {
+            "items": {
+              "$ref": "#/components/schemas/LineaMatrizCopiaLocal"
+            },
+            "title": "Lineas",
+            "type": "array"
+          },
+          "locacion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Id"
+          },
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "tipo_servicio_id": {
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "vigente_desde": {
+            "format": "date",
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "version",
+          "vigente_desde",
+          "vigente_hasta",
+          "copiada_de_version",
+          "estado",
+          "lineas"
+        ],
+        "title": "CopiaLocalMatriz",
         "type": "object"
       },
       "CopiarDefinicionGlobal": {
@@ -478,6 +2257,37 @@
           "definicion_global_id"
         ],
         "title": "CopiarDefinicionGlobal",
+        "type": "object"
+      },
+      "CopiarDefinicionGlobalResponse": {
+        "properties": {
+          "copiada_de_version": {
+            "title": "Copiada De Version",
+            "type": "integer"
+          },
+          "definicion_global_id": {
+            "title": "Definicion Global Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "definicion_global_id",
+          "copiada_de_version",
+          "eventos"
+        ],
+        "title": "CopiarDefinicionGlobalResponse",
         "type": "object"
       },
       "CopiarMatrizGlobal": {
@@ -516,6 +2326,67 @@
           "vigente_desde"
         ],
         "title": "CopiarMatrizGlobal",
+        "type": "object"
+      },
+      "CopiarMatrizGlobalResponse": {
+        "properties": {
+          "copiada_de_version": {
+            "title": "Copiada De Version",
+            "type": "integer"
+          },
+          "definiciones_creadas": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Definiciones Creadas",
+            "type": "array"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "matriz_global_id": {
+            "title": "Matriz Global Id",
+            "type": "string"
+          },
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "version_anterior": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionAnteriorDeMatriz"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vigente_desde": {
+            "format": "date",
+            "title": "Vigente Desde",
+            "type": "string"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "version",
+          "vigente_desde",
+          "version_anterior",
+          "matriz_global_id",
+          "copiada_de_version",
+          "definiciones_creadas",
+          "eventos"
+        ],
+        "title": "CopiarMatrizGlobalResponse",
         "type": "object"
       },
       "CorregirCustodiaBody": {
@@ -575,6 +2446,150 @@
           "periodo_id"
         ],
         "title": "CorregirCustodiaBody",
+        "type": "object"
+      },
+      "CorregirCustodiaResponse": {
+        "properties": {
+          "custodia_id": {
+            "title": "Custodia Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "periodo_corregido_id": {
+            "title": "Periodo Corregido Id",
+            "type": "string"
+          },
+          "periodo_id": {
+            "title": "Periodo Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "custodia_id",
+          "periodo_id",
+          "periodo_corregido_id",
+          "eventos"
+        ],
+        "title": "CorregirCustodiaResponse",
+        "type": "object"
+      },
+      "CustodiaItem": {
+        "properties": {
+          "corregido_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corregido Por"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "custodia_id": {
+            "title": "Custodia Id",
+            "type": "string"
+          },
+          "custodio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custodio Id"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hasta"
+          },
+          "periodo_id": {
+            "title": "Periodo Id",
+            "type": "string"
+          },
+          "recurso_id": {
+            "title": "Recurso Id",
+            "type": "string"
+          },
+          "tipo_recurso": {
+            "title": "Tipo Recurso",
+            "type": "string"
+          }
+        },
+        "required": [
+          "periodo_id",
+          "custodia_id",
+          "recurso_id",
+          "tipo_recurso",
+          "custodio_id",
+          "desde",
+          "hasta",
+          "estado",
+          "corregido_por",
+          "creado_en"
+        ],
+        "title": "CustodiaItem",
+        "type": "object"
+      },
+      "CustodiasResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustodiaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "CustodiasResponse",
         "type": "object"
       },
       "DarDeAltaDefinicionDeRequisito": {
@@ -648,6 +2663,27 @@
         "title": "DarDeAltaDefinicionDeRequisito",
         "type": "object"
       },
+      "DarDeAltaDefinicionDeRequisitoResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "eventos"
+        ],
+        "title": "DarDeAltaDefinicionDeRequisitoResponse",
+        "type": "object"
+      },
       "DarDeBajaDefinicionDeRequisito": {
         "properties": {
           "requisito_definicion_id": {
@@ -660,6 +2696,387 @@
           "requisito_definicion_id"
         ],
         "title": "DarDeBajaDefinicionDeRequisito",
+        "type": "object"
+      },
+      "DarDeBajaDefinicionDeRequisitoResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "eventos"
+        ],
+        "title": "DarDeBajaDefinicionDeRequisitoResponse",
+        "type": "object"
+      },
+      "DecisionDetalle": {
+        "properties": {
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "por_sujeto": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__consultas__router__SujetoEvaluado"
+            },
+            "title": "Por Sujeto",
+            "type": "array"
+          },
+          "referencia_evaluacion": {
+            "title": "Referencia Evaluacion",
+            "type": "string"
+          },
+          "requisitos_faltantes": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__consultas__router__RequisitoFaltante"
+            },
+            "title": "Requisitos Faltantes",
+            "type": "array"
+          },
+          "resultado_de_decision": {
+            "title": "Resultado De Decision",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          },
+          "sujetos_propuestos": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sujetos Propuestos"
+          },
+          "veredicto_de_cumplimiento": {
+            "title": "Veredicto De Cumplimiento",
+            "type": "string"
+          },
+          "version_matriz": {
+            "$ref": "#/components/schemas/VersionMatrizEvaluada"
+          }
+        },
+        "required": [
+          "referencia_evaluacion",
+          "commitment_id",
+          "veredicto_de_cumplimiento",
+          "resultado_de_decision",
+          "por_sujeto",
+          "requisitos_faltantes",
+          "version_matriz",
+          "creado_en",
+          "sujetos_propuestos",
+          "snapshot"
+        ],
+        "title": "DecisionDetalle",
+        "type": "object"
+      },
+      "DecisionResumen": {
+        "properties": {
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "por_sujeto": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__consultas__router__SujetoEvaluado"
+            },
+            "title": "Por Sujeto",
+            "type": "array"
+          },
+          "referencia_evaluacion": {
+            "title": "Referencia Evaluacion",
+            "type": "string"
+          },
+          "requisitos_faltantes": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__consultas__router__RequisitoFaltante"
+            },
+            "title": "Requisitos Faltantes",
+            "type": "array"
+          },
+          "resultado_de_decision": {
+            "title": "Resultado De Decision",
+            "type": "string"
+          },
+          "sujetos_propuestos": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sujetos Propuestos"
+          },
+          "veredicto_de_cumplimiento": {
+            "title": "Veredicto De Cumplimiento",
+            "type": "string"
+          },
+          "version_matriz": {
+            "$ref": "#/components/schemas/VersionMatrizEvaluada"
+          }
+        },
+        "required": [
+          "referencia_evaluacion",
+          "commitment_id",
+          "veredicto_de_cumplimiento",
+          "resultado_de_decision",
+          "por_sujeto",
+          "requisitos_faltantes",
+          "version_matriz",
+          "creado_en",
+          "sujetos_propuestos"
+        ],
+        "title": "DecisionResumen",
+        "type": "object"
+      },
+      "DecisionesOcResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionResumen"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "DecisionesOcResponse",
+        "type": "object"
+      },
+      "DefinicionGlobalConCopias": {
+        "properties": {
+          "activa": {
+            "title": "Activa",
+            "type": "boolean"
+          },
+          "actualizado_en": {
+            "format": "date-time",
+            "title": "Actualizado En",
+            "type": "string"
+          },
+          "categoria": {
+            "title": "Categoria",
+            "type": "string"
+          },
+          "copias_locales": {
+            "items": {
+              "$ref": "#/components/schemas/CopiaLocalDefinicion"
+            },
+            "title": "Copias Locales",
+            "type": "array"
+          },
+          "definicion_global_id": {
+            "title": "Definicion Global Id",
+            "type": "string"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "tipo_sujeto_aplicable": {
+            "title": "Tipo Sujeto Aplicable",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definicion_global_id",
+          "nombre",
+          "categoria",
+          "tipo_sujeto_aplicable",
+          "version",
+          "activa",
+          "descripcion",
+          "actualizado_en",
+          "estado",
+          "copias_locales"
+        ],
+        "title": "DefinicionGlobalConCopias",
+        "type": "object"
+      },
+      "DefinicionRequisitoItem": {
+        "properties": {
+          "activa": {
+            "title": "Activa",
+            "type": "boolean"
+          },
+          "categoria": {
+            "title": "Categoria",
+            "type": "string"
+          },
+          "copiada_de_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copiada De Version"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "definicion_global_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definicion Global Id"
+          },
+          "locacion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Id"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "plazo_aviso_dias": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plazo Aviso Dias"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "tipo_sujeto_aplicable": {
+            "title": "Tipo Sujeto Aplicable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "nombre",
+          "categoria",
+          "tipo_sujeto_aplicable",
+          "locacion_id",
+          "activa",
+          "definicion_global_id",
+          "copiada_de_version",
+          "plazo_aviso_dias",
+          "creado_en"
+        ],
+        "title": "DefinicionRequisitoItem",
+        "type": "object"
+      },
+      "DefinicionesRequisitoResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DefinicionRequisitoItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "DefinicionesRequisitoResponse",
         "type": "object"
       },
       "DescartarArchivoDriveBody": {
@@ -684,6 +3101,101 @@
           "archivo_drive_id"
         ],
         "title": "DescartarArchivoDriveBody",
+        "type": "object"
+      },
+      "DescartarArchivoDriveResponse": {
+        "properties": {
+          "archivo_drive_id": {
+            "title": "Archivo Drive Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "archivo_drive_id",
+          "eventos"
+        ],
+        "title": "DescartarArchivoDriveResponse",
+        "type": "object"
+      },
+      "DocumentoCargadoResponse": {
+        "description": "cargar_documento / proponer_documento (comparten el núcleo `_insertar_version_documento`).",
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "sucede_a": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sucede A"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "documento_id",
+          "version",
+          "sucede_a",
+          "eventos"
+        ],
+        "title": "DocumentoCargadoResponse",
+        "type": "object"
+      },
+      "DocumentoDeLote": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "fila": {
+            "title": "Fila",
+            "type": "integer"
+          },
+          "sucede_a": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sucede A"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fila",
+          "documento_id",
+          "version",
+          "sucede_a"
+        ],
+        "title": "DocumentoDeLote",
         "type": "object"
       },
       "DocumentoEnBandeja": {
@@ -769,6 +3281,380 @@
         "title": "DocumentoEnBandeja",
         "type": "object"
       },
+      "DocumentoItem": {
+        "properties": {
+          "archivo_estado": {
+            "title": "Archivo Estado",
+            "type": "string"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "estado_confirmacion": {
+            "title": "Estado Confirmacion",
+            "type": "string"
+          },
+          "estado_version": {
+            "title": "Estado Version",
+            "type": "string"
+          },
+          "lote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lote Id"
+          },
+          "origen": {
+            "title": "Origen",
+            "type": "string"
+          },
+          "origen_propuesta": {
+            "title": "Origen Propuesta",
+            "type": "boolean"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "vigente_desde": {
+            "format": "date",
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "format": "date",
+            "title": "Vigente Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documento_id",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "requisito",
+          "version",
+          "vigente_desde",
+          "vigente_hasta",
+          "estado_version",
+          "estado_confirmacion",
+          "origen",
+          "origen_propuesta",
+          "lote_id",
+          "archivo_estado",
+          "creado_en"
+        ],
+        "title": "DocumentoItem",
+        "type": "object"
+      },
+      "DocumentoPropuesto": {
+        "properties": {
+          "confianza_extraccion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confianza Extraccion"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "dias_para_vencer": {
+            "title": "Dias Para Vencer",
+            "type": "integer"
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "estado_confirmacion": {
+            "title": "Estado Confirmacion",
+            "type": "string"
+          },
+          "numero": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero"
+          },
+          "origen": {
+            "title": "Origen",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "vencido": {
+            "title": "Vencido",
+            "type": "boolean"
+          },
+          "vigente_desde": {
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "title": "Vigente Hasta",
+            "type": "string"
+          },
+          "vigente_hoy": {
+            "title": "Vigente Hoy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "documento_id",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "requisito",
+          "numero",
+          "vigente_desde",
+          "vigente_hasta",
+          "estado_confirmacion",
+          "origen",
+          "confianza_extraccion",
+          "creado_en",
+          "vigente_hoy",
+          "dias_para_vencer",
+          "vencido"
+        ],
+        "title": "DocumentoPropuesto",
+        "type": "object"
+      },
+      "DocumentosResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentoItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "DocumentosResponse",
+        "type": "object"
+      },
+      "EnvioNotificacion": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "destinatario": {
+            "title": "Destinatario",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "envio_id": {
+            "title": "Envio Id",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "intentos": {
+            "title": "Intentos",
+            "type": "integer"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "integer"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "proveedor_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proveedor Ref"
+          },
+          "usuario_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Id"
+          }
+        },
+        "required": [
+          "envio_id",
+          "job_id",
+          "canal",
+          "destinatario",
+          "usuario_id",
+          "email",
+          "nombre",
+          "estado",
+          "proveedor_ref",
+          "error",
+          "intentos",
+          "creado_en"
+        ],
+        "title": "EnvioNotificacion",
+        "type": "object"
+      },
+      "EnviosNotificacionResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EnvioNotificacion"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "EnviosNotificacionResponse",
+        "type": "object"
+      },
       "ErrorEnvelope": {
         "properties": {
           "error": {
@@ -821,6 +3707,47 @@
         "title": "EscanearDriveBody",
         "type": "object"
       },
+      "EscanearDriveResponse": {
+        "properties": {
+          "bandeja": {
+            "title": "Bandeja",
+            "type": "integer"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "importados": {
+            "title": "Importados",
+            "type": "integer"
+          },
+          "nuevos": {
+            "title": "Nuevos",
+            "type": "integer"
+          },
+          "vistos": {
+            "title": "Vistos",
+            "type": "integer"
+          },
+          "ya_vistos": {
+            "title": "Ya Vistos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vistos",
+          "nuevos",
+          "importados",
+          "bandeja",
+          "ya_vistos",
+          "eventos"
+        ],
+        "title": "EscanearDriveResponse",
+        "type": "object"
+      },
       "EvaluarHabilitacionBody": {
         "additionalProperties": false,
         "description": "`origen_sujetos` NO es parte del contrato público: lo determina exclusivamente el\nservidor (este endpoint siempre produce 'explicito'). Enviarlo es un error 422.",
@@ -845,6 +3772,374 @@
           "sujetos_propuestos"
         ],
         "title": "EvaluarHabilitacionBody",
+        "type": "object"
+      },
+      "EvaluarHabilitacionResponse": {
+        "properties": {
+          "avisos_cerrados": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Avisos Cerrados",
+            "type": "array"
+          },
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "modo": {
+            "title": "Modo",
+            "type": "string"
+          },
+          "origen_sujetos": {
+            "title": "Origen Sujetos",
+            "type": "string"
+          },
+          "por_sujeto": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__operacion__router__SujetoEvaluado"
+            },
+            "title": "Por Sujeto",
+            "type": "array"
+          },
+          "referencia_evaluacion": {
+            "title": "Referencia Evaluacion",
+            "type": "string"
+          },
+          "requisitos_faltantes": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__operacion__router__RequisitoFaltante"
+            },
+            "title": "Requisitos Faltantes",
+            "type": "array"
+          },
+          "resultado_de_decision": {
+            "title": "Resultado De Decision",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          },
+          "sujetos_propuestos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sujetos Propuestos",
+            "type": "array"
+          },
+          "veredicto_de_cumplimiento": {
+            "title": "Veredicto De Cumplimiento",
+            "type": "string"
+          },
+          "version_matriz": {
+            "$ref": "#/components/schemas/VersionMatriz"
+          }
+        },
+        "required": [
+          "referencia_evaluacion",
+          "commitment_id",
+          "modo",
+          "sujetos_propuestos",
+          "origen_sujetos",
+          "avisos_cerrados",
+          "veredicto_de_cumplimiento",
+          "resultado_de_decision",
+          "por_sujeto",
+          "requisitos_faltantes",
+          "version_matriz",
+          "snapshot",
+          "creado_en",
+          "eventos"
+        ],
+        "title": "EvaluarHabilitacionResponse",
+        "type": "object"
+      },
+      "EventoAlerta": {
+        "additionalProperties": true,
+        "properties": {
+          "en": {
+            "format": "date-time",
+            "title": "En",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo",
+          "en"
+        ],
+        "title": "EventoAlerta",
+        "type": "object"
+      },
+      "EventoAuditoria": {
+        "properties": {
+          "evento_id": {
+            "title": "Evento Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ocurrido_en": {
+            "title": "Ocurrido En",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "evento_id",
+          "tipo",
+          "payload",
+          "ocurrido_en"
+        ],
+        "title": "EventoAuditoria",
+        "type": "object"
+      },
+      "EvidenciaVigente": {
+        "properties": {
+          "categoria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria"
+          },
+          "dias_para_vencer": {
+            "title": "Dias Para Vencer",
+            "type": "integer"
+          },
+          "estado_confirmacion": {
+            "title": "Estado Confirmacion",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "locacion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Id"
+          },
+          "origen_propuesta": {
+            "title": "Origen Propuesta",
+            "type": "boolean"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "vencido": {
+            "title": "Vencido",
+            "type": "boolean"
+          },
+          "vigente_desde": {
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "title": "Vigente Hasta",
+            "type": "string"
+          },
+          "vigente_hoy": {
+            "title": "Vigente Hoy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tipo",
+          "id",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "requisito",
+          "categoria",
+          "vigente_desde",
+          "vigente_hasta",
+          "estado_confirmacion",
+          "origen_propuesta",
+          "locacion_id",
+          "vigente_hoy",
+          "dias_para_vencer",
+          "vencido"
+        ],
+        "title": "EvidenciaVigente",
+        "type": "object"
+      },
+      "ExcepcionItem": {
+        "properties": {
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "evidencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidencia"
+          },
+          "excepcion_id": {
+            "title": "Excepcion Id",
+            "type": "string"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "otorgada_por": {
+            "title": "Otorgada Por",
+            "type": "string"
+          },
+          "referencia_evaluacion": {
+            "title": "Referencia Evaluacion",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "vigencia": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigencia"
+          }
+        },
+        "required": [
+          "excepcion_id",
+          "referencia_evaluacion",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "requisito",
+          "commitment_id",
+          "estado",
+          "otorgada_por",
+          "motivo",
+          "vigencia",
+          "evidencia",
+          "creado_en"
+        ],
+        "title": "ExcepcionItem",
+        "type": "object"
+      },
+      "ExcepcionesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExcepcionItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "ExcepcionesResponse",
         "type": "object"
       },
       "FilaRechazada": {
@@ -877,6 +4172,84 @@
         "title": "FilaRechazada",
         "type": "object"
       },
+      "FilaRechazadaLote": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "detalles": {
+            "title": "Detalles"
+          },
+          "fila": {
+            "title": "Fila",
+            "type": "integer"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sujeto Id"
+          }
+        },
+        "required": [
+          "fila",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "codigo",
+          "motivo"
+        ],
+        "title": "FilaRechazadaLote",
+        "type": "object"
+      },
+      "FilaSinCambiosDeLote": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "fila": {
+            "title": "Fila",
+            "type": "integer"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fila",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "documento_id"
+        ],
+        "title": "FilaSinCambiosDeLote",
+        "type": "object"
+      },
       "GenerarPaqueteBody": {
         "properties": {
           "dias_validez": {
@@ -896,6 +4269,137 @@
           "sujeto_id"
         ],
         "title": "GenerarPaqueteBody",
+        "type": "object"
+      },
+      "GenerarPaqueteResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "expira_en": {
+            "title": "Expira En",
+            "type": "string"
+          },
+          "paquete_id": {
+            "title": "Paquete Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "url_qr": {
+            "title": "Url Qr",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paquete_id",
+          "sujeto_id",
+          "url",
+          "url_qr",
+          "expira_en",
+          "eventos"
+        ],
+        "title": "GenerarPaqueteResponse",
+        "type": "object"
+      },
+      "HistorialAlertasResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertaHistorialItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "HistorialAlertasResponse",
+        "type": "object"
+      },
+      "HistorialScore": {
+        "properties": {
+          "cubiertos": {
+            "title": "Cubiertos",
+            "type": "integer"
+          },
+          "exigidos": {
+            "title": "Exigidos",
+            "type": "integer"
+          },
+          "fecha": {
+            "title": "Fecha",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "fecha",
+          "score",
+          "exigidos",
+          "cubiertos"
+        ],
+        "title": "HistorialScore",
+        "type": "object"
+      },
+      "HistorialSupervisionResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AsignacionSupervisionHistorial"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "HistorialSupervisionResponse",
         "type": "object"
       },
       "IdentidadResponse": {
@@ -1101,6 +4605,100 @@
         "title": "ImportarLoteOCResponse",
         "type": "object"
       },
+      "ImportarLoteResponse": {
+        "properties": {
+          "detalle_filas_rechazadas": {
+            "items": {
+              "$ref": "#/components/schemas/FilaRechazadaLote"
+            },
+            "title": "Detalle Filas Rechazadas",
+            "type": "array"
+          },
+          "documentos": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentoDeLote"
+            },
+            "title": "Documentos",
+            "type": "array"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "filas_aceptadas": {
+            "title": "Filas Aceptadas",
+            "type": "integer"
+          },
+          "filas_rechazadas": {
+            "title": "Filas Rechazadas",
+            "type": "integer"
+          },
+          "filas_sin_cambios": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FilaSinCambiosDeLote"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filas Sin Cambios"
+          },
+          "filas_totales": {
+            "title": "Filas Totales",
+            "type": "integer"
+          },
+          "lote_id": {
+            "title": "Lote Id",
+            "type": "string"
+          },
+          "ya_aplicado": {
+            "default": false,
+            "title": "Ya Aplicado",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lote_id",
+          "estado",
+          "filas_totales",
+          "filas_aceptadas",
+          "filas_rechazadas",
+          "detalle_filas_rechazadas",
+          "eventos"
+        ],
+        "title": "ImportarLoteResponse",
+        "type": "object"
+      },
+      "IncumplimientoEmpresaResponse": {
+        "properties": {
+          "aviso": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AvisoIncumplimiento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "aviso"
+        ],
+        "title": "IncumplimientoEmpresaResponse",
+        "type": "object"
+      },
       "InvalidarEvidenciaBody": {
         "properties": {
           "documento_id": {
@@ -1142,6 +4740,51 @@
         "title": "InvalidarEvidenciaResponse",
         "type": "object"
       },
+      "LegajoDatos": {
+        "properties": {
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "dado_de_baja_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dado De Baja En"
+          },
+          "identificador_natural": {
+            "title": "Identificador Natural",
+            "type": "string"
+          },
+          "legajo_id": {
+            "title": "Legajo Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legajo_id",
+          "sujeto_id",
+          "tipo_sujeto",
+          "identificador_natural",
+          "dado_de_baja_en",
+          "creado_en"
+        ],
+        "title": "LegajoDatos",
+        "type": "object"
+      },
       "LineaDeMatriz": {
         "properties": {
           "bloqueante_durante_ejecucion": {
@@ -1168,6 +4811,179 @@
           "bloqueante_durante_ejecucion"
         ],
         "title": "LineaDeMatriz",
+        "type": "object"
+      },
+      "LineaMatrizCopiaLocal": {
+        "properties": {
+          "bloqueante_durante_ejecucion": {
+            "title": "Bloqueante Durante Ejecucion",
+            "type": "boolean"
+          },
+          "clasificacion": {
+            "title": "Clasificacion",
+            "type": "string"
+          },
+          "definicion_global_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definicion Global Id"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "nombre",
+          "definicion_global_id",
+          "clasificacion",
+          "bloqueante_durante_ejecucion"
+        ],
+        "title": "LineaMatrizCopiaLocal",
+        "type": "object"
+      },
+      "LineaMatrizGlobal": {
+        "properties": {
+          "bloqueante_durante_ejecucion": {
+            "title": "Bloqueante Durante Ejecucion",
+            "type": "boolean"
+          },
+          "categoria": {
+            "title": "Categoria",
+            "type": "string"
+          },
+          "clasificacion": {
+            "title": "Clasificacion",
+            "type": "string"
+          },
+          "definicion_global_id": {
+            "title": "Definicion Global Id",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "tipo_sujeto_aplicable": {
+            "title": "Tipo Sujeto Aplicable",
+            "type": "string"
+          },
+          "version_definicion": {
+            "title": "Version Definicion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definicion_global_id",
+          "nombre",
+          "categoria",
+          "tipo_sujeto_aplicable",
+          "version_definicion",
+          "clasificacion",
+          "bloqueante_durante_ejecucion"
+        ],
+        "title": "LineaMatrizGlobal",
+        "type": "object"
+      },
+      "LineaMatrizVigente": {
+        "properties": {
+          "bloqueante_durante_ejecucion": {
+            "title": "Bloqueante Durante Ejecucion",
+            "type": "boolean"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria"
+          },
+          "clasificacion": {
+            "title": "Clasificacion",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "tipo_sujeto_aplicable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Sujeto Aplicable"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "requisito",
+          "categoria",
+          "tipo_sujeto_aplicable",
+          "clasificacion",
+          "bloqueante_durante_ejecucion"
+        ],
+        "title": "LineaMatrizVigente",
+        "type": "object"
+      },
+      "LogAuditoriaResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EventoAuditoria"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "LogAuditoriaResponse",
         "type": "object"
       },
       "LoginRequest": {
@@ -1225,6 +5041,533 @@
         "title": "LogoutResponse",
         "type": "object"
       },
+      "LoteItem": {
+        "properties": {
+          "entidad": {
+            "title": "Entidad",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "filas_aceptadas": {
+            "title": "Filas Aceptadas",
+            "type": "integer"
+          },
+          "filas_rechazadas": {
+            "title": "Filas Rechazadas",
+            "type": "integer"
+          },
+          "filas_totales": {
+            "title": "Filas Totales",
+            "type": "integer"
+          },
+          "lote_id": {
+            "title": "Lote Id",
+            "type": "string"
+          },
+          "origen": {
+            "title": "Origen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lote_id",
+          "origen",
+          "entidad",
+          "estado",
+          "filas_totales",
+          "filas_aceptadas",
+          "filas_rechazadas",
+          "fecha"
+        ],
+        "title": "LoteItem",
+        "type": "object"
+      },
+      "LotesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LoteItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "LotesResponse",
+        "type": "object"
+      },
+      "MatricesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MatrizItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "MatricesResponse",
+        "type": "object"
+      },
+      "MatrizGlobalConCopias": {
+        "properties": {
+          "actualizado_en": {
+            "format": "date-time",
+            "title": "Actualizado En",
+            "type": "string"
+          },
+          "copias_locales": {
+            "items": {
+              "$ref": "#/components/schemas/CopiaLocalMatriz"
+            },
+            "title": "Copias Locales",
+            "type": "array"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fuente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente"
+          },
+          "lineas": {
+            "items": {
+              "$ref": "#/components/schemas/LineaMatrizGlobal"
+            },
+            "title": "Lineas",
+            "type": "array"
+          },
+          "matriz_global_id": {
+            "title": "Matriz Global Id",
+            "type": "string"
+          },
+          "operadora": {
+            "title": "Operadora",
+            "type": "string"
+          },
+          "tipo_servicio": {
+            "title": "Tipo Servicio",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matriz_global_id",
+          "operadora",
+          "tipo_servicio",
+          "descripcion",
+          "version",
+          "fuente",
+          "actualizado_en",
+          "lineas",
+          "estado",
+          "copias_locales"
+        ],
+        "title": "MatrizGlobalConCopias",
+        "type": "object"
+      },
+      "MatrizItem": {
+        "properties": {
+          "autor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autor"
+          },
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "copiada_de_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copiada De Version"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "fuente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente"
+          },
+          "lineas": {
+            "title": "Lineas",
+            "type": "integer"
+          },
+          "locacion_id": {
+            "title": "Locacion Id",
+            "type": "string"
+          },
+          "matriz_global_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matriz Global Id"
+          },
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "tipo_servicio_id": {
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "vigente_desde": {
+            "format": "date",
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "version",
+          "vigente_desde",
+          "vigente_hasta",
+          "fuente",
+          "autor",
+          "matriz_global_id",
+          "copiada_de_version",
+          "creado_en",
+          "lineas"
+        ],
+        "title": "MatrizItem",
+        "type": "object"
+      },
+      "MatrizVigenteResponse": {
+        "properties": {
+          "archivo_de_respaldo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo De Respaldo"
+          },
+          "autor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autor"
+          },
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "fecha_consultada": {
+            "title": "Fecha Consultada",
+            "type": "string"
+          },
+          "fuente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente"
+          },
+          "lineas": {
+            "items": {
+              "$ref": "#/components/schemas/LineaMatrizVigente"
+            },
+            "title": "Lineas",
+            "type": "array"
+          },
+          "locacion_id": {
+            "title": "Locacion Id",
+            "type": "string"
+          },
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "tipo_servicio_id": {
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "vigente_desde": {
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "version",
+          "vigente_desde",
+          "vigente_hasta",
+          "fuente",
+          "archivo_de_respaldo",
+          "autor",
+          "creado_en",
+          "fecha_consultada",
+          "lineas"
+        ],
+        "title": "MatrizVigenteResponse",
+        "type": "object"
+      },
+      "MiLegajoResponse": {
+        "properties": {
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
+          "persona": {
+            "$ref": "#/components/schemas/app__modules__consultas__router__LegajoResponse"
+          },
+          "recursos_bajo_custodia": {
+            "items": {
+              "$ref": "#/components/schemas/RecursoCustodiado"
+            },
+            "title": "Recursos Bajo Custodia",
+            "type": "array"
+          },
+          "resumen": {
+            "$ref": "#/components/schemas/ResumenMiLegajo"
+          }
+        },
+        "required": [
+          "hoy",
+          "persona",
+          "recursos_bajo_custodia",
+          "resumen"
+        ],
+        "title": "MiLegajoResponse",
+        "type": "object"
+      },
+      "OcBacklogItem": {
+        "properties": {
+          "actualizado_en": {
+            "title": "Actualizado En",
+            "type": "string"
+          },
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "locacion_id": {
+            "title": "Locacion Id",
+            "type": "string"
+          },
+          "lote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lote Id"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "tipo_servicio_id": {
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "ultima_decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UltimaDecisionOC"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "referencia",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "vigencia_desde",
+          "vigencia_hasta",
+          "estado",
+          "lote_id",
+          "creado_en",
+          "actualizado_en",
+          "ultima_decision"
+        ],
+        "title": "OcBacklogItem",
+        "type": "object"
+      },
       "OcModificada": {
         "properties": {
           "campos_modificados": {
@@ -1249,6 +5592,39 @@
           "evento_id"
         ],
         "title": "OcModificada",
+        "type": "object"
+      },
+      "OcResumenCobertura": {
+        "properties": {
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "estado",
+          "vigencia_desde",
+          "vigencia_hasta"
+        ],
+        "title": "OcResumenCobertura",
         "type": "object"
       },
       "OtorgarExcepcionBody": {
@@ -1310,6 +5686,121 @@
         "title": "OtorgarExcepcionBody",
         "type": "object"
       },
+      "OtorgarExcepcionResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "excepcion_id": {
+            "title": "Excepcion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "excepcion_id",
+          "eventos"
+        ],
+        "title": "OtorgarExcepcionResponse",
+        "type": "object"
+      },
+      "PaqueteEntrega": {
+        "properties": {
+          "accesos": {
+            "title": "Accesos",
+            "type": "integer"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "creado_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creado Por"
+          },
+          "expira_en": {
+            "format": "date-time",
+            "title": "Expira En",
+            "type": "string"
+          },
+          "paquete_id": {
+            "title": "Paquete Id",
+            "type": "string"
+          },
+          "revocado_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revocado En"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "ultimo_acceso_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Acceso En"
+          },
+          "vigente": {
+            "title": "Vigente",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paquete_id",
+          "sujeto_id",
+          "creado_por",
+          "expira_en",
+          "revocado_en",
+          "accesos",
+          "ultimo_acceso_en",
+          "creado_en",
+          "vigente"
+        ],
+        "title": "PaqueteEntrega",
+        "type": "object"
+      },
+      "PaquetesEntregaResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PaqueteEntrega"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PaquetesEntregaResponse",
+        "type": "object"
+      },
       "ParDeTokens": {
         "properties": {
           "access_token": {
@@ -1338,6 +5829,114 @@
         "title": "ParDeTokens",
         "type": "object"
       },
+      "PeorSujetoScore": {
+        "properties": {
+          "cubiertos": {
+            "title": "Cubiertos",
+            "type": "integer"
+          },
+          "exigidos": {
+            "title": "Exigidos",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "exigidos",
+          "cubiertos",
+          "score"
+        ],
+        "title": "PeorSujetoScore",
+        "type": "object"
+      },
+      "PlantillasGlobalesResponse": {
+        "properties": {
+          "definiciones": {
+            "items": {
+              "$ref": "#/components/schemas/DefinicionGlobalConCopias"
+            },
+            "title": "Definiciones",
+            "type": "array"
+          },
+          "matrices": {
+            "items": {
+              "$ref": "#/components/schemas/MatrizGlobalConCopias"
+            },
+            "title": "Matrices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "definiciones",
+          "matrices"
+        ],
+        "title": "PlantillasGlobalesResponse",
+        "type": "object"
+      },
+      "PlazoPorRequisito": {
+        "properties": {
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "plazo_aviso_dias": {
+            "title": "Plazo Aviso Dias",
+            "type": "integer"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "nombre",
+          "plazo_aviso_dias"
+        ],
+        "title": "PlazoPorRequisito",
+        "type": "object"
+      },
+      "PorTipoSujetoScore": {
+        "properties": {
+          "cubiertos": {
+            "title": "Cubiertos",
+            "type": "integer"
+          },
+          "exigidos": {
+            "title": "Exigidos",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "sujetos": {
+            "title": "Sujetos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sujetos",
+          "exigidos",
+          "cubiertos",
+          "score"
+        ],
+        "title": "PorTipoSujetoScore",
+        "type": "object"
+      },
       "PrepararSubida": {
         "properties": {
           "content_type": {
@@ -1363,6 +5962,39 @@
           "content_type"
         ],
         "title": "PrepararSubida",
+        "type": "object"
+      },
+      "PrepararSubidaResponse": {
+        "properties": {
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "expira_en_seg": {
+            "title": "Expira En Seg",
+            "type": "integer"
+          },
+          "max_bytes": {
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "url_subida": {
+            "title": "Url Subida",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documento_id",
+          "url_subida",
+          "content_type",
+          "max_bytes",
+          "expira_en_seg"
+        ],
+        "title": "PrepararSubidaResponse",
         "type": "object"
       },
       "ProponerDocumento": {
@@ -1416,6 +6048,37 @@
           "vigente_hasta"
         ],
         "title": "ProponerDocumento",
+        "type": "object"
+      },
+      "PropuestasPendientesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentoPropuesto"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "PropuestasPendientesResponse",
         "type": "object"
       },
       "PublicarVersionDeMatriz": {
@@ -1491,6 +6154,49 @@
         "title": "PublicarVersionDeMatriz",
         "type": "object"
       },
+      "PublicarVersionDeMatrizResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "version_anterior": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionAnteriorDeMatriz"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vigente_desde": {
+            "format": "date",
+            "title": "Vigente Desde",
+            "type": "string"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "version",
+          "vigente_desde",
+          "version_anterior",
+          "eventos"
+        ],
+        "title": "PublicarVersionDeMatrizResponse",
+        "type": "object"
+      },
       "ReasignarSupervisor": {
         "properties": {
           "desde": {
@@ -1523,6 +6229,49 @@
         "title": "ReasignarSupervisor",
         "type": "object"
       },
+      "ReasignarSupervisorResponse": {
+        "properties": {
+          "asignacion_cerrada_id": {
+            "title": "Asignacion Cerrada Id",
+            "type": "string"
+          },
+          "asignacion_id": {
+            "title": "Asignacion Id",
+            "type": "string"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "hasta_anterior": {
+            "format": "date",
+            "title": "Hasta Anterior",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asignacion_id",
+          "asignacion_cerrada_id",
+          "sujeto_id",
+          "desde",
+          "hasta_anterior",
+          "eventos"
+        ],
+        "title": "ReasignarSupervisorResponse",
+        "type": "object"
+      },
       "RechazarPropuesta": {
         "properties": {
           "documento_id": {
@@ -1548,6 +6297,39 @@
         "title": "RechazarPropuesta",
         "type": "object"
       },
+      "RechazarPropuestaResponse": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "restaurado_documento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restaurado Documento Id"
+          }
+        },
+        "required": [
+          "documento_id",
+          "restaurado_documento_id",
+          "eventos"
+        ],
+        "title": "RechazarPropuestaResponse",
+        "type": "object"
+      },
       "ReconocerAlertaBody": {
         "properties": {
           "alerta_id": {
@@ -1570,6 +6352,93 @@
           "alerta_id"
         ],
         "title": "ReconocerAlertaBody",
+        "type": "object"
+      },
+      "ReconocerAlertaResponse": {
+        "properties": {
+          "alerta_id": {
+            "title": "Alerta Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "reconocida_hasta": {
+            "title": "Reconocida Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alerta_id",
+          "reconocida_hasta",
+          "eventos"
+        ],
+        "title": "ReconocerAlertaResponse",
+        "type": "object"
+      },
+      "RecursoCustodiado": {
+        "properties": {
+          "acreditaciones": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenciaVigente"
+            },
+            "title": "Acreditaciones",
+            "type": "array"
+          },
+          "custodia_desde": {
+            "format": "date",
+            "title": "Custodia Desde",
+            "type": "string"
+          },
+          "documentos": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenciaVigente"
+            },
+            "title": "Documentos",
+            "type": "array"
+          },
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
+          "inducciones": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenciaVigente"
+            },
+            "title": "Inducciones",
+            "type": "array"
+          },
+          "legajo": {
+            "$ref": "#/components/schemas/LegajoDatos"
+          },
+          "periodo_id": {
+            "title": "Periodo Id",
+            "type": "string"
+          },
+          "resumen": {
+            "$ref": "#/components/schemas/ResumenLegajo"
+          },
+          "tipo_recurso": {
+            "title": "Tipo Recurso",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_recurso",
+          "periodo_id",
+          "custodia_desde",
+          "hoy",
+          "legajo",
+          "documentos",
+          "acreditaciones",
+          "inducciones",
+          "resumen"
+        ],
+        "title": "RecursoCustodiado",
         "type": "object"
       },
       "RefreshRequest": {
@@ -1638,6 +6507,27 @@
         "title": "RegistrarAcreditacionDeCompetencia",
         "type": "object"
       },
+      "RegistrarAcreditacionDeCompetenciaResponse": {
+        "properties": {
+          "acreditacion_id": {
+            "title": "Acreditacion Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "acreditacion_id",
+          "eventos"
+        ],
+        "title": "RegistrarAcreditacionDeCompetenciaResponse",
+        "type": "object"
+      },
       "RegistrarConstanciaBody": {
         "properties": {
           "cliente_id": {
@@ -1702,6 +6592,38 @@
         "title": "RegistrarConstanciaBody",
         "type": "object"
       },
+      "RegistrarConstanciaResponse": {
+        "properties": {
+          "constancia_id": {
+            "title": "Constancia Id",
+            "type": "string"
+          },
+          "constancia_reemplazada_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constancia Reemplazada Id"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "constancia_id",
+          "eventos"
+        ],
+        "title": "RegistrarConstanciaResponse",
+        "type": "object"
+      },
       "RegistrarInduccion": {
         "properties": {
           "estado_confirmacion": {
@@ -1756,6 +6678,55 @@
         "title": "RegistrarInduccion",
         "type": "object"
       },
+      "RegistrarInduccionResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "induccion_id": {
+            "title": "Induccion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "induccion_id",
+          "eventos"
+        ],
+        "title": "RegistrarInduccionResponse",
+        "type": "object"
+      },
+      "RequisitoPaquete": {
+        "properties": {
+          "categoria": {
+            "title": "Categoria",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "requisito": {
+            "title": "Requisito",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "title": "Vigente Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito",
+          "categoria",
+          "vigente_hasta",
+          "estado"
+        ],
+        "title": "RequisitoPaquete",
+        "type": "object"
+      },
       "ResolverArchivoDriveBody": {
         "properties": {
           "archivo_drive_id": {
@@ -1792,6 +6763,96 @@
         "title": "ResolverArchivoDriveBody",
         "type": "object"
       },
+      "ResolverArchivoDriveResponse": {
+        "properties": {
+          "archivo_drive_id": {
+            "title": "Archivo Drive Id",
+            "type": "string"
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "archivo_drive_id",
+          "documento_id",
+          "eventos"
+        ],
+        "title": "ResolverArchivoDriveResponse",
+        "type": "object"
+      },
+      "ResumenLegajo": {
+        "properties": {
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "vencidos": {
+            "title": "Vencidos",
+            "type": "integer"
+          },
+          "vigentes_hoy": {
+            "title": "Vigentes Hoy",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "vigentes_hoy",
+          "vencidos"
+        ],
+        "title": "ResumenLegajo",
+        "type": "object"
+      },
+      "ResumenMiLegajo": {
+        "properties": {
+          "vencidos": {
+            "title": "Vencidos",
+            "type": "integer"
+          },
+          "vigentes_hoy": {
+            "title": "Vigentes Hoy",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vencidos",
+          "vigentes_hoy"
+        ],
+        "title": "ResumenMiLegajo",
+        "type": "object"
+      },
+      "ResumenPaquete": {
+        "properties": {
+          "sin_verificar": {
+            "title": "Sin Verificar",
+            "type": "integer"
+          },
+          "vencidos": {
+            "title": "Vencidos",
+            "type": "integer"
+          },
+          "vigentes": {
+            "title": "Vigentes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vigentes",
+          "vencidos",
+          "sin_verificar"
+        ],
+        "title": "ResumenPaquete",
+        "type": "object"
+      },
       "RevertirLote": {
         "properties": {
           "lote_id": {
@@ -1804,6 +6865,43 @@
           "lote_id"
         ],
         "title": "RevertirLote",
+        "type": "object"
+      },
+      "RevertirLoteResponse": {
+        "properties": {
+          "documentos_restaurados": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Documentos Restaurados",
+            "type": "array"
+          },
+          "documentos_revertidos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Documentos Revertidos",
+            "type": "array"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "lote_id": {
+            "title": "Lote Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lote_id",
+          "documentos_revertidos",
+          "documentos_restaurados",
+          "eventos"
+        ],
+        "title": "RevertirLoteResponse",
         "type": "object"
       },
       "RevocarConstanciaBody": {
@@ -1830,6 +6928,27 @@
         "title": "RevocarConstanciaBody",
         "type": "object"
       },
+      "RevocarConstanciaResponse": {
+        "properties": {
+          "constancia_id": {
+            "title": "Constancia Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "constancia_id",
+          "eventos"
+        ],
+        "title": "RevocarConstanciaResponse",
+        "type": "object"
+      },
       "RevocarExcepcionBody": {
         "properties": {
           "excepcion_id": {
@@ -1854,6 +6973,27 @@
         "title": "RevocarExcepcionBody",
         "type": "object"
       },
+      "RevocarExcepcionResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "excepcion_id": {
+            "title": "Excepcion Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "excepcion_id",
+          "eventos"
+        ],
+        "title": "RevocarExcepcionResponse",
+        "type": "object"
+      },
       "RevocarPaqueteBody": {
         "properties": {
           "paquete_id": {
@@ -1865,6 +7005,450 @@
           "paquete_id"
         ],
         "title": "RevocarPaqueteBody",
+        "type": "object"
+      },
+      "RevocarPaqueteResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "paquete_id": {
+            "title": "Paquete Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paquete_id",
+          "eventos"
+        ],
+        "title": "RevocarPaqueteResponse",
+        "type": "object"
+      },
+      "ScoreDocumentalResponse": {
+        "properties": {
+          "cubiertos": {
+            "title": "Cubiertos",
+            "type": "integer"
+          },
+          "exigidos": {
+            "title": "Exigidos",
+            "type": "integer"
+          },
+          "fecha": {
+            "title": "Fecha",
+            "type": "string"
+          },
+          "historial": {
+            "items": {
+              "$ref": "#/components/schemas/HistorialScore"
+            },
+            "title": "Historial",
+            "type": "array"
+          },
+          "peores": {
+            "items": {
+              "$ref": "#/components/schemas/PeorSujetoScore"
+            },
+            "title": "Peores",
+            "type": "array"
+          },
+          "por_tipo_sujeto": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PorTipoSujetoScore"
+            },
+            "title": "Por Tipo Sujeto",
+            "type": "object"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "sujetos": {
+            "title": "Sujetos",
+            "type": "integer"
+          },
+          "sujetos_completos": {
+            "title": "Sujetos Completos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fecha",
+          "score",
+          "exigidos",
+          "cubiertos",
+          "sujetos",
+          "sujetos_completos",
+          "por_tipo_sujeto",
+          "peores",
+          "historial"
+        ],
+        "title": "ScoreDocumentalResponse",
+        "type": "object"
+      },
+      "SubirArchivoResponse": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "checksum_sha256": {
+            "title": "Checksum Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bytes",
+          "checksum_sha256"
+        ],
+        "title": "SubirArchivoResponse",
+        "type": "object"
+      },
+      "SujetoItem": {
+        "properties": {
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "dado_de_baja_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dado De Baja En"
+          },
+          "identificador_natural": {
+            "title": "Identificador Natural",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "identificador_natural",
+          "dado_de_baja_en",
+          "creado_en"
+        ],
+        "title": "SujetoItem",
+        "type": "object"
+      },
+      "SujetoPaquete": {
+        "properties": {
+          "identificador": {
+            "title": "Identificador",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "identificador"
+        ],
+        "title": "SujetoPaquete",
+        "type": "object"
+      },
+      "SujetosResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SujetoItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "SujetosResponse",
+        "type": "object"
+      },
+      "TableroVencimientosResponse": {
+        "properties": {
+          "hasta": {
+            "title": "Hasta",
+            "type": "string"
+          },
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenciaVigente"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "hoy",
+          "hasta"
+        ],
+        "title": "TableroVencimientosResponse",
+        "type": "object"
+      },
+      "UltimaDecisionOC": {
+        "properties": {
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "referencia_evaluacion": {
+            "title": "Referencia Evaluacion",
+            "type": "string"
+          },
+          "resultado_de_decision": {
+            "title": "Resultado De Decision",
+            "type": "string"
+          },
+          "veredicto_de_cumplimiento": {
+            "title": "Veredicto De Cumplimiento",
+            "type": "string"
+          }
+        },
+        "required": [
+          "referencia_evaluacion",
+          "veredicto_de_cumplimiento",
+          "resultado_de_decision",
+          "creado_en"
+        ],
+        "title": "UltimaDecisionOC",
+        "type": "object"
+      },
+      "UrlDeDescargaResponse": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documento_id",
+          "url",
+          "eventos"
+        ],
+        "title": "UrlDeDescargaResponse",
+        "type": "object"
+      },
+      "UsuarioItem": {
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "sujeto_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sujeto Id"
+          },
+          "usuario_id": {
+            "title": "Usuario Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "usuario_id",
+          "email",
+          "nombre",
+          "roles",
+          "sujeto_id",
+          "activo",
+          "creado_en"
+        ],
+        "title": "UsuarioItem",
+        "type": "object"
+      },
+      "UsuariosResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsuarioItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "UsuariosResponse",
+        "type": "object"
+      },
+      "VersionAnteriorDeMatriz": {
+        "properties": {
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "version",
+          "vigente_hasta"
+        ],
+        "title": "VersionAnteriorDeMatriz",
+        "type": "object"
+      },
+      "VersionMatriz": {
+        "properties": {
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "version"
+        ],
+        "title": "VersionMatriz",
+        "type": "object"
+      },
+      "VersionMatrizEvaluada": {
+        "properties": {
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "version"
+        ],
+        "title": "VersionMatrizEvaluada",
         "type": "object"
       },
       "VincularTelegramBody": {
@@ -1890,6 +7474,642 @@
           "usuario_id"
         ],
         "title": "VincularTelegramBody",
+        "type": "object"
+      },
+      "VincularTelegramResponse": {
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "telegram_vinculado": {
+            "title": "Telegram Vinculado",
+            "type": "boolean"
+          },
+          "usuario_id": {
+            "title": "Usuario Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "usuario_id",
+          "telegram_vinculado",
+          "eventos"
+        ],
+        "title": "VincularTelegramResponse",
+        "type": "object"
+      },
+      "VistaPublicaPaqueteResponse": {
+        "properties": {
+          "empresa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empresa"
+          },
+          "expira_en": {
+            "title": "Expira En",
+            "type": "string"
+          },
+          "fecha": {
+            "title": "Fecha",
+            "type": "string"
+          },
+          "requisitos": {
+            "items": {
+              "$ref": "#/components/schemas/RequisitoPaquete"
+            },
+            "title": "Requisitos",
+            "type": "array"
+          },
+          "resumen": {
+            "$ref": "#/components/schemas/ResumenPaquete"
+          },
+          "sujeto": {
+            "$ref": "#/components/schemas/SujetoPaquete"
+          }
+        },
+        "required": [
+          "empresa",
+          "sujeto",
+          "fecha",
+          "expira_en",
+          "requisitos",
+          "resumen"
+        ],
+        "title": "VistaPublicaPaqueteResponse",
+        "type": "object"
+      },
+      "VivoResponse": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "version"
+        ],
+        "title": "VivoResponse",
+        "type": "object"
+      },
+      "app__modules__consultas__router__LegajoResponse": {
+        "properties": {
+          "acreditaciones": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenciaVigente"
+            },
+            "title": "Acreditaciones",
+            "type": "array"
+          },
+          "documentos": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenciaVigente"
+            },
+            "title": "Documentos",
+            "type": "array"
+          },
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
+          "inducciones": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenciaVigente"
+            },
+            "title": "Inducciones",
+            "type": "array"
+          },
+          "legajo": {
+            "$ref": "#/components/schemas/LegajoDatos"
+          },
+          "resumen": {
+            "$ref": "#/components/schemas/ResumenLegajo"
+          }
+        },
+        "required": [
+          "hoy",
+          "legajo",
+          "documentos",
+          "acreditaciones",
+          "inducciones",
+          "resumen"
+        ],
+        "title": "LegajoResponse",
+        "type": "object"
+      },
+      "app__modules__consultas__router__RequisitoEvaluado": {
+        "properties": {
+          "anulacion_detectada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anulacion Detectada"
+          },
+          "asignable": {
+            "title": "Asignable",
+            "type": "boolean"
+          },
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "bloqueante_durante_ejecucion": {
+            "title": "Bloqueante Durante Ejecucion",
+            "type": "boolean"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria"
+          },
+          "clasificacion": {
+            "title": "Clasificacion",
+            "type": "string"
+          },
+          "constancia_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constancia Id"
+          },
+          "documento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento Id"
+          },
+          "excepcion_aplicable_pero_sin_efecto": {
+            "title": "Excepcion Aplicable Pero Sin Efecto",
+            "type": "boolean"
+          },
+          "excepcion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excepcion Id"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "origen_clasificacion": {
+            "title": "Origen Clasificacion",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "veredicto",
+          "motivo",
+          "excepcion_aplicable_pero_sin_efecto",
+          "anulacion_detectada",
+          "nombre",
+          "categoria",
+          "clasificacion",
+          "origen_clasificacion",
+          "bloqueante_durante_ejecucion",
+          "documento_id",
+          "constancia_id",
+          "excepcion_id",
+          "bajo_excepcion",
+          "asignable"
+        ],
+        "title": "RequisitoEvaluado",
+        "type": "object"
+      },
+      "app__modules__consultas__router__RequisitoFaltante": {
+        "properties": {
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sujeto Id"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_sujeto",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "veredicto",
+          "motivo",
+          "bajo_excepcion"
+        ],
+        "title": "RequisitoFaltante",
+        "type": "object"
+      },
+      "app__modules__consultas__router__SujetoEvaluado": {
+        "properties": {
+          "asignable": {
+            "title": "Asignable",
+            "type": "boolean"
+          },
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "representante": {
+            "title": "Representante",
+            "type": "boolean"
+          },
+          "requisitos": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__consultas__router__RequisitoEvaluado"
+            },
+            "title": "Requisitos",
+            "type": "array"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "veredicto",
+          "asignable",
+          "bajo_excepcion",
+          "requisitos",
+          "representante"
+        ],
+        "title": "SujetoEvaluado",
+        "type": "object"
+      },
+      "app__modules__legajos__router__LegajoResponse": {
+        "description": "alta_de_sujeto / baja_de_sujeto.",
+        "properties": {
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "legajo_id": {
+            "title": "Legajo Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legajo_id",
+          "sujeto_id",
+          "eventos"
+        ],
+        "title": "LegajoResponse",
+        "type": "object"
+      },
+      "app__modules__operacion__router__RequisitoEvaluado": {
+        "description": "Pieza atómica de `por_sujeto[].requisitos[]` — un (sujeto, requisito) puntual\n(ver app/core/tipos.py:VeredictoRequisito y app/core/orquestacion.py:_evaluar_requisito).",
+        "properties": {
+          "anulacion_detectada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anulacion Detectada"
+          },
+          "asignable": {
+            "default": false,
+            "title": "Asignable",
+            "type": "boolean"
+          },
+          "bajo_excepcion": {
+            "default": false,
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "bloqueante_durante_ejecucion": {
+            "title": "Bloqueante Durante Ejecucion",
+            "type": "boolean"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria"
+          },
+          "clasificacion": {
+            "title": "Clasificacion",
+            "type": "string"
+          },
+          "constancia_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constancia Id"
+          },
+          "documento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento Id"
+          },
+          "excepcion_aplicable_pero_sin_efecto": {
+            "default": false,
+            "title": "Excepcion Aplicable Pero Sin Efecto",
+            "type": "boolean"
+          },
+          "excepcion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excepcion Id"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "origen_clasificacion": {
+            "title": "Origen Clasificacion",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "veredicto",
+          "clasificacion",
+          "origen_clasificacion",
+          "bloqueante_durante_ejecucion"
+        ],
+        "title": "RequisitoEvaluado",
+        "type": "object"
+      },
+      "app__modules__operacion__router__RequisitoFaltante": {
+        "properties": {
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sujeto Id"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_sujeto",
+          "veredicto",
+          "motivo",
+          "bajo_excepcion"
+        ],
+        "title": "RequisitoFaltante",
+        "type": "object"
+      },
+      "app__modules__operacion__router__SujetoEvaluado": {
+        "properties": {
+          "asignable": {
+            "title": "Asignable",
+            "type": "boolean"
+          },
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "representante": {
+            "title": "Representante",
+            "type": "boolean"
+          },
+          "requisitos": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__operacion__router__RequisitoEvaluado"
+            },
+            "title": "Requisitos",
+            "type": "array"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "veredicto",
+          "asignable",
+          "bajo_excepcion",
+          "requisitos",
+          "representante"
+        ],
+        "title": "SujetoEvaluado",
         "type": "object"
       }
     },
@@ -2316,9 +8536,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Alta De Sujeto V1 Comandos Alta De Sujeto Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/app__modules__legajos__router__LegajoResponse"
                 }
               }
             },
@@ -2432,9 +8650,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Asignar Supervisor V1 Comandos Asignar Supervisor Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AsignarSupervisorResponse"
                 }
               }
             },
@@ -2548,9 +8764,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Baja De Sujeto V1 Comandos Baja De Sujeto Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/app__modules__legajos__router__LegajoResponse"
                 }
               }
             },
@@ -2664,9 +8878,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cambiar Custodia V1 Comandos Cambiar Custodia Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CambiarCustodiaResponse"
                 }
               }
             },
@@ -2891,9 +9103,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cargar Documento V1 Comandos Cargar Documento Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DocumentoCargadoResponse"
                 }
               }
             },
@@ -3007,9 +9217,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cargar Requisito Particular V1 Comandos Cargar Requisito Particular Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CargarRequisitoParticularResponse"
                 }
               }
             },
@@ -3123,9 +9331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Configurar Alertas V1 Comandos Configurar Alertas Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfigurarAlertasResponse"
                 }
               }
             },
@@ -3239,9 +9445,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Configurar Canales V1 Comandos Configurar Canales Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfigurarCanalesResponse"
                 }
               }
             },
@@ -3355,9 +9559,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Configurar Drive V1 Comandos Configurar Drive Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfigurarDriveResponse"
                 }
               }
             },
@@ -3471,9 +9673,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Confirmar Documento V1 Comandos Confirmar Documento Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfirmarDocumentoResponse"
                 }
               }
             },
@@ -3587,9 +9787,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Confirmar Subida De Evidencia V1 Comandos Confirmar Subida De Evidencia Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfirmarSubidaResponse"
                 }
               }
             },
@@ -3703,9 +9901,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Copiar Definicion Global V1 Comandos Copiar Definicion Global Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CopiarDefinicionGlobalResponse"
                 }
               }
             },
@@ -3819,9 +10015,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Copiar Matriz Global V1 Comandos Copiar Matriz Global Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CopiarMatrizGlobalResponse"
                 }
               }
             },
@@ -3935,9 +10129,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Corregir Custodia V1 Comandos Corregir Custodia Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CorregirCustodiaResponse"
                 }
               }
             },
@@ -4051,9 +10243,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Dar De Alta Definicion De Requisito V1 Comandos Dar De Alta Definicion De Requisito Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DarDeAltaDefinicionDeRequisitoResponse"
                 }
               }
             },
@@ -4167,9 +10357,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Dar De Baja Definicion De Requisito V1 Comandos Dar De Baja Definicion De Requisito Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DarDeBajaDefinicionDeRequisitoResponse"
                 }
               }
             },
@@ -4283,9 +10471,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Descartar Archivo Drive V1 Comandos Descartar Archivo Drive Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DescartarArchivoDriveResponse"
                 }
               }
             },
@@ -4399,9 +10585,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Escanear Drive V1 Comandos Escanear Drive Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EscanearDriveResponse"
                 }
               }
             },
@@ -4515,9 +10699,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Evaluar Habilitacion V1 Comandos Evaluar Habilitacion Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EvaluarHabilitacionResponse"
                 }
               }
             },
@@ -4631,9 +10813,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Generar Paquete Entrega V1 Comandos Generar Paquete Entrega Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/GenerarPaqueteResponse"
                 }
               }
             },
@@ -4747,9 +10927,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Importar Lote V1 Comandos Importar Lote Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImportarLoteResponse"
                 }
               }
             },
@@ -5070,9 +11248,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Otorgar Excepcion V1 Comandos Otorgar Excepcion Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/OtorgarExcepcionResponse"
                 }
               }
             },
@@ -5186,9 +11362,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Preparar Subida De Evidencia V1 Comandos Preparar Subida De Evidencia Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PrepararSubidaResponse"
                 }
               }
             },
@@ -5302,9 +11476,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Proponer Documento V1 Comandos Proponer Documento Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DocumentoCargadoResponse"
                 }
               }
             },
@@ -5418,9 +11590,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Publicar Version De Matriz V1 Comandos Publicar Version De Matriz Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PublicarVersionDeMatrizResponse"
                 }
               }
             },
@@ -5534,9 +11704,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Reasignar Supervisor V1 Comandos Reasignar Supervisor Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReasignarSupervisorResponse"
                 }
               }
             },
@@ -5650,9 +11818,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Rechazar Propuesta V1 Comandos Rechazar Propuesta Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RechazarPropuestaResponse"
                 }
               }
             },
@@ -5766,9 +11932,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Reconocer Alerta V1 Comandos Reconocer Alerta Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReconocerAlertaResponse"
                 }
               }
             },
@@ -5882,9 +12046,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Registrar Acreditacion De Competencia V1 Comandos Registrar Acreditacion De Competencia Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegistrarAcreditacionDeCompetenciaResponse"
                 }
               }
             },
@@ -5998,9 +12160,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Registrar Constancia Del Cliente V1 Comandos Registrar Constancia Del Cliente Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegistrarConstanciaResponse"
                 }
               }
             },
@@ -6114,9 +12274,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Registrar Induccion V1 Comandos Registrar Induccion Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegistrarInduccionResponse"
                 }
               }
             },
@@ -6230,9 +12388,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Resolver Archivo Drive V1 Comandos Resolver Archivo Drive Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ResolverArchivoDriveResponse"
                 }
               }
             },
@@ -6346,9 +12502,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Revertir Lote V1 Comandos Revertir Lote Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RevertirLoteResponse"
                 }
               }
             },
@@ -6462,9 +12616,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Revocar Constancia Del Cliente V1 Comandos Revocar Constancia Del Cliente Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RevocarConstanciaResponse"
                 }
               }
             },
@@ -6578,9 +12730,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Revocar Excepcion V1 Comandos Revocar Excepcion Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RevocarExcepcionResponse"
                 }
               }
             },
@@ -6694,9 +12844,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Revocar Paquete Entrega V1 Comandos Revocar Paquete Entrega Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RevocarPaqueteResponse"
                 }
               }
             },
@@ -6810,9 +12958,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Vincular Telegram V1 Comandos Vincular Telegram Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VincularTelegramResponse"
                 }
               }
             },
@@ -6961,9 +13107,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Alertas Abiertas V1 Consultas Alertas Abiertas Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AlertasAbiertasResponse"
                 }
               }
             },
@@ -7117,9 +13261,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Asignaciones Supervisor V1 Consultas Asignaciones Supervisor Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AsignacionesSupervisorResponse"
                 }
               }
             },
@@ -7244,9 +13386,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Backlog Oc V1 Consultas Backlog Oc Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BacklogOcResponse"
                 }
               }
             },
@@ -7370,9 +13510,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bandeja Drive V1 Consultas Bandeja Drive Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BandejaDriveResponse"
                 }
               }
             },
@@ -7603,9 +13741,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cobertura Oc V1 Consultas Cobertura Oc Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CoberturaOcResponse"
                 }
               }
             },
@@ -7688,9 +13824,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Configuracion Alertas V1 Consultas Configuracion Alertas Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfiguracionAlertasResponse"
                 }
               }
             },
@@ -7776,9 +13910,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Configuracion Canales V1 Consultas Configuracion Canales Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfiguracionCanalesResponse"
                 }
               }
             },
@@ -7864,9 +13996,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Configuracion Drive V1 Consultas Configuracion Drive Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConfiguracionDriveResponse"
                 }
               }
             },
@@ -8033,9 +14163,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Constancias V1 Consultas Constancias Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConstanciasResponse"
                 }
               }
             },
@@ -8185,9 +14313,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Custodias V1 Consultas Custodias Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CustodiasResponse"
                 }
               }
             },
@@ -8281,9 +14407,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Decision V1 Consultas Decision Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DecisionDetalle"
                 }
               }
             },
@@ -8400,9 +14524,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Decisiones Oc V1 Consultas Decisiones Oc Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DecisionesOcResponse"
                 }
               }
             },
@@ -8587,9 +14709,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Definiciones Requisito V1 Consultas Definiciones Requisito Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DefinicionesRequisitoResponse"
                 }
               }
             },
@@ -8768,9 +14888,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Documentos V1 Consultas Documentos Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DocumentosResponse"
                 }
               }
             },
@@ -8919,9 +15037,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Envios Notificacion V1 Consultas Envios Notificacion Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EnviosNotificacionResponse"
                 }
               }
             },
@@ -9087,9 +15203,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Excepciones V1 Consultas Excepciones Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExcepcionesResponse"
                 }
               }
             },
@@ -9322,9 +15436,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Historial Alertas V1 Consultas Historial Alertas Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/HistorialAlertasResponse"
                 }
               }
             },
@@ -9444,9 +15556,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Historial Supervision V1 Consultas Historial Supervision Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/HistorialSupervisionResponse"
                 }
               }
             },
@@ -9529,9 +15639,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Incumplimiento Empresa V1 Consultas Incumplimiento Empresa Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IncumplimientoEmpresaResponse"
                 }
               }
             },
@@ -9625,9 +15733,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Legajo V1 Consultas Legajo Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/app__modules__consultas__router__LegajoResponse"
                 }
               }
             },
@@ -9785,9 +15891,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Log Auditoria V1 Consultas Log Auditoria Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LogAuditoriaResponse"
                 }
               }
             },
@@ -9935,9 +16039,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Lotes V1 Consultas Lotes Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LotesResponse"
                 }
               }
             },
@@ -10072,9 +16174,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Matrices V1 Consultas Matrices Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MatricesResponse"
                 }
               }
             },
@@ -10206,9 +16306,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Matriz Vigente V1 Consultas Matriz Vigente Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MatrizVigenteResponse"
                 }
               }
             },
@@ -10292,9 +16390,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Mi Legajo V1 Consultas Mi Legajo Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MiLegajoResponse"
                 }
               }
             },
@@ -10395,9 +16491,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Paquetes Entrega V1 Consultas Paquetes Entrega Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PaquetesEntregaResponse"
                 }
               }
             },
@@ -10484,9 +16578,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Plantillas Globales V1 Consultas Plantillas Globales Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PlantillasGlobalesResponse"
                 }
               }
             },
@@ -10594,9 +16686,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Propuestas Pendientes V1 Consultas Propuestas Pendientes Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PropuestasPendientesResponse"
                 }
               }
             },
@@ -10679,9 +16769,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Score Documental V1 Consultas Score Documental Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScoreDocumentalResponse"
                 }
               }
             },
@@ -10848,9 +16936,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Sujetos V1 Consultas Sujetos Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SujetosResponse"
                 }
               }
             },
@@ -10970,9 +17056,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Tablero Vencimientos V1 Consultas Tablero Vencimientos Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TableroVencimientosResponse"
                 }
               }
             },
@@ -11136,9 +17220,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Usuarios V1 Consultas Usuarios Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UsuariosResponse"
                 }
               }
             },
@@ -11233,9 +17315,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Paquete Publico V1 Publico Paquete  Token  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VistaPublicaPaqueteResponse"
                 }
               }
             },
@@ -11458,9 +17538,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Vivo V1 Salud Vivo Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VivoResponse"
                 }
               }
             },
@@ -11544,9 +17622,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Url De Descarga V1 Storage Documentos  Documento Id  Url Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UrlDeDescargaResponse"
                 }
               }
             },
@@ -11722,9 +17798,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Subir V1 Storage  Firma  Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SubirArchivoResponse"
                 }
               }
             },

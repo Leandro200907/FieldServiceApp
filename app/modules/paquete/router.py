@@ -1,7 +1,7 @@
 """Paquete de entrega: comandos autenticados + endpoint público firmado (sin JWT)."""
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
@@ -28,26 +28,58 @@ class RevocarPaqueteBody(BaseModel):
     paquete_id: str
 
 
-@router.post("/comandos/generar_paquete_entrega")
+class GenerarPaqueteResponse(BaseModel):
+    paquete_id: str
+    sujeto_id: str
+    url: str
+    url_qr: str
+    expira_en: str
+    eventos: list[str]
+
+
+class RevocarPaqueteResponse(BaseModel):
+    paquete_id: str
+    eventos: list[str]
+
+
+class PaqueteEntrega(BaseModel):
+    paquete_id: str
+    sujeto_id: str
+    creado_por: str | None
+    expira_en: datetime
+    revocado_en: datetime | None
+    accesos: int
+    ultimo_acceso_en: datetime | None
+    creado_en: datetime
+    vigente: bool
+
+
+class PaquetesEntregaResponse(BaseModel):
+    items: list[PaqueteEntrega]
+
+
+@router.post("/comandos/generar_paquete_entrega", response_model=GenerarPaqueteResponse)
 def generar_paquete_entrega(body: GenerarPaqueteBody, request: Request, identidad: Identidad = Depends(identidad_actual),
-                            clave: str | None = Depends(clave_idempotencia)) -> dict[str, Any]:
+                            clave: str | None = Depends(clave_idempotencia)) -> GenerarPaqueteResponse:
     base = str(request.base_url).rstrip("/")
-    return ejecutar_comando(identidad, clave, (Rol.RESPONSABLE_LEGAJOS,),
+    resultado = ejecutar_comando(identidad, clave, (Rol.RESPONSABLE_LEGAJOS,),
                             lambda s: servicio.generar_paquete(s, identidad, sujeto_id=body.sujeto_id, dias_validez=body.dias_validez, base_url=base),
                             ruta="/comandos/generar_paquete_entrega", body=body.model_dump(mode="json"))
+    return GenerarPaqueteResponse(**resultado)
 
 
-@router.post("/comandos/revocar_paquete_entrega")
+@router.post("/comandos/revocar_paquete_entrega", response_model=RevocarPaqueteResponse)
 def revocar_paquete_entrega(body: RevocarPaqueteBody, identidad: Identidad = Depends(identidad_actual),
-                            clave: str | None = Depends(clave_idempotencia)) -> dict[str, Any]:
-    return ejecutar_comando(identidad, clave, (Rol.RESPONSABLE_LEGAJOS,), lambda s: servicio.revocar_paquete(s, identidad, paquete_id=body.paquete_id),
+                            clave: str | None = Depends(clave_idempotencia)) -> RevocarPaqueteResponse:
+    resultado = ejecutar_comando(identidad, clave, (Rol.RESPONSABLE_LEGAJOS,), lambda s: servicio.revocar_paquete(s, identidad, paquete_id=body.paquete_id),
                             ruta="/comandos/revocar_paquete_entrega", body=body.model_dump(mode="json"))
+    return RevocarPaqueteResponse(**resultado)
 
 
-@router.get("/consultas/paquetes_entrega")
-def paquetes_entrega(sujeto_id: str | None = Query(None), identidad: Identidad = Depends(identidad_actual)) -> dict:
+@router.get("/consultas/paquetes_entrega", response_model=PaquetesEntregaResponse)
+def paquetes_entrega(sujeto_id: str | None = Query(None), identidad: Identidad = Depends(identidad_actual)) -> PaquetesEntregaResponse:
     with tenant_session(identidad.tenant_id) as s:
-        return {"items": servicio.paquetes(s, identidad, sujeto_id)}
+        return PaquetesEntregaResponse(items=servicio.paquetes(s, identidad, sujeto_id))
 
 
 # --------------------------------------------------------------------------- público
@@ -68,14 +100,42 @@ def _resolver(token: str, request: Request) -> tuple[str, str]:
     return str(tenant_id), token_hash
 
 
-@router.get("/publico/paquete/{token}")
-def paquete_publico(token: str, request: Request) -> dict:
+class SujetoPaquete(BaseModel):
+    sujeto_id: str
+    tipo_sujeto: str
+    identificador: str
+
+
+class RequisitoPaquete(BaseModel):
+    requisito: str
+    categoria: str
+    vigente_hasta: str
+    estado: str
+
+
+class ResumenPaquete(BaseModel):
+    vigentes: int
+    vencidos: int
+    sin_verificar: int
+
+
+class VistaPublicaPaqueteResponse(BaseModel):
+    empresa: str | None
+    sujeto: SujetoPaquete
+    fecha: str
+    expira_en: str
+    requisitos: list[RequisitoPaquete]
+    resumen: ResumenPaquete
+
+
+@router.get("/publico/paquete/{token}", response_model=VistaPublicaPaqueteResponse)
+def paquete_publico(token: str, request: Request) -> VistaPublicaPaqueteResponse:
     """Sin JWT: quien tiene el link firmado ve el estado de cumplimiento del sujeto (sin archivos)."""
     tenant_id, token_hash = _resolver(token, request)
     origen = origen_real(request.client.host if request.client else None,
                          request.headers.get("x-forwarded-for"), settings.proxies_confiables)
     with tenant_session(tenant_id) as s:
-        return servicio.vista_publica(s, tenant_id, token_hash, origen)
+        return VistaPublicaPaqueteResponse(**servicio.vista_publica(s, tenant_id, token_hash, origen))
 
 
 @router.get("/publico/paquete/{token}/qr.png")
