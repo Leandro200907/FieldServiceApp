@@ -148,6 +148,12 @@ def test_proyeccion_sin_matriz_nunca_da_422(cliente_api, tenant_de_prueba, hoy):
     body = r.json()
     assert body["estado"] == "sin_matriz" and body["matriz"] is None
     assert body["causas"] and body["causas"][0]["motivo"] and body["causas"][0]["tipo_sujeto"] is None
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == commitment_id)
+    assert fila["estado"] == "sin_matriz"
+    assert fila["capacidad_documental_potencial_hoy"] == {}
+    assert fila["origen_calculo"] in ("ultima_decision_visible", "candidatos_del_alcance")
+    assert fila["motivos_resumidos"] == ["No hay matriz vigente para (cliente_id, locacion_id, tipo_servicio_id) al día de ingreso de la OC"]
 
 
 def test_proyeccion_pendiente_de_planificacion_sin_candidatos(cliente_api, tenant_de_prueba, hoy):
@@ -175,6 +181,12 @@ def test_proyeccion_bloqueo_confirmado_desde_el_primer_dia(cliente_api, tenant_d
     assert body["estado"] == "bloqueo_confirmado"
     assert body["intervalos"][0]["estado"] == "bloqueo_confirmado"
     assert body["intervalos"][0]["capacidad_documental_potencial"] == {"persona": 0}
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["estado"] == "bloqueo_confirmado"
+    assert fila["capacidad_documental_potencial_hoy"] == {"persona": 0}
+    assert fila["origen_calculo"] == "candidatos_del_alcance"
+    assert fila["motivos_resumidos"] and "persona" in fila["motivos_resumidos"][0]
 
 
 def test_proyeccion_requiere_revision_documento_declarado(cliente_api, tenant_de_prueba, hoy):
@@ -187,6 +199,11 @@ def test_proyeccion_requiere_revision_documento_declarado(cliente_api, tenant_de
     body = r.json()
     assert body["estado"] == "requiere_revision"
     assert body["intervalos"][0]["capacidad_documental_potencial"] == {"persona": 0}  # nunca cuenta como cobertura real
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["estado"] == "requiere_revision"
+    assert fila["origen_calculo"] == "candidatos_del_alcance"
+    assert fila["motivos_resumidos"] and "revisión" in fila["motivos_resumidos"][0]
 
 
 def test_proyeccion_riesgo_documental_hoy_verde_futuro_sin_respaldo(cliente_api, tenant_de_prueba, hoy):
@@ -200,6 +217,13 @@ def test_proyeccion_riesgo_documental_hoy_verde_futuro_sin_respaldo(cliente_api,
     assert body["estado"] == "riesgo_documental"
     assert body["intervalos"][0]["estado"] == "sin_riesgos_detectados"
     assert any(i["estado"] == "bloqueo_confirmado" for i in body["intervalos"][1:])
+    backlog = _get(cliente_api, t, "responsable_legajos", "proyeccion_documental_backlog").json()
+    fila = next(f for f in backlog["items"] if f["commitment_id"] == esc["commitment_id"])
+    assert fila["estado"] == "riesgo_documental"
+    assert fila["origen_calculo"] == "candidatos_del_alcance"
+    # el motivo resumido tiene que salir del intervalo POSTERIOR que rompe (no del primero,
+    # que está bien) — mismo texto "ningún candidato... lo cubre" que arma el motor.
+    assert fila["motivos_resumidos"] and "ningún candidato" in fila["motivos_resumidos"][0]
 
 
 def test_proyeccion_mutua_exclusion_un_solo_candidato_de_respaldo_no_es_riesgo(cliente_api, tenant_de_prueba, hoy):
@@ -377,6 +401,8 @@ def test_backlog_oc_futura_lejana_entra_con_ventana_completa(cliente_api, tenant
     # en el primer intervalo de SU PROPIA ventana (empieza en su vigencia_desde, no en hoy).
     assert fila["estado"] == "bloqueo_confirmado"
     assert fila["vigencia_desde"] == esc["oc_desde"].isoformat()
+    assert fila["origen_calculo"] == "candidatos_del_alcance"
+    assert fila["motivos_resumidos"] and "ningún candidato" in fila["motivos_resumidos"][0]
 
 
 def test_backlog_paginacion_real(cliente_api, tenant_de_prueba, hoy):
