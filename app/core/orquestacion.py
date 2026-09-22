@@ -166,7 +166,7 @@ def clasificacion_vigente(
     return Clasificacion(linea) if linea else None
 
 
-def _definiciones(session: Session, tenant_id: str, requisito_ids: list[str]) -> dict[str, dict[str, Any]]:
+def definiciones_de(session: Session, tenant_id: str, requisito_ids: list[str]) -> dict[str, dict[str, Any]]:
     if not requisito_ids:
         return {}
     filas = session.execute(
@@ -194,7 +194,7 @@ def _sujetos_activos(session: Session, tenant_id: str, tipos: list[str]) -> list
     return [dict(f) for f in filas]
 
 
-def _cargar_evidencias(
+def cargar_evidencias(
     session: Session, tenant_id: str, definiciones: dict[str, dict[str, Any]]
 ) -> dict[tuple[str, str], Documento]:
     """Mapa (sujeto_id, requisito_definicion_id) → Documento del motor, según categoría:
@@ -511,7 +511,7 @@ def _evaluar(
     if not lineas:
         raise ErrorDeDominio("la matriz vigente no tiene líneas de requisito", {"matriz_version_id": str(matriz["matriz_version_id"])})
 
-    definiciones = _definiciones(session, tenant_id, list(lineas))
+    definiciones = definiciones_de(session, tenant_id, list(lineas))
     faltantes_definicion = [r for r in lineas if r not in definiciones]
     if faltantes_definicion:
         raise ErrorDeDominio("líneas de matriz apuntan a definiciones de requisito inexistentes", {"requisitos": faltantes_definicion})
@@ -527,7 +527,7 @@ def _evaluar(
         commitment_id=commitment_id,
         lineas=lineas,
         definiciones=definiciones,
-        evidencias=_cargar_evidencias(session, tenant_id, definiciones),
+        evidencias=cargar_evidencias(session, tenant_id, definiciones),
         constancias=_cargar_constancias(session, tenant_id, str(oc["cliente_id"]), hoy),
         excepciones=_cargar_excepciones(session, tenant_id, commitment_id, hoy),
     )

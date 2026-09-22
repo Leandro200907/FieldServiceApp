@@ -299,6 +299,61 @@ responsable; nada se actualiza solo. El frontend debe mostrar la comparación (p
 nueva vs. copia local) desde `plantillas_globales` y ofrecer `copiar_matriz_global` /
 `copiar_definicion_global`.
 
+### 4.5bis Proyección documental (docs/PROYECCION_DOCUMENTAL.md) — NUEVO, en revisión
+
+**No integrar en pantallas todavía.** Implementado y probado contra PostgreSQL real, pero
+sin una segunda revisión del contrato cerrada. Antes de conectar cualquier pantalla:
+regenerar tipos TypeScript desde el `docs/openapi.json` de este commit (o el que
+finalmente se integre — los schemas de datos no cambian, pero el contrato tiene que
+corresponder al código exacto), y comparar contra el resultado de una revisión
+independiente si la hay.
+
+Los tres endpoints son de sólo lectura — nunca persisten, nunca crean tareas, nunca
+modifican una decisión histórica ni el estado de custodia. Ver `docs/PROYECCION_DOCUMENTAL.md`
+para el diseño completo (estados, precedencia, puntos de quiebre, ejemplos).
+
+| Ruta | Roles | Query |
+|---|---|---|
+| `GET /v1/consultas/calendario_vigencias` | responsable_legajos, supervisor (su universo), **técnico** (su propio legajo + custodia — amplía la matriz de `tablero_vencimientos`) | `desde?`, `hasta?` (default hoy→+30, máx. 366 días), `tipo_sujeto?`, `categoria?`, `estado?` (`vigente\|vencido\|todos`), `q?`, paginado |
+| `GET /v1/consultas/proyeccion_documental` | responsable_legajos, supervisor (alcance vía última decisión visible o candidatos del universo) | `commitment_id` (obligatorio), `desde?`, `hasta?`, `detalle?` (`resumen\|diario`) |
+| `GET /v1/consultas/proyeccion_documental_backlog` | responsable_legajos, supervisor (una OC entra sólo si al menos un candidato de su conjunto está en su universo) | `estado_oc?` (`activo` por defecto), `estado?` (repetible, uno de los 6 estados), `horizonte_dias?` (default 30, máx. 366), paginado |
+
+- Las tres respuestas llevan `advertencia` con el texto exacto fijo — `capacidad_documental_potencial` **nunca** es una promesa de disponibilidad, ver el documento de diseño §5.
+- Vocabulario cerrado de 6 estados (`sin_matriz`, `pendiente_de_planificacion`,
+  `bloqueo_confirmado`, `requiere_revision`, `riesgo_documental`, `sin_riesgos_detectados`):
+  sólo aplica al **resumen** de una OC; cada `intervalos[].estado` usa un subconjunto de 3
+  (documento §6) — no confundir los dos al construir la UI.
+  `calendario_vigencias` no usa este vocabulario en absoluto (es un hecho suelto, no una
+  conclusión sobre una OC).
+- `capacidad_documental_potencial`/`capacidad_documental_potencial_hoy`: un tipo AUSENTE en
+  el objeto significa "esta OC no lo exige"; un tipo presente en `0` significa "lo exige y
+  hoy nadie lo cubre" — nunca hay un valor `null` para ningún tipo.
+- **Alcance y permisos, sin presumir nada por el rol**: ningún rol habilita documentalmente
+  por sí solo — el motor evalúa documentos, nunca roles. `alcance_de_sujetos`
+  (`app/auth/alcance.py`, única fuente de verdad) es el mismo filtro en los tres endpoints
+  nuevos, en `mi_legajo` y en toda consulta existente:
+  - **Técnico**: su propia persona + los recursos bajo su custodia EFECTIVA hoy (nunca la
+    de una transferencia futura todavía no iniciada — hallazgo A-01, ver `CONDICION_
+    CUSTODIA_EFECTIVA_HOY`). No ve a nadie más, aunque comparta OC con otros.
+  - **Supervisor**: "Mi legajo" (`GET /v1/consultas/mi_legajo`, ya existente — su propia
+    persona + custodia, igual que un técnico) es un endpoint DISTINTO de "Equipo
+    supervisado" (lo que `calendario_vigencias`/`proyeccion_documental_backlog` traen para
+    su rol, vía `alcance_de_sujetos`: propio + universo de supervisión asignado, sin
+    transitividad — si un supervisado es a su vez supervisor de terceros, esos terceros no
+    entran). El frontend no debería fusionar ambas vistas en una sola lista sin dejar claro
+    cuál es cuál.
+  - **Responsable de legajos**: ve TODO el tenant en los tres endpoints (`alcance_de_
+    sujetos` devuelve `None` para este rol — sin filtro).
+  - **Configuración NO tiene acceso a ninguno de los tres** (403) — mismo criterio que ya
+    rige `backlog_oc`/`cobertura_oc`/`tablero_vencimientos`: son consultas operativas de
+    cobertura documental, no de auditoría/configuración. El rol de Configuración sigue
+    viendo `log_auditoria` y administrando canales/alertas, pero no este flujo.
+  - **Aislamiento entre tenants**: RLS (regla dura, `app.current_tenant`) — un
+    `commitment_id`/`sujeto_id` de otro tenant es 404/vacío, nunca 403 (no se confirma su
+    existencia). Mismo alcance en listas (`calendario_vigencias`, backlog) y en el detalle
+    puntual (`proyeccion_documental`) — nunca una OC visible en el backlog y 404/403 al
+    pedir su detalle, o viceversa.
+
 ### 4.6 Catálogos para operar los comandos sin tipear ids (H-06)
 Todos paginados (`offset/limit`, máx. 500) → `{items[], total, offset, limit}`; el alcance
 del supervisor/técnico se aplica siempre (un filtro nunca amplía lo visible); otro tenant no
