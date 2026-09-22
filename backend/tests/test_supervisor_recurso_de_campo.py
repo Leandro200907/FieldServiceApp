@@ -99,6 +99,11 @@ def test_supervisor_con_doble_rol_acumula_propio_y_universo_asignado_sin_transit
         apoyo.legajo(s, t.tenant_id, x)
         apoyo.legajo(s, t.tenant_id, "persona_y")
         apoyo.legajo(s, t.tenant_id, "persona_z")
+        # `identidad_actual` revalida roles contra la base (auditoría externa, hallazgo 1):
+        # para que el token con ["tecnico", "supervisor"] sea efectivo, la base tiene que
+        # tener realmente los dos roles, no solo el JWT.
+        s.execute(text("UPDATE modulo1.usuario SET roles = ARRAY['tecnico', 'supervisor'] "
+                       "WHERE tenant_id = :t AND usuario_id = :u"), {"t": t.tenant_id, "u": t.usuarios["tecnico"]})
         # X supervisa a Y
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                        "VALUES (:t, 'persona_y', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["tecnico"]})

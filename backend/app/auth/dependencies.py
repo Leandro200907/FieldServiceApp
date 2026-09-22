@@ -3,12 +3,14 @@
     from app.auth.dependencies import identidad_actual
     def endpoint(identidad: Identidad = Depends(identidad_actual)): ...
 
-Valida firma, vencimiento y tipo del access token, arma la Identidad con los claims y
-**comprueba en la base, en cada request protegido, que el usuario siga existiendo y
-`activo=true`**. Así una desactivación (scripts/administracion.py) es efectiva de inmediato
-en todas las instancias de la API, sin cachés ni memoria local: el access token vigente
-deja de servir en el request siguiente. Usuario inexistente o inactivo → el mismo 401
-genérico que un token inválido (no se revela cuál de los dos es).
+Valida firma, vencimiento y tipo del access token (para tenant_id/usuario_id — regla dura
+1) y **reconstruye `roles`/`sujeto_id`/`activo` desde la fila actual de `usuario` en cada
+request protegido**, nunca confiando en esos campos tal como vinieron en el JWT. Así tanto
+una desactivación como un cambio de rol o de legajo (scripts/administracion.py, o una
+corrección operativa directa) son efectivos de inmediato en todas las instancias de la
+API, sin cachés ni memoria local: el access token vigente deja de servir el permiso viejo
+en el request siguiente. Usuario inexistente o inactivo → el mismo 401 genérico que un
+token inválido (no se revela cuál de los dos es).
 
 El tenant_id sale SOLO del claim (regla dura 1); ninguna capa lo acepta por otra vía. La
 consulta de estado corre en una `tenant_session` de ese tenant (RLS): un token de otro
@@ -28,7 +30,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
 
 from app.api.errores import NoAutenticado
-from app.auth.identidad import Identidad
+from app.auth.identidad import Identidad, Rol
 from app.auth.jwt import validar_access_token
 from app.db import tenant_session
 
@@ -39,14 +41,21 @@ _bearer = HTTPBearer(auto_error=False)
 _MENSAJE_GENERICO = "No autenticado"
 
 
-def usuario_sigue_activo(tenant_id: str, usuario_id: str) -> bool:
-    """Estado ACTUAL del usuario en la base (sin caché). False si no existe o está inactivo."""
+def _estado_actual_del_usuario(tenant_id: str, usuario_id: str) -> tuple[bool, list[str], str | None] | None:
+    """Estado ACTUAL del usuario en la base (sin caché): (activo, roles, sujeto_id), o
+    None si el usuario ya no existe."""
     with tenant_session(tenant_id) as s:
-        activo = s.execute(
-            text("SELECT activo FROM modulo1.usuario WHERE tenant_id = :t AND usuario_id = :u"),
+        fila = s.execute(
+            text(
+                "SELECT activo, roles, sujeto_id FROM modulo1.usuario "
+                "WHERE tenant_id = :t AND usuario_id = :u"
+            ),
             {"t": tenant_id, "u": usuario_id},
-        ).scalar()
-    return bool(activo)
+        ).first()
+    if fila is None:
+        return None
+    activo, roles, sujeto_id = fila
+    return bool(activo), list(roles or []), sujeto_id
 
 
 def identidad_actual(
@@ -55,6 +64,19 @@ def identidad_actual(
     if credenciales is None or credenciales.scheme.lower() != "bearer" or not credenciales.credentials:
         raise NoAutenticado("Falta el token de acceso")
     identidad = validar_access_token(credenciales.credentials)
-    if not usuario_sigue_activo(identidad.tenant_id, identidad.usuario_id):
+    estado = _estado_actual_del_usuario(identidad.tenant_id, identidad.usuario_id)
+    if estado is None:
         raise NoAutenticado(_MENSAJE_GENERICO)
-    return identidad
+    activo, roles_db, sujeto_id_db = estado
+    if not activo:
+        raise NoAutenticado(_MENSAJE_GENERICO)
+    try:
+        roles = frozenset(Rol(r) for r in roles_db)
+    except ValueError:
+        raise NoAutenticado(_MENSAJE_GENERICO)
+    return Identidad(
+        tenant_id=identidad.tenant_id,
+        usuario_id=identidad.usuario_id,
+        roles=roles,
+        sujeto_id=sujeto_id_db,
+    )

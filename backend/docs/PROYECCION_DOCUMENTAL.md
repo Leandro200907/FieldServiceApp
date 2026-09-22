@@ -31,8 +31,9 @@ Lo que este módulo NO sabe y no debe fingir que sabe:
   módulo no tiene (¹).
 
 Por eso **`capacidad_documental_potencial` es un conteo de candidatos documentalmente
-válidos, nunca una promesa de disponibilidad** (retomado en el punto 6). Cualquier
-respuesta de estos tres endpoints lleva la advertencia obligatoria (punto 10). Esta
+válidos, nunca una promesa de disponibilidad** (retomado en el punto 5). Cualquier
+respuesta de estos tres endpoints lleva la advertencia obligatoria — texto exacto fijado
+más abajo (punto 5) y repetido en cada ejemplo de respuesta (puntos 3, 9 y 10). Esta
 proyección es exactamente la pieza que, cruzada con el backlog de OC de Módulo 2, permite
 la frase *"de tus 40 OC abiertas hay 6 que hoy no podés cubrir con nadie habilitado"* — pero
 la frase la arma Módulo 2 cruzando los dos lados del negocio; acá sólo vive el lado
@@ -91,13 +92,21 @@ Son dos preguntas distintas y los tres endpoints no las mezclan:
 Un vencimiento que aparece en `calendario_vigencias` puede no aparecer en ninguna
 proyección (nadie usa ese requisito en ninguna matriz activa, o el sujeto no es candidato
 de ninguna OC vigente) — y viceversa, un candidato puede estar "verde" en el calendario
-general (nada vence pronto) y aun así la OC estar `bloqueo_confirmado` porque el tipo
-exigido específico no tiene NINGÚN candidato, venza o no.
+general (nada vence pronto) y aun así la OC estar `bloqueo_confirmado` porque HOY el tipo
+exigido específico no tiene NINGÚN candidato — nada por vencer pronto no es lo mismo que
+haber alguien que lo cubra hoy mismo (ver punto 6: `bloqueo_confirmado` es siempre sobre
+hoy, nunca sobre un día futuro — eso es `riesgo_documental`).
 
 ## 3. `GET /v1/consultas/calendario_vigencias`
 
-**Rol**: `responsable_legajos` (todo el tenant), `supervisor` (su universo, vía
-`alcance_de_sujetos`) — misma matriz 2.2 que `tablero_vencimientos`.
+**Rol**: `responsable_legajos` (todo el tenant), `supervisor` (su universo) y `técnico`
+(su propio legajo + custodia) — los tres vía `alcance_de_sujetos`. Amplía deliberadamente
+la matriz de `tablero_vencimientos` (hoy sólo `responsable_legajos`/`supervisor`): un
+técnico ya ve sus propios vencimientos en el resumen de `mi_legajo`
+(`vencidos`/`vigentes_hoy`), pero sin control de rango de fechas; `calendario_vigencias`
+con `alcance_de_sujetos` acotado a su propio legajo es exactamente eso mismo con rango
+explícito, no un permiso nuevo — coherente con que `documentos`/`sujetos` (H-06) ya
+incluyen técnico en su matriz de roles.
 
 **Parámetros**
 
@@ -108,7 +117,7 @@ exigido específico no tiene NINGÚN candidato, venza o no.
 | `tipo_sujeto` | `persona\|vehiculo\|equipo\|empresa` | todos | filtro |
 | `categoria` | `documento\|competencia\|induccion` | todas | filtro |
 | `estado` | `vigente\|vencido\|todos` | `todos` dentro del rango | un vencido con `vigente_hasta` dentro del rango sigue apareciendo |
-| `q` | texto | — | ILIKE sobre `sujeto_id` (igual que otras consultas) |
+| `q` | texto | — | ILIKE sobre `sujeto_id` o `identificador_natural` (misma convención que `sujetos` en H-06) |
 | paginación | `offset`/`limit` | `0`/`50`, máx. `500` | igual convención que el resto (`app/comun/paginacion.py`) |
 
 **Respuesta**
@@ -125,6 +134,7 @@ exigido específico no tiene NINGÚN candidato, venza o no.
       "requisito_definicion_id": "…",
       "requisito": "Apto médico",
       "categoria": "documento",
+      "vigente_desde": "2026-03-30",
       "vigente_hasta": "2026-09-30",
       "dias_para_vencer": 9,
       "estado_confirmacion": "verificado",
@@ -148,25 +158,28 @@ fila es un hecho suelto, no una conclusión sobre una OC.
 Ni `proyeccion_documental` ni `proyeccion_documental_backlog` inventan a quién evaluar.
 Para cada OC, el conjunto de sujetos a proyectar sale de, en este orden:
 
-1. **La última decisión persistida y VISIBLE** para quien consulta (misma regla A-04 que
-   ya usa `backlog_oc`: `filtro_decisiones_visibles` — si algún sujeto propuesto de esa
-   decisión queda fuera del alcance de un supervisor, la decisión entera "no existe" para
-   él, y se cae al punto 2). Los sujetos de `evaluacion_sujeto_propuesto` de esa
-   `referencia_evaluacion` son el conjunto — **se lee, nunca se recalcula ni se
-   sobreescribe la decisión histórica**: `evaluacion_habilitacion.snapshot`,
-   `veredicto_de_cumplimiento` y `resultado_de_decision` de esa fila quedan intactos para
-   siempre (mismo principio ya cerrado para matrices: "una auditoría pregunta por la
-   fecha de la OC, no por hoy").
-2. **Si no hay ninguna decisión visible** (nunca se evaluó esa OC, o la única que hay
-   queda fuera de alcance): el universo por defecto es el `candidatos` de
-   `cobertura_de_oc` en modo consulta — todos los legajos activos del tenant para
-   responsable_legajos, o el universo del supervisor. Este caso es exactamente
-   `pendiente_de_planificacion` si además no hay ningún candidato con NADA cargado (punto
-   6) — pero si hay candidatos potenciales (aunque nadie los haya propuesto formalmente
-   todavía), la proyección los usa igual: el objetivo es anticipar, no esperar a que
-   alguien arme la propuesta primero.
+### 4.1. Última decisión visible
 
-La proyección deja explícito de cuál de los dos vino el conjunto:
+La última decisión persistida y VISIBLE para quien consulta (misma regla A-04 que ya usa
+`backlog_oc`: `filtro_decisiones_visibles` — si algún sujeto propuesto de esa decisión
+queda fuera del alcance de un supervisor, la decisión entera "no existe" para él, y se
+cae al punto 4.2). Los sujetos de `evaluacion_sujeto_propuesto` de esa
+`referencia_evaluacion` son el conjunto — **se lee, nunca se recalcula ni se sobreescribe
+la decisión histórica**: `evaluacion_habilitacion.snapshot`, `veredicto_de_cumplimiento` y
+`resultado_de_decision` de esa fila quedan intactos para siempre (mismo principio ya
+cerrado para matrices: "una auditoría pregunta por la fecha de la OC, no por hoy").
+
+### 4.2. Candidatos del alcance (sin decisión visible)
+
+Si no hay ninguna decisión visible (nunca se evaluó esa OC, o la única que hay queda
+fuera de alcance): el universo por defecto es el `candidatos` de `cobertura_de_oc` en modo
+consulta — todos los legajos activos del tenant para responsable_legajos, o el universo
+del supervisor. Este caso es exactamente `pendiente_de_planificacion` si además no hay
+ningún candidato con NADA cargado (punto 6) — pero si hay candidatos potenciales (aunque
+nadie los haya propuesto formalmente todavía), la proyección los usa igual: el objetivo es
+anticipar, no esperar a que alguien arme la propuesta primero.
+
+La proyección deja explícito de cuál de los dos (4.1 o 4.2) vino el conjunto:
 
 ```json
 "sujetos": {
@@ -199,10 +212,22 @@ Por cada tipo exigido y cada día proyectado:
 Es el **conteo de candidatos del conjunto del punto 4** que, ESE día, cubren todos sus
 requisitos bloqueantes de ese tipo — sin importar si son 3 personas distintas o la misma
 persona con 3 vehículos. Nunca dice "hay 3 personas libres": dice "hay 3 personas cuyo
-legajo alcanzaría, documentalmente, si se las asignara". La advertencia obligatoria
-(punto 10) es la aclaración explícita de esto en cada respuesta; el nombre del campo ya lo
-dice ("potencial"), pero no alcanza solo con el nombre — de ahí que la advertencia sea
-obligatoria y no opcional en el contrato.
+legajo alcanzaría, documentalmente, si se las asignara". El nombre del campo ya lo dice
+("potencial"), pero no alcanza solo con el nombre — de ahí que la advertencia sea
+obligatoria y no opcional en el contrato, con el mismo texto exacto en las tres
+respuestas:
+
+> "Proyección documental calculada con la información registrada a la fecha. No garantiza
+> disponibilidad ni asignación operativa."
+
+**`0` no es lo mismo que ausente.** Las claves de este objeto (y de
+`capacidad_documental_potencial_hoy`, punto 10) son SOLO los `tipo_sujeto` que la matriz
+vigente de la OC efectivamente exige (punto 1). Un tipo ausente significa "esta OC no
+pide ese tipo" — nunca aparece con `0` ni con `null`. Un tipo presente con valor `0`
+significa "la OC lo exige y, ese día, ningún candidato del conjunto lo cubre" — es
+precisamente la condición que dispara `bloqueo_confirmado` (hoy) o el intervalo de
+`riesgo_documental`/`pendiente_de_planificacion` correspondiente (futuro). El objeto nunca
+lleva un valor `null` explícito para ningún tipo.
 
 ## 6. Los seis estados cerrados
 
@@ -214,10 +239,20 @@ Vocabulario CERRADO — no se agregan variantes sin reabrir este documento. Apli
 |---|---|
 | `sin_matriz` | No hay matriz vigente para (cliente, locación, tipo_servicio) de la OC al día de ingreso (`oc.vigencia_desde`) — mismo caso que hoy dispara `sin_matriz_vigente` en `_evaluar()`/`avisar_oc_sin_matriz` (H-02), pero acá NUNCA se propaga como error 422: la proyección lo devuelve como estado, no como falla. |
 | `pendiente_de_planificacion` | Hay matriz, pero el conjunto de sujetos del punto 4 está vacío (ninguna decisión visible Y ningún candidato en el alcance) — no hay nada que evaluar todavía. |
-| `bloqueo_confirmado` | Con los datos de HOY, existe al menos un día dentro del horizonte evaluado en el que algún tipo exigido no tiene NINGÚN candidato que cubra todos sus requisitos bloqueantes — incluye siempre el día de hoy si hoy está bloqueada. |
+| `bloqueo_confirmado` | **Sólo sobre HOY** (el primer día evaluado: `hoy` para `proyeccion_documental_backlog`, `max(hoy, oc.vigencia_desde)` para `proyeccion_documental`) algún tipo exigido no tiene NINGÚN candidato que cubra todos sus requisitos bloqueantes. Nunca un día futuro — eso es `riesgo_documental`, más abajo; ver la nota de mutua exclusión al final de esta sección. |
 | `requiere_revision` | No hay `bloqueo_confirmado`, pero la cobertura de al menos un tipo exigido en algún día depende de un documento `REQUIERE_REVISION` (declarado sin confirmar, o archivo pendiente/inválido — Fase 2 punto 2) — el dato existe pero no es confiable, nunca se lo cuenta como cobertura real ni como bloqueo real. |
-| `riesgo_documental` | Hoy cubierta (sin bloqueo ni revisión pendiente), pero al menos un tipo exigido pierde TODA cobertura en algún día futuro dentro del horizonte (un vencimiento sin candidato de respaldo detrás) — ver "puntos de quiebre" (punto 8). |
+| `riesgo_documental` | HOY cubierta (ningún tipo exigido con cero candidatos hoy, sin `bloqueo_confirmado` ni `requiere_revision`), pero al menos un tipo exigido pierde TODA cobertura en algún día FUTURO dentro del horizonte (un vencimiento sin candidato de respaldo detrás) — ver "puntos de quiebre" (punto 8). |
 | `sin_riesgos_detectados` | Cubierta todos los días del horizonte evaluado, sin documentos `REQUIERE_REVISION` en juego. |
+
+**`bloqueo_confirmado` y `riesgo_documental` no se solapan, por diseño, no por
+prioridad.** El primero exige "hoy" con cero candidatos; el segundo exige "hoy" con AL
+MENOS un candidato y un día futuro con cero. Son mutuamente excluyentes por definición —
+ninguna evaluación puede cumplir las dos condiciones a la vez. (Versión anterior de este
+documento definía `bloqueo_confirmado` como "algún día del horizonte", sin distinguir hoy
+de futuro; con esa redacción todo caso de `riesgo_documental` también cumplía
+`bloqueo_confirmado` — al tener precedencia más alta, `riesgo_documental` nunca se
+alcanzaba. Corregido acá: la distinción hoy/futuro es la que separa los dos estados, la
+precedencia de la sección 7 sólo importa para `requiere_revision` frente a cada uno.)
 
 ## 7. Precedencia del estado resumen
 
@@ -278,13 +313,18 @@ visible queda fuera de su universo, ver punto 4.2 — nunca expone sujetos ajeno
 | `hasta` | fecha | `oc.vigencia_hasta` | `hasta - desde <= 366` (422 si se excede) |
 | `detalle` | `resumen\|diario` | `resumen` | `diario` agrega `estado_por_dia` expandido (punto 8); `resumen` sólo trae el estado + intervalos + causas |
 
+En el ejemplo de abajo la OC ya está vigente (`oc.vigencia_desde = 2026-08-01`, anterior a
+`hoy = 2026-09-21`), por eso `desde = max(hoy, oc.vigencia_desde) = hoy`. Si la OC
+arrancara DESPUÉS de hoy, `desde` sería `oc.vigencia_desde`, no `hoy` — la regla de la
+tabla siempre manda, el ejemplo es sólo un caso particular de ella.
+
 **Respuesta (`detalle=resumen`)**
 
 ```json
 {
   "commitment_id": "OC-4587",
   "oc": {"cliente_id": "…", "locacion_id": "…", "tipo_servicio_id": "…",
-         "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"},
+         "vigencia_desde": "2026-08-01", "vigencia_hasta": "2026-10-05"},
   "desde": "2026-09-21", "hasta": "2026-10-05",
   "matriz": {"matriz_version_id": "…", "version": 3, "tipos_exigidos": ["persona", "vehiculo"]},
   "sujetos": { "...": "ver punto 4" },
@@ -317,10 +357,22 @@ expandiendo cada intervalo — pensado para pintar el Gantt día a día tal como
 sin que el backend tenga que recalcular nada distinto (es el mismo resultado por
 intervalo, sólo repetido por fecha).
 
-**Causas explicables**: todo estado que no sea `sin_riesgos_detectados` trae `causas[]`
-con, como mínimo, el tipo/requisito afectado y qué sujetos pierden o mantienen cobertura
-— nunca un estado "bloqueado" o "en riesgo" sin decir por qué, mismo estándar que ya exige
-`VeredictoRequisito.motivo` en el motor puro.
+**Causas explicables**: todo estado que no sea `sin_riesgos_detectados` trae `causas[]` —
+nunca un estado "bloqueado" o "en riesgo" sin decir por qué, mismo estándar que ya exige
+`VeredictoRequisito.motivo` en el motor puro. La forma de `causas[]` depende del estado:
+
+- `bloqueo_confirmado`, `requiere_revision`, `riesgo_documental`: por tipo/requisito
+  afectado, con `tipo_sujeto`, `requisito_definicion_id`, `requisito`, `motivo` y
+  `sujetos_que_pierden_cobertura`/`sujetos_que_mantienen_cobertura` (forma del ejemplo de
+  arriba) — hay una matriz resuelta y candidatos evaluados, así que hay tipo/requisito al
+  que apuntar.
+- `sin_matriz` y `pendiente_de_planificacion`: **no hay matriz resuelta ni candidatos
+  evaluados** (punto 6/7: son "no se puede evaluar", nunca llegan al motor puro), así que
+  no hay tipo/requisito que citar. `causas` es una lista de un solo elemento con sólo
+  `motivo` (string), sin `tipo_sujeto` ni `requisito_definicion_id`: p. ej. `[{"motivo":
+  "No hay matriz vigente para (cliente_id, locacion_id, tipo_servicio_id) al día de
+  ingreso de la OC"}]` o `[{"motivo": "No hay decisión visible para esta OC ni candidatos
+  en el alcance de quien consulta"}]`.
 
 ## 10. `GET /v1/consultas/proyeccion_documental_backlog`
 
@@ -334,7 +386,7 @@ universo; si no, no aparece, no se sustituye por "sin datos").
 |---|---|---|---|
 | `estado_oc` | `activo\|cancelado` | `activo` | mismo filtro que `backlog_oc` |
 | `estado` | uno de los 6 (punto 6), repetible | todos | filtra el resumen — p. ej. `?estado=bloqueo_confirmado&estado=riesgo_documental` para la vista "qué me preocupa" |
-| `horizonte_dias` | entero | `30` | ventana desde hoy para el cálculo del resumen de cada OC; `<= 366` |
+| `horizonte_dias` | entero | `30` | tope de ventana por OC; `<= 366` |
 | paginación | `offset`/`limit` | `0`/`50`, máx. `500` | igual convención que `backlog_oc` |
 
 **Respuesta**
@@ -346,7 +398,7 @@ universo; si no, no aparece, no se sustituye por "sin datos").
   "items": [
     {
       "commitment_id": "OC-4587",
-      "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05",
+      "vigencia_desde": "2026-08-01", "vigencia_hasta": "2026-10-05",
       "estado": "riesgo_documental",
       "primer_quiebre": "2026-09-30",
       "capacidad_documental_potencial_hoy": {"persona": 2, "vehiculo": 1}
@@ -363,6 +415,16 @@ Cada fila es el resumen de `proyeccion_documental` para esa OC sin `causas`/`int
 completos (eso se pide aparte, por OC, con el endpoint puntual — el backlog es para barrer
 y priorizar, no para explicar cada caso en detalle). `primer_quiebre` es la fecha del
 primer intervalo cuyo estado no es `sin_riesgos_detectados`, o `null` si no hay ninguno.
+
+**La ventana por OC es exactamente la del punto 9, nunca otra**: `desde = max(hoy,
+oc.vigencia_desde)`, `hasta = min(oc.vigencia_hasta, desde + horizonte_dias)` — así el
+`estado` de una OC en el backlog es SIEMPRE el mismo que devolvería consultarla
+puntualmente con ese `hasta` acotado; `horizonte_dias` sólo recorta cuánto del rango de la
+OC se mira, nunca corre la ventana antes de que la OC empiece. Una OC que arranca después
+de `hoy + horizonte_dias` (ej. una OC futura lejana) tiene `desde > hasta` — no entra en
+el cálculo de riesgo de esa vuelta; queda con `estado` según punto 4/6 igual (`sin_matriz`
+o `pendiente_de_planificacion` si corresponde) pero sin intervalos de cobertura que mirar
+tan lejos, y no cuenta como motivo para excluirla del backlog.
 
 ## 11. Límite de 366 días — dónde se aplica
 
@@ -403,6 +465,12 @@ consultas si queda ahí):**
   regresión específica: un `REQUIERE_REVISION` no debe filtrarse a `sin_riesgos_detectados`;
 - `riesgo_documental`: hoy verde, un vencimiento futuro sin respaldo → intervalo
   correcto, `causas` con el sujeto que pierde cobertura;
+- **regresión de la mutua exclusión (punto 6)**: un tipo exigido con cobertura hoy y
+  pérdida total de cobertura en un día futuro tiene que dar `riesgo_documental`, NUNCA
+  `bloqueo_confirmado` — el caso que exactamente distingue las dos definiciones;
+- `causas` de `sin_matriz`/`pendiente_de_planificacion` sin `tipo_sujeto` ni
+  `requisito_definicion_id`, sólo `motivo` (punto 9) — nunca el formato de las otras
+  causas;
 - `sin_riesgos_detectados` de punta a punta;
 - **última evaluación visible ≠ recálculo**: correr la proyección no modifica
   `evaluacion_habilitacion` (snapshot, veredicto, resultado) de la decisión que usó como
@@ -416,6 +484,10 @@ consultas si queda ahí):**
   `riesgo_documental` en otro → el resumen es `requiere_revision` (gana el peor).
 
 **`proyeccion_documental_backlog`:**
+- **misma OC, mismo estado**: el `estado` de una fila del backlog coincide con el que
+  devuelve `proyeccion_documental?commitment_id=…` para esa OC con `hasta` acotado a
+  `min(oc.vigencia_hasta, desde + horizonte_dias)` (punto 10) — nunca un resumen
+  diferente entre los dos endpoints para los mismos datos;
 - filtro por `estado` (uno y varios a la vez);
 - paginación real con más de una página;
 - alcance del supervisor: una OC sin ningún candidato en su universo no aparece;
