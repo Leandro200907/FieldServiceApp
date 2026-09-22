@@ -84,6 +84,37 @@
         "title": "BajaDeSujeto",
         "type": "object"
       },
+      "BandejaValidacionEvidenciaResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentoEnBandeja"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "BandejaValidacionEvidenciaResponse",
+        "type": "object"
+      },
       "CambiarCustodiaBody": {
         "properties": {
           "custodio_id": {
@@ -148,6 +179,37 @@
           }
         },
         "title": "CancelarOC",
+        "type": "object"
+      },
+      "CancelarOCResponse": {
+        "properties": {
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "estado",
+          "eventos"
+        ],
+        "title": "CancelarOCResponse",
         "type": "object"
       },
       "CargarDocumento": {
@@ -624,6 +686,89 @@
         "title": "DescartarArchivoDriveBody",
         "type": "object"
       },
+      "DocumentoEnBandeja": {
+        "properties": {
+          "archivo_scan_estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Scan Estado"
+          },
+          "archivo_validacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion"
+          },
+          "archivo_validacion_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion En"
+          },
+          "archivo_validacion_motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion Motivo"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "estado_confirmacion": {
+            "title": "Estado Confirmacion",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documento_id",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "estado_confirmacion",
+          "archivo_validacion",
+          "archivo_validacion_motivo",
+          "archivo_validacion_en",
+          "archivo_scan_estado",
+          "creado_en"
+        ],
+        "title": "DocumentoEnBandeja",
+        "type": "object"
+      },
       "ErrorEnvelope": {
         "properties": {
           "error": {
@@ -700,6 +845,36 @@
           "sujetos_propuestos"
         ],
         "title": "EvaluarHabilitacionBody",
+        "type": "object"
+      },
+      "FilaRechazada": {
+        "properties": {
+          "clave_origen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clave Origen"
+          },
+          "indice": {
+            "title": "Indice",
+            "type": "integer"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "indice",
+          "clave_origen",
+          "motivo"
+        ],
+        "title": "FilaRechazada",
         "type": "object"
       },
       "GenerarPaqueteBody": {
@@ -828,6 +1003,104 @@
         "title": "ImportarLoteOC",
         "type": "object"
       },
+      "ImportarLoteOCResponse": {
+        "properties": {
+          "detalle_filas_rechazadas": {
+            "items": {
+              "$ref": "#/components/schemas/FilaRechazada"
+            },
+            "title": "Detalle Filas Rechazadas",
+            "type": "array"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "filas_aceptadas": {
+            "title": "Filas Aceptadas",
+            "type": "integer"
+          },
+          "filas_rechazadas": {
+            "title": "Filas Rechazadas",
+            "type": "integer"
+          },
+          "filas_totales": {
+            "title": "Filas Totales",
+            "type": "integer"
+          },
+          "lote_id": {
+            "title": "Lote Id",
+            "type": "string"
+          },
+          "oc_actualizadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Actualizadas"
+          },
+          "oc_creadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Creadas"
+          },
+          "oc_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Oc Ids",
+            "type": "array"
+          },
+          "oc_modificadas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OcModificada"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Modificadas"
+          },
+          "ya_aplicado": {
+            "title": "Ya Aplicado",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lote_id",
+          "estado",
+          "filas_totales",
+          "filas_aceptadas",
+          "filas_rechazadas",
+          "detalle_filas_rechazadas",
+          "oc_ids",
+          "ya_aplicado",
+          "eventos"
+        ],
+        "title": "ImportarLoteOCResponse",
+        "type": "object"
+      },
       "InvalidarEvidenciaBody": {
         "properties": {
           "documento_id": {
@@ -846,6 +1119,27 @@
           "motivo"
         ],
         "title": "InvalidarEvidenciaBody",
+        "type": "object"
+      },
+      "InvalidarEvidenciaResponse": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "documento_id",
+          "eventos"
+        ],
+        "title": "InvalidarEvidenciaResponse",
         "type": "object"
       },
       "LineaDeMatriz": {
@@ -916,6 +1210,45 @@
           "refresh_token"
         ],
         "title": "LogoutRequest",
+        "type": "object"
+      },
+      "LogoutResponse": {
+        "properties": {
+          "revocado": {
+            "title": "Revocado",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revocado"
+        ],
+        "title": "LogoutResponse",
+        "type": "object"
+      },
+      "OcModificada": {
+        "properties": {
+          "campos_modificados": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Campos Modificados",
+            "type": "array"
+          },
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "evento_id": {
+            "title": "Evento Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commitment_id",
+          "campos_modificados",
+          "evento_id"
+        ],
+        "title": "OcModificada",
         "type": "object"
       },
       "OtorgarExcepcionBody": {
@@ -1691,9 +2024,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Logout V1 Auth Logout Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LogoutResponse"
                 }
               }
             },
@@ -2449,9 +2780,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cancelar Oc V1 Comandos Cancelar Oc Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CancelarOCResponse"
                 }
               }
             },
@@ -4516,9 +4845,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Importar Lote Oc V1 Comandos Importar Lote Oc Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImportarLoteOCResponse"
                 }
               }
             },
@@ -4629,9 +4956,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Invalidar Evidencia V1 Comandos Invalidar Evidencia Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/InvalidarEvidenciaResponse"
                 }
               }
             },
@@ -7181,9 +7506,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bandeja Validacion Evidencia V1 Consultas Bandeja Validacion Evidencia Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BandejaValidacionEvidenciaResponse"
                 }
               }
             },
