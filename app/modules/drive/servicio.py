@@ -40,6 +40,7 @@ from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
 from app.comun.paginacion import Pagina, envolver
+from app.comun.reloj import ahora_utc
 from app.config import settings
 from app.modules.drive.proveedor import ArchivoRemoto, ProveedorDeCarpeta, ProveedorNoDisponible
 from app.storage.contrato import Storage
@@ -296,8 +297,11 @@ def escanear(session: Session, identidad: Identidad, proveedor: ProveedorDeCarpe
             "VALUES (:t, :i, :n, :m, :mod, :h, :e, :c, CAST(:x AS jsonb), :mo, :d)"),
             {"t": t, "i": a.id_externo, "n": a.nombre, "m": a.mime, "mod": a.modificado, "h": a.hash, "e": estado, "c": confianza,
              "x": json.dumps(ext, default=str, ensure_ascii=False), "mo": motivo, "d": documento_id})
+    # B-10 (auditoría externa 2026-09-22): antes usaba `datetime.now()` (hora local del
+    # SO, inconsistente con el resto del dominio); `ahora_utc()` es el mismo reloj que ya
+    # usa el resto del sistema cuando no hay un `ahora` explícito de por medio.
     session.execute(text("UPDATE modulo1.configuracion_drive SET ultimo_escaneo_en = :ahora, ultimo_escaneo_resultado = CAST(:r AS jsonb) WHERE tenant_id = :t"),
-                    {"ahora": ahora or datetime.now().astimezone(), "r": json.dumps(r), "t": t})
+                    {"ahora": ahora or ahora_utc(), "r": json.dumps(r), "t": t})
     registrar_evento_interno(session, t, "DriveEscaneado", r, identidad.usuario_id)
     return {**r, "eventos": eventos + ["DriveEscaneado"]}
 

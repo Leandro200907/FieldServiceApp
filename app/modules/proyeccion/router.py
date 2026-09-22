@@ -138,10 +138,14 @@ def proyeccion_documental(
 class ItemBacklog(BaseModel):
     commitment_id: str
     referencia: str
+    oc_referencia: str | None
+    cliente_id: str
+    locacion_id: str
     vigencia_desde: date
     vigencia_hasta: date
     estado: Literal["sin_matriz", "pendiente_de_planificacion", "bloqueo_confirmado",
-                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados"]
+                    "requiere_revision", "riesgo_documental", "sin_riesgos_detectados",
+                    "vigencia_finalizada"]
     primer_quiebre: date | None
     capacidad_documental_potencial_hoy: dict[str, int]
     origen_calculo: Literal["ultima_decision_visible", "candidatos_del_alcance"]

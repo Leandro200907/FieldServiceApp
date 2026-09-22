@@ -13,7 +13,7 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 - **Rutas HTTP:** 89 operaciones sobre 88 paths bajo `/v1` (OpenAPI en `/docs`).
 - **Migraciones:** 24 archivos en `migrations/versions/`, un solo head: `0021_validacion_evidencia`.
-- **Tests:** 581 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
+- **Tests:** 599 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por

@@ -1,9 +1,12 @@
-# Proyección documental — diseño (sin implementar)
+# Proyección documental — implementado (4 endpoints en `main`)
 
-Documento de diseño para tres consultas nuevas bajo `GET /v1/consultas/…`. **Nada de esto
-está implementado todavía**: es la base para decidir alcance antes de tocar código,
-siguiendo el mismo patrón que ya cerró H-01..H-06 y la reauditoría (triage → aprobación →
-commit). No hay endpoints, no hay migración, no se regeneró `docs/openapi.json`.
+Documento de diseño para cuatro consultas bajo `GET /v1/consultas/…`, las cuatro ya
+implementadas y en `main` (ver puntos 14 y 15). El contrato vivo es
+`docs/HANDOFF_PROYECCION_ASTRA.md` + `docs/openapi.json` — este documento es el diseño y
+la referencia de vocabulario/precedencia, no una promesa de "todavía no existe". (B-09,
+auditoría externa 2026-09-22: el título anterior — "diseño, sin implementar" — quedó
+desactualizado desde que se mergearon los primeros tres endpoints y podía hacer creer que
+las rutas no existían.)
 
 1. `GET /v1/consultas/calendario_vigencias`
 2. `GET /v1/consultas/proyeccion_documental_backlog`
@@ -383,7 +386,15 @@ quiebres consecutivos:
 
 - `vigente_hasta + 1` de cada documento/acreditación/inducción vigente de cada candidato
   del conjunto (punto 4) que cubra algún requisito exigido — ahí deja de cubrir.
-- `vigente_hasta + 1` de cada excepción/constancia con vigencia acotada que esté en juego.
+- **`vigente_desde` de cada documento/acreditación/inducción, cuando cae dentro del
+  rango** (corrección B-01, auditoría externa 2026-09-22: faltaba en la versión anterior
+  de este punto — `evaluar_documento_en_periodo` ya rechazaba `periodo_desde <
+  vigente_desde`, pero sin este quiebre un alta a mitad de ventana se evaluaba con la
+  fecha de inicio del tramo, antes del alta, y quedaba roja todo el tramo aunque después
+  cubriera) — ahí EMPIEZA a cubrir.
+- `vigencia + 1` de cada excepción/constancia con vigencia acotada que esté en juego
+  (corrección B-02: el motor las reutiliza desde esta revisión — antes las excluía "a
+  propósito", pese a que este mismo punto siempre las había listado).
 - la fecha de inicio del rango pedido (`desde`) y el día siguiente a su fin (`hasta + 1`,
   como límite, no se evalúa).
 - **la matriz NO agrega puntos de quiebre dentro del rango de una OC ya existente** (regla
@@ -504,7 +515,7 @@ universo; si no, no aparece, no se sustituye por "sin datos").
 | Parámetro | Tipo | Default | Notas |
 |---|---|---|---|
 | `estado_oc` | `activo\|cancelado` | `activo` | mismo filtro que `backlog_oc` |
-| `estado` | uno de los 6 (punto 6), repetible | todos | filtra el resumen — p. ej. `?estado=bloqueo_confirmado&estado=riesgo_documental` para la vista "qué me preocupa" |
+| `estado` | uno de los 6 (punto 6) + `vigencia_finalizada` (más abajo), repetible | todos | filtra el resumen — p. ej. `?estado=bloqueo_confirmado&estado=riesgo_documental` para la vista "qué me preocupa" |
 | `horizonte_dias` | entero | `30` | tope de ventana por OC; `<= 366` |
 | paginación | `offset`/`limit` | `0`/`50`, máx. `500` | igual convención que `backlog_oc` |
 
@@ -663,7 +674,9 @@ consultas si queda ahí):**
   entra igual al backlog con ventana completa desde su propia `vigencia_desde` — nunca
   `desde > hasta`, nunca excluida por estar lejos (regresión directa del punto 10);
 - **OC ya vencida** (`activo` pero `oc.vigencia_hasta < desde`): entra igual, sin
-  intervalos, `primer_quiebre: null`, nunca se cae del backlog;
+  intervalos, `primer_quiebre: null`, nunca se cae del backlog — desde la corrección
+  B-07, con `estado = vigencia_finalizada` (antes `pendiente_de_planificacion`, ver
+  punto 16);
 - `horizonte_dias > 366` → 422.
 
 **Transversal a los tres:**
@@ -899,5 +912,79 @@ evidencia todavía de que haga falta (no optimizar sin medir).
   como parámetro de este endpoint (listar → tomar `referencia` → pedir detalle → 200);
 - `test_detalle_no_escribe_nada`: ninguna rama persiste, crea tareas ni emite eventos.
 
-Corridos junto al resto de la suite de proyección: **41 tests en
-`tests/test_proyeccion_documental.py`, 581 en la suite completa, 0 fallados.**
+Corridos junto al resto de la suite de proyección: al cierre de este documento, **65
+tests en `tests/test_proyeccion_documental.py`, 599 en la suite completa, 0 fallados**
+(incluye las correcciones del punto 16).
+
+## 16. Correcciones de la auditoría externa (2026-09-22)
+
+Una auditoría externa sobre el backlog y la proyección encontró 10 hallazgos (B-01 a
+B-10). Verificados uno por uno contra el código antes de tocar nada — 9 eran reales, uno
+(B-04, calendario ≠ intervalos de cobertura) ya estaba resuelto y documentado en el punto
+2.1. Corregidos, con tests contra PostgreSQL real:
+
+- **B-01 (P1, `app/core/proyeccion.py`)**: el motor no quebraba en `vigente_desde` — un
+  alta a mitad de ventana quedaba roja todo el tramo. Corregido en `puntos_de_quiebre`
+  (punto 8, arriba) y `calcular_intervalos`. Tests:
+  `test_documento_que_arranca_a_mitad_de_ventana_quiebra_en_vigente_desde`
+  (`tests/test_motor_proyeccion.py`) y su contraparte HTTP en
+  `tests/test_proyeccion_documental.py`.
+- **B-02 (P1, `app/core/proyeccion.py`)**: el motor ignoraba excepciones y constancias
+  pese a que el punto 8 siempre las listó como quiebres — podía dar `bloqueo_confirmado`
+  donde `cobertura_oc` (que sí las usa, vía `app/core/orquestacion.py::_evaluar_requisito`)
+  daría habilitado. Corregido reutilizando `resolver_constancia_aplicable`/
+  `excepcion_tiene_efecto` (`app/core/evaluacion.py`) y `cargar_constancias`/
+  `cargar_excepciones` (antes privadas en `app/core/orquestacion.py`, ahora públicas,
+  mismo criterio que `cargar_evidencias`) — misma precedencia que el motor completo:
+  constancia sólo cubre bloqueante_duro, excepción nunca vuelve verde el veredicto pero sí
+  habilita `asignable`/capacidad, y ninguna de las dos rescata `requiere_revision`. Ambas
+  agregan sus propios puntos de quiebre por vigencia acotada. 7 tests nuevos en
+  `tests/test_motor_proyeccion.py` (motor puro) + 2 en `tests/test_proyeccion_documental.py`
+  (end-to-end, carga real).
+- **B-03 (P1, `proyeccion_documental`)**: el default de `hasta` era la vigencia completa
+  de la OC — cualquier OC de más de 366 días explotaba 422 con la llamada más obvia (sin
+  parámetros). Corregido: el default ahora se recorta a `min(oc.vigencia_hasta, desde +
+  366)`; un `hasta` explícito por encima del tope sigue dando 422 igual que antes. Nota:
+  esta corrección NO se extendió al caso simétrico de una OC ya terminada sin `hasta`
+  explícito (sigue dando 422 vía `hasta < desde` en `_exigir_rango`) — el backlog sí
+  resuelve ese caso (B-07), el endpoint puntual todavía no; queda pendiente si hace falta.
+- **B-05 (P2, `proyeccion_documental_backlog`)**: el backlog sólo traía `commitment_id`
+  (la clave técnica) — el frontend no podía armar "OC 45000218 · Cliente Norte" sin otro
+  GET. `ItemBacklog` suma `oc_referencia` (columna `oc.referencia`, nullable), `cliente_id`
+  y `locacion_id` (cambio aditivo, no rompe nada existente).
+- **B-06 (P2, parcial)**: el backlog recorre TODAS las OC activas antes de paginar, y
+  `cargar_evidencias` traía evidencia de todo el tenant para los requisitos en juego, no
+  sólo de los candidatos de cada OC. Corregido lo segundo: `cargar_evidencias` suma un
+  filtro opcional `sujeto_ids` (default `None` = comportamiento anterior, tal como lo
+  sigue usando `evaluar_compromiso` sin pasarlo); `proyeccion_documental` y el backlog lo
+  pasan con `conjunto["candidatos"]`. **Lo primero queda sin resolver a propósito**:
+  paginar antes de calcular exige conocer el `estado` de cada OC para poder filtrar por
+  `estado`/ordenar, lo que a su vez exige haberlas calculado — resolverlo bien (p. ej.
+  SQL-side sólo cuando no hay filtro de `estado` y el alcance es total) es un cambio de
+  arquitectura aparte, de mayor riesgo, que no se apuró en esta tanda por no comprometer
+  la corrección de un endpoint que ya alimenta decisiones. Test de regresión de que acotar
+  evidencia no pierde cobertura real: `test_backlog_evidencia_acotada_a_candidatos_no_pierde_cobertura`.
+- **B-07 (P2, `proyeccion_documental_backlog`)**: una OC activa cuya vigencia ya terminó
+  entraba con el MISMO `estado` que "todavía no hay candidatos ni decisión"
+  (`pendiente_de_planificacion`) — mentira semántica según la auditoría. Estado nuevo,
+  **sólo en el backlog** (`ItemBacklog.estado`, no en `ProyeccionDocumentalResponse.estado`
+  — ver nota de B-03 arriba): `vigencia_finalizada`. Sumado a `ESTADOS_RESUMEN` para que
+  `?estado=vigencia_finalizada` filtre correctamente. Test:
+  `test_backlog_oc_ya_vencida_no_es_pendiente_de_planificacion`.
+- **B-09 (P3, este documento)**: el título decía "diseño (sin implementar)" — desactualizado
+  desde que se mergearon los primeros tres endpoints, podía hacer creer que las rutas no
+  existían. Corregido (encabezado de este documento).
+- **B-10 (P3, `app/modules/drive/servicio.py`)**: `escanear()` usaba `datetime.now().astimezone()`
+  (hora local del SO) como fallback cuando no se pasaba `ahora` explícito — inconsistente
+  con el resto del dominio, que siempre pasa un `ahora`/usa `ahora_utc()`
+  (`app/comun/reloj.py`). El único caller que no lo pasaba era
+  `POST /v1/comandos/escanear_drive` (`app/modules/capacidades_router.py`) — el worker
+  programado sí lo pasaba. Corregido en ambos lados.
+
+**B-08 (P3, `POST /v1/auth/login`)** no es de este documento (proyección/backlog) pero se
+corrigió en la misma tanda por venir en el mismo informe: login no tenía ningún rate
+limit, a diferencia del link público de paquetes. Se extrajo `RateLimiter`
+(`app/modules/paquete/servicio.py`) a `app/comun/ratelimit.py` para reusarlo sin que auth
+dependa de un módulo de negocio ajeno, y se aplicó a `/v1/auth/login` por origen (mismo
+criterio anti-spoofing de `app/comun/red.py` que ya usaba paquetes), 30/min. Ver
+`docs/HANDOFF_PROYECCION_ASTRA.md` §8 para el resumen de contrato de cara a Astra.

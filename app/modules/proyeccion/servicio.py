@@ -20,7 +20,9 @@ from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
 from app.core.orquestacion import (
     buscar_oc,
+    cargar_constancias,
     cargar_evidencias,
+    cargar_excepciones,
     definiciones_de,
     lineas_efectivas,
     matriz_vigente,
@@ -32,6 +34,7 @@ LIMITE_DIAS = 366
 ESTADOS_RESUMEN = (
     "sin_matriz", "pendiente_de_planificacion", "bloqueo_confirmado",
     "requiere_revision", "riesgo_documental", "sin_riesgos_detectados",
+    "vigencia_finalizada",
 )
 
 # `calendario_vigencias` amplía deliberadamente a técnico (punto 3 del documento): ya ve
@@ -205,9 +208,11 @@ def conjunto_de_sujetos(session: Session, identidad: Identidad, commitment_id: s
 # --------------------------------------------------------------------------- motor por OC
 
 
-def _tipos_y_requisitos(session: Session, tenant_id: str, commitment_id: str, oc: dict[str, Any]) -> tuple[dict[str, list[str]], dict[str, str], dict[str, Any]] | None:
+def _tipos_y_requisitos(session: Session, tenant_id: str, commitment_id: str, oc: dict[str, Any]) -> tuple[dict[str, list[str]], dict[str, str], dict[str, str], dict[str, Any]] | None:
     """Requisitos exigidos por tipo (fijos para toda la OC, punto 1), nombres para causas,
-    y la matriz vigente. `None` si no hay matriz vigente al día de ingreso."""
+    clasificación por requisito (B-02: la necesita el motor para constancias/excepciones —
+    sólo bloqueante_duro admite constancia, sólo excepcionable admite excepción con
+    efecto), y la matriz vigente. `None` si no hay matriz vigente al día de ingreso."""
     matriz = matriz_vigente(session, tenant_id, oc["cliente_id"], oc["locacion_id"], oc["tipo_servicio_id"], oc["vigencia_desde"])
     if matriz is None:
         return None
@@ -215,13 +220,15 @@ def _tipos_y_requisitos(session: Session, tenant_id: str, commitment_id: str, oc
     definiciones = definiciones_de(session, tenant_id, list(lineas))
     requisitos_por_tipo: dict[str, list[str]] = {}
     nombres: dict[str, str] = {}
+    clasificaciones: dict[str, str] = {}
     for req_id, linea in lineas.items():
         d = definiciones.get(req_id)
         if d is None:
             continue
         requisitos_por_tipo.setdefault(d["tipo_sujeto_aplicable"], []).append(req_id)
         nombres[req_id] = d["nombre"]
-    return requisitos_por_tipo, nombres, {"matriz_version_id": str(matriz["matriz_version_id"]), "version": matriz["version"]}
+        clasificaciones[req_id] = linea["clasificacion"]
+    return requisitos_por_tipo, nombres, clasificaciones, {"matriz_version_id": str(matriz["matriz_version_id"]), "version": matriz["version"]}
 
 
 def _resumen_desde_intervalos(intervalos: list[Intervalo]) -> tuple[str, date | None, list[str]]:
@@ -275,7 +282,10 @@ def proyeccion_documental(
         raise NoEncontrado("OC inexistente", {"commitment_id": commitment_id})
     hoy = hoy_del_tenant(session, tenant_id)
     desde = desde or max(hoy, oc["vigencia_desde"])
-    hasta = hasta or oc["vigencia_hasta"]
+    # B-03: el default de `hasta` es la vigencia de la OC, pero recortado al tope de 366
+    # días — antes una OC de más de un año explotaba 422 con la llamada más obvia (sin
+    # parámetros). Un `hasta` explícito que exceda el tope sigue dando 422 en `_exigir_rango`.
+    hasta = hasta or min(oc["vigencia_hasta"], desde + timedelta(days=LIMITE_DIAS))
     if desde < oc["vigencia_desde"]:
         raise ErrorDeDominio("`desde` no puede ser anterior a la vigencia de la OC",
                              {"desde": str(desde), "oc_vigencia_desde": str(oc["vigencia_desde"])})
@@ -308,17 +318,24 @@ def proyeccion_documental(
         # Hay matriz resuelta (si no, ya se salió arriba con `sin_matriz`) — se informa
         # igual: `pendiente_de_planificacion` es "falta el conjunto de sujetos", no "no
         # se sabe qué exige la OC". `matriz` sólo es `null` cuando el estado es `sin_matriz`.
-        requisitos_por_tipo_pendiente, _nombres_pendiente, version_matriz_pendiente = resultado_tipos
+        requisitos_por_tipo_pendiente, _nombres_pendiente, _clasif_pendiente, version_matriz_pendiente = resultado_tipos
         salida["estado"] = "pendiente_de_planificacion"
         salida["matriz"] = {**version_matriz_pendiente, "tipos_exigidos": sorted(requisitos_por_tipo_pendiente)}
         salida["intervalos"] = []
         salida["causas"] = _causa_sin_evaluar("No hay decisión visible para esta OC ni candidatos en el alcance de quien consulta")
         return salida
 
-    requisitos_por_tipo, nombres, version_matriz = resultado_tipos
+    requisitos_por_tipo, nombres, clasificaciones, version_matriz = resultado_tipos
     definiciones = definiciones_de(session, tenant_id, [r for reqs in requisitos_por_tipo.values() for r in reqs])
-    evidencias = cargar_evidencias(session, tenant_id, definiciones)
-    intervalos = calcular_intervalos(conjunto["candidatos"], requisitos_por_tipo, nombres, evidencias, desde, hasta)
+    # B-06: acota a los candidatos de ESTA OC, no a todo el tenant con ese requisito.
+    evidencias = cargar_evidencias(session, tenant_id, definiciones, [c.sujeto_id for c in conjunto["candidatos"]])
+    constancias = cargar_constancias(session, tenant_id, str(oc["cliente_id"]), date.min)
+    excepciones = cargar_excepciones(session, tenant_id, commitment_id, date.min)
+    intervalos = calcular_intervalos(
+        conjunto["candidatos"], requisitos_por_tipo, nombres, evidencias, desde, hasta,
+        clasificaciones=clasificaciones, constancias=constancias, excepciones=excepciones,
+        cliente_id=str(oc["cliente_id"]), commitment_id=commitment_id,
+    )
     estado, _primer_quiebre, _motivos = _resumen_desde_intervalos(intervalos)
     salida["matriz"] = {**version_matriz, "tipos_exigidos": sorted(requisitos_por_tipo)}
     salida["estado"] = estado
@@ -357,7 +374,7 @@ def proyeccion_documental_backlog(
 
     ocs = session.execute(
         text(
-            "SELECT oc_id, clave_origen, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta "
+            "SELECT oc_id, clave_origen, referencia, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta "
             "FROM modulo1.oc WHERE tenant_id = :t AND estado = :eo ORDER BY clave_origen"
         ),
         {"t": tenant_id, "eo": estado_oc},
@@ -377,6 +394,9 @@ def proyeccion_documental_backlog(
         fila: dict[str, Any] = {
             "commitment_id": commitment_id,
             "referencia": f"oc:{commitment_id}",
+            # B-05: para que el frontend arme "OC 45000218 · Cliente Norte" sin otro GET.
+            "oc_referencia": oc["referencia"],
+            "cliente_id": str(oc["cliente_id"]), "locacion_id": str(oc["locacion_id"]),
             "vigencia_desde": oc["vigencia_desde"], "vigencia_hasta": oc["vigencia_hasta"],
             "origen_calculo": conjunto["origen"],
         }
@@ -394,16 +414,25 @@ def proyeccion_documental_backlog(
             fila["motivos_resumidos"] = ["No hay decisión visible para esta OC ni candidatos en el alcance de quien consulta"]
         elif hasta < desde:
             # OC activa cuya ventana ya terminó antes de `desde` (punto 10): sin intervalos
-            # que calcular — no hay nada (ya) que evaluar, mismo estado que "todavía no".
-            fila["estado"] = "pendiente_de_planificacion"
+            # que calcular. B-07: esto NO es "todavía no hay candidatos/decisión" —
+            # `pendiente_de_planificacion` mentía semánticamente acá (auditoría externa
+            # 2026-09-22) — es un estado propio, estructural, igual que `sin_matriz`.
+            fila["estado"] = "vigencia_finalizada"
             fila["primer_quiebre"] = None
             fila["capacidad_documental_potencial_hoy"] = {}
             fila["motivos_resumidos"] = ["La vigencia de la OC ya terminó antes del inicio de la ventana evaluada"]
         else:
-            requisitos_por_tipo, nombres, _ = resultado_tipos
+            requisitos_por_tipo, nombres, clasificaciones, _ = resultado_tipos
             definiciones = definiciones_de(session, tenant_id, [r for reqs in requisitos_por_tipo.values() for r in reqs])
-            evidencias = cargar_evidencias(session, tenant_id, definiciones)
-            intervalos = calcular_intervalos(conjunto["candidatos"], requisitos_por_tipo, nombres, evidencias, desde, hasta)
+            # B-06: acota a los candidatos de ESTA OC, no a todo el tenant con ese requisito.
+            evidencias = cargar_evidencias(session, tenant_id, definiciones, [c.sujeto_id for c in conjunto["candidatos"]])
+            constancias = cargar_constancias(session, tenant_id, str(oc["cliente_id"]), date.min)
+            excepciones = cargar_excepciones(session, tenant_id, commitment_id, date.min)
+            intervalos = calcular_intervalos(
+                conjunto["candidatos"], requisitos_por_tipo, nombres, evidencias, desde, hasta,
+                clasificaciones=clasificaciones, constancias=constancias, excepciones=excepciones,
+                cliente_id=str(oc["cliente_id"]), commitment_id=commitment_id,
+            )
             estado, primer_quiebre, motivos = _resumen_desde_intervalos(intervalos)
             fila["estado"] = estado
             fila["primer_quiebre"] = primer_quiebre
@@ -458,7 +487,7 @@ def _matrices_aplicables(
         resultado_tipos = _tipos_y_requisitos(session, tenant_id, commitment_id, oc)
         if resultado_tipos is None:
             continue
-        requisitos_por_tipo, _nombres, version_matriz = resultado_tipos
+        requisitos_por_tipo, _nombres, _clasificaciones, version_matriz = resultado_tipos
         if requisito_definicion_id in requisitos_por_tipo.get(tipo_sujeto, []):
             matches.append({
                 "commitment_id": commitment_id,

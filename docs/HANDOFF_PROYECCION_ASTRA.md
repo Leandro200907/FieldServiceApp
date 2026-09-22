@@ -244,3 +244,32 @@ implementado en la rama `backend/detalle-proyeccion-documental`:
   passed, 0 failed**.
 - Sigue sin declararse integrado a ninguna pantalla — misma disciplina que el resto de
   este documento.
+
+## 9. Addendum — correcciones de auditoría externa (2026-09-22): 3 cambios de contrato
+
+Una auditoría externa (Grok) sobre el backlog/proyección encontró 10 hallazgos; el detalle
+completo de los 9 confirmados y su corrección está en `docs/PROYECCION_DOCUMENTAL.md` §16.
+Acá sólo los que **cambian el contrato HTTP** — el resto son correcciones de cálculo
+internas, sin campos nuevos ni renombrados:
+
+1. **`ItemBacklog` suma 3 campos** (aditivo): `oc_referencia` (string o `null` — la
+   `referencia` de negocio de la OC, distinta de `referencia` = la referencia opaca del
+   punto 8), `cliente_id`, `locacion_id`. Antes sólo traía `commitment_id`
+   (`clave_origen`) — no alcanzaba para mostrar "OC 45000218 · Cliente Norte" sin otro GET.
+2. **`ItemBacklog.estado` suma un 7º valor**: `vigencia_finalizada` — una OC activa cuya
+   vigencia ya terminó antes de la ventana evaluada. Antes reusaba
+   `pendiente_de_planificacion` para este caso (mentira semántica según la auditoría);
+   ahora tiene su propio valor. **`ProyeccionDocumentalResponse.estado` (el endpoint
+   puntual) sigue con los 6 de siempre** — no es simétrico todavía, ver la nota del punto
+   B-03 en `docs/PROYECCION_DOCUMENTAL.md` §16.
+3. **`capacidad_documental_potencial(_hoy)` y `estado` pueden variar para la misma OC**
+   frente a lo que ya se haya visto/cacheado antes de este commit, si esa OC tiene
+   constancias o excepciones otorgadas en juego (B-02): antes el motor las ignoraba por
+   completo. Esto es una corrección de EXACTITUD, no un campo nuevo — ningún tipo de dato
+   cambia, pero un número que antes daba 0 candidatos puede ahora dar 1 (o un `estado`
+   `bloqueo_confirmado` puede pasar a `sin_riesgos_detectados`) para la misma OC, mismos
+   datos de evidencia, si hay una constancia/excepción vigente de por medio.
+
+Diff de operaciones: **ninguna** — los 10 hallazgos no agregan ni sacan rutas, sólo tocan
+schemas existentes (aditivo) y corrigen cálculo. Suite completa tras esta tanda: **599
+passed, 0 failed**.
