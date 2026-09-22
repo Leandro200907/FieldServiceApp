@@ -2,17 +2,17 @@
   "prepared_on": "2026-09-20",
   "status": "backend-contract-current-integration-in-progress",
   "backend_closed": false,
-  "declared_commit": "ee63080bd1a3e22b6298c03e44170ffdf401fec2",
+  "declared_commit": "f098d2d0311df7e7da43bbe4f690371fffc3f8d7",
   "openapi_info": {
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
     "x-migracion-head": "0021_validacion_evidencia"
   },
-  "operations": 88,
-  "paths": 87,
+  "operations": 89,
+  "paths": 88,
   "success_schemas": {
-    "structured": 84,
+    "structured": 85,
     "open_objects": 0,
     "empty_by_design": 4
   },
@@ -25,37 +25,48 @@
   "new_since_bbf42b5": [
     "GET /v1/consultas/calendario_vigencias",
     "GET /v1/consultas/proyeccion_documental",
-    "GET /v1/consultas/proyeccion_documental_backlog"
+    "GET /v1/consultas/proyeccion_documental_backlog",
+    "GET /v1/consultas/detalle_proyeccion_documental"
+  ],
+  "new_since_ee63080": [
+    "GET /v1/consultas/detalle_proyeccion_documental (Q-DOC-03) — referencia opaca (evidencia:{categoria}:{id} u oc:{commitment_id}) emitida sin cambios por los tres endpoints de arriba, campo `referencia` nuevo en cada uno. Ver docs/HANDOFF_PROYECCION_ASTRA.md §8/§9 del backend."
   ],
   "blocking_findings_from_review_db400e6": {
     "A-01": "resuelto (transferencia de custodia futura, ver docs/PROYECCION_DOCUMENTAL.md §2.1 e historial de commits del backend)",
     "A-02": "resuelto (contradicciones de docs/PROYECCION_DOCUMENTAL.md corregidas: ventana unificada, horizonte de OC futura, ejemplo de primer_quiebre, distinción intervalo/resumen)",
     "A-03": "resuelto (401 de /v1/storage/{firma} con Bearer inválido, ahora documentado)"
   },
+  "fixed_since_ee63080_auditoria_externa_2026_09_22": {
+    "descripcion": "9 hallazgos confirmados (B-01 a B-10, B-04 no era bug) + una segunda revisión que señaló la asimetría B-03/B-07, resuelta explícitamente (opción A, simetría). Detalle completo: docs/PROYECCION_DOCUMENTAL.md §16 del backend.",
+    "cambios_de_contrato": [
+      "ItemBacklog suma oc_referencia (string|null), cliente_id, locacion_id — aditivo (B-05)",
+      "estado (ItemBacklog Y ProyeccionDocumentalResponse) suma un 7º valor: vigencia_finalizada — una OC ya vencida ya no da 422 en el endpoint puntual ni reusa pendiente_de_planificacion en el backlog (B-07, y su simetría en el puntual)",
+      "capacidad_documental_potencial(_hoy) y estado pueden variar para la misma OC frente a corridas anteriores si hay constancias/excepciones otorgadas en juego (B-02: antes el motor las ignoraba) — no es un campo nuevo, es una corrección de exactitud"
+    ]
+  },
   "still_not_covered": [
-    "Q-DOC-03 (detalle de tramo del calendario por referencia opaca) sigue sin endpoint — ni en el diseño ni en el código. proyeccion_documental sirve el detalle de una fila de backlog (mismo commitment_id), pero no el de un ítem individual de calendario_vigencias.",
-    "calendario_vigencias NO cruza contra matriz/OC por diseño (docs/PROYECCION_DOCUMENTAL.md §2.1) — no puede cumplir la expectativa de Q-DOC-01 de traer 'contexto de aplicabilidad' ni un estado sin_evidencia. Confirmado por escrito, no resuelto — ver ese mismo documento para las dos alternativas propuestas (combinar en el cliente, o un cuarto endpoint futuro)."
+    "calendario_vigencias NO cruza contra matriz/OC por diseño (docs/PROYECCION_DOCUMENTAL.md §2.1) — como LISTA sigue sin poder traer 'contexto de aplicabilidad' ni un estado sin_evidencia para cada fila. PARCIALMENTE MITIGADO por Q-DOC-03: para UN ítem puntual (no la lista completa), `detalle_proyeccion_documental?referencia=evidencia:...` sí devuelve `aplicabilidad`/`matrices_aplicables` a demanda. Si se necesita esa combinación para TODA la lista en una sola respuesta, sigue siendo una decisión de producto pendiente (combinar N+1 llamadas en el cliente, o un cambio de contrato de calendario_vigencias — ninguno decidido)."
   ],
   "sources": [
     {
       "file": "backend/docs/openapi.json",
-      "sha256": "aa54163d0dd78aed03df52507c2464a1c8fdf55aea2e9005285e1c166340f37b"
+      "sha256": "7ffa1088fe57c216c438b8bb9773711149f1306d825359bd58288131f4689537"
     },
     {
       "file": "backend/docs/HANDOFF_FRONTEND.md",
-      "sha256": "f4f7f0248773f65deffcb118be99ce263ab6d55ae3ba6fd8c48b208582ad120a"
+      "sha256": "f2eded55618948c295e922f62f46742a90856f5be7ef1eca9eba92fe8b3ce8c5"
     },
     {
       "file": "backend/docs/HANDOFF_PROYECCION_ASTRA.md",
-      "sha256": "569ac91cac6243cf76ada596ec877b49441152244fe5270a4bd1e1c41f0cc7b3"
+      "sha256": "87b4c213ce4ce6b24bd39ca40b3f1ac2c282914c72961f82a2b8b63570c705cb"
     },
     {
       "file": "backend/docs/PROYECCION_DOCUMENTAL.md",
-      "sha256": "9dff9cf549957365723064eac88b9345d9d0704cf50ebaed8fbfa488879e2d52"
+      "sha256": "b7e87d1914e6e9c8f4de83f0f11968de196b7451bdb1728f976ef0f1443fab49"
     },
     {
       "file": "backend/README.md",
-      "sha256": "df2a4c019e2bd1852224f003bdd1e2725c0ec5a4870437598fe772d2a3688014"
+      "sha256": "0e17dc4add049a892d9ba02dbc124d7cf40d0914a8c1656d68e75ada5e31a34a"
     }
   ],
   "sources_note": "Las entradas de la línea base anterior (especificaciones/*.md, DECISIONES_DOMINIO.md, el informe y el zip de la auditoría bbf42b5) no están presentes en este repo con esos nombres/rutas y se retiraron de esta lista en vez de dejar hashes no verificables. Si existen en otro lugar, agregarlas de nuevo con su hash real.",

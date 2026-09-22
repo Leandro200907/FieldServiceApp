@@ -11,6 +11,10 @@ import './planning.css';
 const stateLabels: Record<ProjectionState, string> = {
   sin_riesgos_detectados: 'Sin riesgos detectados', riesgo_documental: 'Riesgo documental', bloqueo_confirmado: 'Bloqueo confirmado',
   pendiente_de_planificacion: 'Pendiente de planificación', sin_matriz: 'Sin matriz', requiere_revision: 'Requiere revisión',
+  // B-07 (backend): estado propio para una OC cuya vigencia ya terminó — antes reusaba
+  // `pendiente_de_planificacion`. Su simetría en el endpoint puntual (segunda revisión
+  // externa) hace que este 7º valor aparezca en los dos lugares donde se usa `ProjectionState`.
+  vigencia_finalizada: 'Vigencia finalizada',
 };
 function displayDate(value: string | null | undefined) { return value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`)) : 'Sin fecha'; }
 function capacityLabel(capacity: Record<string, number>) {
@@ -48,7 +52,10 @@ export function BacklogProjectionScreen({ roles }: { roles: readonly string[] })
       <section className="panel projection-summary"><div><p className="eyebrow">Hoy</p><strong>{projection.data?.hoy}</strong></div><div><p className="eyebrow">Horizonte</p><strong>{projection.data?.horizonte_dias} días</strong></div><div><p className="eyebrow">Total de OC</p><strong>{projection.data?.total}</strong></div></section>
       <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>OC</th><th>Fechas previstas</th><th>Estado documental</th><th>Primer día de riesgo</th><th>Base de la proyección</th><th>Capacidad documental potencial</th><th>Motivos</th></tr></thead><tbody>
         {projection.data?.items.map(row => <tr key={row.commitment_id} className={selected === row.commitment_id ? 'selected-row' : ''}>
-          <td><strong>{row.commitment_id}</strong></td>
+          {/* F-05: antes sólo mostraba `commitment_id` (la clave técnica, `clave_origen`)
+              — sin referencia de negocio ni cliente, la tabla era ilegible con datos
+              reales. `oc_referencia`/`cliente_id` los suma el backend (B-05). */}
+          <td><strong>{row.oc_referencia || row.commitment_id}</strong><small>{row.commitment_id} · {row.cliente_id}</small></td>
           <td>{displayDate(row.vigencia_desde)} — {displayDate(row.vigencia_hasta)}</td>
           <td><span className={`projection-status projection-${row.estado}`}>{stateLabels[row.estado]}</span></td>
           <td>{displayDate(row.primer_quiebre)}</td>

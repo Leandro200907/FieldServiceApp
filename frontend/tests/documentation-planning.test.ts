@@ -23,6 +23,16 @@ describe('temporary documentary planning mock (real contract shape)', () => {
     expect(enSuVencimiento.items.find(item => item.id === 'cal-emp-01')).toBeDefined();
   });
 
+  it('F-05: cada fila del backlog trae oc_referencia/cliente_id/locacion_id además de commitment_id', async () => {
+    const projection = await temporaryMockAccess.readBacklogProjection({});
+    for (const row of projection.items) {
+      expect(typeof row.cliente_id).toBe('string');
+      expect(typeof row.locacion_id).toBe('string');
+      expect(row.oc_referencia === null || typeof row.oc_referencia === 'string').toBe(true);
+      expect(row.referencia).toBe(`oc:${row.commitment_id}`);
+    }
+  });
+
   it('derives declarada/vencida/verificada without ever needing proxima_a_vencer or sin_evidencia', async () => {
     const calendar = await temporaryMockAccess.readCalendar({ from: '2026-09-01', to: '2026-10-31' });
     const states = new Set(calendar.items.map(deriveVisualState));

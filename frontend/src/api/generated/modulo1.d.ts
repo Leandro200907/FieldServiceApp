@@ -1012,6 +1012,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/consultas/detalle_proyeccion_documental": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle Proyeccion Documental */
+        get: operations["detalle_proyeccion_documental_v1_consultas_detalle_proyeccion_documental_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/consultas/documentos": {
         parameters: {
             query?: never;
@@ -2593,6 +2610,106 @@ export interface components {
             /** Eventos */
             eventos: string[];
         };
+        /** DetalleEvidenciaResponse */
+        DetalleEvidenciaResponse: {
+            /** Advertencia */
+            advertencia: string;
+            /**
+             * Aplicabilidad
+             * @enum {string}
+             */
+            aplicabilidad: "exigida_por_oc" | "informativa";
+            /** Archivo Validacion */
+            archivo_validacion: string | null;
+            /**
+             * Categoria
+             * @enum {string}
+             */
+            categoria: "documento" | "competencia" | "induccion";
+            /** Estado Confirmacion */
+            estado_confirmacion: string;
+            /**
+             * Hoy
+             * Format: date
+             */
+            hoy: string;
+            /** Id */
+            id: string;
+            /** Identificador Natural */
+            identificador_natural: string | null;
+            /** Matrices Aplicables */
+            matrices_aplicables: components["schemas"]["MatrizAplicable"][];
+            /** Referencia */
+            referencia: string;
+            /** Requisito */
+            requisito: string | null;
+            /** Requisito Definicion Id */
+            requisito_definicion_id: string | null;
+            /** Sujeto Id */
+            sujeto_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tipo: "evidencia";
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+            /**
+             * Vigente Desde
+             * Format: date
+             */
+            vigente_desde: string;
+            /**
+             * Vigente Hasta
+             * Format: date
+             */
+            vigente_hasta: string;
+        };
+        /** DetalleOcResponse */
+        DetalleOcResponse: {
+            /** Advertencia */
+            advertencia: string;
+            /** Causas */
+            causas?: components["schemas"]["CausaProyeccion"][] | null;
+            /** Commitment Id */
+            commitment_id: string;
+            /**
+             * Desde
+             * Format: date
+             */
+            desde: string;
+            /**
+             * Estado
+             * @enum {string}
+             */
+            estado: "sin_matriz" | "pendiente_de_planificacion" | "bloqueo_confirmado" | "requiere_revision" | "riesgo_documental" | "sin_riesgos_detectados" | "vigencia_finalizada";
+            /** Estado Por Dia */
+            estado_por_dia?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Hasta
+             * Format: date
+             */
+            hasta: string;
+            /**
+             * Hoy
+             * Format: date
+             */
+            hoy: string;
+            /** Intervalos */
+            intervalos: components["schemas"]["IntervaloProyeccion"][];
+            matriz: components["schemas"]["MatrizInfo"] | null;
+            oc: components["schemas"]["OcInfo"];
+            /** Referencia */
+            referencia: string;
+            sujetos: components["schemas"]["SujetosOrigen"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tipo: "oc";
+        };
         /**
          * DocumentoCargadoResponse
          * @description cargar_documento / proponer_documento (comparten el núcleo `_insertar_version_documento`).
@@ -3184,15 +3301,21 @@ export interface components {
             capacidad_documental_potencial_hoy: {
                 [key: string]: number;
             };
+            /** Cliente Id */
+            cliente_id: string;
             /** Commitment Id */
             commitment_id: string;
             /**
              * Estado
              * @enum {string}
              */
-            estado: "sin_matriz" | "pendiente_de_planificacion" | "bloqueo_confirmado" | "requiere_revision" | "riesgo_documental" | "sin_riesgos_detectados";
+            estado: "sin_matriz" | "pendiente_de_planificacion" | "bloqueo_confirmado" | "requiere_revision" | "riesgo_documental" | "sin_riesgos_detectados" | "vigencia_finalizada";
+            /** Locacion Id */
+            locacion_id: string;
             /** Motivos Resumidos */
             motivos_resumidos: string[];
+            /** Oc Referencia */
+            oc_referencia: string | null;
             /**
              * Origen Calculo
              * @enum {string}
@@ -3200,6 +3323,8 @@ export interface components {
             origen_calculo: "ultima_decision_visible" | "candidatos_del_alcance";
             /** Primer Quiebre */
             primer_quiebre: string | null;
+            /** Referencia */
+            referencia: string;
             /**
              * Vigencia Desde
              * Format: date
@@ -3225,6 +3350,8 @@ export interface components {
             id: string;
             /** Identificador Natural */
             identificador_natural: string | null;
+            /** Referencia */
+            referencia: string;
             /** Requisito */
             requisito: string | null;
             /** Requisito Definicion Id */
@@ -3392,6 +3519,20 @@ export interface components {
             offset: number;
             /** Total */
             total: number;
+        };
+        /** MatrizAplicable */
+        MatrizAplicable: {
+            /** Commitment Id */
+            commitment_id: string;
+            /** Matriz Version Id */
+            matriz_version_id: string;
+            /**
+             * Origen Calculo
+             * @enum {string}
+             */
+            origen_calculo: "ultima_decision_visible" | "candidatos_del_alcance";
+            /** Version */
+            version: number;
         };
         /** MatrizGlobalConCopias */
         MatrizGlobalConCopias: {
@@ -3778,7 +3919,7 @@ export interface components {
              * Estado
              * @enum {string}
              */
-            estado: "sin_matriz" | "pendiente_de_planificacion" | "bloqueo_confirmado" | "requiere_revision" | "riesgo_documental" | "sin_riesgos_detectados";
+            estado: "sin_matriz" | "pendiente_de_planificacion" | "bloqueo_confirmado" | "requiere_revision" | "riesgo_documental" | "sin_riesgos_detectados" | "vigencia_finalizada";
             /** Estado Por Dia */
             estado_por_dia?: {
                 [key: string]: string;
@@ -3797,6 +3938,8 @@ export interface components {
             intervalos: components["schemas"]["IntervaloProyeccion"][];
             matriz: components["schemas"]["MatrizInfo"] | null;
             oc: components["schemas"]["OcInfo"];
+            /** Referencia */
+            referencia: string;
             sujetos: components["schemas"]["SujetosOrigen"];
         };
         /** PublicarVersionDeMatriz */
@@ -9170,6 +9313,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DefinicionesRequisitoResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    detalle_proyeccion_documental_v1_consultas_detalle_proyeccion_documental_get: {
+        parameters: {
+            query: {
+                referencia: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetalleEvidenciaResponse"] | components["schemas"]["DetalleOcResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
