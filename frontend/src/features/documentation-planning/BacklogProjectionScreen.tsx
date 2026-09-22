@@ -3,6 +3,7 @@ import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import type { ProjectionState, ProyeccionDocumentalResponse } from './contracts';
 import { backlogAccess, isBacklogIntegrated } from './access';
+import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
 import { usePrototypeRead } from './usePrototypeRead';
 import './planning.css';
@@ -33,7 +34,8 @@ function DetailPanel({ detail }: { detail: ProyeccionDocumentalResponse }) {
 export function BacklogProjectionScreen({ roles }: { roles: readonly string[] }) {
   const resolved = documentationScopeFor(roles);
   const [selected, setSelected] = useState<string | null>(null);
-  const projection = usePrototypeRead(() => backlogAccess().readBacklogProjection({}), []);
+  const [offset, setOffset] = useState(0);
+  const projection = usePrototypeRead(() => backlogAccess().readBacklogProjection({ offset, limit: PAGE_SIZE }), [offset]);
   const detail = usePrototypeRead(() => selected ? backlogAccess().readProjectionDetail({ commitmentId: selected }) : Promise.resolve(null), [selected]);
   const integrated = isBacklogIntegrated();
   if (!resolved || resolved === 'technician') return <Pending title="Sin acceso a esta vista">La proyección del backlog es para responsable de legajos y supervisor.</Pending>;
@@ -52,10 +54,16 @@ export function BacklogProjectionScreen({ roles }: { roles: readonly string[] })
           <td>{displayDate(row.primer_quiebre)}</td>
           <td>{row.origen_calculo === 'ultima_decision_visible' ? 'Última evaluación' : 'Candidatos del alcance'}</td>
           <td>{capacityLabel(row.capacidad_documental_potencial_hoy)}</td>
-          <td>{row.motivos_resumidos.length > 0 ? <button className="text-button" onClick={() => setSelected(row.commitment_id)}>Ver motivos</button> : <span className="muted">—</span>}</td>
+          {/* F-04: el detalle (intervalos, matriz) existe para CUALQUIER estado, no sólo
+              cuando hay motivos que resumir — `motivos_resumidos` está vacío justamente
+              cuando `estado = sin_riesgos_detectados` (docs/PROYECCION_DOCUMENTAL.md),
+              así que condicionar el botón a esa lista dejaba sin forma de abrir el
+              detalle de una OC sin riesgo. */}
+          <td><button className="text-button" onClick={() => setSelected(row.commitment_id)}>{row.motivos_resumidos.length > 0 ? 'Ver motivos' : 'Ver detalle'}</button></td>
         </tr>)}
       </tbody></table></div>
       {projection.data?.items.length === 0 && <p className="empty-inline">No hay OC visibles en tu alcance para este filtro.</p>}
+      {projection.data && <PaginationControls offset={projection.data.offset} limit={projection.data.limit} total={projection.data.total} onOffsetChange={setOffset} />}
     </>}
     {selected && (detail.loading ? <LoadingState /> : detail.error ? <ErrorState message={detail.error.message} /> : detail.data && <DetailPanel detail={detail.data} />)}
     <section className="module-boundary"><strong>Solo proyección documental del Módulo 1</strong><span>Sin disponibilidad</span><span>Sin asignar recursos</span><span>Sin modificar fechas ni crear OT</span><span>Sin ejecución, tiempos reales, firma ni certificados</span></section>
