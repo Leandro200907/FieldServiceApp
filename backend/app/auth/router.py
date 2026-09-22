@@ -67,6 +67,10 @@ class IdentidadResponse(BaseModel):
     sujeto_id: str | None
 
 
+class LogoutResponse(BaseModel):
+    revocado: bool
+
+
 # --------------------------------------------------------------------------- endpoints
 
 
@@ -103,14 +107,14 @@ def refresh(body: RefreshRequest) -> ParDeTokens:
         return _emitir_par(s, str(claims["tenant_id"]), usuario)
 
 
-@router.post("/logout")
-def logout(body: LogoutRequest, identidad: Identidad = Depends(identidad_actual)) -> dict:
+@router.post("/logout", response_model=LogoutResponse)
+def logout(body: LogoutRequest, identidad: Identidad = Depends(identidad_actual)) -> LogoutResponse:
     """Revoca el refresh token. Idempotente: si ya estaba revocado o no es del tenant
     (RLS), simplemente informa `revocado: false`. No se decodifica el token del body —
     con el hash alcanza, y así un refresh malformado tampoco filtra información."""
     with tenant_session(identidad.tenant_id) as s:
         revocado = tokens.revocar_refresh_token(s, body.refresh_token)
-    return {"revocado": revocado}
+    return LogoutResponse(revocado=revocado)
 
 
 @router.get("/yo", response_model=IdentidadResponse)

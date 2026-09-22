@@ -51,48 +51,79 @@ class ConfirmarSubida(BaseModel):
     documento_id: str = Field(min_length=1)
 
 
-@router.post("/comandos/preparar_subida_de_evidencia")
+class PrepararSubidaResponse(BaseModel):
+    documento_id: str
+    url_subida: str
+    content_type: str
+    max_bytes: int
+    expira_en_seg: int
+
+
+class ConfirmarSubidaResponse(BaseModel):
+    documento_id: str
+    checksum_sha256: str
+    bytes: int
+    # Presente sólo si el documento ya estaba confirmado (llamada repetida/idempotente).
+    ya_confirmado: bool | None = None
+    # Presente sólo cuando esta llamada confirma la subida por primera vez.
+    eventos: list[str] | None = None
+
+
+class UrlDeDescargaResponse(BaseModel):
+    documento_id: str
+    url: str
+    eventos: list[str]
+
+
+@router.post("/comandos/preparar_subida_de_evidencia", response_model=PrepararSubidaResponse)
 def preparar_subida_de_evidencia(
     body: PrepararSubida,
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-) -> dict:
+) -> PrepararSubidaResponse:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.TECNICO)
-    return ejecutar_idempotente(
+    resultado = ejecutar_idempotente(
         identidad.tenant_id, identidad.usuario_id, idempotency_key,
         fingerprint_de("POST", "/comandos/preparar_subida_de_evidencia", body.model_dump(mode="json")),
         lambda s: preparar_subida(s, identidad, body.documento_id, body.nombre_archivo, body.content_type, storage=_storage()),
     )
+    return PrepararSubidaResponse(**resultado)
 
 
-@router.post("/comandos/confirmar_subida_de_evidencia")
+@router.post("/comandos/confirmar_subida_de_evidencia", response_model=ConfirmarSubidaResponse)
 def confirmar_subida_de_evidencia(
     body: ConfirmarSubida,
     identidad: Identidad = Depends(identidad_actual),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-) -> dict:
+) -> ConfirmarSubidaResponse:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.TECNICO)
-    return ejecutar_idempotente(
+    resultado = ejecutar_idempotente(
         identidad.tenant_id, identidad.usuario_id, idempotency_key,
         fingerprint_de("POST", "/comandos/confirmar_subida_de_evidencia", body.model_dump(mode="json")),
         lambda s: confirmar_subida(s, identidad, body.documento_id, storage=_storage()),
     )
+    return ConfirmarSubidaResponse(**resultado)
 
 
-@router.get("/storage/documentos/{documento_id}/url")
-def url_de_descarga(documento_id: str, identidad: Identidad = Depends(identidad_actual)) -> dict:
+@router.get("/storage/documentos/{documento_id}/url", response_model=UrlDeDescargaResponse)
+def url_de_descarga(documento_id: str, identidad: Identidad = Depends(identidad_actual)) -> UrlDeDescargaResponse:
     """DescargarArchivoDeEvidencia: responsable_legajos (todo), supervisor (su universo),
     técnico (solo su propio legajo). Audita en event_log y devuelve la URL efímera."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR, Rol.TECNICO)
     with tenant_session(identidad.tenant_id) as s:
         url = firmar_descarga(s, identidad, documento_id, storage=_storage())
-    return {"documento_id": documento_id, "url": url, "eventos": ["DescargarArchivoDeEvidencia"]}
+    return UrlDeDescargaResponse(documento_id=documento_id, url=url, eventos=["DescargarArchivoDeEvidencia"])
 
 
-@router.put("/storage/{firma}")
+class SubirArchivoResponse(BaseModel):
+    bytes: int
+    checksum_sha256: str
+
+
+@router.put("/storage/{firma}", response_model=SubirArchivoResponse)
 async def subir(
     firma: str, request: Request, cred: HTTPAuthorizationCredentials | None = Depends(_bearer_opcional)
-) -> dict:
+) -> SubirArchivoResponse:
     storage = _storage()
     cuerpo = storage.verificar(firma, "put")
     _exigir_tenant_del_token(cred, cuerpo["tenant"])
@@ -118,7 +149,7 @@ async def subir(
     if not contenido:
         raise ErrorDeDominio("Archivo vacío", codigo="archivo_vacio")
     checksum = storage.escribir(cuerpo["clave"], contenido)
-    return {"bytes": len(contenido), "checksum_sha256": checksum}
+    return SubirArchivoResponse(bytes=len(contenido), checksum_sha256=checksum)
 
 
 @router.get("/storage/{firma}")
