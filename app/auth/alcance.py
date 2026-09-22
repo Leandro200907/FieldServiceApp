@@ -37,7 +37,20 @@ from app.auth.identidad import Identidad, Rol
 ROLES_CON_TODO_LECTURA = (Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
 ROLES_CON_TODO_DESCARGA = (Rol.RESPONSABLE_LEGAJOS,)
 
-_SQL_UNIVERSO = """
+# `cambiar_custodia` cierra el período anterior (`estado='cerrado'`) en el mismo instante
+# en que crea el siguiente, aunque el nuevo arranque en el futuro (transferencia
+# programada) — así que `estado='vigente'` YA NO significa "vale hoy", significa "es el
+# último asignado". El período efectivo HOY es el que cubre la fecha, esté `vigente` o
+# recién `cerrado`: `desde <= hoy` y (`hasta` abierto o `hasta >= hoy`). Un período
+# `corregido` (corregir_custodia) queda excluido siempre — es un error reemplazado, nunca
+# la verdad de ningún día (auditoría externa hallazgo A-01, commit db400e6: antes de este
+# fix, programar una transferencia futura le sacaba el acceso al custodio actual desde
+# el momento en que se programaba, no desde que efectivamente empezaba la nueva).
+CONDICION_CUSTODIA_EFECTIVA_HOY = (
+    "p.estado IN ('vigente', 'cerrado') AND p.desde <= :hoy AND (p.hasta IS NULL OR p.hasta >= :hoy)"
+)
+
+_SQL_UNIVERSO = f"""
     WITH personas AS (
         SELECT sujeto_id FROM modulo1.asignacion_supervisor
         WHERE supervisor_usuario_id = CAST(:u AS uuid) AND estado = 'vigente' AND desde <= :hoy
@@ -47,7 +60,7 @@ _SQL_UNIVERSO = """
     SELECT c.recurso_id
     FROM modulo1.periodo_custodia p
     JOIN modulo1.custodia_recurso c ON c.custodia_id = p.custodia_id
-    WHERE p.estado = 'vigente' AND p.desde <= :hoy AND p.custodio_id IN (SELECT sujeto_id FROM personas)
+    WHERE {CONDICION_CUSTODIA_EFECTIVA_HOY} AND p.custodio_id IN (SELECT sujeto_id FROM personas)
 """
 
 
@@ -79,14 +92,26 @@ def alcance_de_sujetos(
 
 
 def recursos_bajo_custodia(session: Session, custodio_id: str, hoy: date) -> list[str]:
-    """Vehículos/equipos con período de custodia vigente Y YA INICIADA (`desde <= hoy`) a
-    nombre de la persona. Un período `vigente` con `desde` futuro (cambiar_custodia
-    permite planificar) todavía no es de esta persona hoy."""
+    """Vehículos/equipos cuyo período de custodia EFECTIVO HOY (ver
+    `CONDICION_CUSTODIA_EFECTIVA_HOY`) es de esta persona: ni un período que todavía no
+    empezó (transferencia futura recién programada), ni uno que ya terminó."""
     return [f[0] for f in session.execute(text(
-        "SELECT c.recurso_id FROM modulo1.periodo_custodia p "
-        "JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
-        "WHERE p.estado = 'vigente' AND p.desde <= :hoy AND p.custodio_id = :cu ORDER BY c.recurso_id"),
+        f"SELECT c.recurso_id FROM modulo1.periodo_custodia p "
+        f"JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
+        f"WHERE {CONDICION_CUSTODIA_EFECTIVA_HOY} AND p.custodio_id = :cu ORDER BY c.recurso_id"),
         {"cu": custodio_id, "hoy": hoy}).all()]
+
+
+def periodo_custodia_efectivo(session: Session, tenant_id: str, recurso_id: str, hoy: date) -> dict | None:
+    """El período de custodia que cubre `hoy` para este recurso (vigente o recién cerrado
+    por una transferencia futura todavía no iniciada), o None si nadie lo custodia hoy."""
+    fila = session.execute(text(
+        f"SELECT c.tipo_recurso, p.periodo_id::text AS periodo_id, p.custodio_id, p.desde, p.hasta "
+        f"FROM modulo1.periodo_custodia p "
+        f"JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
+        f"WHERE p.tenant_id = :t AND c.recurso_id = :r AND {CONDICION_CUSTODIA_EFECTIVA_HOY}"),
+        {"t": tenant_id, "r": recurso_id, "hoy": hoy}).mappings().first()
+    return dict(fila) if fila is not None else None
 
 
 def sujeto_en_alcance(

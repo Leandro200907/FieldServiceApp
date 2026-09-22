@@ -25,7 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
-from app.auth.alcance import alcance_de_sujetos, sujeto_en_alcance
+from app.auth.alcance import CONDICION_CUSTODIA_EFECTIVA_HOY, alcance_de_sujetos, sujeto_en_alcance
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento, registrar_evento_interno
 from app.comun.paginacion import Pagina, envolver
@@ -117,15 +117,17 @@ def _usuarios_por_rol(session: Session, tenant_id: str, rol: str) -> list[str]:
         {"t": tenant_id, "r": rol}).scalars()]
 
 
-def _persona_responsable(session: Session, tenant_id: str, sujeto_id: str, tipo_sujeto: str) -> str | None:
-    """La persona detrás de la alerta: el propio sujeto si es persona; el custodio vigente
-    si es vehículo/equipo; nadie para la empresa."""
+def _persona_responsable(session: Session, tenant_id: str, sujeto_id: str, tipo_sujeto: str, hoy: date) -> str | None:
+    """La persona detrás de la alerta: el propio sujeto si es persona; el custodio
+    EFECTIVO HOY si es vehículo/equipo (ver `CONDICION_CUSTODIA_EFECTIVA_HOY`: no el
+    custodio de una transferencia futura todavía no iniciada); nadie para la empresa."""
     if tipo_sujeto == "persona":
         return sujeto_id
     if tipo_sujeto in ("vehiculo", "equipo"):
         return session.execute(text(
-            "SELECT p.custodio_id FROM modulo1.periodo_custodia p JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
-            "WHERE p.tenant_id = :t AND c.recurso_id = :r AND p.estado = 'vigente'"), {"t": tenant_id, "r": sujeto_id}).scalar()
+            f"SELECT p.custodio_id FROM modulo1.periodo_custodia p JOIN modulo1.custodia_recurso c ON c.tenant_id = p.tenant_id AND c.custodia_id = p.custodia_id "
+            f"WHERE p.tenant_id = :t AND c.recurso_id = :r AND {CONDICION_CUSTODIA_EFECTIVA_HOY}"),
+            {"t": tenant_id, "r": sujeto_id, "hoy": hoy}).scalar()
     return None
 
 
@@ -138,7 +140,7 @@ def _destinatarios(session: Session, tenant_id: str, alerta: dict[str, Any], rol
     `sujeto_id`, sea cual sea su rol (H-05/H-06: un Supervisor con legajo propio también
     recibe la alerta de su propio vencimiento). No se filtra por rol `tecnico`."""
     salida: list[tuple[str, str | None]] = []
-    persona = _persona_responsable(session, tenant_id, alerta["sujeto_id"], alerta["tipo_sujeto"])
+    persona = _persona_responsable(session, tenant_id, alerta["sujeto_id"], alerta["tipo_sujeto"], hoy)
     for rol in roles:
         if rol == "tecnico":
             if persona:

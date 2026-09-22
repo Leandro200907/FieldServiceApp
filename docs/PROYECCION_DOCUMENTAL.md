@@ -94,8 +94,9 @@ proyección (nadie usa ese requisito en ninguna matriz activa, o el sujeto no es
 de ninguna OC vigente) — y viceversa, un candidato puede estar "verde" en el calendario
 general (nada vence pronto) y aun así la OC estar `bloqueo_confirmado` porque HOY el tipo
 exigido específico no tiene NINGÚN candidato — nada por vencer pronto no es lo mismo que
-haber alguien que lo cubra hoy mismo (ver punto 6: `bloqueo_confirmado` es siempre sobre
-hoy, nunca sobre un día futuro — eso es `riesgo_documental`).
+haber alguien que lo cubra hoy mismo (ver puntos 6 y 7: `bloqueo_confirmado` como resumen
+es siempre sobre el primer intervalo del rango, nunca uno posterior — eso es
+`riesgo_documental`).
 
 ## 3. `GET /v1/consultas/calendario_vigencias`
 
@@ -232,49 +233,75 @@ lleva un valor `null` explícito para ningún tipo.
 ## 6. Los seis estados cerrados
 
 Vocabulario CERRADO — no se agregan variantes sin reabrir este documento. Aplican al
-`estado` resumen de una OC completa (`proyeccion_documental` y cada fila de
+`estado` **resumen** de una OC completa (`proyeccion_documental` y cada fila de
 `proyeccion_documental_backlog`); `calendario_vigencias` no los usa (punto 3).
 
-| Estado | Cuándo |
+**No los seis aplican a `intervalos[].estado`.** Cada intervalo (punto 8) es, por
+construcción, un tramo donde la cobertura NO cambia — así que dentro de un mismo
+intervalo no hay "hoy" ni "futuro" que comparar entre sí, sólo un hecho constante. Por
+eso `intervalos[].estado` usa sólo TRES de los seis (los que describen un hecho de UN
+intervalo en sí mismo, no una comparación entre intervalos):
+
+- `bloqueo_confirmado`: algún tipo exigido tiene cero candidatos durante ESE intervalo.
+- `requiere_revision`: la cobertura de algún tipo exigido durante ESE intervalo depende
+  de un documento `REQUIERE_REVISION`.
+- `sin_riesgos_detectados`: cubierto, sin duda, durante ESE intervalo.
+
+`sin_matriz`, `pendiente_de_planificacion` y `riesgo_documental` sólo existen al nivel del
+**resumen** (`estado`, no `intervalos[].estado`) — los dos primeros porque son anteriores
+a tener ningún intervalo que evaluar (punto 7); `riesgo_documental` porque es
+intrínsecamente una comparación ENTRE intervalos ("el primero está bien, uno posterior no")
+y por eso no puede ser el hecho de un solo intervalo — ver el cálculo del resumen en el
+punto 7.
+
+| Estado | Cuándo (nivel) |
 |---|---|
-| `sin_matriz` | No hay matriz vigente para (cliente, locación, tipo_servicio) de la OC al día de ingreso (`oc.vigencia_desde`) — mismo caso que hoy dispara `sin_matriz_vigente` en `_evaluar()`/`avisar_oc_sin_matriz` (H-02), pero acá NUNCA se propaga como error 422: la proyección lo devuelve como estado, no como falla. |
-| `pendiente_de_planificacion` | Hay matriz, pero el conjunto de sujetos del punto 4 está vacío (ninguna decisión visible Y ningún candidato en el alcance) — no hay nada que evaluar todavía. |
-| `bloqueo_confirmado` | **Sólo sobre HOY** (el primer día evaluado: `hoy` para `proyeccion_documental_backlog`, `max(hoy, oc.vigencia_desde)` para `proyeccion_documental`) algún tipo exigido no tiene NINGÚN candidato que cubra todos sus requisitos bloqueantes. Nunca un día futuro — eso es `riesgo_documental`, más abajo; ver la nota de mutua exclusión al final de esta sección. |
-| `requiere_revision` | No hay `bloqueo_confirmado`, pero la cobertura de al menos un tipo exigido en algún día depende de un documento `REQUIERE_REVISION` (declarado sin confirmar, o archivo pendiente/inválido — Fase 2 punto 2) — el dato existe pero no es confiable, nunca se lo cuenta como cobertura real ni como bloqueo real. |
-| `riesgo_documental` | HOY cubierta (ningún tipo exigido con cero candidatos hoy, sin `bloqueo_confirmado` ni `requiere_revision`), pero al menos un tipo exigido pierde TODA cobertura en algún día FUTURO dentro del horizonte (un vencimiento sin candidato de respaldo detrás) — ver "puntos de quiebre" (punto 8). |
-| `sin_riesgos_detectados` | Cubierta todos los días del horizonte evaluado, sin documentos `REQUIERE_REVISION` en juego. |
+| `sin_matriz` | No hay matriz vigente para (cliente, locación, tipo_servicio) de la OC al día de ingreso (`oc.vigencia_desde`) — mismo caso que hoy dispara `sin_matriz_vigente` en `_evaluar()`/`avisar_oc_sin_matriz` (H-02), pero acá NUNCA se propaga como error 422: la proyección lo devuelve como estado, no como falla. (Resumen.) |
+| `pendiente_de_planificacion` | Hay matriz, pero el conjunto de sujetos del punto 4 está vacío (ninguna decisión visible Y ningún candidato en el alcance) — no hay nada que evaluar todavía. (Resumen.) |
+| `bloqueo_confirmado` | Durante ese intervalo, algún tipo exigido no tiene NINGÚN candidato que cubra todos sus requisitos bloqueantes. (Intervalo — y, si es el PRIMER intervalo del rango pedido, también es candidato a resumen: ver punto 7.) |
+| `requiere_revision` | La cobertura de al menos un tipo exigido durante ese intervalo depende de un documento `REQUIERE_REVISION` (declarado sin confirmar, o archivo pendiente/inválido — Fase 2 punto 2) — el dato existe pero no es confiable, nunca se lo cuenta como cobertura real ni como bloqueo real. (Intervalo y resumen.) |
+| `riesgo_documental` | El PRIMER intervalo del rango (el que cubre `desde`) es `sin_riesgos_detectados`, pero algún intervalo POSTERIOR es `bloqueo_confirmado` o `requiere_revision` — hoy bien, un vencimiento futuro sin candidato de respaldo detrás. (Sólo resumen — ver punto 7.) |
+| `sin_riesgos_detectados` | Cubierta todos los intervalos del horizonte evaluado, sin documentos `REQUIERE_REVISION` en juego. (Intervalo y resumen.) |
 
-**`bloqueo_confirmado` y `riesgo_documental` no se solapan, por diseño, no por
-prioridad.** El primero exige "hoy" con cero candidatos; el segundo exige "hoy" con AL
-MENOS un candidato y un día futuro con cero. Son mutuamente excluyentes por definición —
-ninguna evaluación puede cumplir las dos condiciones a la vez. (Versión anterior de este
-documento definía `bloqueo_confirmado` como "algún día del horizonte", sin distinguir hoy
-de futuro; con esa redacción todo caso de `riesgo_documental` también cumplía
-`bloqueo_confirmado` — al tener precedencia más alta, `riesgo_documental` nunca se
-alcanzaba. Corregido acá: la distinción hoy/futuro es la que separa los dos estados, la
-precedencia de la sección 7 sólo importa para `requiere_revision` frente a cada uno.)
+## 7. Cómo se calcula el `estado` resumen a partir de los intervalos
 
-## 7. Precedencia del estado resumen
+**No es simplemente `peor(intervalos)`** — `riesgo_documental` no es un valor que ningún
+intervalo individual pueda tener (punto 6), así que el cálculo tiene un paso extra antes
+de comparar:
 
-Un día puede tener un veredicto y el rango completo otro (peor). Se resuelve exactamente
-como `peor()`/`ORDEN_VEREDICTO` ya resuelven el veredicto de un sujeto
-(`app/core/orquestacion.py:51-63`) — mismo patrón, extendido a 6 valores, evaluado en este
-orden (el primero que aplica gana, sin mezclarlos):
+1. Si no hay matriz (`sin_matriz`) o el conjunto de sujetos está vacío
+   (`pendiente_de_planificacion`), ESE es el resumen — no se llega a calcular ningún
+   intervalo (2.2 de este documento no cambia).
+2. Si no, se mira el PRIMER intervalo del rango pedido — el que cubre `desde`, que para
+   `proyeccion_documental` es `max(hoy, oc.vigencia_desde)` y para
+   `proyeccion_documental_backlog` es `hoy` (punto 10) —, nunca el calendario-hoy si la
+   OC todavía no arrancó: **ese primer intervalo ES el resumen** si es
+   `bloqueo_confirmado` o `requiere_revision`.
+3. Si el primer intervalo es `sin_riesgos_detectados`, se mira si ALGÚN intervalo
+   posterior es `bloqueo_confirmado` o `requiere_revision`: si lo hay, el resumen es
+   `riesgo_documental` (el primero sigue bien, pero hay un problema más adelante). Nunca
+   se usa el estado de ese intervalo posterior directamente como resumen — eso sería
+   mezclar "hoy" con "un día futuro" en el mismo campo, que es exactamente el defecto que
+   esta sección corrige.
+4. Si ningún intervalo tiene problema, el resumen es `sin_riesgos_detectados`.
 
-```
-sin_matriz > pendiente_de_planificacion > bloqueo_confirmado
-           > requiere_revision > riesgo_documental > sin_riesgos_detectados
-```
+Esto reemplaza una versión anterior de este documento que trataba `bloqueo_confirmado`
+como "algún día del horizonte" sin distinguir el primero de los siguientes: con esa
+redacción, todo caso de "hoy bien, futuro mal" (lo que hoy es `riesgo_documental`) también
+cumplía la definición vieja de `bloqueo_confirmado`, y como tenía precedencia más alta,
+`riesgo_documental` nunca se alcanzaba. El paso 2/3 de arriba es la corrección: SOLO el
+primer intervalo puede producir `bloqueo_confirmado`/`requiere_revision` como resumen
+directo; cualquier intervalo posterior con el mismo problema baja a `riesgo_documental`.
 
-Justificación de cada salto:
-- `sin_matriz` y `pendiente_de_planificacion` van primero porque son "no se puede
-  evaluar", no "se evaluó y dio mal" — estructuralmente distintos del resto, igual que
-  hoy `sin_matriz_vigente` corta el cálculo antes de llegar a ningún veredicto.
-- `bloqueo_confirmado` sobre `requiere_revision`: un bloqueo confirmado con datos
-  confiables es más grave que una duda sobre datos — si además de la duda hay un día
-  claramente bloqueado por otro motivo, ese es el resumen.
-- `requiere_revision` sobre `riesgo_documental`: no se puede llamar "en riesgo" (que
-  implica que hoy está bien) a algo que hoy mismo no se puede confirmar.
+Justificación adicional:
+- `bloqueo_confirmado` sobre `requiere_revision` cuando ambos podrían aplicar al primer
+  intervalo a la vez (dos tipos exigidos distintos, uno sin ningún candidato y otro con
+  candidato pero `REQUIERE_REVISION`): un bloqueo confirmado con datos confiables es más
+  grave que una duda sobre datos.
+- `requiere_revision` sobre `riesgo_documental` cuando el primer intervalo tiene
+  `requiere_revision` Y además hay un intervalo posterior en `bloqueo_confirmado`: no se
+  puede llamar "en riesgo" (que implica que hoy está bien) a algo que hoy mismo no se
+  puede confirmar.
 
 ## 8. Puntos de quiebre temporales (cómo se evalúan hasta 366 días sin 366 evaluaciones)
 
@@ -296,8 +323,8 @@ Con eso, evaluar un año completo son unos pocos intervalos (tantos como vencimi
 reales tengan los candidatos en juego, normalmente muy por debajo de 366), no 366 pasadas
 del motor. El resultado por intervalo se expande a `estado_por_dia` sólo si el llamador
 pide el detalle diario (`GET proyeccion_documental` con `detalle=diario`, punto 9); el
-resumen (punto 6) y `proyeccion_documental_backlog` nunca necesitan expandirlo, resuelven
-directamente `peor(estado_de_cada_intervalo)`.
+resumen (punto 7) y `proyeccion_documental_backlog` nunca necesitan expandirlo — corren
+el cálculo del punto 7 directamente sobre la lista de intervalos.
 
 ## 9. `GET /v1/consultas/proyeccion_documental?commitment_id=…`
 
@@ -324,8 +351,8 @@ tabla siempre manda, el ejemplo es sólo un caso particular de ella.
 {
   "commitment_id": "OC-4587",
   "oc": {"cliente_id": "…", "locacion_id": "…", "tipo_servicio_id": "…",
-         "vigencia_desde": "2026-08-01", "vigencia_hasta": "2026-10-05"},
-  "desde": "2026-09-21", "hasta": "2026-10-05",
+         "vigencia_desde": "2026-08-01", "vigencia_hasta": "2026-10-10"},
+  "desde": "2026-09-21", "hasta": "2026-10-10",
   "matriz": {"matriz_version_id": "…", "version": 3, "tipos_exigidos": ["persona", "vehiculo"]},
   "sujetos": { "...": "ver punto 4" },
   "estado": "riesgo_documental",
@@ -335,15 +362,19 @@ tabla siempre manda, el ejemplo es sólo un caso particular de ella.
       "capacidad_documental_potencial": {"persona": 2, "vehiculo": 1}
     },
     {
-      "desde": "2026-09-30", "hasta": "2026-10-05", "estado": "riesgo_documental",
-      "capacidad_documental_potencial": {"persona": 1, "vehiculo": 1},
+      "desde": "2026-09-30", "hasta": "2026-10-04", "estado": "sin_riesgos_detectados",
+      "capacidad_documental_potencial": {"persona": 1, "vehiculo": 1}
+    },
+    {
+      "desde": "2026-10-05", "hasta": "2026-10-10", "estado": "bloqueo_confirmado",
+      "capacidad_documental_potencial": {"persona": 0, "vehiculo": 1},
       "causas": [
         {
           "tipo_sujeto": "persona",
           "requisito_definicion_id": "…", "requisito": "Apto médico",
-          "motivo": "persona_0077 vence el 2026-09-29; queda persona_0042 como único candidato de respaldo",
-          "sujetos_que_pierden_cobertura": ["persona_0077"],
-          "sujetos_que_mantienen_cobertura": ["persona_0042"]
+          "motivo": "persona_0077 venció el 2026-09-29 sin ser reemplazado; persona_0042, el único candidato de respaldo que quedaba, vence el 2026-10-04 — desde el 2026-10-05 el tipo persona queda sin ningún candidato",
+          "sujetos_que_pierden_cobertura": ["persona_0042"],
+          "sujetos_que_mantienen_cobertura": []
         }
       ]
     }
@@ -351,6 +382,18 @@ tabla siempre manda, el ejemplo es sólo un caso particular de ella.
   "advertencia": "Proyección documental calculada con la información registrada a la fecha. No garantiza disponibilidad ni asignación operativa."
 }
 ```
+
+Por qué el resumen es `riesgo_documental` y no `bloqueo_confirmado` (punto 7): el PRIMER
+intervalo (2026-09-21 a 2026-09-29, el que cubre `desde`) es `sin_riesgos_detectados` — hoy
+está cubierto. El intervalo del medio (2026-09-30 a 2026-10-04) también, aunque con un solo
+candidato de respaldo: eso no es un problema en sí mismo, así que sigue
+`sin_riesgos_detectados` a nivel de intervalo (punto 6) — no hay que confundir "queda un
+solo candidato" con "está en riesgo": un ejemplo anterior de este documento cometía
+exactamente ese error, etiquetando ese intervalo intermedio como `riesgo_documental`
+cuando todavía tenía cobertura real. El TERCER intervalo (desde 2026-10-05) sí es
+`bloqueo_confirmado` a nivel de intervalo (cero candidatos de persona) — pero por ser
+POSTERIOR al primero, no se propaga tal cual al resumen: se traduce a `riesgo_documental`
+("hoy bien, más adelante no").
 
 Con `detalle=diario`, se agrega `"estado_por_dia": {"2026-09-21": "sin_riesgos_detectados", …}`
 expandiendo cada intervalo — pensado para pintar el Gantt día a día tal como se discutió,
@@ -465,9 +508,20 @@ consultas si queda ahí):**
   regresión específica: un `REQUIERE_REVISION` no debe filtrarse a `sin_riesgos_detectados`;
 - `riesgo_documental`: hoy verde, un vencimiento futuro sin respaldo → intervalo
   correcto, `causas` con el sujeto que pierde cobertura;
-- **regresión de la mutua exclusión (punto 6)**: un tipo exigido con cobertura hoy y
-  pérdida total de cobertura en un día futuro tiene que dar `riesgo_documental`, NUNCA
-  `bloqueo_confirmado` — el caso que exactamente distingue las dos definiciones;
+- **regresión de la mutua exclusión (puntos 6/7)**: un tipo exigido con cobertura en el
+  primer intervalo y pérdida total de cobertura en un intervalo posterior tiene que dar
+  `riesgo_documental` de resumen, NUNCA `bloqueo_confirmado` — el caso que exactamente
+  distingue las dos definiciones (regresión directa del ejemplo del punto 9);
+- **intervalo intermedio con un solo candidato de respaldo NO es riesgo**: un intervalo
+  que sigue cubierto (aunque con un solo candidato en vez de varios) tiene que quedar
+  `sin_riesgos_detectados` a nivel de intervalo — no confundir "menos redundancia" con
+  "en riesgo" (regresión directa del error que tenía la versión anterior del ejemplo);
+- **OC que todavía no arrancó** (`oc.vigencia_desde` en el futuro, hoy anterior a esa
+  fecha): `desde = oc.vigencia_desde`, no `hoy` (punto 9); si ese primer intervalo (el que
+  arranca en el futuro) es `bloqueo_confirmado`, el resumen tiene que ser
+  `bloqueo_confirmado` igual, aunque calendario-hoy sea antes de que la OC empiece — la
+  referencia para "primero" es el primer intervalo del RANGO PEDIDO, nunca la fecha civil
+  de hoy si la OC arranca después;
 - `causas` de `sin_matriz`/`pendiente_de_planificacion` sin `tipo_sujeto` ni
   `requisito_definicion_id`, sólo `motivo` (punto 9) — nunca el formato de las otras
   causas;
