@@ -231,6 +231,26 @@ def test_firma_vencida_y_operacion_incorrecta(api, storage, tenant_de_prueba):
     assert api.get(f"/v1/storage/{put_como_get}").status_code == 403
 
 
+def test_bearer_invalido_en_url_firmada_da_401_aunque_el_bearer_sea_opcional(api, storage, tenant_de_prueba):
+    """Auditoría externa (AUDITORIA_DB400E6, hallazgo A-03), con archivo real por HTTP (la
+    auditoría lo marcó como hallazgo por inspección de código, sin esta prueba). El bearer
+    de `/v1/storage/{firma}` es opcional — la firma es el permiso real — pero si SE MANDA
+    uno, tiene que ser válido: `_exigir_tenant_del_token` lo decodifica igual."""
+    t = tenant_de_prueba
+    doc = _documento(t.tenant_id)
+    prep = api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": doc, "nombre_archivo": "apto.pdf", "content_type": "application/pdf"})
+    assert prep.status_code == 200, prep.text
+    url_subida = prep.json()["url_subida"]
+    put = api.put(url_subida, content=_pdf("x"), headers={"Content-Type": "application/pdf", "Authorization": "Bearer token-invalido"})
+    assert put.status_code == 401, put.text
+
+    conf = _subir_completo(api, storage, t, doc)  # sube de nuevo, ok: preparar_subida no quedó bloqueado por el 401 de arriba
+    url_descarga = api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).json()["url"]
+    get = api.get(url_descarga, headers={"Authorization": "Bearer token-invalido"})
+    assert get.status_code == 401, get.text
+
+
 def test_secreto_de_storage_es_distinto_del_jwt(storage):
     from app.config import settings
 

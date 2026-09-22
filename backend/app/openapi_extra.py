@@ -7,12 +7,19 @@ así los dos son, por construcción, el mismo esquema, y no dos copias que se pu
 desincronizar (auditoría externa, hallazgo 3: antes el enriquecimiento vivía solo en el
 script y nunca se aplicaba a la app en vivo).
 
-`SIN_SECURITY`: rutas sin bearer obligatorio — ni siquiera opcional en el caso de
-`/v1/storage/{firma}`, cuyo permiso es la firma de la URL, no el token; FastAPI igual les
-pone `security` automáticamente por depender de un `HTTPBearer(auto_error=False)`, así
-que acá se limpia explícito (hallazgo 3). `SIN_401` es un subconjunto de `SIN_SECURITY`:
-login y refresh no exigen bearer pero sí pueden devolver 401 genuino (credenciales o
-refresh inválidos) — separarlos de las rutas verdaderamente públicas es el hallazgo 4."""
+`SIN_SECURITY`: rutas sin bearer obligatorio — el permiso de `/v1/storage/{firma}` es la
+firma de la URL, no el token, así que el bearer ahí es opcional (para el chequeo extra de
+que un token, si se manda, sea del mismo tenant que la firma); FastAPI igual les pone
+`security` automáticamente por depender de un `HTTPBearer(auto_error=False)`, así que acá
+se limpia explícito (hallazgo 3). `SIN_401` es un subconjunto MÁS CHICO de `SIN_SECURITY`:
+login, refresh y storage no EXIGEN bearer, pero sí pueden devolver 401 genuino si se manda
+uno inválido — login/refresh por credenciales/refresh token inválidos, storage porque
+`_exigir_tenant_del_token` llama `validar_access_token()` sobre el bearer SI VINO, y eso
+puede lanzar `NoAutenticado` (token vencido/malformado) aunque nunca lo exija (auditoría
+externa, informe AUDITORIA_DB400E6 hallazgo A-03: "bearer opcional" es "ausente está bien",
+no "presente pero inválido está bien" — son cosas distintas y hay que documentar el 401
+igual). Separar estas tres de las rutas VERDADERAMENTE públicas (salud, paquete público,
+donde no hay ningún bearer que revisar y 401 es sencillamente imposible) es el hallazgo 4."""
 from __future__ import annotations
 
 from app.version import MIGRACION_HEAD, VERSION
@@ -44,7 +51,9 @@ RESPUESTAS_COMUNES = {
 }
 SIN_SECURITY = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}",
                 "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
-SIN_401 = SIN_SECURITY - {"/v1/auth/login", "/v1/auth/refresh"}
+# Verdaderamente públicas: ni bearer ni la posibilidad de un 401 por token inválido
+# (a diferencia de storage, no leen Authorization en absoluto).
+SIN_401 = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
 
 
 def enriquecer(doc: dict) -> dict:
