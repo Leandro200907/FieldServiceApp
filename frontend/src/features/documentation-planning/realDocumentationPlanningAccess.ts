@@ -15,7 +15,9 @@ import type {
 // status real. Se traduce con el mismo `parseApiError`/`ApiFailure` que ya usa `session`,
 // para que `ErrorState`/`usePrototypeRead` reciban siempre el mismo tipo de error en toda
 // la app, venga de auth o de una consulta de negocio.
-async function unwrap<T>(
+// Exportado para test (F-10, auditoría externa 2026-09-22): antes ningún test ejercitaba
+// este adaptador real ni `unwrap` — sólo el mock. Ver tests/real-documentation-planning-access.test.ts.
+export async function unwrap<T>(
   promise: Promise<{ data?: T; error?: unknown; response: Response }>,
 ): Promise<T> {
   const { data, error, response } = await promise;
