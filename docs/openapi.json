@@ -1604,6 +1604,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -1655,6 +1665,7 @@
             "description": "Error interno; informar request_id"
           }
         },
+        "security": [],
         "summary": "Login",
         "tags": [
           "auth"
@@ -1784,6 +1795,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -1835,6 +1856,7 @@
             "description": "Error interno; informar request_id"
           }
         },
+        "security": [],
         "summary": "Refresh",
         "tags": [
           "auth"
@@ -10947,6 +10969,7 @@
             "description": "Error interno; informar request_id"
           }
         },
+        "security": [],
         "summary": "Paquete Publico",
         "tags": [
           "paquete"
@@ -11027,6 +11050,7 @@
             "description": "Error interno; informar request_id"
           }
         },
+        "security": [],
         "summary": "Paquete Qr",
         "tags": [
           "paquete"
@@ -11096,6 +11120,7 @@
             "description": "Error interno; informar request_id"
           }
         },
+        "security": [],
         "summary": "Listo",
         "tags": [
           "salud"
@@ -11169,6 +11194,7 @@
             "description": "Error interno; informar request_id"
           }
         },
+        "security": [],
         "summary": "Vivo",
         "tags": [
           "salud"
@@ -11349,11 +11375,7 @@
             "description": "Error interno; informar request_id"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
+        "security": [],
         "summary": "Descargar",
         "tags": [
           "storage"
@@ -11436,11 +11458,7 @@
             "description": "Error interno; informar request_id"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
+        "security": [],
         "summary": "Subir",
         "tags": [
           "storage"
