@@ -272,11 +272,11 @@ de comparar:
 1. Si no hay matriz (`sin_matriz`) o el conjunto de sujetos está vacío
    (`pendiente_de_planificacion`), ESE es el resumen — no se llega a calcular ningún
    intervalo (2.2 de este documento no cambia).
-2. Si no, se mira el PRIMER intervalo del rango pedido — el que cubre `desde`, que para
-   `proyeccion_documental` es `max(hoy, oc.vigencia_desde)` y para
-   `proyeccion_documental_backlog` es `hoy` (punto 10) —, nunca el calendario-hoy si la
-   OC todavía no arrancó: **ese primer intervalo ES el resumen** si es
-   `bloqueo_confirmado` o `requiere_revision`.
+2. Si no, se mira el PRIMER intervalo del rango pedido — el que cubre `desde`. **La
+   fórmula de `desde` es la MISMA para los dos endpoints, sin excepción** (punto 10):
+   `desde = max(hoy, oc.vigencia_desde)`. Nunca el calendario-hoy si la OC todavía no
+   arrancó — ni en `proyeccion_documental` ni en `proyeccion_documental_backlog`: **ese
+   primer intervalo ES el resumen** si es `bloqueo_confirmado` o `requiere_revision`.
 3. Si el primer intervalo es `sin_riesgos_detectados`, se mira si ALGÚN intervalo
    posterior es `bloqueo_confirmado` o `requiere_revision`: si lo hay, el resumen es
    `riesgo_documental` (el primero sigue bien, pero hay un problema más adelante). Nunca
@@ -350,6 +350,7 @@ tabla siempre manda, el ejemplo es sólo un caso particular de ella.
 ```json
 {
   "commitment_id": "OC-4587",
+  "hoy": "2026-09-21",
   "oc": {"cliente_id": "…", "locacion_id": "…", "tipo_servicio_id": "…",
          "vigencia_desde": "2026-08-01", "vigencia_hasta": "2026-10-10"},
   "desde": "2026-09-21", "hasta": "2026-10-10",
@@ -411,11 +412,15 @@ nunca un estado "bloqueado" o "en riesgo" sin decir por qué, mismo estándar qu
   que apuntar.
 - `sin_matriz` y `pendiente_de_planificacion`: **no hay matriz resuelta ni candidatos
   evaluados** (punto 6/7: son "no se puede evaluar", nunca llegan al motor puro), así que
-  no hay tipo/requisito que citar. `causas` es una lista de un solo elemento con sólo
-  `motivo` (string), sin `tipo_sujeto` ni `requisito_definicion_id`: p. ej. `[{"motivo":
-  "No hay matriz vigente para (cliente_id, locacion_id, tipo_servicio_id) al día de
-  ingreso de la OC"}]` o `[{"motivo": "No hay decisión visible para esta OC ni candidatos
-  en el alcance de quien consulta"}]`.
+  no hay tipo/requisito que citar. `causas` es una lista de un solo elemento con `motivo`
+  (string) con dato real y el resto de los campos (`tipo_sujeto`,
+  `requisito_definicion_id`, `sujetos_que_pierden_cobertura`,
+  `sujetos_que_mantienen_cobertura`) en `null` — mismo criterio que el resto del contrato
+  (p. ej. `periodo_cerrado_id` en `cambiar_custodia`): un campo sin dato viaja en `null`,
+  nunca se omite la clave. P. ej. `[{"motivo": "No hay matriz vigente para (cliente_id,
+  locacion_id, tipo_servicio_id) al día de ingreso de la OC", "tipo_sujeto": null,
+  "requisito_definicion_id": null, "sujetos_que_pierden_cobertura": null,
+  "sujetos_que_mantienen_cobertura": null}]`.
 
 ## 10. `GET /v1/consultas/proyeccion_documental_backlog`
 
@@ -441,10 +446,14 @@ universo; si no, no aparece, no se sustituye por "sin datos").
   "items": [
     {
       "commitment_id": "OC-4587",
-      "vigencia_desde": "2026-08-01", "vigencia_hasta": "2026-10-05",
+      "vigencia_desde": "2026-08-01", "vigencia_hasta": "2026-10-10",
       "estado": "riesgo_documental",
-      "primer_quiebre": "2026-09-30",
-      "capacidad_documental_potencial_hoy": {"persona": 2, "vehiculo": 1}
+      "primer_quiebre": "2026-10-05",
+      "capacidad_documental_potencial_hoy": {"persona": 2, "vehiculo": 1},
+      "origen_calculo": "ultima_decision_visible",
+      "motivos_resumidos": [
+        "Apto médico: persona_0077 venció el 2026-09-29 sin ser reemplazado; persona_0042, el único candidato de respaldo que quedaba, vence el 2026-10-04 — desde el 2026-10-05 el tipo persona queda sin ningún candidato"
+      ]
     }
   ],
   "total": 214,
@@ -454,20 +463,49 @@ universo; si no, no aparece, no se sustituye por "sin datos").
 }
 ```
 
+Es EXACTAMENTE la OC-4587 del ejemplo del punto 9 (mismos `vigencia_desde`/`vigencia_hasta`,
+mismo `estado`) — a propósito, para que se pueda verificar la equivalencia a simple vista:
+el punto 9 tiene tres intervalos (2026-09-21 a 09-29 y 09-30 a 10-04, ambos
+`sin_riesgos_detectados` a nivel de intervalo — ver punto 6, un solo candidato de respaldo
+no es problema por sí mismo —, y 10-05 a 10-10, `bloqueo_confirmado` a nivel de intervalo).
+`primer_quiebre` es la fecha del primer intervalo cuyo estado DE INTERVALO no es
+`sin_riesgos_detectados` — acá el tercero, `2026-10-05`, no el segundo: ese sigue cubierto
+(persona: 1), no es un quiebre. `null` si no hay ninguno. `capacidad_documental_potencial_hoy`
+es la del primer intervalo (el mismo que en el punto 9), no la de un intervalo posterior.
+
 Cada fila es el resumen de `proyeccion_documental` para esa OC sin `causas`/`intervalos`
 completos (eso se pide aparte, por OC, con el endpoint puntual — el backlog es para barrer
-y priorizar, no para explicar cada caso en detalle). `primer_quiebre` es la fecha del
-primer intervalo cuyo estado no es `sin_riesgos_detectados`, o `null` si no hay ninguno.
+y priorizar, no para explicar cada caso en detalle). Dos campos la resumen sin obligar a
+pedir el detalle puntual:
+
+- `origen_calculo`: el mismo valor que `sujetos.origen` del punto 4/9 para esa OC —
+  `ultima_decision_visible` o `candidatos_del_alcance` — para que quien lee el backlog
+  sepa si el cálculo se apoya en una decisión ya tomada o en el universo de candidatos sin
+  decisión formal todavía.
+- `motivos_resumidos`: los `motivo` de las `causas` del intervalo que efectivamente explica
+  el `estado` (punto 7: el primero si es `bloqueo_confirmado`/`requiere_revision`, o el
+  primer intervalo posterior con problema si es `riesgo_documental`) — lista vacía sólo
+  cuando `estado = sin_riesgos_detectados`. Para `sin_matriz`/`pendiente_de_planificacion`
+  es un único motivo genérico (mismo texto que el `causas[0].motivo` del punto 9).
 
 **La ventana por OC es exactamente la del punto 9, nunca otra**: `desde = max(hoy,
 oc.vigencia_desde)`, `hasta = min(oc.vigencia_hasta, desde + horizonte_dias)` — así el
 `estado` de una OC en el backlog es SIEMPRE el mismo que devolvería consultarla
 puntualmente con ese `hasta` acotado; `horizonte_dias` sólo recorta cuánto del rango de la
-OC se mira, nunca corre la ventana antes de que la OC empiece. Una OC que arranca después
-de `hoy + horizonte_dias` (ej. una OC futura lejana) tiene `desde > hasta` — no entra en
-el cálculo de riesgo de esa vuelta; queda con `estado` según punto 4/6 igual (`sin_matriz`
-o `pendiente_de_planificacion` si corresponde) pero sin intervalos de cobertura que mirar
-tan lejos, y no cuenta como motivo para excluirla del backlog.
+OC se mira, relativo a `desde` (el inicio efectivamente evaluado, no el calendario-hoy).
+Con `horizonte_dias > 0` la fórmula nunca produce `desde > hasta` para una OC futura —
+lejana o no, `hasta = min(oc.vigencia_hasta, desde + horizonte_dias) >= desde` siempre
+que `oc.vigencia_hasta >= desde` (una OC con `vigencia_desde <= vigencia_hasta` cumple
+esto salvo el caso aparte de abajo. Una OC futura lejana simplemente entra al backlog con
+un rango completo, empezando en su propia `vigencia_desde` — no hay ningún caso en que
+quede excluida por estar lejos.
+
+Único caso real donde no hay ventana válida: una OC `activo` (no cancelada, punto 10)
+cuya `vigencia_hasta` ya quedó en el pasado respecto de `desde` (su ventana entera ya
+terminó sin que nadie la cancelara explícitamente) — ahí no hay ningún intervalo que
+calcular; la fila entra igual al backlog con el `estado` que corresponda por punto 4/6
+(`pendiente_de_planificacion` si además no hay candidatos, u otro válido si los hay) y
+`primer_quiebre: null`, nunca se excluye ni se sustituye por "sin datos".
 
 ## 11. Límite de 366 días — dónde se aplica
 
@@ -546,6 +584,11 @@ consultas si queda ahí):**
 - paginación real con más de una página;
 - alcance del supervisor: una OC sin ningún candidato en su universo no aparece;
 - `primer_quiebre` correcto y `null` cuando no hay ninguno;
+- **OC futura lejana** (`oc.vigencia_desde` bastante después de `hoy + horizonte_dias`):
+  entra igual al backlog con ventana completa desde su propia `vigencia_desde` — nunca
+  `desde > hasta`, nunca excluida por estar lejos (regresión directa del punto 10);
+- **OC ya vencida** (`activo` pero `oc.vigencia_hasta < desde`): entra igual, sin
+  intervalos, `primer_quiebre: null`, nunca se cae del backlog;
 - `horizonte_dias > 366` → 422.
 
 **Transversal a los tres:**

@@ -558,7 +558,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}",
                 "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
-    assert len(paths) == 84
+    assert len(paths) == 87
     for path, ops in paths.items():
         if path in publicas:
             continue

@@ -39,6 +39,7 @@ ROUTERS = [
     "app.modules.capacidades_router",
     "app.modules.evidencia.router",
     "app.modules.oc.router",
+    "app.modules.proyeccion.router",
     "app.modules.consultas.router",
     "app.storage.router",
 ]
