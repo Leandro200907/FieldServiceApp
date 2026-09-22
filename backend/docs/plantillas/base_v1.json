@@ -1,0 +1,47 @@
+{
+  "_nota": "Precarga inicial de industria (no-funcionales 1.5.1/1.5.2). CONTENIDO A VALIDAR por el negocio con cada operadora antes de un piloto: los nombres y clasificaciones son el punto de partida habitual en Vaca Muerta, no la matriz oficial de cada operadora. Cargar con scripts/precargar_plantillas.py (rol owner). Subir `version` al cambiar una plantilla: el reloj avisa a cada tenant con copia local.",
+  "definiciones": [
+    {"nombre": "Apto médico", "categoria": "documento", "tipo_sujeto_aplicable": "persona", "version": 1, "descripcion": "Examen médico laboral vigente"},
+    {"nombre": "Alta temprana AFIP", "categoria": "documento", "tipo_sujeto_aplicable": "persona", "version": 1},
+    {"nombre": "Constancia de cobertura ART (nómina)", "categoria": "documento", "tipo_sujeto_aplicable": "persona", "version": 1},
+    {"nombre": "Licencia de conducir", "categoria": "documento", "tipo_sujeto_aplicable": "persona", "version": 1},
+    {"nombre": "Manejo defensivo", "categoria": "competencia", "tipo_sujeto_aplicable": "persona", "version": 1},
+    {"nombre": "Trabajo en altura", "categoria": "competencia", "tipo_sujeto_aplicable": "persona", "version": 1},
+    {"nombre": "Espacios confinados", "categoria": "competencia", "tipo_sujeto_aplicable": "persona", "version": 1},
+    {"nombre": "Izaje y movimiento de cargas", "categoria": "competencia", "tipo_sujeto_aplicable": "persona", "version": 1},
+    {"nombre": "Inducción HSE de la operadora", "categoria": "induccion", "tipo_sujeto_aplicable": "persona", "version": 1, "descripcion": "Por locación: el tenant elige la locación al copiar"},
+    {"nombre": "Certificado de cobertura ART", "categoria": "documento", "tipo_sujeto_aplicable": "empresa", "version": 1},
+    {"nombre": "Formulario 931 (cargas sociales)", "categoria": "documento", "tipo_sujeto_aplicable": "empresa", "version": 1},
+    {"nombre": "Seguro de responsabilidad civil", "categoria": "documento", "tipo_sujeto_aplicable": "empresa", "version": 1},
+    {"nombre": "Habilitación municipal / inscripción proveedor", "categoria": "documento", "tipo_sujeto_aplicable": "empresa", "version": 1},
+    {"nombre": "VTV / RTO", "categoria": "documento", "tipo_sujeto_aplicable": "vehiculo", "version": 1},
+    {"nombre": "Seguro del vehículo", "categoria": "documento", "tipo_sujeto_aplicable": "vehiculo", "version": 1},
+    {"nombre": "Cédula / título del vehículo", "categoria": "documento", "tipo_sujeto_aplicable": "vehiculo", "version": 1},
+    {"nombre": "Certificación de arnés / línea de vida", "categoria": "documento", "tipo_sujeto_aplicable": "equipo", "version": 1},
+    {"nombre": "Certificación de equipo de izaje", "categoria": "documento", "tipo_sujeto_aplicable": "equipo", "version": 1}
+  ],
+  "matrices": [
+    {
+      "operadora": "YPF", "tipo_servicio": "servicios de campo", "version": 1, "fuente": "precarga base v1 (a validar con la operadora)",
+      "lineas": [
+        {"definicion": "Apto médico", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": true},
+        {"definicion": "Alta temprana AFIP", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": false},
+        {"definicion": "Constancia de cobertura ART (nómina)", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": true},
+        {"definicion": "Licencia de conducir", "clasificacion": "excepcionable", "bloqueante_durante_ejecucion": true},
+        {"definicion": "Manejo defensivo", "clasificacion": "excepcionable", "bloqueante_durante_ejecucion": false},
+        {"definicion": "Trabajo en altura", "clasificacion": "excepcionable", "bloqueante_durante_ejecucion": true},
+        {"definicion": "Inducción HSE de la operadora", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": true},
+        {"definicion": "Certificado de cobertura ART", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": true},
+        {"definicion": "Formulario 931 (cargas sociales)", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": false},
+        {"definicion": "Seguro de responsabilidad civil", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": true},
+        {"definicion": "VTV / RTO", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": true},
+        {"definicion": "Seguro del vehículo", "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": true}
+      ]
+    },
+    {"operadora": "PAE", "tipo_servicio": "servicios de campo", "version": 1, "fuente": "precarga base v1 (a validar con la operadora)", "lineas": "como YPF"},
+    {"operadora": "Pampa Energía", "tipo_servicio": "servicios de campo", "version": 1, "fuente": "precarga base v1 (a validar con la operadora)", "lineas": "como YPF"},
+    {"operadora": "Vista", "tipo_servicio": "servicios de campo", "version": 1, "fuente": "precarga base v1 (a validar con la operadora)", "lineas": "como YPF"},
+    {"operadora": "Tecpetrol", "tipo_servicio": "servicios de campo", "version": 1, "fuente": "precarga base v1 (a validar con la operadora)", "lineas": "como YPF"},
+    {"operadora": "Shell", "tipo_servicio": "servicios de campo", "version": 1, "fuente": "precarga base v1 (a validar con la operadora)", "lineas": "como YPF"}
+  ]
+}

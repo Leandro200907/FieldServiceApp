@@ -1,0 +1,311 @@
+"""Backlog de OC (documentacion-habilitante 1.12): ImportarLote de órdenes de compra y
+CancelarOC.
+
+ImportarLote es UNA transacción e idempotente por `lote_id` (regla dura 6): la clave
+`lote:<lote_id>` en idempotency_keys guarda el resultado y una segunda llamada lo
+devuelve sin re-aplicar nada. Es incremental: `clave_origen` identifica la OC en el
+origen, así que una clave conocida actualiza la OC (y `actualizado_en`) en vez de
+duplicarla — para eso está `uq_oc_clave_origen` (migración 0003_oc_uq_clave_origen).
+Las filas inválidas se rechazan de a una y quedan listadas en `detalle_filas_rechazadas`;
+el resto del lote se aplica igual.
+"""
+from __future__ import annotations
+
+import uuid
+from datetime import date
+from typing import Any
+
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
+from app.auth.identidad import Identidad, Rol
+from app.comun.eventos import registrar_evento
+from app.core.revaluacion import ultima_decision
+
+ORIGENES = ("planilla", "drive")
+CAMPOS_OBLIGATORIOS = ("clave_origen", "cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta")
+
+
+def clave_idempotencia_lote(lote_id: str) -> str:
+    return f"lote:{lote_id}"
+
+
+# --------------------------------------------------------------------- validación
+
+
+def _uuid(valor: Any) -> str:
+    return str(uuid.UUID(str(valor)))
+
+
+def _fecha(valor: Any) -> date:
+    if isinstance(valor, date):
+        return valor
+    return date.fromisoformat(str(valor))
+
+
+def validar_fila(fila: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Devuelve (fila_normalizada, None) o (None, motivo). Nunca levanta: una fila mala
+    no puede tirar el lote entero."""
+    faltantes = [c for c in CAMPOS_OBLIGATORIOS if fila.get(c) in (None, "")]
+    if faltantes:
+        return None, f"campos faltantes: {', '.join(faltantes)}"
+    try:
+        desde, hasta = _fecha(fila["vigencia_desde"]), _fecha(fila["vigencia_hasta"])
+    except (ValueError, TypeError):
+        return None, "vigencia_desde/vigencia_hasta no son fechas ISO válidas"
+    if desde > hasta:
+        return None, "vigencia invertida: vigencia_desde > vigencia_hasta"
+    try:
+        normalizada = {
+            "clave_origen": str(fila["clave_origen"]).strip(),
+            "referencia": (str(fila["referencia"]).strip() or None) if fila.get("referencia") is not None else None,
+            "cliente_id": _uuid(fila["cliente_id"]),
+            "locacion_id": _uuid(fila["locacion_id"]),
+            "tipo_servicio_id": _uuid(fila["tipo_servicio_id"]),
+            "vigencia_desde": desde,
+            "vigencia_hasta": hasta,
+        }
+    except (ValueError, TypeError):
+        return None, "cliente_id/locacion_id/tipo_servicio_id no son UUID válidos"
+    if not normalizada["clave_origen"]:
+        return None, "campos faltantes: clave_origen"
+    return normalizada, None
+
+
+# --------------------------------------------------------------------- comandos
+
+
+def importar_lote_oc(
+    session: Session, identidad: Identidad, lote_id: str, origen: str, filas: list[dict[str, Any]]
+) -> dict[str, Any]:
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    tenant_id = identidad.tenant_id
+    if origen not in ORIGENES:
+        raise ErrorDeDominio("origen inválido", {"origen": origen, "validos": list(ORIGENES)})
+    lote_id = str(uuid.UUID(str(lote_id)))
+
+    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # La clave de idempotencia expira (24 h) pero el lote queda: si existe, tampoco se
+    # re-aplica — se reconstruye el resultado desde lote_importacion.
+    from app.comun.idempotencia import hash_canonico
+
+    hash_contenido = hash_canonico([dict(f) for f in filas])
+    lote_existente = session.execute(
+        text(
+            "SELECT filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, estado, hash_archivo "
+            "FROM modulo1.lote_importacion WHERE lote_id = :l"
+        ),
+        {"l": lote_id},
+    ).mappings().first()
+    if lote_existente is not None:
+        if lote_existente["hash_archivo"] != hash_contenido:
+            raise Conflicto(
+                "El lote ya fue importado con otro contenido; un lote_id identifica un contenido único",
+                {"lote_id": lote_id},
+                codigo="lote_contenido_distinto",
+            )
+        oc_ids = [
+            str(f[0])
+            for f in session.execute(text("SELECT oc_id FROM modulo1.oc WHERE lote_id = :l ORDER BY clave_origen"), {"l": lote_id})
+        ]
+        return {
+            "lote_id": lote_id,
+            "estado": lote_existente["estado"],
+            "filas_totales": lote_existente["filas_totales"],
+            "filas_aceptadas": lote_existente["filas_aceptadas"],
+            "filas_rechazadas": lote_existente["filas_rechazadas"],
+            "detalle_filas_rechazadas": lote_existente["detalle_filas_rechazadas"],
+            "oc_ids": oc_ids,
+            "ya_aplicado": True,
+            "eventos": [],
+        }
+
+    # Dentro del mismo lote una clave_origen repetida es ambigua: se acepta la primera
+    # y se rechazan las siguientes.
+    vistas: set[str] = set()
+    aceptadas: list[dict[str, Any]] = []
+    rechazadas: list[dict[str, Any]] = []
+    for indice, fila in enumerate(filas):
+        normalizada, motivo = validar_fila(fila if isinstance(fila, dict) else {})
+        if normalizada is None:
+            rechazadas.append({"indice": indice, "clave_origen": (fila or {}).get("clave_origen"), "motivo": motivo})
+            continue
+        if normalizada["clave_origen"] in vistas:
+            rechazadas.append({"indice": indice, "clave_origen": normalizada["clave_origen"], "motivo": "clave_origen repetida en el lote"})
+            continue
+        vistas.add(normalizada["clave_origen"])
+        aceptadas.append(normalizada)
+
+    session.execute(
+        text(
+            "INSERT INTO modulo1.lote_importacion "
+            "(lote_id, tenant_id, origen, entidad, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, hash_archivo) "
+            "VALUES (:l, :t, :o, 'oc', :tot, :ok, :ko, CAST(:det AS jsonb), :hash)"
+        ),
+        {
+            "l": lote_id,
+            "hash": hash_contenido,
+            "t": tenant_id,
+            "o": origen,
+            "tot": len(filas),
+            "ok": len(aceptadas),
+            "ko": len(rechazadas),
+            "det": _json(rechazadas),
+        },
+    )
+
+    oc_ids: list[str] = []
+    creadas = actualizadas = 0
+    modificadas: list[dict[str, Any]] = []
+    for fila in aceptadas:
+        # Regla de modificación de compromiso (7.1, A-07): ANTES de actualizar se captura el
+        # estado previo de las entradas de la evaluación y la última decisión de la OC; si
+        # alguna entrada cambia se emite UN `CompromisoModificado` por OC (varios campos →
+        # un solo evento causal). Una OC nueva, una reimportación idéntica o un cambio solo
+        # descriptivo (`referencia`) no emiten nada.
+        previa = session.execute(
+            text("SELECT oc_id, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta "
+                 "FROM modulo1.oc WHERE tenant_id = :t AND clave_origen = :c FOR UPDATE"),
+            {"t": tenant_id, "c": fila["clave_origen"]},
+        ).mappings().first()
+        cambios = _campos_modificados(previa, fila) if previa is not None else {}
+        referencia_previa = ultima_decision(session, tenant_id, fila["clave_origen"]) if cambios else None
+        resultado = session.execute(
+            text(
+                """
+                INSERT INTO modulo1.oc (tenant_id, clave_origen, referencia, cliente_id, locacion_id,
+                                        tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id)
+                VALUES (:t, :clave, :ref, :cli, :loc, :tipo, :desde, :hasta, :l)
+                ON CONFLICT (tenant_id, clave_origen) DO UPDATE SET
+                    referencia = EXCLUDED.referencia,
+                    cliente_id = EXCLUDED.cliente_id,
+                    locacion_id = EXCLUDED.locacion_id,
+                    tipo_servicio_id = EXCLUDED.tipo_servicio_id,
+                    vigencia_desde = EXCLUDED.vigencia_desde,
+                    vigencia_hasta = EXCLUDED.vigencia_hasta,
+                    lote_id = EXCLUDED.lote_id,
+                    actualizado_en = now()
+                RETURNING oc_id, (xmax = 0) AS insertada
+                """
+            ),
+            {
+                "t": tenant_id,
+                "clave": fila["clave_origen"],
+                "ref": fila["referencia"],
+                "cli": fila["cliente_id"],
+                "loc": fila["locacion_id"],
+                "tipo": fila["tipo_servicio_id"],
+                "desde": fila["vigencia_desde"],
+                "hasta": fila["vigencia_hasta"],
+                "l": lote_id,
+            },
+        ).first()
+        oc_ids.append(str(resultado[0]))
+        if resultado[1]:
+            creadas += 1
+        else:
+            actualizadas += 1
+        if cambios:
+            evento_id = registrar_evento(
+                session, tenant_id, "CompromisoModificado",
+                {
+                    "commitment_id": fila["clave_origen"], "oc_id": str(resultado[0]), "lote_id": lote_id,
+                    "referencias_afectadas": [str(referencia_previa)] if referencia_previa else [],
+                    "campos_modificados": sorted(cambios),
+                    "anterior": {k: v[0] for k, v in cambios.items()},
+                    "nuevo": {k: v[1] for k, v in cambios.items()},
+                },
+                identidad.usuario_id,
+            )
+            modificadas.append({"commitment_id": fila["clave_origen"], "campos_modificados": sorted(cambios), "evento_id": evento_id})
+
+    registrar_evento(
+        session,
+        tenant_id,
+        "LoteAplicado",
+        {
+            "lote_id": lote_id,
+            "entidad": "oc",
+            "origen": origen,
+            "filas_totales": len(filas),
+            "filas_aceptadas": len(aceptadas),
+            "filas_rechazadas": len(rechazadas),
+            "oc_creadas": creadas,
+            "oc_actualizadas": actualizadas,
+            "oc_modificadas": len(modificadas),
+        },
+        identidad.usuario_id,
+    )
+    resultado_cmd = {
+        "lote_id": lote_id,
+        "estado": "aplicado",
+        "filas_totales": len(filas),
+        "filas_aceptadas": len(aceptadas),
+        "filas_rechazadas": len(rechazadas),
+        "detalle_filas_rechazadas": rechazadas,
+        "oc_ids": oc_ids,
+        "oc_creadas": creadas,
+        "oc_actualizadas": actualizadas,
+        "oc_modificadas": modificadas,
+        "ya_aplicado": False,
+        "eventos": ["CompromisoModificado"] * len(modificadas) + ["LoteAplicado"],
+    }
+    return resultado_cmd
+
+
+CAMPOS_ENTRADA_EVALUACION = ("cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta")
+
+
+def _campos_modificados(previa: dict[str, Any], fila: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """Compara de forma canónica (str) las entradas del snapshot; `referencia` y `estado`
+    quedan fuera a propósito (descriptivo / cancelación tiene su propio evento)."""
+    cambios: dict[str, tuple[str, str]] = {}
+    for campo in CAMPOS_ENTRADA_EVALUACION:
+        antes, despues = str(previa[campo]), str(fila[campo])
+        if antes != despues:
+            cambios[campo] = (antes, despues)
+    return cambios
+
+
+def cancelar_oc(session: Session, identidad: Identidad, oc_id: str | None, clave_origen: str | None) -> dict[str, Any]:
+    """Pasa la OC a `cancelado`. Se identifica por `oc_id` o por `clave_origen`."""
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    if not oc_id and not clave_origen:
+        raise ErrorDeDominio("Hay que indicar oc_id o clave_origen")
+    if oc_id:
+        fila = session.execute(
+            text("SELECT oc_id, clave_origen, estado FROM modulo1.oc WHERE oc_id = :id FOR UPDATE"),
+            {"id": str(uuid.UUID(str(oc_id)))},
+        ).first()
+    else:
+        fila = session.execute(
+            text("SELECT oc_id, clave_origen, estado FROM modulo1.oc WHERE clave_origen = :c FOR UPDATE"),
+            {"c": clave_origen},
+        ).first()
+    if fila is None:
+        raise NoEncontrado("OC inexistente", {"oc_id": oc_id, "clave_origen": clave_origen})
+    if fila[2] == "cancelado":
+        raise Conflicto("La OC ya está cancelada", {"oc_id": str(fila[0])})
+    # 7.1: "cambio o cancelación del compromiso mismo" dispara revaluación. La referencia de
+    # la última decisión se captura ANTES de cancelar (después, la OC ya no es "activa").
+    referencia = ultima_decision(session, identidad.tenant_id, fila[1])
+    session.execute(
+        text("UPDATE modulo1.oc SET estado = 'cancelado', actualizado_en = now() WHERE oc_id = :id"),
+        {"id": str(fila[0])},
+    )
+    eventos = []
+    registrar_evento(
+        session, identidad.tenant_id, "CompromisoCancelado",
+        {"oc_id": str(fila[0]), "commitment_id": fila[1],
+         "referencias_afectadas": [str(referencia)] if referencia else []},
+        identidad.usuario_id,
+    )
+    eventos.append("CompromisoCancelado")
+    return {"oc_id": str(fila[0]), "clave_origen": fila[1], "estado": "cancelado", "eventos": eventos}
+
+
+def _json(valor: Any) -> str:
+    import json
+
+    return json.dumps(valor, default=str, ensure_ascii=False)
