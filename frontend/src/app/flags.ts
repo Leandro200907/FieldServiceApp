@@ -6,5 +6,5 @@ export const featureFlags = Object.freeze({
   documentBatchImport: false, typedBusinessViews: false, signedEvidence: false,
   technicianCompositeView: true,
   documentationCalendarIntegration: true, backlogDocumentationIntegration: true,
-  expirationsBoardIntegration: true,
+  expirationsBoardIntegration: true, legajoLookupIntegration: true,
 });

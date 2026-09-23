@@ -11,6 +11,7 @@ import { DesignCatalog } from './DesignCatalog';
 import { isBacklogIntegrated, isCalendarIntegrated } from '../features/documentation-planning/access';
 import { isMiLegajoIntegrated } from '../features/mi-legajo/access';
 import { isVencimientosIntegrated } from '../features/vencimientos/access';
+import { isLegajosIntegrated } from '../features/legajos/access';
 import { Badge, ErrorState, LoadingState, Pending } from '../ui/States';
 
 // F-09 (auditoría externa 2026-09-22): antes este badge era incondicional para toda
@@ -24,7 +25,8 @@ function IntegrationBadge({ page }: { page: Page | undefined }) {
   const integrated = (page.id === 'calendario-vigencias' && isCalendarIntegrated())
     || (page.id === 'proyeccion-backlog' && isBacklogIntegrated())
     || (page.id === 'mi-legajo' && isMiLegajoIntegrated())
-    || (page.id === 'vencimientos' && isVencimientosIntegrated());
+    || (page.id === 'vencimientos' && isVencimientosIntegrated())
+    || (page.id === 'legajos' && isLegajosIntegrated());
   return integrated ? <Badge tone="accent">Conectado al backend</Badge> : <Badge tone="warning">Pendiente de integración</Badge>;
 }
 

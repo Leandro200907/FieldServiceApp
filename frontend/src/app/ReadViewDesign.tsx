@@ -4,11 +4,9 @@ import { Badge, EmptyState, ErrorState, LoadingState, Pending } from '../ui/Stat
 
 type PreviewState = 'pending' | 'loading' | 'empty' | 'error';
 const views: Partial<Record<PageId, { title: string; columns: string[]; endpoint: string; note: string }>> = {
-  legajos: { title: 'Legajos en tu alcance', columns: ['Persona o recurso', 'Tipo', 'Identificación', 'Estado del legajo'], endpoint: '/v1/consultas/sujetos', note: 'El servidor aplica el alcance. Un legajo activo no implica habilitación documental.' },
   propuestas: { title: 'Documentos pendientes de revisión', columns: ['Persona', 'Requisito', 'Vigencia', 'Origen', 'Presentación'], endpoint: '/v1/consultas/propuestas_pendientes', note: 'Confirmar o rechazar requiere revisar la evidencia. No se ejecutan acciones desde este diseño.' },
   matrices: { title: 'Matrices documentales', columns: ['Cliente', 'Locación', 'Servicio', 'Versión', 'Vigencia'], endpoint: '/v1/consultas/matrices', note: 'Las reglas de obligatoriedad se resuelven en el backend según matriz y contexto de OC.' },
   oc: { title: 'Backlog de órdenes de compra', columns: ['OC', 'Período previsto', 'Estado', 'Última decisión visible'], endpoint: '/v1/consultas/backlog_oc', note: 'Una decisión documental no garantiza disponibilidad ni asignación operativa.' },
-  vencimientos: { title: 'Evidencia por vencimiento', columns: ['Persona o recurso', 'Requisito', 'Vigencia hasta', 'Confirmación'], endpoint: '/v1/consultas/tablero_vencimientos', note: 'Vencimientos de evidencia; su obligatoriedad depende de la matriz y de la OC aplicables.' },
   auditoria: { title: 'Eventos registrados', columns: ['Fecha', 'Actor', 'Evento', 'Referencia'], endpoint: '/v1/consultas/log_auditoria', note: 'Consulta de trazabilidad. Los eventos se presentan como los entrega el servidor.' },
 };
 

@@ -13,7 +13,10 @@ export interface Page { id: PageId; label: string; description: string; roles: r
 export const pages: Page[] = [
   { id: 'configuracion', label: 'Configuración', description: 'Definiciones locales y administración documental.', roles: ['configuracion'], gaps: ['G-01', 'G-02'] },
   { id: 'propuestas', label: 'Propuestas', description: 'Revisión de documentación presentada por técnicos.', roles: ['responsable_legajos'], gaps: ['G-01', 'G-03'] },
-  { id: 'legajos', label: 'Legajos', description: 'Documentación de personas, vehículos, equipos y empresa.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'SEL-01'] },
+  // SEL-01/G-01 ya no son gaps de contrato — GET /v1/consultas/sujetos (búsqueda) y
+  // GET /v1/consultas/legajo (detalle) tienen adaptador real (`realLegajosAccess.ts`),
+  // detrás de `featureFlags.legajoLookupIntegration` (hoy `false`).
+  { id: 'legajos', label: 'Legajos', description: 'Documentación de personas, vehículos, equipos y empresa.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
   // G-05/G-16 ya no son gaps de contrato — GET /v1/consultas/mi_legajo tiene adaptador
   // real (`realMiLegajoAccess.ts`), detrás de `featureFlags.technicianCompositeView`
   // (hoy `false`, decisión de producto, no gap de API). G-17 (separar "Mi legajo" de
