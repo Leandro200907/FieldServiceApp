@@ -20,7 +20,12 @@ export const pages: Page[] = [
   // "Equipo supervisado") sigue abierto, sin relación con esto.
   { id: 'mi-legajo', label: 'Mi legajo', description: 'Tu condición documental como persona potencialmente operativa.', roles: ['tecnico', 'supervisor'], gaps: ['G-17'] },
   { id: 'equipo-supervisado', label: 'Equipo supervisado', description: 'Personas y recursos dentro de tu universo asignado.', roles: ['supervisor'], gaps: ['G-01', 'G-17', 'SEL-33'] },
-  { id: 'vencimientos', label: 'Vencimientos', description: 'Evidencia vencida o próxima a vencer dentro de tu alcance.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'H-02'] },
+  // G-01 ya no es gap de contrato para este endpoint — GET /v1/consultas/tablero_vencimientos
+  // tiene adaptador real (`realVencimientosAccess.ts`), detrás de
+  // `featureFlags.expirationsBoardIntegration` (hoy `false`). H-02 sigue abierto: esta
+  // pantalla es solo consulta, sin ciclo de alertas (agregado, políticas, recordatorio,
+  // escalamiento) — capacidad distinta, no implementada.
+  { id: 'vencimientos', label: 'Vencimientos', description: 'Evidencia vencida o próxima a vencer dentro de tu alcance.', roles: ['responsable_legajos', 'supervisor'], gaps: ['H-02'] },
   // F-08 (auditoría externa 2026-09-22): Q-DOC-01/02/03 y G-18 ya no son gaps de
   // contrato — los 4 endpoints están implementados y con adaptador real
   // (`realDocumentationPlanningAccess.ts`), sólo detrás de featureFlags en `false`
