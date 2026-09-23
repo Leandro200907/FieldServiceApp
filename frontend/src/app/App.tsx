@@ -13,6 +13,8 @@ import { isMiLegajoIntegrated } from '../features/mi-legajo/access';
 import { isVencimientosIntegrated } from '../features/vencimientos/access';
 import { isLegajosIntegrated } from '../features/legajos/access';
 import { isPropuestasIntegrated } from '../features/propuestas/access';
+import { isAuditoriaIntegrated } from '../features/auditoria/access';
+import { isMatricesIntegrated } from '../features/matrices/access';
 import { Badge, ErrorState, LoadingState, Pending } from '../ui/States';
 
 // F-09 (auditoría externa 2026-09-22): antes este badge era incondicional para toda
@@ -28,7 +30,9 @@ function IntegrationBadge({ page }: { page: Page | undefined }) {
     || (page.id === 'mi-legajo' && isMiLegajoIntegrated())
     || (page.id === 'vencimientos' && isVencimientosIntegrated())
     || (page.id === 'legajos' && isLegajosIntegrated())
-    || (page.id === 'propuestas' && isPropuestasIntegrated());
+    || (page.id === 'propuestas' && isPropuestasIntegrated())
+    || (page.id === 'auditoria' && isAuditoriaIntegrated())
+    || (page.id === 'matrices' && isMatricesIntegrated());
   return integrated ? <Badge tone="accent">Conectado al backend</Badge> : <Badge tone="warning">Pendiente de integración</Badge>;
 }
 

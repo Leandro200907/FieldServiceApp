@@ -4,9 +4,7 @@ import { Badge, EmptyState, ErrorState, LoadingState, Pending } from '../ui/Stat
 
 type PreviewState = 'pending' | 'loading' | 'empty' | 'error';
 const views: Partial<Record<PageId, { title: string; columns: string[]; endpoint: string; note: string }>> = {
-  matrices: { title: 'Matrices documentales', columns: ['Cliente', 'Locación', 'Servicio', 'Versión', 'Vigencia'], endpoint: '/v1/consultas/matrices', note: 'Las reglas de obligatoriedad se resuelven en el backend según matriz y contexto de OC.' },
   oc: { title: 'Backlog de órdenes de compra', columns: ['OC', 'Período previsto', 'Estado', 'Última decisión visible'], endpoint: '/v1/consultas/backlog_oc', note: 'Una decisión documental no garantiza disponibilidad ni asignación operativa.' },
-  auditoria: { title: 'Eventos registrados', columns: ['Fecha', 'Actor', 'Evento', 'Referencia'], endpoint: '/v1/consultas/log_auditoria', note: 'Consulta de trazabilidad. Los eventos se presentan como los entrega el servidor.' },
 };
 
 /** Presentation only: never issues requests or manufactures business records. */

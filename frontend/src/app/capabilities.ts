@@ -42,10 +42,18 @@ export const pages: Page[] = [
   { id: 'calendario-vigencias', label: 'Calendario documental', description: 'Intervalos documentales por empresa, persona, vehículo y equipo.', roles: ['responsable_legajos', 'supervisor', 'tecnico'], gaps: [] },
   { id: 'proyeccion-backlog', label: 'Proyección del backlog', description: 'Riesgo documental proyectado por OC, sin disponibilidad ni asignación.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
   { id: 'oc', label: 'OC y cobertura', description: 'Consulta de cobertura y decisiones registradas.', roles: ['responsable_legajos', 'supervisor'], gaps: ['G-01', 'G-07', 'SEL-18', 'SEL-19'] },
-  { id: 'matrices', label: 'Matrices', description: 'Requisitos por cliente, locación y tipo de servicio.', roles: ['configuracion', 'responsable_legajos'], gaps: ['G-01', 'SEL-09', 'SEL-10', 'SEL-11', 'SEL-12'] },
+  // G-01/SEL-12 ya no son gaps de contrato — GET /v1/consultas/matrices y GET
+  // /v1/consultas/matriz_vigente tienen adaptador real (`realMatricesAccess.ts`),
+  // detrás de `featureFlags.matricesIntegration` (hoy `false`). SEL-09/10/11 siguen
+  // abiertos: no existe catálogo de nombres para cliente/locación/tipo de servicio en
+  // el backend, sólo IDs.
+  { id: 'matrices', label: 'Matrices', description: 'Requisitos por cliente, locación y tipo de servicio.', roles: ['configuracion', 'responsable_legajos'], gaps: ['SEL-09', 'SEL-10', 'SEL-11'] },
   { id: 'supervision', label: 'Supervisión', description: 'Asignación e historial de supervisores.', roles: ['configuracion', 'responsable_legajos'], gaps: ['G-01', 'SEL-26', 'SEL-27'] },
   { id: 'custodias', label: 'Custodias', description: 'Asignación y corrección de la custodia de recursos.', roles: ['supervisor'], gaps: ['G-01', 'SEL-28', 'SEL-29', 'SEL-30'] },
-  { id: 'auditoria', label: 'Auditoría', description: 'Consulta de eventos del módulo.', roles: ['configuracion', 'responsable_legajos'], gaps: ['G-01'] },
+  // G-01 ya no es gap de contrato — GET /v1/consultas/log_auditoria tiene adaptador
+  // real (`realAuditoriaAccess.ts`), detrás de `featureFlags.auditLogIntegration`
+  // (hoy `false`).
+  { id: 'auditoria', label: 'Auditoría', description: 'Consulta de eventos del módulo.', roles: ['configuracion', 'responsable_legajos'], gaps: [] },
   { id: 'perfil', label: 'Mi sesión', description: 'Identidad y permisos de la sesión actual.', roles: ['configuracion', 'responsable_legajos', 'supervisor', 'tecnico'], gaps: [] },
 ];
 export function canOpen(page: Page, roles: readonly string[]): boolean {
