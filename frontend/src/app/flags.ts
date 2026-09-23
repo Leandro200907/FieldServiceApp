@@ -7,5 +7,5 @@ export const featureFlags = Object.freeze({
   technicianCompositeView: true,
   documentationCalendarIntegration: true, backlogDocumentationIntegration: true,
   expirationsBoardIntegration: true, legajoLookupIntegration: true,
-  pendingProposalsIntegration: true, auditLogIntegration: true, matricesIntegration: true,
+  pendingProposalsIntegration: true, auditLogIntegration: true, matricesIntegration: true, supervisionIntegration: true,
 });

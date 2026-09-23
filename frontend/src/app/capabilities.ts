@@ -48,7 +48,11 @@ export const pages: Page[] = [
   // abiertos: no existe catálogo de nombres para cliente/locación/tipo de servicio en
   // el backend, sólo IDs.
   { id: 'matrices', label: 'Matrices', description: 'Requisitos por cliente, locación y tipo de servicio.', roles: ['configuracion', 'responsable_legajos'], gaps: ['SEL-09', 'SEL-10', 'SEL-11'] },
-  { id: 'supervision', label: 'Supervisión', description: 'Asignación e historial de supervisores.', roles: ['configuracion', 'responsable_legajos'], gaps: ['G-01', 'SEL-26', 'SEL-27'] },
+  // G-01/SEL-26/SEL-27 ya no son gaps de contrato — asignaciones_supervisor,
+  // historial_supervision, usuarios (rol=supervisor), asignar_supervisor y
+  // reasignar_supervisor tienen adaptador real (`realSupervisionAccess.ts`), detrás de
+  // `featureFlags.supervisionIntegration` (hoy `false`).
+  { id: 'supervision', label: 'Supervisión', description: 'Asignación e historial de supervisores.', roles: ['configuracion', 'responsable_legajos'], gaps: [] },
   { id: 'custodias', label: 'Custodias', description: 'Asignación y corrección de la custodia de recursos.', roles: ['supervisor'], gaps: ['G-01', 'SEL-28', 'SEL-29', 'SEL-30'] },
   // G-01 ya no es gap de contrato — GET /v1/consultas/log_auditoria tiene adaptador
   // real (`realAuditoriaAccess.ts`), detrás de `featureFlags.auditLogIntegration`
