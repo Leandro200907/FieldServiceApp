@@ -12,7 +12,13 @@ export type PageId = 'propuestas' | 'legajos' | 'mi-legajo' | 'equipo-supervisad
 export interface Page { id: PageId; label: string; description: string; roles: readonly Role[]; gaps: string[] }
 export const pages: Page[] = [
   { id: 'configuracion', label: 'Configuración', description: 'Definiciones locales y administración documental.', roles: ['configuracion'], gaps: ['G-01', 'G-02'] },
-  { id: 'propuestas', label: 'Propuestas', description: 'Revisión de documentación presentada por técnicos.', roles: ['responsable_legajos'], gaps: ['G-01', 'G-03'] },
+  // G-01 ya no es gap de contrato — GET /v1/consultas/propuestas_pendientes, POST
+  // /v1/comandos/confirmar_documento y POST /v1/comandos/rechazar_propuesta tienen
+  // adaptador real (`realPropuestasAccess.ts`), detrás de
+  // `featureFlags.pendingProposalsIntegration` (hoy `false`). G-03 sigue abierto: la
+  // descarga de evidencia firmada no está integrada, la decisión se toma solo con los
+  // datos declarados (número, vigencia, requisito).
+  { id: 'propuestas', label: 'Propuestas', description: 'Revisión de documentación presentada por técnicos.', roles: ['responsable_legajos'], gaps: ['G-03'] },
   // SEL-01/G-01 ya no son gaps de contrato — GET /v1/consultas/sujetos (búsqueda) y
   // GET /v1/consultas/legajo (detalle) tienen adaptador real (`realLegajosAccess.ts`),
   // detrás de `featureFlags.legajoLookupIntegration` (hoy `false`).
