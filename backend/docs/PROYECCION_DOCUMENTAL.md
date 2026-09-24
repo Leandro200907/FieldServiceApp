@@ -1,13 +1,21 @@
-# Proyección documental — diseño (sin implementar)
+# Proyección documental — implementado (4 endpoints en `main`)
 
-Documento de diseño para tres consultas nuevas bajo `GET /v1/consultas/…`. **Nada de esto
-está implementado todavía**: es la base para decidir alcance antes de tocar código,
-siguiendo el mismo patrón que ya cerró H-01..H-06 y la reauditoría (triage → aprobación →
-commit). No hay endpoints, no hay migración, no se regeneró `docs/openapi.json`.
+Documento de diseño para cuatro consultas bajo `GET /v1/consultas/…`, las cuatro ya
+implementadas y en `main` (ver puntos 14 y 15). El contrato vivo es
+`docs/HANDOFF_PROYECCION_ASTRA.md` + `docs/openapi.json` — este documento es el diseño y
+la referencia de vocabulario/precedencia, no una promesa de "todavía no existe". (B-09,
+auditoría externa 2026-09-22: el título anterior — "diseño, sin implementar" — quedó
+desactualizado desde que se mergearon los primeros tres endpoints y podía hacer creer que
+las rutas no existían.)
 
 1. `GET /v1/consultas/calendario_vigencias`
 2. `GET /v1/consultas/proyeccion_documental_backlog`
 3. `GET /v1/consultas/proyeccion_documental?commitment_id=…`
+
+Los tres de arriba ya están implementados y en `main` (ver punto 14). Este documento suma
+un cuarto, diseñado e implementado en el punto 15:
+
+4. `GET /v1/consultas/detalle_proyeccion_documental?referencia=…` (Q-DOC-03)
 
 Nace de la idea del "Gantt de cobertura documental" discutida antes del congelamiento de
 la reauditoría (día a día, verde→rojo por OC, gris = sin matriz) y de la vista compuesta
@@ -124,12 +132,10 @@ Esto es una respuesta directa a la especificación previa del frontend (Q-DOC-01
 `docs/frontend/API_GAPS.md`), que pedía que cada ítem del calendario trajera "contexto de
 aplicabilidad" (matriz/OC o ausencia explícita) y un estado `sin_evidencia`: **ese pedido
 no se puede cumplir con este endpoint tal como está diseñado**, porque cruzar contra
-matriz/OC es precisamente lo que este endpoint decide no hacer (punto 2, arriba). Si se
-necesita esa combinación en una sola respuesta, es una decisión de producto pendiente —
-options: (a) el frontend arma la combinación en el cliente, cruzando
-`calendario_vigencias` con `proyeccion_documental_backlog`/`proyeccion_documental` por
-`sujeto_id`/`commitment_id`; o (b) se diseña un cuarto endpoint explícito para eso (fuera
-del alcance de este documento; no implementado). No se resuelve acá.
+matriz/OC es precisamente lo que este endpoint decide no hacer (punto 2, arriba). Opción
+(b) — un cuarto endpoint explícito, de detalle puntual, que sí haga ese cruce pero
+únicamente para UN ítem a la vez (nunca para la lista completa) — implementado en el
+punto 15 (`detalle_proyeccion_documental`, Q-DOC-03).
 
 ## 3. `GET /v1/consultas/calendario_vigencias`
 
@@ -380,7 +386,15 @@ quiebres consecutivos:
 
 - `vigente_hasta + 1` de cada documento/acreditación/inducción vigente de cada candidato
   del conjunto (punto 4) que cubra algún requisito exigido — ahí deja de cubrir.
-- `vigente_hasta + 1` de cada excepción/constancia con vigencia acotada que esté en juego.
+- **`vigente_desde` de cada documento/acreditación/inducción, cuando cae dentro del
+  rango** (corrección B-01, auditoría externa 2026-09-22: faltaba en la versión anterior
+  de este punto — `evaluar_documento_en_periodo` ya rechazaba `periodo_desde <
+  vigente_desde`, pero sin este quiebre un alta a mitad de ventana se evaluaba con la
+  fecha de inicio del tramo, antes del alta, y quedaba roja todo el tramo aunque después
+  cubriera) — ahí EMPIEZA a cubrir.
+- `vigencia + 1` de cada excepción/constancia con vigencia acotada que esté en juego
+  (corrección B-02: el motor las reutiliza desde esta revisión — antes las excluía "a
+  propósito", pese a que este mismo punto siempre las había listado).
 - la fecha de inicio del rango pedido (`desde`) y el día siguiente a su fin (`hasta + 1`,
   como límite, no se evalúa).
 - **la matriz NO agrega puntos de quiebre dentro del rango de una OC ya existente** (regla
@@ -501,7 +515,7 @@ universo; si no, no aparece, no se sustituye por "sin datos").
 | Parámetro | Tipo | Default | Notas |
 |---|---|---|---|
 | `estado_oc` | `activo\|cancelado` | `activo` | mismo filtro que `backlog_oc` |
-| `estado` | uno de los 6 (punto 6), repetible | todos | filtra el resumen — p. ej. `?estado=bloqueo_confirmado&estado=riesgo_documental` para la vista "qué me preocupa" |
+| `estado` | uno de los 6 (punto 6) + `vigencia_finalizada` (más abajo), repetible | todos | filtra el resumen — p. ej. `?estado=bloqueo_confirmado&estado=riesgo_documental` para la vista "qué me preocupa" |
 | `horizonte_dias` | entero | `30` | tope de ventana por OC; `<= 366` |
 | paginación | `offset`/`limit` | `0`/`50`, máx. `500` | igual convención que `backlog_oc` |
 
@@ -660,7 +674,9 @@ consultas si queda ahí):**
   entra igual al backlog con ventana completa desde su propia `vigencia_desde` — nunca
   `desde > hasta`, nunca excluida por estar lejos (regresión directa del punto 10);
 - **OC ya vencida** (`activo` pero `oc.vigencia_hasta < desde`): entra igual, sin
-  intervalos, `primer_quiebre: null`, nunca se cae del backlog;
+  intervalos, `primer_quiebre: null`, nunca se cae del backlog — desde la corrección
+  B-07, con `estado = vigencia_finalizada` (antes `pendiente_de_planificacion`, ver
+  punto 16);
 - `horizonte_dias > 366` → 422.
 
 **Transversal a los tres:**
@@ -696,5 +712,290 @@ resueltas en el código, no sólo en el diseño:
    `calendario_vigencias` es la versión con rango explícito y ampliada a técnico — ninguno
    reemplazó al otro.
 
-Sigue abierta, en cambio, la decisión del punto 2.1 (endpoint combinado
-calendario+matriz/OC): esa no se resuelve en este documento a propósito.
+La decisión del punto 2.1 (endpoint combinado calendario+matriz/OC) ya no está abierta:
+quedó diseñada e **implementada** como el punto 15, `detalle_proyeccion_documental`
+(Q-DOC-03).
+
+## 15. `GET /v1/consultas/detalle_proyeccion_documental` (Q-DOC-03, implementado)
+
+Responde al gap que Astra señaló sobre el frontend ya integrado (`realDocumentationPlanningAccess`,
+commit `b942c7e` de `FieldServiceApp`): un endpoint de detalle **genérico**, que reciba una
+referencia opaca emitida tanto por `calendario_vigencias` como por
+`proyeccion_documental_backlog`, y devuelva motivos/contexto sin que el frontend tenga que
+reconstruir nada por su cuenta. Resuelve además, de paso, la tensión del punto 2.1: la
+única forma de darle a un ítem del calendario su "contexto de aplicabilidad" sin volver a
+`calendario_vigencias` una consulta cara (cruzando cada fila de la lista contra matriz/OC)
+es calcularlo **on-demand, para UN ítem a la vez** — el mismo motivo por el que
+`proyeccion_documental_backlog` ya paga el costo de recorrer OCs activas por fila, pero acá
+el costo se paga una sola vez, al pedir el detalle, no en cada fila de una lista.
+
+No es un cuarto motor: reutiliza `conjunto_de_sujetos` y `_tipos_y_requisitos` tal cual
+existen para la rama de evidencia, y reutiliza `proyeccion_documental` completo, sin
+cambiarle una línea, para la rama de OC.
+
+### 15.1 Referencia opaca
+
+`calendario_vigencias` y `proyeccion_documental_backlog` agregan un campo nuevo,
+`referencia: string`, a cada ítem que ya devuelven (cambio aditivo, no rompe nada
+existente):
+
+- `ItemCalendario.referencia` = `f"evidencia:{categoria}:{id}"` (p. ej.
+  `"evidencia:documento:9f2a…"`) — `categoria` es la misma que ya viaja en la fila
+  (`documento`/`competencia`/`induccion`), `id` es la misma PK que ya viaja como `id`.
+- `ItemBacklog.referencia` = `f"oc:{commitment_id}"`.
+- Por simetría, `ProyeccionDocumentalResponse` (el endpoint puntual por `commitment_id`)
+  también suma `referencia` con el mismo formato — así el mismo campo sirve para llegar a
+  este endpoint nuevo desde cualquiera de los tres.
+
+"Opaca" acá no significa cifrada ni codificada: significa que el frontend nunca arma este
+string por su cuenta concatenando campos — sólo reenvía, tal cual, el valor que ya recibió
+en la fila. El prefijo (`evidencia:`/`oc:`) es el único contrato que el cliente necesita
+conocer para decidir qué pantalla de detalle mostrar; el resto es responsabilidad exclusiva
+del backend. Ningún dato nuevo queda expuesto: `documento_id`/`commitment_id` ya viajan hoy
+en las listas sin cifrar, así que empaquetarlos en `referencia` no cambia el modelo de
+confianza.
+
+**Parseo** (server-side, único lugar): el prefijo (`evidencia:`/`oc:`) decide la rama; para
+`evidencia:` el resto se separa por `:` con límite 1 (`categoria`, `id` — `id` propio
+podría en teoría contener `:`, no se confía en que no pase); para `oc:` el resto entero
+(sin volver a separar) es el `commitment_id`, que también podría contener `:`. Una
+referencia que no matchea ningún prefijo, o cuya `categoria` no es una de las tres
+válidas, es 422 (`ErrorDeDominio`, `referencia inválida` — mismo status que el resto de
+las validaciones de estos endpoints, p. ej. `estado inválido`) — nunca un 500.
+
+### 15.2 Contrato
+
+`GET /v1/consultas/detalle_proyeccion_documental?referencia=…`
+
+Único parámetro: `referencia` (string, obligatorio). Sin `desde`/`hasta`: para la rama
+`evidencia` la ventana relevante es la vigencia propia del ítem (`vigente_desde`/
+`vigente_hasta`); para la rama `oc` el detalle delega en `proyeccion_documental`, que ya
+resuelve sus propios defaults por `commitment_id`.
+
+**Rol**, según la rama de la referencia — no un único rol para el endpoint entero:
+- `referencia` empieza con `evidencia:` → mismo rol que `calendario_vigencias`
+  (`ROLES_CALENDARIO`: `responsable_legajos`, `supervisor`, `técnico`).
+- `referencia` empieza con `oc:` → mismo rol que `proyeccion_documental`/`_backlog`
+  (`ROLES_PROYECCION`: `responsable_legajos`, `supervisor` — técnico nunca ve detalle de
+  OC, coherente con que tampoco ve el backlog).
+
+El rol se valida DESPUÉS de parsear el prefijo (no antes): un técnico pidiendo
+`referencia=oc:…` tiene que recibir el mismo 403 que ya recibiría llamando
+`proyeccion_documental` directo — el endpoint nuevo no le abre una puerta lateral.
+
+**Respuesta**: unión discriminada por `tipo` (`"evidencia" | "oc"`), dos formas
+completamente tipadas (ninguna es un objeto abierto) — mismo criterio de tipado estricto
+que ya se aplicó a los otros 84/88 endpoints.
+
+#### Rama `oc` — reutiliza `proyeccion_documental` sin modificarlo
+
+```json
+{
+  "tipo": "oc",
+  "referencia": "oc:OC-2026-118",
+  "commitment_id": "OC-2026-118",
+  "oc": { "...": "..." },
+  "hoy": "2026-09-22",
+  "desde": "2026-09-22",
+  "hasta": "2026-11-30",
+  "sujetos": { "...": "..." },
+  "matriz": { "...": "..." },
+  "estado": "riesgo_documental",
+  "intervalos": [ "..." ],
+  "advertencia": "Proyección documental calculada con la información registrada a la fecha. No garantiza disponibilidad ni asignación operativa."
+}
+```
+
+Es literalmente el body de `proyeccion_documental?commitment_id=OC-2026-118` con `tipo` y
+`referencia` agregados encima — cero lógica nueva, `servicio.proyeccion_documental()` se
+llama tal cual.
+
+#### Rama `evidencia` — pieza genuinamente nueva: cruce evidencia → OC, a demanda
+
+Dado `(categoria, id)`:
+
+1. Releer la fila de evidencia (misma unión `documento`/`acreditacion_competencia`/
+   `induccion` que ya arma `_SQL_CALENDARIO`, filtrada por `categoria = :categoria AND id
+   = :id AND tenant_id = :t`). Si no existe, o el `sujeto_id` de esa fila no está dentro de
+   `alcance_de_sujetos` de quien consulta → 404 `NoEncontrado` (nunca 403: no se revela que
+   el recurso existe fuera del alcance propio — mismo criterio que ya usa `buscar_oc`).
+2. Con `sujeto_id`, `tipo_sujeto` y `requisito_definicion_id` de esa fila, recorrer las OC
+   **activas** (`estado = 'activo'`, mismo universo por defecto que
+   `proyeccion_documental_backlog`) cuya vigencia se superpone con
+   `[vigente_desde, vigente_hasta]` de la evidencia. Para cada una:
+   - `conjunto_de_sujetos(session, identidad, oc.clave_origen, hoy)` — si `sujeto_id` no
+     está en `sujeto_ids`, esa OC no aplica, se descarta (reusa 4.1/4.2 tal cual, sin
+     reglas nuevas).
+   - `_tipos_y_requisitos(...)` — si es `None` (`sin_matriz`) o si
+     `requisito_definicion_id` no está en `requisitos_por_tipo[tipo_sujeto]`, tampoco
+     aplica.
+   - Si ambas pasan, la OC exige este requisito para este sujeto: se agrega a
+     `matrices_aplicables` con `commitment_id`, `matriz_version_id`, `version` y
+     `origen_calculo` (mismo campo que ya expone el backlog).
+3. `aplicabilidad`:
+   - `"exigida_por_oc"` si `matrices_aplicables` no quedó vacío.
+   - `"informativa"` si quedó vacío — evidencia real, registrada, pero que hoy ninguna OC
+     activa en el alcance de quien consulta exige. Es la respuesta directa y honesta a
+     Q-DOC-01: nunca se presenta como obligatoria sin serlo, y ahora hay un campo explícito
+     que lo dice en vez de dejarlo implícito.
+
+```json
+{
+  "tipo": "evidencia",
+  "referencia": "evidencia:documento:9f2a1c3e-...",
+  "categoria": "documento",
+  "id": "9f2a1c3e-...",
+  "sujeto_id": "persona_0042",
+  "tipo_sujeto": "persona",
+  "identificador_natural": "Juan Pérez",
+  "requisito_definicion_id": "…",
+  "requisito": "Apto médico",
+  "vigente_desde": "2026-03-30",
+  "vigente_hasta": "2026-09-30",
+  "estado_confirmacion": "verificado",
+  "archivo_validacion": "valido",
+  "hoy": "2026-09-22",
+  "aplicabilidad": "exigida_por_oc",
+  "matrices_aplicables": [
+    { "commitment_id": "OC-2026-118", "matriz_version_id": "…", "version": 3, "origen_calculo": "ultima_decision_visible" }
+  ],
+  "advertencia": "Proyección documental calculada con la información registrada a la fecha. No garantiza disponibilidad ni asignación operativa."
+}
+```
+
+Nota de costo: el recorrido de OCs activas es el mismo orden de magnitud que ya paga
+`proyeccion_documental_backlog` completo (una función de "cantidad de OC activas", no de
+"cantidad de evidencia") — aceptable porque este endpoint se llama una vez por click en
+"ver detalle", nunca por fila de una lista. Si en producción la cantidad de OC activas
+crece lo suficiente para que esto pese, la mitigación es acotar por `cliente_id`/
+`locacion_id` del sujeto antes de iterar — no forma parte de este diseño porque no hay
+evidencia todavía de que haga falta (no optimizar sin medir).
+
+### 15.3 Qué NO resuelve esto
+
+- No agrega el estado `sin_evidencia` que pedía Q-DOC-01 originalmente — sigue sin tener
+  sentido en este endpoint: `sin_evidencia` describe la AUSENCIA de una fila, y este
+  endpoint necesita una fila existente (`categoria`+`id`) para resolver algo. Esa pregunta
+  ("¿qué requisito de esta OC no tiene NINGÚN candidato que lo cubra?") ya la contesta
+  `bloqueo_confirmado`/`causas` en la rama `oc` — no es un tercer estado nuevo, es
+  reutilizar lo que ya existe.
+- No cambia en nada `calendario_vigencias` ni `proyeccion_documental_backlog` como listas:
+  siguen sin cruzar matriz/OC fila por fila (punto 2.1 se mantiene intacto para las
+  listas). El cruce vive exclusivamente en este endpoint de detalle, y exclusivamente para
+  la referencia puntual que se pida.
+- No inventa un rol nuevo ni una regla de alcance nueva: hereda los roles y el alcance de
+  los tres endpoints existentes, rama por rama.
+
+### 15.4 Tests (`tests/test_proyeccion_documental.py`, contra PostgreSQL real)
+
+- `test_detalle_rama_oc_coincide_con_proyeccion_documental`: el body coincide EXACTAMENTE
+  con `proyeccion_documental?commitment_id=…` para la misma OC, salvo `tipo` de más
+  (regresión de no-duplicar el motor); confirma además la simetría de `referencia` en
+  `ProyeccionDocumentalResponse`;
+- `test_detalle_rama_oc_tecnico_403`: técnico → 403, igual que en `proyeccion_documental`
+  directo;
+- `test_detalle_rama_evidencia_informativa_sin_ninguna_oc_activa`: `aplicabilidad =
+  "informativa"` cuando ninguna OC activa exige ese requisito para ese sujeto;
+- `test_detalle_rama_evidencia_exigida_por_oc` / `test_detalle_rama_evidencia_exigida_por_mas_de_una_oc`:
+  `aplicabilidad = "exigida_por_oc"` con una OC que sí lo exige, y con más de una
+  (`matrices_aplicables` con más de un elemento);
+- `test_detalle_rama_evidencia_sujeto_fuera_de_alcance_da_404`: sujeto fuera del alcance de
+  quien consulta → 404, nunca 403, nunca expone `sujeto_id` ni `requisito` de otro alcance;
+- `test_detalle_rama_evidencia_categoria_id_inexistente_da_404`: `categoria`/`id`
+  inexistente → 404;
+- `test_detalle_referencia_malformada_da_422`: sin prefijo válido, sin `id`, `categoria`
+  inválida → 422 (cuatro variantes);
+- `test_detalle_rama_evidencia_tecnico_ve_su_propia_referencia`: `evidencia:` sí admite
+  técnico (mismo rol que `calendario_vigencias`), a diferencia de `oc:`;
+- `test_detalle_backlog_expone_referencia_punta_a_punta`: `proyeccion_documental_backlog`
+  expone `referencia` con el formato exacto, y ese mismo string funciona sin modificación
+  como parámetro de este endpoint (listar → tomar `referencia` → pedir detalle → 200);
+- `test_detalle_no_escribe_nada`: ninguna rama persiste, crea tareas ni emite eventos.
+
+Corridos junto al resto de la suite de proyección: al cierre de este documento, **51
+tests en `tests/test_proyeccion_documental.py`, 601 en la suite completa, 0 fallados**
+(incluye las correcciones del punto 16).
+
+## 16. Correcciones de la auditoría externa (2026-09-22)
+
+Una auditoría externa sobre el backlog y la proyección encontró 10 hallazgos (B-01 a
+B-10). Verificados uno por uno contra el código antes de tocar nada — 9 eran reales, uno
+(B-04, calendario ≠ intervalos de cobertura) ya estaba resuelto y documentado en el punto
+2.1. Corregidos, con tests contra PostgreSQL real:
+
+- **B-01 (P1, `app/core/proyeccion.py`)**: el motor no quebraba en `vigente_desde` — un
+  alta a mitad de ventana quedaba roja todo el tramo. Corregido en `puntos_de_quiebre`
+  (punto 8, arriba) y `calcular_intervalos`. Tests:
+  `test_documento_que_arranca_a_mitad_de_ventana_quiebra_en_vigente_desde`
+  (`tests/test_motor_proyeccion.py`) y su contraparte HTTP en
+  `tests/test_proyeccion_documental.py`.
+- **B-02 (P1, `app/core/proyeccion.py`)**: el motor ignoraba excepciones y constancias
+  pese a que el punto 8 siempre las listó como quiebres — podía dar `bloqueo_confirmado`
+  donde `cobertura_oc` (que sí las usa, vía `app/core/orquestacion.py::_evaluar_requisito`)
+  daría habilitado. Corregido reutilizando `resolver_constancia_aplicable`/
+  `excepcion_tiene_efecto` (`app/core/evaluacion.py`) y `cargar_constancias`/
+  `cargar_excepciones` (antes privadas en `app/core/orquestacion.py`, ahora públicas,
+  mismo criterio que `cargar_evidencias`) — misma precedencia que el motor completo:
+  constancia sólo cubre bloqueante_duro, excepción nunca vuelve verde el veredicto pero sí
+  habilita `asignable`/capacidad, y ninguna de las dos rescata `requiere_revision`. Ambas
+  agregan sus propios puntos de quiebre por vigencia acotada. 7 tests nuevos en
+  `tests/test_motor_proyeccion.py` (motor puro) + 2 en `tests/test_proyeccion_documental.py`
+  (end-to-end, carga real).
+- **B-03 (P1, `proyeccion_documental`)**: el default de `hasta` era la vigencia completa
+  de la OC — cualquier OC de más de 366 días explotaba 422 con la llamada más obvia (sin
+  parámetros). Corregido: el default ahora se recorta a `min(oc.vigencia_hasta, desde +
+  366)`; un `hasta` explícito por encima del tope sigue dando 422 igual que antes.
+  **Seguimiento (observación de una segunda revisión externa, 2026-09-22)**: esto dejaba
+  un caso simétrico sin resolver — una OC ya terminada sin `hasta` explícito seguía dando
+  422 en el endpoint puntual, mientras el backlog ya lo resolvía con `vigencia_finalizada`
+  (B-07). Decisión explícita, opción A (simetría, no documentar la asimetría): el
+  endpoint puntual también devuelve 200 con `estado = vigencia_finalizada` para ese
+  caso — `matriz` viaja poblada (ya está resuelta en ese punto), `intervalos: []`, mismo
+  texto de `causas` que usa el backlog. La distinción es POR QUÉ `hasta < desde`: si es
+  por el default (la vigencia de la OC ya pasó), es un hecho estructural →
+  `vigencia_finalizada`, 200; si `hasta` fue explícito, sigue siendo 422 — ahí es un pedido
+  mal formado de quien consulta, no un hecho de la OC (`vigencia_ya_finalizada` en
+  `servicio.py`). `ProyeccionDocumentalResponse.estado` (y por herencia `DetalleOcResponse`
+  del punto 15) suma el 7º valor. 2 tests nuevos:
+  `test_proyeccion_oc_ya_vencida_da_vigencia_finalizada_no_422` (y su contraparte,
+  confirmando que el `hasta` explícito en una OC activa SIGUE dando 422).
+- **B-05 (P2, `proyeccion_documental_backlog`)**: el backlog sólo traía `commitment_id`
+  (la clave técnica) — el frontend no podía armar "OC 45000218 · Cliente Norte" sin otro
+  GET. `ItemBacklog` suma `oc_referencia` (columna `oc.referencia`, nullable), `cliente_id`
+  y `locacion_id` (cambio aditivo, no rompe nada existente).
+- **B-06 (P2, parcial)**: el backlog recorre TODAS las OC activas antes de paginar, y
+  `cargar_evidencias` traía evidencia de todo el tenant para los requisitos en juego, no
+  sólo de los candidatos de cada OC. Corregido lo segundo: `cargar_evidencias` suma un
+  filtro opcional `sujeto_ids` (default `None` = comportamiento anterior, tal como lo
+  sigue usando `evaluar_compromiso` sin pasarlo); `proyeccion_documental` y el backlog lo
+  pasan con `conjunto["candidatos"]`. **Lo primero queda sin resolver a propósito**:
+  paginar antes de calcular exige conocer el `estado` de cada OC para poder filtrar por
+  `estado`/ordenar, lo que a su vez exige haberlas calculado — resolverlo bien (p. ej.
+  SQL-side sólo cuando no hay filtro de `estado` y el alcance es total) es un cambio de
+  arquitectura aparte, de mayor riesgo, que no se apuró en esta tanda por no comprometer
+  la corrección de un endpoint que ya alimenta decisiones. Test de regresión de que acotar
+  evidencia no pierde cobertura real: `test_backlog_evidencia_acotada_a_candidatos_no_pierde_cobertura`.
+- **B-07 (P2, `proyeccion_documental_backlog`)**: una OC activa cuya vigencia ya terminó
+  entraba con el MISMO `estado` que "todavía no hay candidatos ni decisión"
+  (`pendiente_de_planificacion`) — mentira semántica según la auditoría. Estado nuevo,
+  **sólo en el backlog** (`ItemBacklog.estado`, no en `ProyeccionDocumentalResponse.estado`
+  — ver nota de B-03 arriba): `vigencia_finalizada`. Sumado a `ESTADOS_RESUMEN` para que
+  `?estado=vigencia_finalizada` filtre correctamente. Test:
+  `test_backlog_oc_ya_vencida_no_es_pendiente_de_planificacion`.
+- **B-09 (P3, este documento)**: el título decía "diseño (sin implementar)" — desactualizado
+  desde que se mergearon los primeros tres endpoints, podía hacer creer que las rutas no
+  existían. Corregido (encabezado de este documento).
+- **B-10 (P3, `app/modules/drive/servicio.py`)**: `escanear()` usaba `datetime.now().astimezone()`
+  (hora local del SO) como fallback cuando no se pasaba `ahora` explícito — inconsistente
+  con el resto del dominio, que siempre pasa un `ahora`/usa `ahora_utc()`
+  (`app/comun/reloj.py`). El único caller que no lo pasaba era
+  `POST /v1/comandos/escanear_drive` (`app/modules/capacidades_router.py`) — el worker
+  programado sí lo pasaba. Corregido en ambos lados.
+
+**B-08 (P3, `POST /v1/auth/login`)** no es de este documento (proyección/backlog) pero se
+corrigió en la misma tanda por venir en el mismo informe: login no tenía ningún rate
+limit, a diferencia del link público de paquetes. Se extrajo `RateLimiter`
+(`app/modules/paquete/servicio.py`) a `app/comun/ratelimit.py` para reusarlo sin que auth
+dependa de un módulo de negocio ajeno, y se aplicó a `/v1/auth/login` por origen (mismo
+criterio anti-spoofing de `app/comun/red.py` que ya usaba paquetes), 30/min. Ver
+`docs/HANDOFF_PROYECCION_ASTRA.md` §8 para el resumen de contrato de cara a Astra.
