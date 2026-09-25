@@ -53,6 +53,7 @@ class DetalleOcResponse(BaseModel):
     oc: dict[str, Any]
     estado_documental: str
     matrices_utilizadas: list[dict[str, Any]]
+    requisitos_particulares: list[dict[str, Any]]
     grupos: list[dict[str, Any]]
     advertencia: str
 
@@ -95,4 +96,5 @@ def radar_documental_legajo(
 ) -> DetalleLegajoResponse:
     with tenant_session(identidad.tenant_id) as session:
         return DetalleLegajoResponse(**servicio.detalle_legajo(session, identidad, str(oc_id), sujeto_id))
+
 
