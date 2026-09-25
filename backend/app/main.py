@@ -40,6 +40,7 @@ ROUTERS = [
     "app.modules.evidencia.router",
     "app.modules.oc.router",
     "app.modules.proyeccion.router",
+    "app.modules.radar_documental.router",
     "app.modules.consultas.router",
     "app.storage.router",
 ]
