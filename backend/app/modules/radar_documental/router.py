@@ -97,4 +97,3 @@ def radar_documental_legajo(
     with tenant_session(identidad.tenant_id) as session:
         return DetalleLegajoResponse(**servicio.detalle_legajo(session, identidad, str(oc_id), sujeto_id))
 
-
