@@ -567,3 +567,4 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
             r = cliente_api.post(url, json={}) if metodo == "post" else getattr(cliente_api, metodo)(url)
             assert r.status_code == 401, (metodo, path, r.status_code)
             assert r.json()["error"]["codigo"] == "no_autenticado"
+

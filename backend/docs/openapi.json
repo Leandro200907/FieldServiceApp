@@ -1394,69 +1394,6 @@
         "title": "CausaIncumplimiento",
         "type": "object"
       },
-      "CausaProyeccion": {
-        "properties": {
-          "motivo": {
-            "title": "Motivo",
-            "type": "string"
-          },
-          "requisito_definicion_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requisito Definicion Id"
-          },
-          "sujetos_que_mantienen_cobertura": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sujetos Que Mantienen Cobertura"
-          },
-          "sujetos_que_pierden_cobertura": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sujetos Que Pierden Cobertura"
-          },
-          "tipo_sujeto": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tipo Sujeto"
-          }
-        },
-        "required": [
-          "motivo"
-        ],
-        "title": "CausaProyeccion",
-        "type": "object"
-      },
       "CoberturaOcResponse": {
         "properties": {
           "commitment_id": {
@@ -2212,6 +2149,29 @@
           "limit"
         ],
         "title": "ConstanciasResponse",
+        "type": "object"
+      },
+      "ConteoTipo": {
+        "properties": {
+          "con_alertas": {
+            "title": "Con Alertas",
+            "type": "integer"
+          },
+          "incompletos": {
+            "title": "Incompletos",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "con_alertas",
+          "incompletos"
+        ],
+        "title": "ConteoTipo",
         "type": "object"
       },
       "CopiaLocalDefinicion": {
@@ -3241,257 +3201,80 @@
         "title": "DescartarArchivoDriveResponse",
         "type": "object"
       },
-      "DetalleEvidenciaResponse": {
+      "DetalleLegajoRadarResponse": {
         "properties": {
           "advertencia": {
             "title": "Advertencia",
             "type": "string"
           },
-          "aplicabilidad": {
-            "enum": [
-              "exigida_por_oc",
-              "informativa"
-            ],
-            "title": "Aplicabilidad",
-            "type": "string"
-          },
-          "archivo_validacion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Archivo Validacion"
-          },
-          "categoria": {
-            "enum": [
-              "documento",
-              "competencia",
-              "induccion"
-            ],
-            "title": "Categoria",
-            "type": "string"
-          },
-          "estado_confirmacion": {
-            "title": "Estado Confirmacion",
-            "type": "string"
-          },
-          "hoy": {
-            "format": "date",
-            "title": "Hoy",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "identificador_natural": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Identificador Natural"
-          },
-          "matrices_aplicables": {
-            "items": {
-              "$ref": "#/components/schemas/MatrizAplicable"
-            },
-            "title": "Matrices Aplicables",
-            "type": "array"
-          },
-          "referencia": {
-            "title": "Referencia",
-            "type": "string"
-          },
-          "requisito": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requisito"
-          },
-          "requisito_definicion_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requisito Definicion Id"
-          },
-          "sujeto_id": {
-            "title": "Sujeto Id",
-            "type": "string"
-          },
-          "tipo": {
-            "const": "evidencia",
-            "title": "Tipo",
-            "type": "string"
-          },
-          "tipo_sujeto": {
-            "title": "Tipo Sujeto",
-            "type": "string"
-          },
-          "vigente_desde": {
-            "format": "date",
-            "title": "Vigente Desde",
-            "type": "string"
-          },
-          "vigente_hasta": {
-            "format": "date",
-            "title": "Vigente Hasta",
-            "type": "string"
-          }
-        },
-        "required": [
-          "tipo",
-          "referencia",
-          "categoria",
-          "id",
-          "sujeto_id",
-          "tipo_sujeto",
-          "identificador_natural",
-          "requisito_definicion_id",
-          "requisito",
-          "vigente_desde",
-          "vigente_hasta",
-          "estado_confirmacion",
-          "archivo_validacion",
-          "hoy",
-          "aplicabilidad",
-          "matrices_aplicables",
-          "advertencia"
-        ],
-        "title": "DetalleEvidenciaResponse",
-        "type": "object"
-      },
-      "DetalleOcResponse": {
-        "properties": {
-          "advertencia": {
-            "title": "Advertencia",
-            "type": "string"
-          },
-          "causas": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/CausaProyeccion"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Causas"
-          },
-          "commitment_id": {
-            "title": "Commitment Id",
-            "type": "string"
-          },
-          "desde": {
-            "format": "date",
-            "title": "Desde",
-            "type": "string"
-          },
-          "estado": {
-            "enum": [
-              "sin_matriz",
-              "pendiente_de_planificacion",
-              "bloqueo_confirmado",
-              "requiere_revision",
-              "riesgo_documental",
-              "sin_riesgos_detectados",
-              "vigencia_finalizada"
-            ],
-            "title": "Estado",
-            "type": "string"
-          },
-          "estado_por_dia": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Estado Por Dia"
-          },
-          "hasta": {
-            "format": "date",
-            "title": "Hasta",
-            "type": "string"
-          },
-          "hoy": {
-            "format": "date",
-            "title": "Hoy",
-            "type": "string"
-          },
-          "intervalos": {
-            "items": {
-              "$ref": "#/components/schemas/IntervaloProyeccion"
-            },
-            "title": "Intervalos",
-            "type": "array"
-          },
-          "matriz": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MatrizInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "legajo": {
+            "additionalProperties": true,
+            "title": "Legajo",
+            "type": "object"
           },
           "oc": {
-            "$ref": "#/components/schemas/OcInfo"
-          },
-          "referencia": {
-            "title": "Referencia",
-            "type": "string"
-          },
-          "sujetos": {
-            "$ref": "#/components/schemas/SujetosOrigen"
-          },
-          "tipo": {
-            "const": "oc",
-            "title": "Tipo",
-            "type": "string"
+            "additionalProperties": true,
+            "title": "Oc",
+            "type": "object"
           }
         },
         "required": [
-          "commitment_id",
-          "referencia",
           "oc",
-          "hoy",
-          "desde",
-          "hasta",
-          "sujetos",
-          "matriz",
-          "estado",
-          "intervalos",
-          "advertencia",
-          "tipo"
+          "legajo",
+          "advertencia"
         ],
-        "title": "DetalleOcResponse",
+        "title": "DetalleLegajoRadarResponse",
+        "type": "object"
+      },
+      "DetalleOcRadarResponse": {
+        "properties": {
+          "advertencia": {
+            "title": "Advertencia",
+            "type": "string"
+          },
+          "estado_documental": {
+            "title": "Estado Documental",
+            "type": "string"
+          },
+          "grupos": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Grupos",
+            "type": "array"
+          },
+          "matrices_utilizadas": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Matrices Utilizadas",
+            "type": "array"
+          },
+          "oc": {
+            "additionalProperties": true,
+            "title": "Oc",
+            "type": "object"
+          },
+          "requisitos_particulares": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Requisitos Particulares",
+            "type": "array"
+          }
+        },
+        "required": [
+          "oc",
+          "estado_documental",
+          "matrices_utilizadas",
+          "requisitos_particulares",
+          "grupos",
+          "advertencia"
+        ],
+        "title": "DetalleOcRadarResponse",
         "type": "object"
       },
       "DocumentoCargadoResponse": {
@@ -5069,58 +4852,6 @@
         "title": "IncumplimientoEmpresaResponse",
         "type": "object"
       },
-      "IntervaloProyeccion": {
-        "properties": {
-          "capacidad_documental_potencial": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "title": "Capacidad Documental Potencial",
-            "type": "object"
-          },
-          "causas": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/CausaProyeccion"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Causas"
-          },
-          "desde": {
-            "format": "date",
-            "title": "Desde",
-            "type": "string"
-          },
-          "estado": {
-            "enum": [
-              "bloqueo_confirmado",
-              "requiere_revision",
-              "sin_riesgos_detectados"
-            ],
-            "title": "Estado",
-            "type": "string"
-          },
-          "hasta": {
-            "format": "date",
-            "title": "Hasta",
-            "type": "string"
-          }
-        },
-        "required": [
-          "desde",
-          "hasta",
-          "estado",
-          "capacidad_documental_potencial"
-        ],
-        "title": "IntervaloProyeccion",
-        "type": "object"
-      },
       "InvalidarEvidenciaBody": {
         "properties": {
           "documento_id": {
@@ -5160,110 +4891,6 @@
           "eventos"
         ],
         "title": "InvalidarEvidenciaResponse",
-        "type": "object"
-      },
-      "ItemBacklog": {
-        "properties": {
-          "capacidad_documental_potencial_hoy": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "title": "Capacidad Documental Potencial Hoy",
-            "type": "object"
-          },
-          "cliente_id": {
-            "title": "Cliente Id",
-            "type": "string"
-          },
-          "commitment_id": {
-            "title": "Commitment Id",
-            "type": "string"
-          },
-          "estado": {
-            "enum": [
-              "sin_matriz",
-              "pendiente_de_planificacion",
-              "bloqueo_confirmado",
-              "requiere_revision",
-              "riesgo_documental",
-              "sin_riesgos_detectados",
-              "vigencia_finalizada"
-            ],
-            "title": "Estado",
-            "type": "string"
-          },
-          "locacion_id": {
-            "title": "Locacion Id",
-            "type": "string"
-          },
-          "motivos_resumidos": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Motivos Resumidos",
-            "type": "array"
-          },
-          "oc_referencia": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Oc Referencia"
-          },
-          "origen_calculo": {
-            "enum": [
-              "ultima_decision_visible",
-              "candidatos_del_alcance"
-            ],
-            "title": "Origen Calculo",
-            "type": "string"
-          },
-          "primer_quiebre": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Primer Quiebre"
-          },
-          "referencia": {
-            "title": "Referencia",
-            "type": "string"
-          },
-          "vigencia_desde": {
-            "format": "date",
-            "title": "Vigencia Desde",
-            "type": "string"
-          },
-          "vigencia_hasta": {
-            "format": "date",
-            "title": "Vigencia Hasta",
-            "type": "string"
-          }
-        },
-        "required": [
-          "commitment_id",
-          "referencia",
-          "oc_referencia",
-          "cliente_id",
-          "locacion_id",
-          "vigencia_desde",
-          "vigencia_hasta",
-          "estado",
-          "primer_quiebre",
-          "capacidad_documental_potencial_hoy",
-          "origen_calculo",
-          "motivos_resumidos"
-        ],
-        "title": "ItemBacklog",
         "type": "object"
       },
       "ItemCalendario": {
@@ -5367,6 +4994,103 @@
           "referencia"
         ],
         "title": "ItemCalendario",
+        "type": "object"
+      },
+      "ItemRadar": {
+        "properties": {
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "estado_documental": {
+            "enum": [
+              "sin_alertas_documentales",
+              "con_alertas_documentales",
+              "informacion_incompleta",
+              "sin_matriz"
+            ],
+            "title": "Estado Documental",
+            "type": "string"
+          },
+          "locacion_id": {
+            "title": "Locacion Id",
+            "type": "string"
+          },
+          "motivos_resumidos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Motivos Resumidos",
+            "type": "array"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "primer_quiebre": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primer Quiebre"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "resumen": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ConteoTipo"
+            },
+            "title": "Resumen",
+            "type": "object"
+          },
+          "tipo_servicio_id": {
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "vigencia_desde": {
+            "format": "date",
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "format": "date",
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "referencia",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "vigencia_desde",
+          "vigencia_hasta",
+          "estado_documental",
+          "primer_quiebre",
+          "resumen",
+          "motivos_resumidos"
+        ],
+        "title": "ItemRadar",
         "type": "object"
       },
       "LegajoDatos": {
@@ -5781,38 +5505,6 @@
         "title": "MatricesResponse",
         "type": "object"
       },
-      "MatrizAplicable": {
-        "properties": {
-          "commitment_id": {
-            "title": "Commitment Id",
-            "type": "string"
-          },
-          "matriz_version_id": {
-            "title": "Matriz Version Id",
-            "type": "string"
-          },
-          "origen_calculo": {
-            "enum": [
-              "ultima_decision_visible",
-              "candidatos_del_alcance"
-            ],
-            "title": "Origen Calculo",
-            "type": "string"
-          },
-          "version": {
-            "title": "Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "commitment_id",
-          "matriz_version_id",
-          "version",
-          "origen_calculo"
-        ],
-        "title": "MatrizAplicable",
-        "type": "object"
-      },
       "MatrizGlobalConCopias": {
         "properties": {
           "actualizado_en": {
@@ -5890,32 +5582,6 @@
           "copias_locales"
         ],
         "title": "MatrizGlobalConCopias",
-        "type": "object"
-      },
-      "MatrizInfo": {
-        "properties": {
-          "matriz_version_id": {
-            "title": "Matriz Version Id",
-            "type": "string"
-          },
-          "tipos_exigidos": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Tipos Exigidos",
-            "type": "array"
-          },
-          "version": {
-            "title": "Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "matriz_version_id",
-          "version",
-          "tipos_exigidos"
-        ],
-        "title": "MatrizInfo",
         "type": "object"
       },
       "MatrizItem": {
@@ -6253,41 +5919,6 @@
           "ultima_decision"
         ],
         "title": "OcBacklogItem",
-        "type": "object"
-      },
-      "OcInfo": {
-        "properties": {
-          "cliente_id": {
-            "title": "Cliente Id",
-            "type": "string"
-          },
-          "locacion_id": {
-            "title": "Locacion Id",
-            "type": "string"
-          },
-          "tipo_servicio_id": {
-            "title": "Tipo Servicio Id",
-            "type": "string"
-          },
-          "vigencia_desde": {
-            "format": "date",
-            "title": "Vigencia Desde",
-            "type": "string"
-          },
-          "vigencia_hasta": {
-            "format": "date",
-            "title": "Vigencia Hasta",
-            "type": "string"
-          }
-        },
-        "required": [
-          "cliente_id",
-          "locacion_id",
-          "tipo_servicio_id",
-          "vigencia_desde",
-          "vigencia_hasta"
-        ],
-        "title": "OcInfo",
         "type": "object"
       },
       "OcModificada": {
@@ -6803,163 +6434,6 @@
         "title": "PropuestasPendientesResponse",
         "type": "object"
       },
-      "ProyeccionDocumentalBacklogResponse": {
-        "properties": {
-          "advertencia": {
-            "title": "Advertencia",
-            "type": "string"
-          },
-          "horizonte_dias": {
-            "title": "Horizonte Dias",
-            "type": "integer"
-          },
-          "hoy": {
-            "format": "date",
-            "title": "Hoy",
-            "type": "string"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ItemBacklog"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "limit": {
-            "title": "Limit",
-            "type": "integer"
-          },
-          "offset": {
-            "title": "Offset",
-            "type": "integer"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "hoy",
-          "horizonte_dias",
-          "items",
-          "total",
-          "offset",
-          "limit",
-          "advertencia"
-        ],
-        "title": "ProyeccionDocumentalBacklogResponse",
-        "type": "object"
-      },
-      "ProyeccionDocumentalResponse": {
-        "properties": {
-          "advertencia": {
-            "title": "Advertencia",
-            "type": "string"
-          },
-          "causas": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/CausaProyeccion"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Causas"
-          },
-          "commitment_id": {
-            "title": "Commitment Id",
-            "type": "string"
-          },
-          "desde": {
-            "format": "date",
-            "title": "Desde",
-            "type": "string"
-          },
-          "estado": {
-            "enum": [
-              "sin_matriz",
-              "pendiente_de_planificacion",
-              "bloqueo_confirmado",
-              "requiere_revision",
-              "riesgo_documental",
-              "sin_riesgos_detectados",
-              "vigencia_finalizada"
-            ],
-            "title": "Estado",
-            "type": "string"
-          },
-          "estado_por_dia": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Estado Por Dia"
-          },
-          "hasta": {
-            "format": "date",
-            "title": "Hasta",
-            "type": "string"
-          },
-          "hoy": {
-            "format": "date",
-            "title": "Hoy",
-            "type": "string"
-          },
-          "intervalos": {
-            "items": {
-              "$ref": "#/components/schemas/IntervaloProyeccion"
-            },
-            "title": "Intervalos",
-            "type": "array"
-          },
-          "matriz": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MatrizInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "oc": {
-            "$ref": "#/components/schemas/OcInfo"
-          },
-          "referencia": {
-            "title": "Referencia",
-            "type": "string"
-          },
-          "sujetos": {
-            "$ref": "#/components/schemas/SujetosOrigen"
-          }
-        },
-        "required": [
-          "commitment_id",
-          "referencia",
-          "oc",
-          "hoy",
-          "desde",
-          "hasta",
-          "sujetos",
-          "matriz",
-          "estado",
-          "intervalos",
-          "advertencia"
-        ],
-        "title": "ProyeccionDocumentalResponse",
-        "type": "object"
-      },
       "PublicarVersionDeMatriz": {
         "properties": {
           "archivo_de_respaldo": {
@@ -7074,6 +6548,60 @@
           "eventos"
         ],
         "title": "PublicarVersionDeMatrizResponse",
+        "type": "object"
+      },
+      "RadarBacklogResponse": {
+        "properties": {
+          "advertencia": {
+            "title": "Advertencia",
+            "type": "string"
+          },
+          "calculado_en": {
+            "format": "date-time",
+            "title": "Calculado En",
+            "type": "string"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "hasta": {
+            "format": "date",
+            "title": "Hasta",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemRadar"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "calculado_en",
+          "desde",
+          "hasta",
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "advertencia"
+        ],
+        "title": "RadarBacklogResponse",
         "type": "object"
       },
       "ReasignarSupervisor": {
@@ -8050,56 +7578,6 @@
           "identificador"
         ],
         "title": "SujetoPaquete",
-        "type": "object"
-      },
-      "SujetosOrigen": {
-        "properties": {
-          "evaluada_en": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evaluada En"
-          },
-          "origen": {
-            "enum": [
-              "ultima_decision_visible",
-              "candidatos_del_alcance"
-            ],
-            "title": "Origen",
-            "type": "string"
-          },
-          "referencia_evaluacion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Referencia Evaluacion"
-          },
-          "sujeto_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Sujeto Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "origen",
-          "referencia_evaluacion",
-          "evaluada_en",
-          "sujeto_ids"
-        ],
-        "title": "SujetosOrigen",
         "type": "object"
       },
       "SujetosResponse": {
@@ -15932,118 +15410,6 @@
         "summary": "Definiciones Requisito"
       }
     },
-    "/v1/consultas/detalle_proyeccion_documental": {
-      "get": {
-        "operationId": "detalle_proyeccion_documental_v1_consultas_detalle_proyeccion_documental_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "referencia",
-            "required": true,
-            "schema": {
-              "title": "Referencia",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "discriminator": {
-                    "mapping": {
-                      "evidencia": "#/components/schemas/DetalleEvidenciaResponse",
-                      "oc": "#/components/schemas/DetalleOcResponse"
-                    },
-                    "propertyName": "tipo"
-                  },
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/DetalleEvidenciaResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/DetalleOcResponse"
-                    }
-                  ],
-                  "title": "Response Detalle Proyeccion Documental V1 Consultas Detalle Proyeccion Documental Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Rol insuficiente o fuera de alcance"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Recurso inexistente o no visible para el rol"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflicto de dominio, idempotencia o concurrencia"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validación o regla de dominio"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Error interno; informar request_id"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Detalle Proyeccion Documental",
-        "tags": [
-          "proyeccion"
-        ]
-      }
-    },
     "/v1/consultas/documentos": {
       "get": {
         "operationId": "documentos_v1_consultas_documentos_get",
@@ -18021,19 +17387,10 @@
         "summary": "Propuestas Pendientes"
       }
     },
-    "/v1/consultas/proyeccion_documental": {
+    "/v1/consultas/radar_documental_backlog": {
       "get": {
-        "operationId": "proyeccion_documental_v1_consultas_proyeccion_documental_get",
+        "operationId": "radar_documental_backlog_v1_consultas_radar_documental_backlog_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "commitment_id",
-            "required": true,
-            "schema": {
-              "title": "Commitment Id",
-              "type": "string"
-            }
-          },
           {
             "in": "query",
             "name": "desde",
@@ -18070,118 +17427,53 @@
           },
           {
             "in": "query",
-            "name": "detalle",
+            "name": "cliente_id",
             "required": false,
             "schema": {
-              "default": "resumen",
-              "enum": [
-                "resumen",
-                "diario"
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "title": "Detalle",
-              "type": "string"
+              "title": "Cliente Id"
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProyeccionDocumentalResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Rol insuficiente o fuera de alcance"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Recurso inexistente o no visible para el rol"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflicto de dominio, idempotencia o concurrencia"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validación o regla de dominio"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Error interno; informar request_id"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Proyeccion Documental",
-        "tags": [
-          "proyeccion"
-        ]
-      }
-    },
-    "/v1/consultas/proyeccion_documental_backlog": {
-      "get": {
-        "operationId": "proyeccion_documental_backlog_v1_consultas_proyeccion_documental_backlog_get",
-        "parameters": [
           {
             "in": "query",
-            "name": "estado_oc",
+            "name": "locacion_id",
             "required": false,
             "schema": {
-              "default": "activo",
-              "enum": [
-                "activo",
-                "cancelado"
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "title": "Estado Oc",
-              "type": "string"
+              "title": "Locacion Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tipo_servicio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Servicio Id"
             }
           },
           {
@@ -18205,13 +17497,18 @@
           },
           {
             "in": "query",
-            "name": "horizonte_dias",
+            "name": "q",
             "required": false,
             "schema": {
-              "default": 30,
-              "minimum": 1,
-              "title": "Horizonte Dias",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {
@@ -18243,7 +17540,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProyeccionDocumentalBacklogResponse"
+                  "$ref": "#/components/schemas/RadarBacklogResponse"
                 }
               }
             },
@@ -18315,7 +17612,212 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Proyeccion Documental Backlog",
+        "summary": "Radar Documental Backlog",
+        "tags": [
+          "proyeccion"
+        ]
+      }
+    },
+    "/v1/consultas/radar_documental_oc": {
+      "get": {
+        "operationId": "radar_documental_oc_v1_consultas_radar_documental_oc_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "oc_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Oc Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetalleOcRadarResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Radar Documental Oc",
+        "tags": [
+          "proyeccion"
+        ]
+      }
+    },
+    "/v1/consultas/radar_documental_oc/{oc_id}/legajos/{sujeto_id}": {
+      "get": {
+        "operationId": "radar_documental_legajo_v1_consultas_radar_documental_oc__oc_id__legajos__sujeto_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "oc_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Oc Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sujeto_id",
+            "required": true,
+            "schema": {
+              "title": "Sujeto Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetalleLegajoRadarResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Radar Documental Legajo",
         "tags": [
           "proyeccion"
         ]
