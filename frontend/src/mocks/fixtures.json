@@ -1,0 +1,122 @@
+{
+  "notice": "SOLO DESARROLLO/TEST. Datos sintéticos, sin credenciales válidas ni respuestas de negocio. No conectar automáticamente a API real.",
+  "baseline_sha256": "7608202069de835c8fbb40acbc0b2e41e1b4535edc15e0be1b1c15087b979e72",
+  "fixtures": [
+    {
+      "name": "login-200",
+      "synthetic": true,
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "status": 200,
+      "body": {
+        "access_token": "SYNTHETIC_INITIAL_ACCESS_NOT_A_JWT",
+        "refresh_token": "SYNTHETIC_INITIAL_REFRESH_NOT_A_JWT",
+        "token_type": "bearer",
+        "expires_in": 300
+      }
+    },
+    {
+      "name": "refresh-200",
+      "synthetic": true,
+      "method": "POST",
+      "path": "/v1/auth/refresh",
+      "status": 200,
+      "body": {
+        "access_token": "SYNTHETIC_ROTATED_ACCESS_NOT_A_JWT",
+        "refresh_token": "SYNTHETIC_ROTATED_REFRESH_NOT_A_JWT",
+        "token_type": "bearer",
+        "expires_in": 300
+      }
+    },
+    {
+      "name": "yo-200-configuracion",
+      "synthetic": true,
+      "method": "GET",
+      "path": "/v1/auth/yo",
+      "status": 200,
+      "body": {
+        "tenant_id": "SYNTHETIC_TENANT",
+        "usuario_id": "SYNTHETIC_USER_configuracion",
+        "roles": [
+          "configuracion"
+        ],
+        "sujeto_id": null
+      }
+    },
+    {
+      "name": "yo-200-responsable_legajos",
+      "synthetic": true,
+      "method": "GET",
+      "path": "/v1/auth/yo",
+      "status": 200,
+      "body": {
+        "tenant_id": "SYNTHETIC_TENANT",
+        "usuario_id": "SYNTHETIC_USER_responsable_legajos",
+        "roles": [
+          "responsable_legajos"
+        ],
+        "sujeto_id": null
+      }
+    },
+    {
+      "name": "yo-200-supervisor",
+      "synthetic": true,
+      "method": "GET",
+      "path": "/v1/auth/yo",
+      "status": 200,
+      "body": {
+        "tenant_id": "SYNTHETIC_TENANT",
+        "usuario_id": "SYNTHETIC_USER_supervisor",
+        "roles": [
+          "supervisor"
+        ],
+        "sujeto_id": null
+      }
+    },
+    {
+      "name": "yo-200-tecnico",
+      "synthetic": true,
+      "method": "GET",
+      "path": "/v1/auth/yo",
+      "status": 200,
+      "body": {
+        "tenant_id": "SYNTHETIC_TENANT",
+        "usuario_id": "SYNTHETIC_USER_tecnico",
+        "roles": [
+          "tecnico"
+        ],
+        "sujeto_id": "SYNTHETIC_PERSON"
+      }
+    },
+    {
+      "name": "yo-401",
+      "synthetic": true,
+      "method": "GET",
+      "path": "/v1/auth/yo",
+      "status": 401,
+      "body": {
+        "error": {
+          "codigo": "no_autenticado",
+          "mensaje": "Escenario sintético de prueba; no corresponde a un usuario real.",
+          "detalles": null,
+          "request_id": "SYNTHETIC_REQUEST_401"
+        }
+      }
+    },
+    {
+      "name": "login-422",
+      "synthetic": true,
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "status": 422,
+      "body": {
+        "error": {
+          "codigo": "validacion",
+          "mensaje": "Escenario sintético de prueba; no corresponde a un usuario real.",
+          "detalles": null,
+          "request_id": "SYNTHETIC_REQUEST_422"
+        }
+      }
+    }
+  ]
+}
