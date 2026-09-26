@@ -244,8 +244,12 @@ def test_http_dos_requests_simultaneos_no_ejecutan_dos_veces(cliente_api, tenant
     body = {"tipo_sujeto": "persona", "identificador_natural": "DNI-77"}
     h = t.headers("responsable_legajos", idempotency_key="k-http")
     salidas = _en_paralelo([lambda: cliente_api.post("/v1/comandos/alta_de_sujeto", json=body, headers=h)] * 2)
-    assert sorted(r.status_code for r, _ in salidas) == [200, 409]
+    estados = sorted(r.status_code for r, _ in salidas)
+    # Si la segunda petición llega mientras la primera sigue reservada recibe 409; si el
+    # commit ocurre antes, recibe el replay 200. Ambas intercalaciones son correctas.
+    assert estados in ([200, 409], [200, 200])
     ok = next(r for r, _ in salidas if r.status_code == 200)
+    assert all(r.json() == ok.json() for r, _ in salidas if r.status_code == 200)
     assert cliente_api.post("/v1/comandos/alta_de_sujeto", json=body, headers=h).json() == ok.json()
     otro = cliente_api.post("/v1/comandos/alta_de_sujeto", json={**body, "identificador_natural": "DNI-78"}, headers=h)
     assert otro.status_code == 409 and otro.json()["error"]["codigo"] == "clave_idempotencia_reutilizada"
