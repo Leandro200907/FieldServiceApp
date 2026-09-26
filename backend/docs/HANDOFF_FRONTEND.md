@@ -173,41 +173,13 @@ el documento cuando resulta inválido:
 Unicidad de definición: `(nombre, categoria, tipo_sujeto_aplicable, locacion_id)` por
 tenant, **incluyendo las dadas de baja** → repetir es 409 `conflicto` / `definicion_duplicada`.
 
-### 4.4 Comandos de operación
-| Ruta | Rol | Body |
-|---|---|---|
-| `POST /v1/comandos/cambiar_custodia` | supervisor | `{recurso_id, tipo_recurso: vehiculo\|equipo, custodio_id?, desde}` → `{custodia_id, periodo_id, periodo_cerrado_id, eventos[]}` |
-| `POST /v1/comandos/corregir_custodia` | supervisor | `{periodo_id, custodio_id?, desde?, hasta?, motivo?}` |
-| `POST /v1/comandos/otorgar_excepcion` | supervisor | `{referencia_evaluacion, sujeto_id, requisito_definicion_id, commitment_id, motivo, vigencia?, evidencia?}` |
-| `POST /v1/comandos/revocar_excepcion` | supervisor | `{excepcion_id, motivo?}` |
-| `POST /v1/comandos/registrar_constancia_del_cliente` | responsable_legajos | `{sujeto_id, requisito_definicion_id, cliente_id, evidencia, commitment_id?, emisor?, vigencia?}` → `{constancia_id, constancia_reemplazada_id, eventos[]}` |
-| `POST /v1/comandos/revocar_constancia_del_cliente` | responsable_legajos | `{constancia_id, motivo?}` |
-| `POST /v1/comandos/evaluar_habilitacion` | responsable_legajos | `{commitment_id, sujetos_propuestos[]}` (sin campos extra: `origen_sujetos` es 422) → decisión persistida con `referencia_evaluacion` |
+### 4.4 Frontera con Módulo 2
 
-Reglas que el frontend debe reflejar:
-- **Custodia**: sólo el Supervisor (el responsable recibe 403). El custodio tiene que ser
-  una persona activa **dentro del universo del supervisor** (403 si no); `custodio_id`
-  vacío sólo para equipos (`custodio_requerido` en vehículo). El nuevo período tiene que
-  empezar después del vigente (409 `conflicto`). Corregir nunca borra: el período viejo
-  queda `corregido` apuntando al nuevo.
-- **Excepción**: sólo sobre requisitos `excepcionable` (422 `requisito_no_excepcionable`),
-  nunca sobre la empresa (422 `excepcion_de_empresa_deshabilitada`), una sola `otorgada` por
-  (sujeto, requisito, compromiso) (409 `conflicto` / `excepcion_activa_duplicada`). El
-  supervisor sólo ve/toca decisiones cuyos sujetos propuestos están todos en su universo
-  (si no: 404 de la evaluación, 403 del sujeto).
-- **Constancia del cliente**: sólo sobre requisitos `bloqueante_duro` (422
-  `requisito_no_bloqueante_duro`). Registrar una nueva para la misma clave **reemplaza** a
-  la vigente (`constancia_reemplazada_id` en la respuesta; la vieja queda `reemplazada`).
-  General (`commitment_id` nulo) y específica (con `commitment_id`) son claves distintas:
-  no se reemplazan entre sí.
-- **Semántica concurrente de constancias (aceptada)**: si dos usuarios registran a la vez
-  la "primera" constancia de la misma clave, el backend las serializa: **las dos pueden
-  responder 200**, pero la segunda reemplaza a la primera y **sólo una queda vigente**. El
-  frontend no debe asumir que un 200 significa "sigue vigente": releé el legajo (o mirá
-  `constancia_reemplazada_id` de la otra respuesta). Para excepciones no hay reemplazo:
-  la segunda concurrente recibe 409.
-- **Evaluar habilitación** es modo decisión (persiste). El supervisor sólo consulta
-  (`GET /v1/consultas/cobertura_oc`, no persiste). `evaluar_habilitacion` por el supervisor → 403.
+Módulo 1 no publica comandos de asignación de supervisores, custodia de recursos,
+excepciones, constancias de cliente ni evaluación operativa. Tampoco publica sus
+historiales operativos. Las tablas y servicios heredados permanecen internos porque el
+alcance documental, las alertas y la transición futura hacia Módulo 2 todavía los leen.
+El frontend de Módulo 1 no debe ofrecer controles para modificar esos datos.
 
 ### 4.4 bis Alertas de vencimiento (flujo 3.4)
 | Ruta | Rol | Body / query |
@@ -220,9 +192,9 @@ Reglas que el frontend debe reflejar:
 
 Semántica que la UI debe reflejar: `etapa` avanza sola con el tiempo (T−plazo aviso,
 T−plazo/2 recordatorio, T+1 vencido, T+N escalado) y `estado` refleja la acción humana
-(`abierta`, `pausada_por_accion`, `resuelta`). Cargar/proponer un documento o registrar
-una excepción pausa los recordatorios; sólo un documento **verificado** que cubra el
-requisito resuelve; sobre `vencido` una excepción marca `bajo_excepcion` sin resolver.
+(`abierta`, `pausada_por_accion`, `resuelta`). Cargar/proponer un documento pausa los
+recordatorios; sólo un documento **verificado** que cubra el requisito resuelve. Una
+excepción ya existente puede marcar `bajo_excepcion`, pero no se gestiona desde Módulo 1.
 Las notificaciones salen agrupadas por destinatario (un mensaje con varias alertas). El
 override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_aviso_dias`
 (vía alta/edición de la definición; hoy sólo por base — pendiente comando propio).
@@ -281,11 +253,6 @@ Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}
 | `GET /v1/consultas/legajo` | todos (técnico: sólo el propio; supervisor: su universo) | `sujeto_id` |
 | `GET /v1/consultas/propuestas_pendientes` | responsable_legajos | paginado |
 | `GET /v1/consultas/tablero_vencimientos` | responsable_legajos, supervisor | `dias`, paginado |
-| `GET /v1/consultas/backlog_oc` | responsable_legajos, supervisor | `estado?`, paginado |
-| `GET /v1/consultas/cobertura_oc` | responsable_legajos, supervisor | `commitment_id` (modo consulta, no persiste) |
-| `GET /v1/consultas/decisiones_oc` | responsable_legajos, supervisor | `commitment_id`, paginado |
-| `GET /v1/consultas/decision` | responsable_legajos, supervisor | `referencia_evaluacion` |
-| `GET /v1/consultas/historial_supervision` | configuracion, responsable_legajos | `sujeto_id`, paginado |
 | `GET /v1/consultas/log_auditoria` | configuracion, responsable_legajos | `tipo?`, `desde?`, `hasta?`, paginado |
 | `GET /v1/consultas/matriz_vigente` | todos | `cliente_id`, `locacion_id`, `tipo_servicio_id`, `fecha?` |
 | `GET /v1/consultas/incumplimiento_empresa` | todos | — |
@@ -316,26 +283,21 @@ El frontend debe consumir sólo estas rutas para el cruce OC-legajos. Los contra
 anteriores de proyección fueron retirados: no existe una capa de compatibilidad paralela.
 El calendario de vigencias continúa siendo una consulta documental independiente.
 
-### 4.6 Catálogos para operar los comandos sin tipear ids (H-06)
+### 4.6 Catálogos documentales (H-06)
 Todos paginados (`offset/limit`, máx. 500) → `{items[], total, offset, limit}`; el alcance
 del supervisor/técnico se aplica siempre (un filtro nunca amplía lo visible); otro tenant no
 ve nada.
 
 | Ruta | Roles | Query | Alimenta a |
 |---|---|---|---|
-| `GET /v1/consultas/sujetos` | todos (alcance) | `q` (sujeto_id / identificador), `tipo_sujeto`, `activos` (true por defecto; false = dados de baja) | alta/baja, cargar/proponer documento, custodia, excepción, constancia, asignar supervisor |
-| `GET /v1/consultas/definiciones_requisito` | todos | `q`, `categoria`, `tipo_sujeto_aplicable`, `activas` | cargar documento, líneas de matriz, requisito particular, excepción, constancia |
+| `GET /v1/consultas/sujetos` | todos (alcance) | `q` (sujeto_id / identificador), `tipo_sujeto`, `activos` (true por defecto; false = dados de baja) | alta/baja y evidencia documental |
+| `GET /v1/consultas/definiciones_requisito` | todos | `q`, `categoria`, `tipo_sujeto_aplicable`, `activas` | documentos, matrices y requisitos particulares |
 | `GET /v1/consultas/matrices` | configuracion, responsable_legajos, supervisor | `cliente_id`, `solo_vigentes` | publicar versión (claves existentes), matriz_vigente |
-| `GET /v1/consultas/usuarios` | configuracion, responsable_legajos | `q` (email/nombre), `rol`, `activos` (sin hashes) | asignar/reasignar supervisor |
+| `GET /v1/consultas/usuarios` | configuracion, responsable_legajos | `q` (email/nombre), `rol`, `activos` (sin hashes) | consulta administrativa |
 | `GET /v1/consultas/documentos` | todos (alcance) | `sujeto_id`, `estado_version` (vigente por defecto; `todas`), `estado_confirmacion`, `archivo_estado` | confirmar/rechazar, preparar/confirmar subida, descarga |
-| `GET /v1/consultas/excepciones` | configuracion, responsable_legajos, supervisor (alcance) | `sujeto_id`, `estado` (otorgada por defecto), `commitment_id` | revocar excepción |
-| `GET /v1/consultas/constancias` | configuracion, responsable_legajos, supervisor (alcance) | `sujeto_id`, `estado` (vigente por defecto), `cliente_id` | revocar constancia |
-| `GET /v1/consultas/custodias` | todos (alcance por recurso) | `recurso_id`, `custodio_id`, `solo_vigentes` | corregir custodia, cambiar custodia |
 | `GET /v1/consultas/lotes` | configuracion, responsable_legajos | `estado`, `entidad` | revertir lote |
-| `GET /v1/consultas/asignaciones_supervisor` | configuracion, responsable_legajos, supervisor (alcance) | `supervisor_usuario_id`, `sujeto_id`, `solo_vigentes` | reasignar supervisor |
 
-Ya existentes que también dan ids: `backlog_oc` (commitment_id / oc_id), `decisiones_oc` y
-`decision` (referencia_evaluacion), `propuestas_pendientes` (documento_id), `alertas_abiertas`
+Ya existentes que también dan ids: `propuestas_pendientes` (documento_id), `alertas_abiertas`
 (alerta_id), `plantillas_globales` (ids globales).
 
 **Alcance del técnico (H-05)**: se ve a sí mismo y a los vehículos/equipos bajo su custodia
@@ -413,4 +375,3 @@ corrió), `archivo_invalido` (422: la validación técnica dio inválido), `usar
   `OutboxEstancado`, a `configuracion`, vía el mismo canal que cualquier otra alerta) si un
   evento se queda estancado.
 - Storage: sólo backend local (`STORAGE_BACKEND=local`); el contrato ya es el de un bucket.
-

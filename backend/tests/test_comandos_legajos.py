@@ -15,23 +15,18 @@ from app.db import tenant_session
 
 CMD = "/v1/comandos"
 
-
 # --------------------------------------------------------------------------- helpers
-
 
 def _post(cliente_api, tenant, rol: str, comando: str, body: dict, clave: str | None = None):
     return cliente_api.post(f"{CMD}/{comando}", json=body, headers=tenant.headers(rol, idempotency_key=clave))
-
 
 def _ok(r) -> dict:
     assert r.status_code == 200, r.text
     return r.json()
 
-
 def _alta_def(cliente_api, tenant, nombre: str, categoria: str = "documento", tipo: str = "persona", **extra) -> str:
     body = {"nombre": nombre, "categoria": categoria, "tipo_sujeto_aplicable": tipo, **extra}
     return _ok(_post(cliente_api, tenant, "configuracion", "dar_de_alta_definicion_de_requisito", body))["requisito_definicion_id"]
-
 
 def _alta_persona(cliente_api, tenant, ident: str, sujeto_id: str | None = None) -> str:
     body = {"tipo_sujeto": "persona", "identificador_natural": ident}
@@ -39,11 +34,9 @@ def _alta_persona(cliente_api, tenant, ident: str, sujeto_id: str | None = None)
         body["sujeto_id"] = sujeto_id
     return _ok(_post(cliente_api, tenant, "responsable_legajos", "alta_de_sujeto", body))["sujeto_id"]
 
-
 def _cargar(cliente_api, tenant, sujeto_id: str, req: str, desde="2026-03-01", hasta="2026-09-15", **extra) -> dict:
     body = {"sujeto_id": sujeto_id, "requisito_definicion_id": req, "vigente_desde": desde, "vigente_hasta": hasta, **extra}
     return _ok(_post(cliente_api, tenant, "responsable_legajos", "cargar_documento", body))
-
 
 def _docs(tenant, sujeto_id: str, req: str) -> list[dict]:
     with tenant_session(tenant.tenant_id) as s:
@@ -56,18 +49,14 @@ def _docs(tenant, sujeto_id: str, req: str) -> list[dict]:
         ).mappings().all()
         return [{k: (str(v) if v is not None and k in ("documento_id", "sucede_a", "lote_id") else v) for k, v in f.items()} for f in filas]
 
-
 def _vigentes(docs: list[dict]) -> list[str]:
     return [d["documento_id"] for d in docs if d["estado_version"] == "vigente"]
-
 
 def _eventos(tenant, tipo: str) -> int:
     with tenant_session(tenant.tenant_id) as s:
         return s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = :tipo"), {"tipo": tipo}).scalar()
 
-
 # --------------------------------------------------------------------------- legajos
-
 
 def test_alta_carga_y_sucesion_un_solo_vigente(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -108,7 +97,6 @@ def test_alta_carga_y_sucesion_un_solo_vigente(cliente_api, tenant_de_prueba):
                       {"sujeto_id": sujeto, "requisito_definicion_id": req, "vigente_desde": "2026-12-31", "vigente_hasta": "2026-01-01"})
     assert invertida.status_code == 422
 
-
 def test_baja_de_sujeto(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto médico")
@@ -126,9 +114,7 @@ def test_baja_de_sujeto(cliente_api, tenant_de_prueba):
     # el identificador vuelve a estar disponible para un alta nueva
     _alta_persona(cliente_api, t, "DNI 1")
 
-
 # --------------------------------------------------------------------------- permisos
-
 
 def test_permisos_supervisor_no_puede_cargar_documento(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -143,9 +129,7 @@ def test_permisos_supervisor_no_puede_cargar_documento(cliente_api, tenant_de_pr
     sin_token = cliente_api.post(f"{CMD}/cargar_documento", json=body)
     assert sin_token.status_code == 401 and sin_token.json()["error"]["codigo"] == "no_autenticado"
 
-
 # --------------------------------------------------------------------------- propuestas
-
 
 def test_propuesta_y_rechazo_restaura_el_anterior(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -188,9 +172,7 @@ def test_propuesta_y_rechazo_restaura_el_anterior(cliente_api, tenant_de_prueba)
     assert rech2["restaurado_documento_id"] is None
     assert _vigentes(_docs(t, propio, req2)) == []
 
-
 # --------------------------------------------------------------------------- confirmación
-
 
 def test_confirmar_documento_regulariza_excepcion(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -229,9 +211,7 @@ def test_confirmar_documento_regulariza_excepcion(cliente_api, tenant_de_prueba)
     assert _post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": d["documento_id"]}).status_code == 409
     assert _post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": str(uuid.uuid4())}).status_code == 404
 
-
 # --------------------------------------------------------------------------- competencia / inducción
-
 
 def test_acreditacion_e_induccion(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -266,9 +246,7 @@ def test_acreditacion_e_induccion(cliente_api, tenant_de_prueba):
         assert s.execute(text("SELECT count(*) FROM modulo1.acreditacion_competencia")).scalar() == 1
         assert s.execute(text("SELECT count(*) FROM modulo1.induccion WHERE locacion_id = :l"), {"l": loc}).scalar() == 1
 
-
 # --------------------------------------------------------------------------- lotes
-
 
 def test_importar_lote_idempotente_por_lote_id(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -315,7 +293,6 @@ def test_importar_lote_idempotente_por_lote_id(cliente_api, tenant_de_prueba):
         assert s.execute(text("SELECT count(*) FROM modulo1.documento")).scalar() == 2
     assert _eventos(t, "LoteAplicado") == 1
 
-
 def test_revertir_lote_restaura_los_vigentes_anteriores(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto médico")
@@ -349,9 +326,7 @@ def test_revertir_lote_restaura_los_vigentes_anteriores(cliente_api, tenant_de_p
     assert _post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": lote_id}).status_code == 409
     assert _post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": str(uuid.uuid4())}).status_code == 404
 
-
 # --------------------------------------------------------------------------- Idempotency-Key
-
 
 def test_idempotency_key_repite_respuesta_sin_duplicar(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -365,48 +340,4 @@ def test_idempotency_key_repite_respuesta_sin_duplicar(cliente_api, tenant_de_pr
     # sin clave (u otra clave) el mismo body choca con la unicidad del identificador
     assert _post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", body, clave="alta-equipo-2").status_code == 409
 
-
 # --------------------------------------------------------------------------- supervisor
-
-
-def test_asignar_y_reasignar_supervisor(cliente_api, tenant_de_prueba):
-    t = tenant_de_prueba
-    sujeto = _alta_persona(cliente_api, t, "DNI 31")
-    sup = t.usuarios["supervisor"]
-    no_sup = t.usuarios["tecnico"]
-    with tenant_session(t.tenant_id) as s:
-        hoy = hoy_del_tenant(s, t.tenant_id)
-
-    # técnico y supervisor no asignan; configuración y responsable sí
-    assert _post(cliente_api, t, "supervisor", "asignar_supervisor", {"sujeto_id": sujeto, "supervisor_usuario_id": sup}).status_code == 403
-    # el usuario destino tiene que ser supervisor
-    r = _post(cliente_api, t, "configuracion", "asignar_supervisor", {"sujeto_id": sujeto, "supervisor_usuario_id": no_sup})
-    assert r.status_code == 422 and r.json()["error"]["codigo"] == "regla_de_dominio"
-    assert _post(cliente_api, t, "configuracion", "asignar_supervisor", {"sujeto_id": sujeto, "supervisor_usuario_id": str(uuid.uuid4())}).status_code == 404
-
-    a1 = _ok(_post(cliente_api, t, "configuracion", "asignar_supervisor", {"sujeto_id": sujeto, "supervisor_usuario_id": sup}))
-    assert a1["desde"] == hoy.isoformat() and a1["eventos"] == ["SupervisorAsignado"]
-    # ya hay una vigente → hay que reasignar
-    assert _post(cliente_api, t, "responsable_legajos", "asignar_supervisor", {"sujeto_id": sujeto, "supervisor_usuario_id": sup}).status_code == 409
-
-    # reasignar el mismo día que empezó la vigente no cierra nada coherente → 422
-    assert _post(cliente_api, t, "responsable_legajos", "reasignar_supervisor",
-                 {"sujeto_id": sujeto, "supervisor_usuario_id": sup, "desde": hoy.isoformat()}).status_code == 422
-
-    manana = hoy + timedelta(days=1)
-    a2 = _ok(_post(cliente_api, t, "responsable_legajos", "reasignar_supervisor",
-                   {"sujeto_id": sujeto, "supervisor_usuario_id": sup, "desde": manana.isoformat()}))
-    assert a2["asignacion_cerrada_id"] == a1["asignacion_id"] and a2["hasta_anterior"] == hoy.isoformat()
-    assert a2["eventos"] == ["SupervisorReasignado"]
-
-    with tenant_session(t.tenant_id) as s:
-        filas = s.execute(
-            text("SELECT asignacion_id::text, estado, desde::text, hasta::text, asignada_por FROM modulo1.asignacion_supervisor ORDER BY creado_en")
-        ).all()
-        assert [tuple(f) for f in filas] == [
-            (a1["asignacion_id"], "cerrada", hoy.isoformat(), hoy.isoformat(), t.usuarios["configuracion"]),
-            (a2["asignacion_id"], "vigente", manana.isoformat(), None, t.usuarios["responsable_legajos"]),
-        ]
-    # sin vigente no se reasigna
-    otro = _alta_persona(cliente_api, t, "DNI 32")
-    assert _post(cliente_api, t, "configuracion", "reasignar_supervisor", {"sujeto_id": otro, "supervisor_usuario_id": sup}).status_code == 409

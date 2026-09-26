@@ -33,7 +33,6 @@ ROUTERS = [
     "app.auth.router",
     "app.modules.legajos.router",
     "app.modules.requisitos.router",
-    "app.modules.operacion.router",
     "app.modules.alertas.router",
     "app.modules.paquete.router",
     "app.modules.capacidades_router",
@@ -62,4 +61,3 @@ _montar_routers()
 # `app.openapi_schema`; `enriquecer` lo muta in place, así que la caché queda enriquecida
 # y las llamadas siguientes (incluida la ruta real `/openapi.json`) devuelven eso mismo.
 enriquecer(app.openapi())
-

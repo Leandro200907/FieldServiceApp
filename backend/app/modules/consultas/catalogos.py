@@ -1,10 +1,8 @@
-"""Consultas auxiliares (H-06) y legajo compuesto del técnico (H-05).
+"""Catálogos documentales (H-06) y legajo compuesto (H-05).
 
-Con estas listas todo comando del OpenAPI puede operarse sin tipear identificadores:
-sujetos, definiciones, matrices, usuarios, documentos, excepciones, constancias,
-custodias, lotes y asignaciones de supervisor. Todas: permiso por rol (matriz 2.2),
-alcance multi-tenant (RLS + `alcance_de_sujetos`), paginación `offset/limit` y búsqueda
-`q` (ILIKE) donde tiene sentido. Devuelven `{items, total, offset, limit}`.
+Los catálogos operativos de excepciones, constancias, custodias y supervisión permanecen
+como funciones internas, sin rutas HTTP en Módulo 1. Todos aplican alcance multi-tenant
+(RLS + `alcance_de_sujetos`) y paginación uniforme.
 """
 from __future__ import annotations
 

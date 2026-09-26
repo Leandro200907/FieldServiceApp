@@ -311,9 +311,8 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
     a, b = _armar_tenant(c, ta), _armar_tenant(c, tb)
 
     # --- HTTP: el tenant B intenta leer/escribir cosas del tenant A con sus propios tokens
-    assert c.get("/v1/consultas/legajo", params={"sujeto_id": a["persona"]}, headers=tb.headers("responsable_legajos")).status_code == 404
-    assert c.get("/v1/consultas/cobertura_oc", params={"commitment_id": a["oc"]}, headers=tb.headers("supervisor")).status_code == 404
-    assert c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": a["oc"], "sujetos_propuestos": [a["persona"]]}, headers=tb.headers("responsable_legajos")).status_code == 404
+    sujetos_b = _ok(c.get("/v1/consultas/sujetos", params={"q": a["persona"]}, headers=tb.headers("responsable_legajos")))
+    assert sujetos_b["total"] == 0
     assert c.post("/v1/comandos/confirmar_documento", json={"documento_id": a["doc"]}, headers=tb.headers("responsable_legajos")).status_code == 404
     assert c.post("/v1/comandos/cargar_documento", json={"sujeto_id": a["persona"], "requisito_definicion_id": a["req"],
                   "vigente_desde": "2026-01-01", "vigente_hasta": "2026-12-31"}, headers=tb.headers("responsable_legajos")).status_code == 404
@@ -321,8 +320,8 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
     # listados: B ve solo lo suyo
     tab = _ok(c.get("/v1/consultas/tablero_vencimientos", params={"dias": 365}, headers=tb.headers("responsable_legajos")))
     assert {i["sujeto_id"] for i in tab["items"]} == {b["persona"]}
-    back = _ok(c.get("/v1/consultas/backlog_oc", headers=tb.headers("responsable_legajos")))
-    assert {i["clave_origen"] for i in back["items"]} == {b["oc"]}
+    radar = _ok(c.get("/v1/consultas/radar_documental_backlog", headers=tb.headers("responsable_legajos")))
+    assert {i["clave_origen"] for i in radar["items"]} == {b["oc"]}
     log = _ok(c.get("/v1/consultas/log_auditoria", params={"limit": 500}, headers=tb.headers("configuracion")))
     assert all(a["persona"] not in str(e) and a["doc"] not in str(e) for e in log["items"])
     # el sujeto de A existe para A
@@ -520,10 +519,12 @@ def test_contrato_http_codigos_y_serializacion(cliente_api, tenant_de_prueba):
     # 401 sin token / 403 rol incorrecto / 422 validación / 404 no encontrado / 409 conflicto — mismo envelope
     casos = [
         (c.post("/v1/comandos/alta_de_sujeto", json={}), 401, "no_autenticado"),
-        (c.post("/v1/comandos/otorgar_excepcion", json={"referencia_evaluacion": str(uuid.uuid4()), "sujeto_id": "x",
-                "requisito_definicion_id": str(uuid.uuid4()), "commitment_id": "x", "motivo": "x"}, headers=h), 403, "prohibido"),
+        (c.post("/v1/comandos/publicar_version_de_matriz", json={"cliente_id": str(uuid.uuid4()),
+                "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4()),
+                "vigente_desde": "2026-01-01", "lineas": [{"requisito_definicion_id": str(uuid.uuid4()),
+                "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": True}]}, headers=h), 403, "prohibido"),
         # la validación del body corre antes que la autorización: body inválido + rol incorrecto = 422
-        (c.post("/v1/comandos/otorgar_excepcion", json={}, headers=h), 422, "validacion"),
+        (c.post("/v1/comandos/alta_de_sujeto", json={}, headers=h), 422, "validacion"),
         (c.post("/v1/comandos/alta_de_sujeto", json={"tipo_sujeto": "marciano", "identificador_natural": "x"}, headers=h), 422, "validacion"),
         (c.post("/v1/comandos/confirmar_documento", json={"documento_id": str(uuid.uuid4())}, headers=h), 404, "no_encontrado"),
         (c.get("/v1/consultas/legajo", params={"sujeto_id": "nadie"}, headers=h), 404, "no_encontrado"),
@@ -558,7 +559,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}",
                 "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
-    assert len(paths) == 88
+    assert len(paths) == 70
     for path, ops in paths.items():
         if path in publicas:
             continue
@@ -567,4 +568,3 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
             r = cliente_api.post(url, json={}) if metodo == "post" else getattr(cliente_api, metodo)(url)
             assert r.status_code == 401, (metodo, path, r.status_code)
             assert r.json()["error"]["codigo"] == "no_autenticado"
-

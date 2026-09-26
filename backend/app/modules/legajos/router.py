@@ -169,8 +169,3 @@ _ruta(
     clave_de_body=lambda b: f"lote:{b.lote_id}",
 )
 _ruta("revertir_lote", e.RevertirLote, servicio.revertir_lote, RESPONSABLE, RevertirLoteResponse)
-_ruta("asignar_supervisor", e.AsignarSupervisor, servicio.asignar_supervisor, CONFIG_O_RESPONSABLE, AsignarSupervisorResponse)
-_ruta(
-    "reasignar_supervisor", e.ReasignarSupervisor, servicio.reasignar_supervisor, CONFIG_O_RESPONSABLE,
-    ReasignarSupervisorResponse,
-)

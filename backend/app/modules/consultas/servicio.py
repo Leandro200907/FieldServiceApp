@@ -1,10 +1,9 @@
-"""Consultas de Módulo 1 (GET /v1/consultas/*): solo lectura, SQL explícito, alcance por
-rol resuelto en `app.auth.alcance`. "Hoy" siempre es `hoy_del_tenant` (regla dura 2) y
-`vigente_hasta` es inclusive en todos los cálculos.
+"""Servicios de lectura documental e históricos internos.
 
-`cobertura_oc` es el barrido en MODO CONSULTA (`app.core.orquestacion.cobertura_de_oc`):
-nunca persiste. Las decisiones persistidas se leen con `decisiones_oc` / `decision`,
-filtradas por visibilidad (A-04).
+Las funciones vinculadas con cobertura, decisiones y supervisión ya no están publicadas
+por el router de Módulo 1. Se conservan temporalmente como lógica interna para alertas,
+revaluación y una futura integración explícita con Módulo 2. "Hoy" siempre es
+`hoy_del_tenant` y `vigente_hasta` es inclusivo.
 """
 from __future__ import annotations
 

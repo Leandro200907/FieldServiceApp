@@ -317,44 +317,6 @@ def tablero_vencimientos(
         return TableroVencimientosResponse(**servicio.tablero_vencimientos(s, identidad, dias, p))
 
 
-@router.get("/consultas/backlog_oc", response_model=BacklogOcResponse)
-def backlog_oc(
-    estado: str | None = Query("activo"),
-    identidad: Identidad = Depends(identidad_actual),
-    p: Pagina = Depends(pagina),
-) -> BacklogOcResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return BacklogOcResponse(**servicio.backlog_oc(s, identidad, estado or None, p))
-
-
-@router.get("/consultas/cobertura_oc", response_model=CoberturaOcResponse)
-def cobertura_oc(commitment_id: str = Query(...), identidad: Identidad = Depends(identidad_actual)) -> CoberturaOcResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return CoberturaOcResponse(**servicio.cobertura_oc(s, identidad, commitment_id))
-
-
-@router.get("/consultas/decisiones_oc", response_model=DecisionesOcResponse)
-def decisiones_oc(
-    commitment_id: str = Query(...), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)
-) -> DecisionesOcResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return DecisionesOcResponse(**servicio.decisiones_oc(s, identidad, commitment_id, p))
-
-
-@router.get("/consultas/decision", response_model=DecisionDetalle)
-def decision(referencia_evaluacion: str = Query(...), identidad: Identidad = Depends(identidad_actual)) -> DecisionDetalle:
-    with tenant_session(identidad.tenant_id) as s:
-        return DecisionDetalle(**servicio.decision(s, identidad, referencia_evaluacion))
-
-
-@router.get("/consultas/historial_supervision", response_model=HistorialSupervisionResponse)
-def historial_supervision(
-    sujeto_id: str = Query(...), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)
-) -> HistorialSupervisionResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return HistorialSupervisionResponse(**servicio.historial_supervision(s, identidad, sujeto_id, p))
-
-
 @router.get("/consultas/log_auditoria", response_model=LogAuditoriaResponse)
 def log_auditoria(
     tipo: str | None = Query(None),
@@ -664,12 +626,6 @@ class ExcepcionesResponse(BaseModel):
     limit: int
 
 
-@router.get("/consultas/excepciones", response_model=ExcepcionesResponse)
-def excepciones(sujeto_id: str | None = Query(None), estado: Literal["otorgada", "revocada", "regularizada", "vencida"] | None = Query("otorgada"),
-                commitment_id: str | None = Query(None), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> ExcepcionesResponse:
-    return ExcepcionesResponse(**_con(catalogos.excepciones, identidad, p=p, sujeto_id=sujeto_id, estado=estado, commitment_id=commitment_id))
-
-
 class ConstanciaItem(BaseModel):
     constancia_id: str
     sujeto_id: str
@@ -693,12 +649,6 @@ class ConstanciasResponse(BaseModel):
     limit: int
 
 
-@router.get("/consultas/constancias", response_model=ConstanciasResponse)
-def constancias(sujeto_id: str | None = Query(None), estado: Literal["vigente", "vencida", "revocada", "reemplazada"] | None = Query("vigente"),
-                cliente_id: UUID | None = Query(None), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> ConstanciasResponse:
-    return ConstanciasResponse(**_con(catalogos.constancias, identidad, p=p, sujeto_id=sujeto_id, estado=estado, cliente_id=str(cliente_id) if cliente_id else None))
-
-
 class CustodiaItem(BaseModel):
     periodo_id: str
     custodia_id: str
@@ -717,12 +667,6 @@ class CustodiasResponse(BaseModel):
     total: int
     offset: int
     limit: int
-
-
-@router.get("/consultas/custodias", response_model=CustodiasResponse)
-def custodias(recurso_id: str | None = Query(None), custodio_id: str | None = Query(None), solo_vigentes: bool = Query(False),
-              identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> CustodiasResponse:
-    return CustodiasResponse(**_con(catalogos.custodias, identidad, p=p, recurso_id=recurso_id, custodio_id=custodio_id, solo_vigentes=solo_vigentes))
 
 
 class LoteItem(BaseModel):
@@ -769,8 +713,3 @@ class AsignacionesSupervisorResponse(BaseModel):
     limit: int
 
 
-@router.get("/consultas/asignaciones_supervisor", response_model=AsignacionesSupervisorResponse)
-def asignaciones_supervisor(supervisor_usuario_id: UUID | None = Query(None), sujeto_id: str | None = Query(None), solo_vigentes: bool = Query(True),
-                            identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> AsignacionesSupervisorResponse:
-    return AsignacionesSupervisorResponse(**_con(catalogos.asignaciones_supervisor, identidad, p=p, supervisor_usuario_id=str(supervisor_usuario_id) if supervisor_usuario_id else None,
-                sujeto_id=sujeto_id, solo_vigentes=solo_vigentes))

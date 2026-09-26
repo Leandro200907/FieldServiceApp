@@ -20,6 +20,7 @@ from app.core.incumplimiento_empresa import registrar_vencimientos_de_empresa
 from app.core.orquestacion import decidir_habilitacion
 from app.core.revaluacion import EVENTOS_FUENTE, EVENTOS_PRODUCIDOS, aplicar_politica
 from app.db import tenant_session
+from app.modules.operacion import servicio as operacion
 from app.worker.outbox import PublicadorEnMemoria, drenar_outbox
 from tests.test_orquestacion import (
     clave_de_matriz,
@@ -30,10 +31,9 @@ from tests.test_orquestacion import (
     insertar_oc,
     sesion,  # noqa: F401
 )
-from tests.test_robustez import _en_paralelo
+from tests.test_robustez import _en_paralelo, _ident
 
 AHORA = datetime(2026, 9, 19, 12, 0, tzinfo=timezone.utc)
-
 
 def _base(s, t, *, persona_b: bool = True) -> dict:
     clave = clave_de_matriz()
@@ -50,7 +50,6 @@ def _base(s, t, *, persona_b: bool = True) -> dict:
     d1 = decidir_habilitacion(s, t.tenant_id, "OC-1", ["persona_A"], AHORA, t.usuarios["responsable_legajos"])["referencia_evaluacion"]
     return {"clave": clave, "req_e": req_e, "req_p": req_p, "m1": m1, "d1": d1}
 
-
 def _avisos(t, ref: str | None = None) -> list[dict]:
     with tenant_session(t.tenant_id) as s:
         q = "SELECT aviso_id, referencia_evaluacion, commitment_id, estado FROM modulo1.aviso_revaluacion"
@@ -58,18 +57,15 @@ def _avisos(t, ref: str | None = None) -> list[dict]:
             q += " WHERE referencia_evaluacion = :r"
         return [dict(f) for f in s.execute(text(q + " ORDER BY abierto_en"), {"r": ref}).mappings()]
 
-
 def _causas(t, aviso_id: str) -> list[dict]:
     with tenant_session(t.tenant_id) as s:
         return [dict(f) for f in s.execute(text("SELECT evento_id, tipo_evento, entidad_tipo, entidad_id FROM modulo1.aviso_revaluacion_causa "
                                                  "WHERE aviso_id = :a ORDER BY registrada_en"), {"a": aviso_id}).mappings()]
 
-
 def _outbox(t, tipo: str = "HabilitacionRequiereRevaluacion") -> list[dict]:
     with tenant_session(t.tenant_id) as s:
         return [dict(f) for f in s.execute(text("SELECT evento_id, tipo, payload, clave_dedup, version_contrato, procesado_en "
                                                  "FROM modulo1.outbox_events WHERE tipo = :tipo ORDER BY creado_en"), {"tipo": tipo}).mappings()]
-
 
 def _cargar_declarado(cliente_api, t, sujeto: str, req: str, desde="2026-06-01", hasta="2027-06-01") -> str:
     """Nueva versión declarada por el comando real (sucede al vigente); lista para confirmar."""
@@ -79,14 +75,11 @@ def _cargar_declarado(cliente_api, t, sujeto: str, req: str, desde="2026-06-01",
     assert r.status_code == 200, r.text
     return r.json()["documento_id"]
 
-
 def _eventos(t, tipo: str) -> int:
     with tenant_session(t.tenant_id) as s:
         return s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = :tipo"), {"tipo": tipo}).scalar()
 
-
 # ============================================================ positivos (una fila de 7.2 cada uno)
-
 
 def _espera_un_aviso(t, ref, tipo_evento, entidad_tipo):
     avisos = _avisos(t, ref)
@@ -101,7 +94,6 @@ def _espera_un_aviso(t, ref, tipo_evento, entidad_tipo):
     assert p["emitido_en"] and p["aviso_id"] == str(avisos[0]["aviso_id"])
     assert _eventos(t, "AvisoDeRevaluacionAbierto") == 1
 
-
 def test_documento_verificado_marca_decisiones_que_proponen_al_sujeto(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -111,7 +103,6 @@ def test_documento_verificado_marca_decisiones_que_proponen_al_sujeto(cliente_ap
     r = cliente_api.post("/v1/comandos/confirmar_documento", json={"documento_id": doc}, headers=t.headers("responsable_legajos"))
     assert r.status_code == 200, r.text
     _espera_un_aviso(t, e["d1"], "DocumentoVerificado", "documento")
-
 
 def test_documento_verificado_de_empresa_marca_todas_las_decisiones(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -124,7 +115,6 @@ def test_documento_verificado_de_empresa_marca_todas_las_decisiones(cliente_api,
     cliente_api.post("/v1/comandos/confirmar_documento", json={"documento_id": doc}, headers=t.headers("responsable_legajos"))
     assert {a["referencia_evaluacion"] for a in _avisos(t)} == {uuid.UUID(e["d1"]), uuid.UUID(d2)}
     assert len(_outbox(t)) == 2
-
 
 def test_lote_revertido_marca_por_sujetos_del_lote(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -139,14 +129,12 @@ def test_lote_revertido_marca_por_sujetos_del_lote(cliente_api, tenant_de_prueba
     assert cliente_api.post("/v1/comandos/revertir_lote", json={"lote_id": lote}, headers=h).status_code == 200
     _espera_un_aviso(t, e["d1"], "LoteRevertido", "lote_importacion")
 
-
 def test_legajo_dado_de_baja_marca(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
     sesion.commit()
     assert cliente_api.post("/v1/comandos/baja_de_sujeto", json={"sujeto_id": "persona_A"}, headers=t.headers("responsable_legajos")).status_code == 200
     _espera_un_aviso(t, e["d1"], "LegajoDadoDeBaja", "legajo")
-
 
 def test_matriz_publicada_marca_solo_decisiones_bajo_la_version_cerrada(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -165,7 +153,6 @@ def test_matriz_publicada_marca_solo_decisiones_bajo_la_version_cerrada(cliente_
     assert r.status_code == 200, r.text
     _espera_un_aviso(t, e["d1"], "MatrizVersionPublicada", "matriz_requisitos")
 
-
 def test_requisito_particular_marca_solo_su_commitment(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -178,36 +165,36 @@ def test_requisito_particular_marca_solo_su_commitment(cliente_api, tenant_de_pr
     assert r.status_code == 200, r.text
     _espera_un_aviso(t, e["d1"], "RequisitoParticularCargado", "requisito_particular")
 
-
-def test_excepcion_ciclo_completo_marca_en_cada_transicion(cliente_api, tenant_de_prueba, sesion):
+def test_excepcion_ciclo_completo_marca_en_cada_transicion(tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
     sesion.execute(text("DELETE FROM modulo1.documento WHERE sujeto_id = 'persona_A'"))
     sesion.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                         "VALUES (:t, 'persona_A', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["supervisor"]})
     sesion.commit()
-    sup = t.headers("supervisor")
-    exc = cliente_api.post("/v1/comandos/otorgar_excepcion", json={"referencia_evaluacion": e["d1"], "sujeto_id": "persona_A",
-                           "requisito_definicion_id": e["req_p"], "commitment_id": "OC-1", "motivo": "m"}, headers=sup)
-    assert exc.status_code == 200, exc.text
+    with tenant_session(t.tenant_id) as s:
+        exc = operacion.otorgar_excepcion(
+            s, _ident(t, "supervisor"), referencia_evaluacion=e["d1"], sujeto_id="persona_A",
+            requisito_definicion_id=e["req_p"], commitment_id="OC-1", motivo="m",
+        )
     _espera_un_aviso(t, e["d1"], "ExcepcionOtorgada", "excepcion")
     # revocar: misma decisión, aviso ya abierto → segunda causa, sin outbox nuevo
-    assert cliente_api.post("/v1/comandos/revocar_excepcion", json={"excepcion_id": exc.json()["excepcion_id"]}, headers=sup).status_code == 200
+    with tenant_session(t.tenant_id) as s:
+        operacion.revocar_excepcion(s, _ident(t, "supervisor"), excepcion_id=exc["excepcion_id"])
     avisos = _avisos(t, e["d1"])
     assert len(avisos) == 1 and len(_causas(t, str(avisos[0]["aviso_id"]))) == 2 and len(_outbox(t)) == 1
 
-
-def test_constancia_general_marca_decisiones_del_cliente_que_proponen_al_sujeto(cliente_api, tenant_de_prueba, sesion):
+def test_constancia_general_marca_decisiones_del_cliente_que_proponen_al_sujeto(tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
     sesion.execute(text("UPDATE modulo1.linea_requisito SET clasificacion = 'bloqueante_duro' WHERE requisito_definicion_id = :r"), {"r": e["req_p"]})
     sesion.commit()
-    r = cliente_api.post("/v1/comandos/registrar_constancia_del_cliente", json={
-        "sujeto_id": "persona_A", "requisito_definicion_id": e["req_p"], "cliente_id": e["clave"]["c"], "evidencia": "mail"},
-        headers=t.headers("responsable_legajos"))
-    assert r.status_code == 200, r.text
+    with tenant_session(t.tenant_id) as s:
+        operacion.registrar_constancia_del_cliente(
+            s, _ident(t, "responsable_legajos"), sujeto_id="persona_A",
+            requisito_definicion_id=e["req_p"], cliente_id=e["clave"]["c"], evidencia="mail",
+        )
     _espera_un_aviso(t, e["d1"], "ConstanciaRegistrada", "constancia_cliente")
-
 
 def test_vencimientos_del_reloj_marcan(tenant_de_prueba, sesion):
     from app.worker.procesos_reloj import vencer_excepciones_y_constancias
@@ -222,9 +209,7 @@ def test_vencimientos_del_reloj_marcan(tenant_de_prueba, sesion):
         vencer_excepciones_y_constancias(s, t.tenant_id, ahora_utc())
     _espera_un_aviso(t, e["d1"], "ExcepcionVencida", "excepcion")
 
-
 # ============================================================ negativos (una fila de 7.2 cada uno)
-
 
 @pytest.mark.parametrize("tipo", [
     "DocumentoCargado", "DocumentoRechazado", "DocumentoSucedido", "AcreditacionDeCompetenciaRegistrada", "InduccionRegistrada",
@@ -245,7 +230,6 @@ def test_eventos_excluidos_por_7_2_no_marcan_nada(tenant_de_prueba, sesion, tipo
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.politica_evento_procesado")).scalar() == 0
 
-
 def test_despachador_no_recursa_al_abrir_o_cerrar_avisos(tenant_de_prueba, sesion):
     """Los eventos producidos por la política se registran por la vía interna y no están en
     el mapa: registrar uno a mano tampoco dispara nada."""
@@ -258,14 +242,14 @@ def test_despachador_no_recursa_al_abrir_o_cerrar_avisos(tenant_de_prueba, sesio
     sesion.commit()
     assert _avisos(t) == [] and _outbox(t) == []
 
-
 # ============================================================ custodia condicional
 
-
-def _custodia_cambiada(cliente_api, t, recurso: str):
-    return cliente_api.post("/v1/comandos/cambiar_custodia", json={"recurso_id": recurso, "tipo_recurso": "vehiculo",
-                            "custodio_id": "persona_A", "desde": "2026-09-19"}, headers=t.headers("supervisor"))
-
+def _custodia_cambiada(t, recurso: str):
+    with tenant_session(t.tenant_id) as s:
+        return operacion.cambiar_custodia(
+            s, _ident(t, "supervisor"), recurso_id=recurso, tipo_recurso="vehiculo",
+            custodio_id="persona_A", desde=date(2026, 9, 19),
+        )
 
 def test_custodia_cambiada_no_marca_decision_con_sujetos_explicitos(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -275,9 +259,8 @@ def test_custodia_cambiada_no_marca_decision_con_sujetos_explicitos(cliente_api,
     d = decidir_habilitacion(sesion, t.tenant_id, "OC-1", ["persona_A", "vehiculo_V"], AHORA, None)  # explícito
     sesion.commit()
     assert d["origen_sujetos"] == "explicito"
-    assert _custodia_cambiada(cliente_api, t, "vehiculo_V").status_code == 200
+    assert _custodia_cambiada(t, "vehiculo_V")["periodo_id"]
     assert _avisos(t) == [] and _outbox(t) == []
-
 
 def test_custodia_cambiada_marca_decision_con_custodia_por_defecto(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -290,27 +273,8 @@ def test_custodia_cambiada_marca_decision_con_custodia_por_defecto(cliente_api, 
         assert s.execute(text("SELECT origen_sujetos FROM modulo1.evaluacion_habilitacion WHERE referencia_evaluacion = :r"),
                          {"r": d["referencia_evaluacion"]}).scalar() == "custodia_por_defecto"
     assert d["snapshot"]["origen_sujetos"] == "custodia_por_defecto"
-    assert _custodia_cambiada(cliente_api, t, "vehiculo_V").status_code == 200
+    assert _custodia_cambiada(t, "vehiculo_V")["periodo_id"]
     _espera_un_aviso(t, d["referencia_evaluacion"], "CustodiaCambiada", "periodo_custodia")
-
-
-def test_origen_sujetos_no_es_falsificable_desde_la_api(cliente_api, tenant_de_prueba, sesion):
-    t = tenant_de_prueba
-    _base(sesion, t)
-    sesion.commit()
-    esquema = cliente_api.get("/openapi.json").json()["components"]["schemas"]["EvaluarHabilitacionBody"]
-    assert "origen_sujetos" not in esquema["properties"]
-    r = cliente_api.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-1", "sujetos_propuestos": ["persona_A"]},
-                         headers=t.headers("responsable_legajos"))
-    assert r.status_code == 200 and r.json()["origen_sujetos"] == "explicito"
-    with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT origen_sujetos FROM modulo1.evaluacion_habilitacion WHERE referencia_evaluacion = :r"),
-                         {"r": r.json()["referencia_evaluacion"]}).scalar() == "explicito"
-
-
-# ============================================================ compromiso: cancelación transaccional
-
-
 def test_cancelar_oc_abre_un_aviso_y_un_outbox_con_tipo_cambio(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -319,7 +283,6 @@ def test_cancelar_oc_abre_un_aviso_y_un_outbox_con_tipo_cambio(cliente_api, tena
     assert r.status_code == 200 and r.json()["eventos"] == ["CompromisoCancelado"]
     _espera_un_aviso(t, e["d1"], "CompromisoCancelado", "oc")
     assert _outbox(t)[0]["payload"]["tipo_cambio"] == "cancelacion"  # el consumidor INVALIDA, no crea decisión
-
 
 def test_cancelar_oc_con_rollback_no_deja_aviso_ni_outbox(tenant_de_prueba, sesion):
     from app.api.errores import ErrorDeDominio
@@ -343,9 +306,7 @@ def test_cancelar_oc_con_rollback_no_deja_aviso_ni_outbox(tenant_de_prueba, sesi
         assert s.execute(text("SELECT count(*) FROM modulo1.aviso_revaluacion_causa")).scalar() == 0
         assert s.execute(text("SELECT count(*) FROM modulo1.politica_evento_procesado")).scalar() == 0
 
-
 # ============================================================ idempotencia por evento causal y coalescing
-
 
 def test_mismo_evento_id_con_aviso_abierto_una_causa_y_tras_cerrar_no_reabre(tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -366,7 +327,6 @@ def test_mismo_evento_id_con_aviso_abierto_una_causa_y_tras_cerrar_no_reabre(ten
         assert aplicar_politica(s, t.tenant_id, ev, "LegajoDadoDeBaja", {"sujeto_id": "persona_A"}) == []
     assert [a["estado"] for a in _avisos(t)] == ["cerrado"] and len(_outbox(t)) == 1
 
-
 def test_dos_eventos_distintos_misma_evaluacion_un_aviso_dos_causas_un_outbox(tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -375,7 +335,6 @@ def test_dos_eventos_distintos_misma_evaluacion_un_aviso_dos_causas_un_outbox(te
     sesion.commit()
     avisos = _avisos(t, e["d1"])
     assert len(avisos) == 1 and len(_causas(t, str(avisos[0]["aviso_id"]))) == 2 and len(_outbox(t)) == 1
-
 
 def test_dos_aperturas_concurrentes_un_aviso_un_outbox(tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -391,7 +350,6 @@ def test_dos_aperturas_concurrentes_un_aviso_un_outbox(tenant_de_prueba, sesion)
     avisos = _avisos(t, e["d1"])
     assert len(avisos) == 1 and len(_causas(t, str(avisos[0]["aviso_id"]))) == 2 and len(_outbox(t)) == 1
 
-
 def test_rollback_del_productor_no_deja_nada(tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -406,9 +364,7 @@ def test_rollback_del_productor_no_deja_nada(tenant_de_prueba, sesion):
                           {"x": "LegajoDadoDeBaja" if tabla == "event_log" else "HabilitacionRequiereRevaluacion"}).scalar()
             assert n == 0, tabla
 
-
 # ============================================================ cierre por decisión nueva
-
 
 def test_decision_nueva_cierra_solo_avisos_de_su_commitment_y_rollback_los_conserva(tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -433,9 +389,7 @@ def test_decision_nueva_cierra_solo_avisos_de_su_commitment_y_rollback_los_conse
     assert [a["estado"] for a in _avisos(t, d_otra)] == ["abierto"]
     assert _eventos(t, "AvisoDeRevaluacionCerrado") == 1 and _avisos(t, r["referencia_evaluacion"]) == []
 
-
 # ============================================================ incumplimiento de empresa
-
 
 def test_incumplimiento_empresa_abre_suma_regulariza_parcial_y_cierra(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -470,7 +424,6 @@ def test_incumplimiento_empresa_abre_suma_regulariza_parcial_y_cierra(cliente_ap
     assert estado["estado"] == "regularizado" and estado["causas_activas"] == []
     assert _eventos(t, "CumplimientoEmpresaRegularizado") == 1 and len(_outbox(t, "CumplimientoEmpresaAfectado")) == 1
 
-
 def test_regularizacion_concurrente_de_a_y_b_cierra_exactamente_una_vez(tenant_de_prueba, sesion):
     from app.core.incumplimiento_empresa import reevaluar_causas
 
@@ -496,9 +449,7 @@ def test_regularizacion_concurrente_de_a_y_b_cierra_exactamente_una_vez(tenant_d
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.aviso_incumplimiento_empresa_causa WHERE estado = 'activa'")).scalar() == 0
 
-
 # ============================================================ publicación con dos workers
-
 
 def test_drenaje_con_dos_workers_publica_cada_evento_una_vez(tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -527,20 +478,16 @@ def test_drenaje_con_dos_workers_publica_cada_evento_una_vez(tenant_de_prueba, s
     assert all(o["procesado_en"] is not None for o in _outbox(t))
     assert all(p["version_contrato"] == "1.0" for _, p, _ in pub.eventos)
 
-
 # ============================================================ compromiso modificado (importar_lote_oc)
-
 
 def _fila_oc(e, clave_origen="OC-1", **cambios):
     base = {"clave_origen": clave_origen, "cliente_id": e["clave"]["c"], "locacion_id": e["clave"]["l"],
             "tipo_servicio_id": e["clave"]["ts"], "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}
     return {**base, **cambios}
 
-
 def _importar(cliente_api, t, filas, lote=None):
     return cliente_api.post("/v1/comandos/importar_lote_oc", json={"lote_id": lote or str(uuid.uuid4()), "origen": "planilla", "filas": filas},
                             headers=t.headers("responsable_legajos"))
-
 
 @pytest.mark.parametrize("cambio", [
     {"vigencia_hasta": "2026-10-09"}, {"cliente_id": str(uuid.uuid4())}, {"locacion_id": str(uuid.uuid4())},
@@ -565,7 +512,6 @@ def test_modificacion_de_una_entrada_abre_un_aviso_y_un_outbox(cliente_api, tena
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 1
 
-
 def test_varios_campos_juntos_un_solo_evento_causal_y_un_aviso(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -575,7 +521,6 @@ def test_varios_campos_juntos_un_solo_evento_causal_y_un_aviso(cliente_api, tena
     assert r.json()["oc_modificadas"][0]["campos_modificados"] == ["cliente_id", "vigencia_desde", "vigencia_hasta"]
     assert _eventos(t, "CompromisoModificado") == 1
     _espera_un_aviso(t, e["d1"], "CompromisoModificado", "oc")
-
 
 def test_reimportacion_identica_oc_nueva_y_solo_referencia_no_emiten(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -589,7 +534,6 @@ def test_reimportacion_identica_oc_nueva_y_solo_referencia_no_emiten(cliente_api
     assert r.status_code == 200 and r.json()["eventos"] == ["LoteAplicado"] and r.json()["oc_creadas"] == 1
     assert _eventos(t, "CompromisoModificado") == 0 and _avisos(t) == [] and _outbox(t) == []
 
-
 def test_modificacion_sin_decision_previa_audita_pero_no_marca(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -602,7 +546,6 @@ def test_modificacion_sin_decision_previa_audita_pero_no_marca(cliente_api, tena
         assert p["referencias_afectadas"] == []
         assert s.execute(text("SELECT count(*) FROM modulo1.politica_evento_procesado")).scalar() == 1  # procesado, sin afectadas
     assert _avisos(t) == [] and _outbox(t) == []
-
 
 def test_rollback_de_la_importacion_no_deja_nada(tenant_de_prueba, sesion):
     from app.auth.identidad import Identidad, Rol
@@ -624,7 +567,6 @@ def test_rollback_de_la_importacion_no_deja_nada(tenant_de_prueba, sesion):
                             ("lote_importacion", "true")):
             assert s.execute(text(f"SELECT count(*) FROM modulo1.{tabla} WHERE {cond}")).scalar() == 0, tabla
 
-
 def test_repeticion_idempotente_del_lote_no_duplica(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     e = _base(sesion, t)
@@ -636,7 +578,6 @@ def test_repeticion_idempotente_del_lote_no_duplica(cliente_api, tenant_de_prueb
     assert r1.status_code == 200 and r2.status_code == 200 and r1.json() == r2.json()
     assert _eventos(t, "CompromisoModificado") == 1 and len(_avisos(t)) == 1 and len(_outbox(t)) == 1
     assert len(_causas(t, str(_avisos(t)[0]["aviso_id"]))) == 1
-
 
 def test_dos_ocs_modificadas_en_un_lote_se_tratan_por_separado(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
@@ -651,14 +592,3 @@ def test_dos_ocs_modificadas_en_un_lote_se_tratan_por_separado(cliente_api, tena
     assert [m["commitment_id"] for m in r.json()["oc_modificadas"]] == ["OC-1"]
     assert {a["referencia_evaluacion"] for a in _avisos(t)} == {uuid.UUID(e["d1"])}
     assert _avisos(t, d2) == [] and len(_outbox(t)) == 1
-
-
-def test_origen_sujetos_en_el_body_es_422(cliente_api, tenant_de_prueba, sesion):
-    t = tenant_de_prueba
-    _base(sesion, t)
-    sesion.commit()
-    r = cliente_api.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-1", "sujetos_propuestos": ["persona_A"],
-                         "origen_sujetos": "custodia_por_defecto"}, headers=t.headers("responsable_legajos"))
-    assert r.status_code == 422 and r.json()["error"]["codigo"] == "validacion"
-    with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 1  # solo D1

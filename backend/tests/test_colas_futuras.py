@@ -23,6 +23,7 @@ from app.db import tenant_session
 from app.worker import main as worker_main
 from app.worker.cola import COLAS
 from app.worker.outbox import PublicadorEnMemoria
+from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar
 
 RAIZ = Path(__file__).resolve().parents[1]
 FUTURAS = ("evidencia_qr",)
@@ -53,10 +54,8 @@ def test_ningun_flujo_soportado_produce_colas_futuras():
 
 
 def test_e2e_principal_termina_sin_jobs_obligatorios_en_dead_letter(cliente_api, tenant_de_prueba):
-    """Corre el flujo E2E completo por HTTP y después una vuelta real del worker: ningún
+    """Corre un flujo documental representativo y después una vuelta real del worker: ningún
     job del tenant queda `fallido` y ninguno pertenece a una cola futura."""
-    from tests.test_e2e_http import test_flujo_completo_por_http
-
     class _Storage:
         def clave_para(self, *a): return "x"
         def existe(self, c): return False
@@ -64,7 +63,9 @@ def test_e2e_principal_termina_sin_jobs_obligatorios_en_dead_letter(cliente_api,
         def borrar(self, c): return True
         def disponible(self): return True
 
-    test_flujo_completo_por_http(cliente_api, tenant_de_prueba)
+    requisito = _alta_def(cliente_api, tenant_de_prueba, "Apto E2E colas")
+    persona = _alta_persona(cliente_api, tenant_de_prueba, "E2E-COLAS")
+    _cargar(cliente_api, tenant_de_prueba, persona, requisito, hasta="2027-12-31")
     worker_main.correr_una_vuelta(_Storage(), PublicadorEnMemoria())
     with tenant_session(tenant_de_prueba.tenant_id) as s:
         filas = s.execute(text("SELECT cola, estado, count(*) FROM modulo1.job_queue WHERE tenant_id = :t GROUP BY 1, 2"),

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
-const expectedHash = 'fff5825b40ab9388050debcf6b7b01f92416b077650b17cd8ce518753cf614ce';
+const expectedHash = '7bee57bfc84990a0af1b9d1a2a62500203821c76f9de16c85783a89fe0b51f42';
 const bytes = await readFile(new URL('../contracts/modulo1/openapi.json', import.meta.url));
 const hash = createHash('sha256').update(bytes).digest('hex');
 if (hash !== expectedHash) {
@@ -9,9 +9,8 @@ if (hash !== expectedHash) {
 }
 const contract = JSON.parse(bytes);
 const operations = Object.values(contract.paths).reduce((total, path) => total + Object.keys(path).filter(key => ['get', 'post', 'put', 'delete', 'patch'].includes(key)).length, 0);
-if (operations !== 89 || Object.keys(contract.paths).length !== 88) {
+if (operations !== 71 || Object.keys(contract.paths).length !== 70) {
   throw new Error(`Unexpected baseline shape: ${operations} operations / ${Object.keys(contract.paths).length} paths.`);
 }
 console.log(`Pinned contract verified: ${operations} operations, ${Object.keys(contract.paths).length} paths, SHA-256 ${hash}.`);
-
 

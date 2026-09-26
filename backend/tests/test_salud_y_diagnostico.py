@@ -242,7 +242,7 @@ def test_toda_respuesta_lleva_request_id(cliente_api):
 
 def test_422_no_registra_ni_devuelve_el_cuerpo(cliente_api, tenant_de_prueba, caplog):
     with caplog.at_level(logging.DEBUG):
-        r = cliente_api.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": "OC-SECRETA-XYZ"},
+        r = cliente_api.post("/v1/comandos/alta_de_sujeto", json={"identificador_natural": "OC-SECRETA-XYZ"},
                              headers=tenant_de_prueba.headers("responsable_legajos"))
     assert r.status_code == 422
     assert "OC-SECRETA-XYZ" not in r.text and "OC-SECRETA-XYZ" not in caplog.text

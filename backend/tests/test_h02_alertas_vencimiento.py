@@ -11,9 +11,11 @@ from datetime import date, datetime, time, timedelta, timezone
 import pytest
 from sqlalchemy import text
 
+from app.auth.identidad import Identidad, Rol
 from app.core.alertas import ParametrosAlerta, etapa_de
 from app.db import tenant_session
 from app.modules.alertas import servicio as alertas
+from app.modules.operacion import servicio as operacion
 from app.worker.procesos_reloj import control_vencimientos
 from tests import apoyo
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _ok, _post
@@ -199,11 +201,17 @@ def test_excepcion_sobre_vencido_marca_bajo_excepcion_sin_resolver(cliente_api, 
         insertar_matriz(s, t.tenant_id, clave, {req: "excepcionable"})
         s.execute(text("INSERT INTO modulo1.oc (tenant_id, clave_origen, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta) "
                        "VALUES (:t, 'OC-X', :c, :l, :ts, :d, :h)"), {"t": t.tenant_id, **clave, "d": VENCE + timedelta(days=10), "h": VENCE + timedelta(days=20)})
-    ev = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-X", "sujetos_propuestos": [persona]})
-    assert ev.status_code == 200, ev.text
-    r = _post(cliente_api, t, "supervisor", "otorgar_excepcion", {"referencia_evaluacion": ev.json()["referencia_evaluacion"], "sujeto_id": persona,
-                                                                   "requisito_definicion_id": req, "commitment_id": "OC-X", "motivo": "curso en trámite"})
-    assert r.status_code == 200, r.text
+    with tenant_session(t.tenant_id) as s:
+        ev = operacion.evaluar_habilitacion(
+            s, Identidad(t.tenant_id, t.usuarios["responsable_legajos"], frozenset({Rol.RESPONSABLE_LEGAJOS})),
+            commitment_id="OC-X", sujetos_propuestos=[persona],
+        )
+    with tenant_session(t.tenant_id) as s:
+        operacion.otorgar_excepcion(
+            s, Identidad(t.tenant_id, t.usuarios["supervisor"], frozenset({Rol.SUPERVISOR})),
+            referencia_evaluacion=ev["referencia_evaluacion"], sujeto_id=persona,
+            requisito_definicion_id=req, commitment_id="OC-X", motivo="curso en trámite",
+        )
     a = _alerta(t, doc)
     assert (a["estado"], a["bajo_excepcion"], a["ultima_accion_tipo"]) == ("abierta", True, "excepcion")
     # sigue escalando: la excepción evita el bloqueo operativo, no resuelve
@@ -311,10 +319,13 @@ def test_vencimiento_dispara_revaluacion_de_decision_vigente(cliente_api, esc):
         insertar_matriz(s, t.tenant_id, clave, {req: "bloqueante_duro"})
         s.execute(text("INSERT INTO modulo1.oc (tenant_id, clave_origen, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta) "
                        "VALUES (:t, 'OC-R', :c, :l, :ts, :d, :h)"), {"t": t.tenant_id, **clave, "d": VENCE + timedelta(days=10), "h": VENCE + timedelta(days=20)})
-    ev = _post(cliente_api, t, "responsable_legajos", "evaluar_habilitacion", {"commitment_id": "OC-R", "sujetos_propuestos": [persona]})
-    assert ev.status_code == 200
+    with tenant_session(t.tenant_id) as s:
+        ev = operacion.evaluar_habilitacion(
+            s, Identidad(t.tenant_id, t.usuarios["responsable_legajos"], frozenset({Rol.RESPONSABLE_LEGAJOS})),
+            commitment_id="OC-R", sujetos_propuestos=[persona],
+        )
     _reloj(t, VENCE + timedelta(days=1))
     with tenant_session(t.tenant_id) as s:
         avisos = s.execute(text("SELECT count(*) FROM modulo1.aviso_revaluacion WHERE tenant_id = :t AND referencia_evaluacion = :r AND estado = 'abierto'"),
-                           {"t": t.tenant_id, "r": ev.json()["referencia_evaluacion"]}).scalar()
+                           {"t": t.tenant_id, "r": ev["referencia_evaluacion"]}).scalar()
     assert avisos == 1

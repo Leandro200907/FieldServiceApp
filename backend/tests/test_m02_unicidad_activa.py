@@ -25,7 +25,6 @@ from tests.test_robustez import _en_paralelo, _ident
 PERSONA = "persona_0042"
 EMPRESA = "empresa_0001"
 
-
 @pytest.fixture
 def esc(tenant_de_prueba):
     """Escenario: persona con requisito excepcionable, empresa con requisito bloqueante_duro,
@@ -40,7 +39,6 @@ def esc(tenant_de_prueba):
         dec = op.evaluar_habilitacion(s, _ident(t, "responsable_legajos"), commitment_id="OC-1", sujetos_propuestos=[PERSONA])
     return {**e, "t": t, "referencia": dec["referencia_evaluacion"]}
 
-
 def _otorgar(esc, motivo="m"):
     t = esc["t"]
 
@@ -51,7 +49,6 @@ def _otorgar(esc, motivo="m"):
                 requisito_definicion_id=esc["req_apto"], commitment_id="OC-1", motivo=motivo,
             )
     return fn
-
 
 def _constancia(esc, commitment_id=None, evidencia="mail"):
     t = esc["t"]
@@ -64,15 +61,12 @@ def _constancia(esc, commitment_id=None, evidencia="mail"):
             )
     return fn
 
-
 def _filas(t, tabla, id_col):
     with tenant_session(t.tenant_id) as s:
         return [dict(f) for f in s.execute(text(f"SELECT {id_col} AS id, estado, * FROM modulo1.{tabla} WHERE tenant_id = :t ORDER BY creado_en"),
                                            {"t": t.tenant_id}).mappings()]
 
-
 # --------------------------------------------------------------------------- concurrencia
-
 
 def test_dos_primeras_excepciones_simultaneas_queda_una_activa(esc):
     salidas = _en_paralelo([_otorgar(esc, "a"), _otorgar(esc, "b")])
@@ -82,7 +76,6 @@ def test_dos_primeras_excepciones_simultaneas_queda_una_activa(esc):
     assert isinstance(errores[0], Conflicto) and errores[0].status == 409
     filas = _filas(esc["t"], "excepcion", "excepcion_id")
     assert [f["estado"] for f in filas] == ["otorgada"]
-
 
 def test_dos_primeras_constancias_generales_simultaneas_queda_una_vigente(esc):
     salidas = _en_paralelo([_constancia(esc, evidencia="a"), _constancia(esc, evidencia="b")])
@@ -95,7 +88,6 @@ def test_dos_primeras_constancias_generales_simultaneas_queda_una_vigente(esc):
     assert str(reemplazada["reemplazada_por"]) == str(vigentes[0]["id"])
     assert {r["constancia_reemplazada_id"] for r, _ in salidas} == {None, str(reemplazada["id"])}
 
-
 def test_dos_primeras_constancias_especificas_simultaneas_queda_una_vigente(esc):
     salidas = _en_paralelo([_constancia(esc, "OC-1", "a"), _constancia(esc, "OC-1", "b")])
     assert all(e is None for _, e in salidas), salidas
@@ -103,9 +95,7 @@ def test_dos_primeras_constancias_especificas_simultaneas_queda_una_vigente(esc)
     assert sorted(f["estado"] for f in filas) == ["reemplazada", "vigente"]
     assert all(f["commitment_id"] == "OC-1" for f in filas)
 
-
 # --------------------------------------------------------------------------- reemplazo e historial
-
 
 def test_reemplazo_correcto_no_viola_el_indice_y_general_y_especifica_conviven(esc):
     g1 = _constancia(esc)()
@@ -119,7 +109,6 @@ def test_reemplazo_correcto_no_viola_el_indice_y_general_y_especifica_conviven(e
     assert filas[g1["constancia_id"]]["estado"] == "reemplazada" and str(filas[g1["constancia_id"]]["reemplazada_por"]) == g2["constancia_id"]
     assert filas[e1["constancia_id"]]["estado"] == "reemplazada" and str(filas[e1["constancia_id"]]["reemplazada_por"]) == e2["constancia_id"]
     assert sorted(str(k) for k, f in filas.items() if f["estado"] == "vigente") == sorted([g2["constancia_id"], e2["constancia_id"]])
-
 
 def test_varias_filas_historicas_de_excepcion_y_constancia_conviven(esc):
     t = esc["t"]
@@ -141,9 +130,7 @@ def test_varias_filas_historicas_de_excepcion_y_constancia_conviven(esc):
     filas = _filas(t, "constancia_cliente", "constancia_id")
     assert sorted(f["estado"] for f in filas) == ["reemplazada"] * 3 + ["vigente"]
 
-
 # --------------------------------------------------------------------------- colisión residual → 409 estable
-
 
 class _SesionSinChequeo:
     """Proxy que hace que la consulta previa ('ya'/'anterior') no vea nada: simula la
@@ -164,7 +151,6 @@ class _SesionSinChequeo:
     def __getattr__(self, n):
         return getattr(self._real, n)
 
-
 def test_colision_residual_de_excepcion_es_409_de_dominio(esc):
     t = esc["t"]
     _otorgar(esc)()
@@ -178,7 +164,6 @@ def test_colision_residual_de_excepcion_es_409_de_dominio(esc):
         assert info.value.status == 409 and info.value.codigo == "excepcion_activa_duplicada"
         assert isinstance(info.value.__cause__, IntegrityError)
         s.rollback()
-
 
 @pytest.mark.parametrize("commitment_id, indice", [(None, "uq_constancia_general_activa"), ("OC-1", "uq_constancia_especifica_activa")])
 def test_colision_residual_de_constancia_es_409_de_dominio(esc, commitment_id, indice):
@@ -194,28 +179,6 @@ def test_colision_residual_de_constancia_es_409_de_dominio(esc, commitment_id, i
         assert info.value.status == 409 and info.value.codigo == "constancia_activa_duplicada"
         assert info.value.__cause__.orig.diag.constraint_name == indice
         s.rollback()
-
-
-def test_api_colision_residual_responde_409_no_500(cliente_api, esc, monkeypatch):
-    """Por HTTP: el 23505 residual sale como 409 con código de dominio (no 500)."""
-    from tests.test_comandos_operacion import _post
-    t = esc["t"]
-    _otorgar(esc)()
-    original = op.otorgar_excepcion
-
-    def sin_chequeo(session, identidad, **kw):
-        return original(_SesionSinChequeo(session, "SELECT excepcion_id FROM modulo1.excepcion"), identidad, **kw)
-    monkeypatch.setattr(op, "otorgar_excepcion", sin_chequeo)
-    r = _post(cliente_api, t, "supervisor", "otorgar_excepcion",
-              {"referencia_evaluacion": esc["referencia"], "sujeto_id": PERSONA, "requisito_definicion_id": esc["req_apto"],
-               "commitment_id": "OC-1", "motivo": "x"})
-    assert r.status_code == 409, r.text
-    assert r.json()["error"]["codigo"] == "excepcion_activa_duplicada"
-
-
-# --------------------------------------------------------------------------- la base sola
-
-
 def test_indices_parciales_rechazan_duplicado_activo_y_permiten_historial(esc):
     t = esc["t"]
     with tenant_session(t.tenant_id) as s:
@@ -234,7 +197,6 @@ def test_indices_parciales_rechazan_duplicado_activo_y_permiten_historial(esc):
         assert info.value.orig.diag.constraint_name == "uq_excepcion_activa"
         s.rollback()
 
-
 def test_pg_indexes_definicion_exacta():
     with tenant_session("00000000-0000-0000-0000-000000000000") as s:
         defs = dict(s.execute(text("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'modulo1' AND indexname LIKE 'uq_%activa'")).all())
@@ -242,3 +204,5 @@ def test_pg_indexes_definicion_exacta():
     assert defs["uq_constancia_general_activa"].endswith("(tenant_id, sujeto_id, requisito_definicion_id, cliente_id) WHERE ((estado = 'vigente'::text) AND (commitment_id IS NULL))")
     assert defs["uq_constancia_especifica_activa"].endswith("(tenant_id, sujeto_id, requisito_definicion_id, cliente_id, commitment_id) WHERE ((estado = 'vigente'::text) AND (commitment_id IS NOT NULL))")
     assert all(d.startswith("CREATE UNIQUE INDEX") for d in defs.values())
+
+
