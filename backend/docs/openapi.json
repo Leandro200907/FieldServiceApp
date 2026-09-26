@@ -1680,22 +1680,22 @@
         "properties": {
           "escalamiento_dias": {
             "default": 7,
-            "maximum": 365,
-            "minimum": 0,
+            "maximum": 365.0,
+            "minimum": 0.0,
             "title": "Escalamiento Dias",
             "type": "integer"
           },
           "plazo_aviso_dias": {
             "default": 30,
-            "maximum": 365,
-            "minimum": 1,
+            "maximum": 365.0,
+            "minimum": 1.0,
             "title": "Plazo Aviso Dias",
             "type": "integer"
           },
           "reconocimiento_dias": {
             "default": 3,
-            "maximum": 30,
-            "minimum": 0,
+            "maximum": 30.0,
+            "minimum": 0.0,
             "title": "Reconocimiento Dias",
             "type": "integer"
           },
@@ -1868,8 +1868,8 @@
           "intervalo_horas": {
             "anyOf": [
               {
-                "maximum": 168,
-                "minimum": 1,
+                "maximum": 168.0,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -2775,7 +2775,7 @@
           "plazo_retencion_archivo_dias": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -3424,122 +3424,6 @@
           "advertencia"
         ],
         "title": "DetalleLegajoResponse",
-        "type": "object"
-      },
-      "DetalleOcResponse": {
-        "properties": {
-          "advertencia": {
-            "title": "Advertencia",
-            "type": "string"
-          },
-          "causas": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/CausaProyeccion"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Causas"
-          },
-          "commitment_id": {
-            "title": "Commitment Id",
-            "type": "string"
-          },
-          "desde": {
-            "format": "date",
-            "title": "Desde",
-            "type": "string"
-          },
-          "estado": {
-            "enum": [
-              "sin_matriz",
-              "pendiente_de_planificacion",
-              "bloqueo_confirmado",
-              "requiere_revision",
-              "riesgo_documental",
-              "sin_riesgos_detectados",
-              "vigencia_finalizada"
-            ],
-            "title": "Estado",
-            "type": "string"
-          },
-          "estado_por_dia": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Estado Por Dia"
-          },
-          "hasta": {
-            "format": "date",
-            "title": "Hasta",
-            "type": "string"
-          },
-          "hoy": {
-            "format": "date",
-            "title": "Hoy",
-            "type": "string"
-          },
-          "intervalos": {
-            "items": {
-              "$ref": "#/components/schemas/IntervaloProyeccion"
-            },
-            "title": "Intervalos",
-            "type": "array"
-          },
-          "matriz": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MatrizInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "oc": {
-            "$ref": "#/components/schemas/OcInfo"
-          },
-          "referencia": {
-            "title": "Referencia",
-            "type": "string"
-          },
-          "sujetos": {
-            "$ref": "#/components/schemas/SujetosOrigen"
-          },
-          "tipo": {
-            "const": "oc",
-            "title": "Tipo",
-            "type": "string"
-          }
-        },
-        "required": [
-          "commitment_id",
-          "referencia",
-          "oc",
-          "hoy",
-          "desde",
-          "hasta",
-          "sujetos",
-          "matriz",
-          "estado",
-          "intervalos",
-          "advertencia",
-          "tipo"
-        ],
-        "title": "DetalleOcResponse",
         "type": "object"
       },
       "DocumentoCargadoResponse": {
@@ -4672,8 +4556,8 @@
         "properties": {
           "dias_validez": {
             "default": 30,
-            "maximum": 90,
-            "minimum": 1,
+            "maximum": 90.0,
+            "minimum": 1.0,
             "title": "Dias Validez",
             "type": "integer"
           },
@@ -9238,6 +9122,122 @@
           "representante"
         ],
         "title": "SujetoEvaluado",
+        "type": "object"
+      },
+      "app__modules__proyeccion__router__DetalleOcResponse": {
+        "properties": {
+          "advertencia": {
+            "title": "Advertencia",
+            "type": "string"
+          },
+          "causas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CausaProyeccion"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causas"
+          },
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "desde": {
+            "format": "date",
+            "title": "Desde",
+            "type": "string"
+          },
+          "estado": {
+            "enum": [
+              "sin_matriz",
+              "pendiente_de_planificacion",
+              "bloqueo_confirmado",
+              "requiere_revision",
+              "riesgo_documental",
+              "sin_riesgos_detectados",
+              "vigencia_finalizada"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "estado_por_dia": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Por Dia"
+          },
+          "hasta": {
+            "format": "date",
+            "title": "Hasta",
+            "type": "string"
+          },
+          "hoy": {
+            "format": "date",
+            "title": "Hoy",
+            "type": "string"
+          },
+          "intervalos": {
+            "items": {
+              "$ref": "#/components/schemas/IntervaloProyeccion"
+            },
+            "title": "Intervalos",
+            "type": "array"
+          },
+          "matriz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatrizInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oc": {
+            "$ref": "#/components/schemas/OcInfo"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
+          "sujetos": {
+            "$ref": "#/components/schemas/SujetosOrigen"
+          },
+          "tipo": {
+            "const": "oc",
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commitment_id",
+          "referencia",
+          "oc",
+          "hoy",
+          "desde",
+          "hasta",
+          "sujetos",
+          "matriz",
+          "estado",
+          "intervalos",
+          "advertencia",
+          "tipo"
+        ],
+        "title": "DetalleOcResponse",
         "type": "object"
       },
       "app__modules__radar_documental__router__DetalleOcResponse": {
@@ -16204,7 +16204,7 @@
                   "discriminator": {
                     "mapping": {
                       "evidencia": "#/components/schemas/DetalleEvidenciaResponse",
-                      "oc": "#/components/schemas/DetalleOcResponse"
+                      "oc": "#/components/schemas/app__modules__proyeccion__router__DetalleOcResponse"
                     },
                     "propertyName": "tipo"
                   },
@@ -16213,7 +16213,7 @@
                       "$ref": "#/components/schemas/DetalleEvidenciaResponse"
                     },
                     {
-                      "$ref": "#/components/schemas/DetalleOcResponse"
+                      "$ref": "#/components/schemas/app__modules__proyeccion__router__DetalleOcResponse"
                     }
                   ],
                   "title": "Response Detalle Proyeccion Documental V1 Consultas Detalle Proyeccion Documental Get"
