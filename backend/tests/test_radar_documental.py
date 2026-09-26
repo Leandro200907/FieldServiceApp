@@ -35,14 +35,15 @@ def test_sin_matriz_tiene_precedencia_en_la_oc():
 
 
 def test_radar_no_depende_de_componentes_operativos():
-    fuente = (Path(__file__).parents[1] / "app/modules/radar_documental/servicio.py").read_text(encoding="utf-8")
+    fuente = (Path(__file__).parents[1] / "app/modules/proyeccion/radar.py").read_text(encoding="utf-8")
     prohibidos = ("app.modules.operacion", "modulo1.asignacion_supervisor", "modulo1.custodia_recurso",
                   "modulo1.periodo_custodia", "modulo1.evaluacion_habilitacion", "modulo1.excepcion")
     assert not any(nombre in fuente for nombre in prohibidos)
 
 
 def test_respuesta_no_introduce_semantica_de_planificacion():
-    fuente = (Path(__file__).parents[1] / "app/modules/radar_documental/router.py").read_text(encoding="utf-8")
+    fuente = (Path(__file__).parents[1] / "app/modules/proyeccion/router.py").read_text(encoding="utf-8")
     prohibidos = ("asignable", "candidato", "capacidad_documental", "bajo_excepcion")
     assert not any(nombre in fuente for nombre in prohibidos)
+
 

@@ -1,4 +1,4 @@
-"""Radar documental de sólo lectura.
+"""Cálculo documental del radar dentro del módulo de proyección existente.
 
 Consulta OC, matrices, requisitos, legajos y evidencias. Deliberadamente no importa ni
 consulta operación, asignaciones, custodia, excepciones o evaluaciones históricas.
@@ -269,4 +269,5 @@ def detalle_legajo(session: Session, identidad: Identidad, oc_id: str, sujeto_id
             if legajo["sujeto_id"] == sujeto_id:
                 return {"oc": detalle["oc"], "legajo": legajo, "advertencia": ADVERTENCIA}
     raise NoEncontrado("Legajo inexistente o inactivo", {"sujeto_id": sujeto_id})
+
 
