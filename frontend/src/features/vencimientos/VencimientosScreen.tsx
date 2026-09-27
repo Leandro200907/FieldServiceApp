@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
+import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import { deriveVisualState } from '../documentation-planning/contracts';
 import type { VisualCalendarState } from '../documentation-planning/contracts';
 import { PAGE_SIZE, PaginationControls } from '../documentation-planning/PaginationControls';
@@ -35,7 +36,7 @@ export function VencimientosScreen() {
             <td>{item.categoria || 'Sin categoría'}</td>
             <td>{item.vigente_hasta}</td>
             <td><Badge tone={state === 'vencida' ? 'warning' : 'accent'}>{visualStateLabels[state]}</Badge></td>
-            <td>{item.dias_para_vencer >= 0 ? `vence en ${item.dias_para_vencer} días` : `venció hace ${Math.abs(item.dias_para_vencer)} días`}</td>
+            <td>{formatDaysToExpiry(item.dias_para_vencer)}</td>
           </tr>;
         })}
       </tbody></table></div>
@@ -44,3 +45,5 @@ export function VencimientosScreen() {
     </>}
   </>;
 }
+
+
