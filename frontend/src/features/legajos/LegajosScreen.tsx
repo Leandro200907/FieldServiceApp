@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
+import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import { deriveVisualState } from '../documentation-planning/contracts';
 import type { VisualCalendarState } from '../documentation-planning/contracts';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
@@ -18,7 +19,7 @@ function EvidenceRow({ item }: { item: EvidenciaVigente }) {
   return <li className="evidence-row">
     <span className="evidence-name">{item.requisito || 'Requisito sin nombre'}</span>
     <Badge tone={state === 'vencida' ? 'warning' : 'accent'}>{visualStateLabels[state]}</Badge>
-    <small>{item.vigente_hasta} · {item.dias_para_vencer >= 0 ? `vence en ${item.dias_para_vencer} días` : `venció hace ${Math.abs(item.dias_para_vencer)} días`}</small>
+    <small>{item.vigente_hasta} · {formatDaysToExpiry(item.dias_para_vencer)}</small>
   </li>;
 }
 
@@ -59,3 +60,5 @@ export function LegajosScreen() {
     </section>)}
   </>;
 }
+
+
