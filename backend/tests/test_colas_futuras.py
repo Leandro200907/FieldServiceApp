@@ -42,6 +42,7 @@ def test_ningun_flujo_soportado_produce_colas_futuras():
         assert _productores(cola) == [], f"{cola} tiene productor: implementar handler o desactivar el productor"
     assert sorted(Path(p).as_posix() for p in _productores("notificaciones")) == [
         "app/modules/alertas/servicio.py", "app/modules/evidencia/servicio.py",
-        "app/modules/requisitos/plantillas.py", "app/worker/outbox.py"]
+        "app/modules/operadoras/servicio.py", "app/modules/requisitos/plantillas.py",
+        "app/worker/outbox.py"]
     assert sorted(Path(p).as_posix() for p in _productores("validacion_evidencia")) == ["app/storage/servicio.py"]
     assert set(worker_main.HANDLERS) == set(SOPORTADAS)   # las futuras sólo tienen handler_no_implementado

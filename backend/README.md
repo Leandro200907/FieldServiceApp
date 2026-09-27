@@ -11,9 +11,9 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 71 operaciones sobre 70 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 24 archivos en `migrations/versions/`, un solo head: `0021_validacion_evidencia`.
-- **Tests:** 523 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro,
+- **Rutas HTTP:** 73 operaciones sobre 72 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 25 archivos en `migrations/versions/`, un solo head: `0022_espejo_operadoras`.
+- **Tests:** 525 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -49,12 +49,13 @@ app/
     paquete/            # paquete de entrega público firmado + QR (sin JWT, rate limit)
     score/              # score de salud documental + snapshot diario
     exportacion/        # exportar legajo (json/csv) con traza
+    operadoras/         # espejo por operadora, diferencias de versión y alertas
     drive/              # carpeta de Drive de solo lectura: proveedor, escaneo, extracción por confianza, bandeja
     oc/                 # importación/cancelación de OC (vista de compromiso)
     consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0021, lineales, un head)
+migrations/             # Alembic (0001 … 0022, lineales, un head)
 scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md

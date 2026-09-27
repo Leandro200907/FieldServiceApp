@@ -5,8 +5,22 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0021_validacion_evidencia`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0022_espejo_operadoras`.
 Prefijo de todas las rutas: `/v1`.
+
+### Espejo documental por operadora
+
+- `POST /v1/comandos/registrar_estado_documento_operadora` registra, desde una planilla
+  u otra fuente, si una versión fue exportada, enviada, aceptada o rechazada por una
+  operadora. Conserva archivo, hoja y fila de origen.
+- `GET /v1/consultas/alertas_actualizacion_operadora` devuelve las diferencias abiertas
+  entre la versión vigente del legajo y la versión conocida por cada operadora.
+- Una renovación no modifica automáticamente el estado externo: abre una alerta por
+  operadora. El envío la cambia a pendiente de aceptación; la aceptación de la versión
+  vigente la cierra.
+- El responsable de legajos y el supervisor vigente del sujeto reciben la notificación.
+  El alcance del supervisor también se aplica a la consulta.
+- Esta capacidad es documental: no asigna recursos ni confirma disponibilidad.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
 

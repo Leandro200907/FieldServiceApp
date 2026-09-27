@@ -30,4 +30,13 @@ describe('realVencimientosAccess', () => {
     getMock.mockResolvedValueOnce(errorResponse(403));
     await expect(realVencimientosAccess.readTableroVencimientos({})).rejects.toMatchObject({ detail: { status: 403 } });
   });
+
+  it('consulta diferencias entre el legajo y el espejo de las operadoras', async () => {
+    getMock.mockResolvedValueOnce(okResponse({ items: [], total: 0, offset: 0, limit: 50 }));
+    await realVencimientosAccess.readAlertasOperadora({ offset: 0, limit: 50 });
+    expect(getMock).toHaveBeenCalledWith('/v1/consultas/alertas_actualizacion_operadora', {
+      params: { query: { offset: 0, limit: 50 } },
+    });
+  });
 });
+

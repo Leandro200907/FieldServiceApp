@@ -23,4 +23,10 @@ export const realVencimientosAccess: VencimientosAccess = {
       params: { query: { dias: query.dias, offset: query.offset, limit: query.limit } },
     }));
   },
+  async readAlertasOperadora(query) {
+    return unwrap(session.client.GET('/v1/consultas/alertas_actualizacion_operadora', {
+      params: { query: { offset: query.offset, limit: query.limit } },
+    }));
+  },
 };
+

@@ -26,4 +26,8 @@ export const temporaryMockAccess: VencimientosAccess = {
       total: filtered.length, offset, limit,
     };
   },
+  async readAlertasOperadora(query) {
+    return { items: [], total: 0, offset: query.offset ?? 0, limit: query.limit ?? 50 };
+  },
 };
+

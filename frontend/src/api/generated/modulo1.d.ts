@@ -519,6 +519,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/comandos/registrar_estado_documento_operadora": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar Estado Documento Operadora */
+        post: operations["registrar_estado_documento_operadora_v1_comandos_registrar_estado_documento_operadora_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comandos/registrar_induccion": {
         parameters: {
             query?: never;
@@ -613,6 +630,23 @@ export interface paths {
         };
         /** Alertas Abiertas */
         get: operations["alertas_abiertas_v1_consultas_alertas_abiertas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/consultas/alertas_actualizacion_operadora": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Alertas Actualizacion Operadora */
+        get: operations["alertas_actualizacion_operadora_v1_consultas_alertas_actualizacion_operadora_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1279,6 +1313,41 @@ export interface components {
             /** Vigente Hasta */
             vigente_hasta: string | null;
         };
+        /** AlertaOperadora */
+        AlertaOperadora: {
+            /**
+             * Abierta En
+             * Format: date-time
+             */
+            abierta_en: string;
+            /**
+             * Actualizada En
+             * Format: date-time
+             */
+            actualizada_en: string;
+            /** Alerta Id */
+            alerta_id: string;
+            /** Documento Vigente Id */
+            documento_vigente_id: string;
+            /** Estado */
+            estado: string;
+            /** Identificador Natural */
+            identificador_natural: string;
+            /** Motivo */
+            motivo: string;
+            /** Operadora */
+            operadora: string;
+            /** Operadora Id */
+            operadora_id: string;
+            /** Requisito */
+            requisito: string;
+            /** Requisito Definicion Id */
+            requisito_definicion_id: string;
+            /** Sujeto Id */
+            sujeto_id: string;
+            /** Ultimo Documento Operadora Id */
+            ultimo_documento_operadora_id: string | null;
+        };
         /** AlertaVencimiento */
         AlertaVencimiento: {
             /**
@@ -1346,6 +1415,17 @@ export interface components {
             por_etapa: {
                 [key: string]: number;
             };
+            /** Total */
+            total: number;
+        };
+        /** AlertasOperadoraResponse */
+        AlertasOperadoraResponse: {
+            /** Items */
+            items: components["schemas"]["AlertaOperadora"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
             /** Total */
             total: number;
         };
@@ -3147,6 +3227,51 @@ export interface components {
             acreditacion_id: string;
             /** Eventos */
             eventos: string[];
+        };
+        /** RegistrarEstadoOperadoraBody */
+        RegistrarEstadoOperadoraBody: {
+            /** Aceptado En */
+            aceptado_en?: string | null;
+            /** Documento Id */
+            documento_id: string;
+            /** Enviado En */
+            enviado_en?: string | null;
+            /**
+             * Estado
+             * @enum {string}
+             */
+            estado: "exportado" | "enviado" | "aceptado" | "rechazado";
+            /** Exportado En */
+            exportado_en?: string | null;
+            /** Fuente Archivo */
+            fuente_archivo?: string | null;
+            /** Fuente Fila */
+            fuente_fila?: number | null;
+            /** Fuente Hoja */
+            fuente_hoja?: string | null;
+            /** Observacion */
+            observacion?: string | null;
+            /** Operadora */
+            operadora: string;
+            /** Rechazado En */
+            rechazado_en?: string | null;
+            /** Sujeto Id */
+            sujeto_id: string;
+        };
+        /** RegistrarEstadoOperadoraResponse */
+        RegistrarEstadoOperadoraResponse: {
+            /** Alerta */
+            alerta: {
+                [key: string]: unknown;
+            } | null;
+            /** Documento Id */
+            documento_id: string;
+            /** Estado */
+            estado: string;
+            /** Eventos */
+            eventos: string[];
+            /** Operadora Id */
+            operadora_id: string;
         };
         /** RegistrarInduccion */
         RegistrarInduccion: {
@@ -5872,6 +5997,86 @@ export interface operations {
             };
         };
     };
+    registrar_estado_documento_operadora_v1_comandos_registrar_estado_documento_operadora_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrarEstadoOperadoraBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrarEstadoOperadoraResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     registrar_induccion_v1_comandos_registrar_induccion_post: {
         parameters: {
             query?: never;
@@ -6293,6 +6498,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlertasAbiertasResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    alertas_actualizacion_operadora_v1_consultas_alertas_actualizacion_operadora_get: {
+        parameters: {
+            query?: {
+                sujeto_id?: string | null;
+                estado?: ("pendiente_envio" | "pendiente_aceptacion" | "rechazado") | null;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertasOperadoraResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */

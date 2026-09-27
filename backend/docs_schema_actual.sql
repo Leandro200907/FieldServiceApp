@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0021_validacion_evidencia
+-- head: 0022_espejo_operadoras
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -72,6 +72,23 @@ CREATE TABLE modulo1.acreditacion_competencia (
     CONSTRAINT ck_vigencia_acreditacion CHECK ((vigente_desde <= vigente_hasta))
 );
 ALTER TABLE ONLY modulo1.acreditacion_competencia FORCE ROW LEVEL SECURITY;
+-- Name: alerta_actualizacion_operadora; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.alerta_actualizacion_operadora (
+    alerta_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    operadora_id uuid NOT NULL,
+    sujeto_id text NOT NULL,
+    requisito_definicion_id uuid NOT NULL,
+    documento_vigente_id uuid NOT NULL,
+    ultimo_documento_operadora_id uuid,
+    estado text NOT NULL,
+    motivo text NOT NULL,
+    abierta_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizada_en timestamp with time zone DEFAULT now() NOT NULL,
+    resuelta_en timestamp with time zone,
+    CONSTRAINT alerta_actualizacion_operadora_estado_check CHECK ((estado = ANY (ARRAY['pendiente_envio'::text, 'pendiente_aceptacion'::text, 'rechazado'::text, 'resuelta'::text])))
+);
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora FORCE ROW LEVEL SECURITY;
 -- Name: alerta_notificacion; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.alerta_notificacion (
     notificacion_id bigint NOT NULL,
@@ -356,6 +373,30 @@ CREATE TABLE modulo1.documento (
     CONSTRAINT documento_origen_check CHECK ((origen = ANY (ARRAY['planilla'::text, 'carga_manual'::text, 'drive'::text])))
 );
 ALTER TABLE ONLY modulo1.documento FORCE ROW LEVEL SECURITY;
+-- Name: entrega_documento_operadora; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.entrega_documento_operadora (
+    entrega_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    operadora_id uuid NOT NULL,
+    sujeto_id text NOT NULL,
+    requisito_definicion_id uuid NOT NULL,
+    documento_id uuid NOT NULL,
+    estado text NOT NULL,
+    exportado_en timestamp with time zone,
+    enviado_en timestamp with time zone,
+    aceptado_en timestamp with time zone,
+    rechazado_en timestamp with time zone,
+    fuente_archivo text,
+    fuente_hoja text,
+    fuente_fila integer,
+    observacion text,
+    actualizado_por text NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT entrega_documento_operadora_estado_check CHECK ((estado = ANY (ARRAY['exportado'::text, 'enviado'::text, 'aceptado'::text, 'rechazado'::text]))),
+    CONSTRAINT entrega_documento_operadora_fuente_fila_check CHECK (((fuente_fila IS NULL) OR (fuente_fila > 0)))
+);
+ALTER TABLE ONLY modulo1.entrega_documento_operadora FORCE ROW LEVEL SECURITY;
 -- Name: evaluacion_habilitacion; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.evaluacion_habilitacion (
     referencia_evaluacion uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -614,6 +655,24 @@ CREATE TABLE modulo1.oc (
     CONSTRAINT oc_estado_check CHECK ((estado = ANY (ARRAY['activo'::text, 'cancelado'::text])))
 );
 ALTER TABLE ONLY modulo1.oc FORCE ROW LEVEL SECURITY;
+-- Name: operadora_documental; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.operadora_documental (
+    operadora_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    nombre text NOT NULL,
+    activa boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE ONLY modulo1.operadora_documental FORCE ROW LEVEL SECURITY;
+-- Name: operadora_legajo; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.operadora_legajo (
+    tenant_id uuid NOT NULL,
+    operadora_id uuid NOT NULL,
+    sujeto_id text NOT NULL,
+    fuente text DEFAULT 'planilla'::text NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE ONLY modulo1.operadora_legajo FORCE ROW LEVEL SECURITY;
 -- Name: outbox_events; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.outbox_events (
     evento_id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -814,6 +873,9 @@ ALTER TABLE ONLY modulo1.paquete_acceso ALTER COLUMN acceso_id SET DEFAULT nextv
 -- Name: acreditacion_competencia acreditacion_competencia_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.acreditacion_competencia
     ADD CONSTRAINT acreditacion_competencia_pkey PRIMARY KEY (acreditacion_id);
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operadora_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT alerta_actualizacion_operadora_pkey PRIMARY KEY (alerta_id);
 -- Name: alerta_notificacion alerta_notificacion_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.alerta_notificacion
     ADD CONSTRAINT alerta_notificacion_pkey PRIMARY KEY (notificacion_id);
@@ -862,6 +924,9 @@ ALTER TABLE ONLY modulo1.definicion_requisito
 -- Name: documento documento_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.documento
     ADD CONSTRAINT documento_pkey PRIMARY KEY (documento_id);
+-- Name: entrega_documento_operadora entrega_documento_operadora_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.entrega_documento_operadora
+    ADD CONSTRAINT entrega_documento_operadora_pkey PRIMARY KEY (entrega_id);
 -- Name: evaluacion_habilitacion evaluacion_habilitacion_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.evaluacion_habilitacion
     ADD CONSTRAINT evaluacion_habilitacion_pkey PRIMARY KEY (referencia_evaluacion);
@@ -904,6 +969,12 @@ ALTER TABLE ONLY modulo1.notificacion_envio
 -- Name: oc oc_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT oc_pkey PRIMARY KEY (oc_id);
+-- Name: operadora_documental operadora_documental_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_documental
+    ADD CONSTRAINT operadora_documental_pkey PRIMARY KEY (operadora_id);
+-- Name: operadora_legajo operadora_legajo_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_legajo
+    ADD CONSTRAINT operadora_legajo_pkey PRIMARY KEY (tenant_id, operadora_id, sujeto_id);
 -- Name: outbox_events outbox_events_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.outbox_events
     ADD CONSTRAINT outbox_events_pkey PRIMARY KEY (evento_id);
@@ -952,6 +1023,9 @@ ALTER TABLE ONLY modulo1.aviso_incumplimiento_empresa
 -- Name: alerta_vencimiento uq_alerta_fuente; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.alerta_vencimiento
     ADD CONSTRAINT uq_alerta_fuente UNIQUE (tenant_id, fuente_tipo, fuente_id);
+-- Name: alerta_actualizacion_operadora uq_alerta_operadora_version; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT uq_alerta_operadora_version UNIQUE (tenant_id, operadora_id, sujeto_id, requisito_definicion_id, documento_vigente_id);
 -- Name: alerta_vencimiento uq_alerta_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.alerta_vencimiento
     ADD CONSTRAINT uq_alerta_tenant_id UNIQUE (tenant_id, alerta_id);
@@ -979,6 +1053,9 @@ ALTER TABLE ONLY modulo1.definicion_requisito
 -- Name: documento uq_documento_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.documento
     ADD CONSTRAINT uq_documento_tenant_id UNIQUE (tenant_id, documento_id);
+-- Name: entrega_documento_operadora uq_entrega_operadora_documento; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.entrega_documento_operadora
+    ADD CONSTRAINT uq_entrega_operadora_documento UNIQUE (tenant_id, operadora_id, documento_id);
 -- Name: evaluacion_habilitacion uq_evaluacion_tenant_ref; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.evaluacion_habilitacion
     ADD CONSTRAINT uq_evaluacion_tenant_ref UNIQUE (tenant_id, referencia_evaluacion);
@@ -1006,6 +1083,9 @@ ALTER TABLE ONLY modulo1.notificacion_envio
 -- Name: oc uq_oc_clave_origen; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT uq_oc_clave_origen UNIQUE (tenant_id, clave_origen);
+-- Name: operadora_documental uq_operadora_documental_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_documental
+    ADD CONSTRAINT uq_operadora_documental_tenant_id UNIQUE (tenant_id, operadora_id);
 -- Name: outbox_events uq_outbox_dedup; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.outbox_events
     ADD CONSTRAINT uq_outbox_dedup UNIQUE (tenant_id, clave_dedup);
@@ -1048,6 +1128,8 @@ CREATE INDEX ix_acreditacion_competencia__persona_id ON modulo1.acreditacion_com
 CREATE INDEX ix_acreditacion_tenant_persona ON modulo1.acreditacion_competencia USING btree (tenant_id, persona_id, requisito_definicion_id);
 -- Name: ix_alerta_notificacion_pendientes; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_alerta_notificacion_pendientes ON modulo1.alerta_notificacion USING btree (tenant_id, destinatario_rol, destinatario_usuario_id) WHERE (entregada_en IS NULL);
+-- Name: ix_alerta_operadora_abierta; Type: INDEX; Schema: modulo1; Owner: -
+CREATE INDEX ix_alerta_operadora_abierta ON modulo1.alerta_actualizacion_operadora USING btree (tenant_id, estado, sujeto_id) WHERE (estado <> 'resuelta'::text);
 -- Name: ix_alerta_vencimiento_abiertas; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_alerta_vencimiento_abiertas ON modulo1.alerta_vencimiento USING btree (tenant_id, etapa, sujeto_id) WHERE (estado <> 'resuelta'::text);
 -- Name: ix_alerta_vencimiento_sujeto_req; Type: INDEX; Schema: modulo1; Owner: -
@@ -1078,6 +1160,8 @@ CREATE INDEX ix_documento_archivo_validacion ON modulo1.documento USING btree (t
 CREATE INDEX ix_documento_sucede_a ON modulo1.documento USING btree (tenant_id, sucede_a);
 -- Name: ix_documento_tenant_sujeto; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_documento_tenant_sujeto ON modulo1.documento USING btree (tenant_id, sujeto_id, requisito_definicion_id);
+-- Name: ix_entrega_operadora_legajo; Type: INDEX; Schema: modulo1; Owner: -
+CREATE INDEX ix_entrega_operadora_legajo ON modulo1.entrega_documento_operadora USING btree (tenant_id, sujeto_id, requisito_definicion_id, operadora_id);
 -- Name: ix_esp_sujeto; Type: INDEX; Schema: modulo1; Owner: -
 CREATE INDEX ix_esp_sujeto ON modulo1.evaluacion_sujeto_propuesto USING btree (tenant_id, sujeto_id);
 -- Name: ix_eval_commitment_orden; Type: INDEX; Schema: modulo1; Owner: -
@@ -1146,6 +1230,8 @@ CREATE UNIQUE INDEX uq_documento_vigente ON modulo1.documento USING btree (tenan
 CREATE UNIQUE INDEX uq_excepcion_activa ON modulo1.excepcion USING btree (tenant_id, sujeto_id, requisito_definicion_id, commitment_id) WHERE (estado = 'otorgada'::text);
 -- Name: uq_latido_proceso; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_latido_proceso ON modulo1.latido_proceso USING btree (nombre, COALESCE(tenant_id, '00000000-0000-0000-0000-000000000000'::uuid));
+-- Name: uq_operadora_documental_nombre; Type: INDEX; Schema: modulo1; Owner: -
+CREATE UNIQUE INDEX uq_operadora_documental_nombre ON modulo1.operadora_documental USING btree (tenant_id, lower(nombre));
 -- Name: uq_periodo_custodia_vigente; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_periodo_custodia_vigente ON modulo1.periodo_custodia USING btree (custodia_id) WHERE (estado = 'vigente'::text);
 -- Name: uq_tenant_slug; Type: INDEX; Schema: modulo1; Owner: -
@@ -1157,6 +1243,24 @@ CREATE TRIGGER trg_tenant_slug AFTER INSERT OR DELETE OR UPDATE OF slug, tenant_
 -- Name: acreditacion_competencia acreditacion_competencia_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.acreditacion_competencia
     ADD CONSTRAINT acreditacion_competencia_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operador_tenant_id_documento_vigente__fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT alerta_actualizacion_operador_tenant_id_documento_vigente__fkey FOREIGN KEY (tenant_id, documento_vigente_id) REFERENCES modulo1.documento(tenant_id, documento_id);
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operador_tenant_id_requisito_definici_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT alerta_actualizacion_operador_tenant_id_requisito_definici_fkey FOREIGN KEY (tenant_id, requisito_definicion_id) REFERENCES modulo1.definicion_requisito(tenant_id, requisito_definicion_id);
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operador_tenant_id_ultimo_documento_o_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT alerta_actualizacion_operador_tenant_id_ultimo_documento_o_fkey FOREIGN KEY (tenant_id, ultimo_documento_operadora_id) REFERENCES modulo1.documento(tenant_id, documento_id);
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operadora_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT alerta_actualizacion_operadora_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operadora_tenant_id_operadora_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT alerta_actualizacion_operadora_tenant_id_operadora_id_fkey FOREIGN KEY (tenant_id, operadora_id) REFERENCES modulo1.operadora_documental(tenant_id, operadora_id);
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operadora_tenant_id_sujeto_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.alerta_actualizacion_operadora
+    ADD CONSTRAINT alerta_actualizacion_operadora_tenant_id_sujeto_id_fkey FOREIGN KEY (tenant_id, sujeto_id) REFERENCES modulo1.legajo(tenant_id, sujeto_id);
 -- Name: alerta_notificacion alerta_notificacion_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.alerta_notificacion
     ADD CONSTRAINT alerta_notificacion_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -1193,6 +1297,18 @@ ALTER TABLE ONLY modulo1.definicion_requisito
 -- Name: documento documento_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.documento
     ADD CONSTRAINT documento_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: entrega_documento_operadora entrega_documento_operadora_tenant_id_documento_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.entrega_documento_operadora
+    ADD CONSTRAINT entrega_documento_operadora_tenant_id_documento_id_fkey FOREIGN KEY (tenant_id, documento_id) REFERENCES modulo1.documento(tenant_id, documento_id);
+-- Name: entrega_documento_operadora entrega_documento_operadora_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.entrega_documento_operadora
+    ADD CONSTRAINT entrega_documento_operadora_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: entrega_documento_operadora entrega_documento_operadora_tenant_id_operadora_id_sujeto__fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.entrega_documento_operadora
+    ADD CONSTRAINT entrega_documento_operadora_tenant_id_operadora_id_sujeto__fkey FOREIGN KEY (tenant_id, operadora_id, sujeto_id) REFERENCES modulo1.operadora_legajo(tenant_id, operadora_id, sujeto_id);
+-- Name: entrega_documento_operadora entrega_documento_operadora_tenant_id_requisito_definicion_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.entrega_documento_operadora
+    ADD CONSTRAINT entrega_documento_operadora_tenant_id_requisito_definicion_fkey FOREIGN KEY (tenant_id, requisito_definicion_id) REFERENCES modulo1.definicion_requisito(tenant_id, requisito_definicion_id);
 -- Name: evaluacion_habilitacion evaluacion_habilitacion_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.evaluacion_habilitacion
     ADD CONSTRAINT evaluacion_habilitacion_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -1373,6 +1489,18 @@ ALTER TABLE ONLY modulo1.notificacion_envio
 -- Name: oc oc_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT oc_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: operadora_documental operadora_documental_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_documental
+    ADD CONSTRAINT operadora_documental_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: operadora_legajo operadora_legajo_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_legajo
+    ADD CONSTRAINT operadora_legajo_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: operadora_legajo operadora_legajo_tenant_id_operadora_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_legajo
+    ADD CONSTRAINT operadora_legajo_tenant_id_operadora_id_fkey FOREIGN KEY (tenant_id, operadora_id) REFERENCES modulo1.operadora_documental(tenant_id, operadora_id);
+-- Name: operadora_legajo operadora_legajo_tenant_id_sujeto_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_legajo
+    ADD CONSTRAINT operadora_legajo_tenant_id_sujeto_id_fkey FOREIGN KEY (tenant_id, sujeto_id) REFERENCES modulo1.legajo(tenant_id, sujeto_id);
 -- Name: outbox_events outbox_events_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.outbox_events
     ADD CONSTRAINT outbox_events_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -1407,6 +1535,10 @@ ALTER TABLE ONLY plataforma.linea_matriz_global
 ALTER TABLE modulo1.acreditacion_competencia ENABLE ROW LEVEL SECURITY;
 -- Name: acreditacion_competencia acreditacion_competencia_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY acreditacion_competencia_aislamiento ON modulo1.acreditacion_competencia USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: alerta_actualizacion_operadora; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.alerta_actualizacion_operadora ENABLE ROW LEVEL SECURITY;
+-- Name: alerta_actualizacion_operadora alerta_actualizacion_operadora_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY alerta_actualizacion_operadora_aislamiento ON modulo1.alerta_actualizacion_operadora USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: alerta_notificacion; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.alerta_notificacion ENABLE ROW LEVEL SECURITY;
 -- Name: alerta_notificacion alerta_notificacion_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
@@ -1471,6 +1603,10 @@ CREATE POLICY definicion_requisito_aislamiento ON modulo1.definicion_requisito U
 ALTER TABLE modulo1.documento ENABLE ROW LEVEL SECURITY;
 -- Name: documento documento_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY documento_aislamiento ON modulo1.documento USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: entrega_documento_operadora; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.entrega_documento_operadora ENABLE ROW LEVEL SECURITY;
+-- Name: entrega_documento_operadora entrega_documento_operadora_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY entrega_documento_operadora_aislamiento ON modulo1.entrega_documento_operadora USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: evaluacion_habilitacion; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.evaluacion_habilitacion ENABLE ROW LEVEL SECURITY;
 -- Name: evaluacion_habilitacion evaluacion_habilitacion_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
@@ -1527,6 +1663,14 @@ CREATE POLICY notificacion_envio_aislamiento ON modulo1.notificacion_envio USING
 ALTER TABLE modulo1.oc ENABLE ROW LEVEL SECURITY;
 -- Name: oc oc_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY oc_aislamiento ON modulo1.oc USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: operadora_documental; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.operadora_documental ENABLE ROW LEVEL SECURITY;
+-- Name: operadora_documental operadora_documental_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY operadora_documental_aislamiento ON modulo1.operadora_documental USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: operadora_legajo; Type: ROW SECURITY; Schema: modulo1; Owner: -
+ALTER TABLE modulo1.operadora_legajo ENABLE ROW LEVEL SECURITY;
+-- Name: operadora_legajo operadora_legajo_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY operadora_legajo_aislamiento ON modulo1.operadora_legajo USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: outbox_events; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.outbox_events ENABLE ROW LEVEL SECURITY;
 -- Name: outbox_events outbox_events_aislamiento; Type: POLICY; Schema: modulo1; Owner: -

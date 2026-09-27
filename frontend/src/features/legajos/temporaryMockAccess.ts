@@ -68,4 +68,8 @@ export const temporaryMockAccess: LegajosAccess = {
     if (!legajo) throw new Error('El mock temporal no contiene el legajo solicitado.');
     return legajo;
   },
+  async readAlertasOperadora() {
+    return { items: [], total: 0, offset: 0, limit: 50 };
+  },
 };
+

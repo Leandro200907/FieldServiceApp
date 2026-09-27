@@ -202,6 +202,15 @@ def _insertar_version_documento(
         )
         eventos.append("DocumentoSucedido")
 
+    # Si el legajo ya se presenta ante una o más operadoras, una nueva versión interna
+    # puede dejar desactualizado ese espejo. Se compara en la misma transacción y se
+    # notifica una sola vez por operadora + requisito + versión.
+    from app.modules.operadoras.servicio import al_registrar_nueva_version
+
+    al_registrar_nueva_version(
+        s, identidad, sujeto_id=sujeto_id, requisito_definicion_id=str(requisito_definicion_id),
+    )
+
     return {"documento_id": documento_id, "version": version, "sucede_a": sucede_a}
 
 

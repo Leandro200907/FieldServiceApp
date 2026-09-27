@@ -36,4 +36,13 @@ describe('realLegajosAccess', () => {
     getMock.mockResolvedValueOnce(errorResponse(403));
     await expect(realLegajosAccess.readLegajo('persona-ajena')).rejects.toMatchObject({ detail: { status: 403 } });
   });
+
+  it('consulta el espejo por operadora del legajo seleccionado', async () => {
+    getMock.mockResolvedValueOnce(okResponse({ items: [], total: 0, offset: 0, limit: 50 }));
+    await realLegajosAccess.readAlertasOperadora('persona-marina');
+    expect(getMock).toHaveBeenCalledWith('/v1/consultas/alertas_actualizacion_operadora', {
+      params: { query: { sujeto_id: 'persona-marina', offset: 0, limit: 50 } },
+    });
+  });
 });
+

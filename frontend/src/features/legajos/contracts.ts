@@ -9,6 +9,7 @@ export type LegajoLookupResponse = LegajoCompuesto;
 export type { EvidenciaVigente };
 export type SujetoItem = components['schemas']['SujetoItem'];
 export type SujetosResponse = components['schemas']['SujetosResponse'];
+export type AlertasOperadoraResponse = components['schemas']['AlertasOperadoraResponse'];
 export type SubjectKind = 'empresa' | 'persona' | 'vehiculo' | 'equipo';
 
 export interface SujetoSearchQuery {
@@ -21,4 +22,6 @@ export interface SujetoSearchQuery {
 export interface LegajosAccess {
   searchSujetos(query: SujetoSearchQuery): Promise<SujetosResponse>;
   readLegajo(sujetoId: string): Promise<LegajoLookupResponse>;
+  readAlertasOperadora(sujetoId: string): Promise<AlertasOperadoraResponse>;
 }
+
