@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
+import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import type { ItemCalendario, SubjectKind, VisualCalendarState } from './contracts';
 import { deriveVisualState } from './contracts';
 import { calendarAccess, isCalendarIntegrated } from './access';
@@ -27,7 +28,7 @@ function Detail({ item }: { item: ItemCalendario }) {
     <h3>{item.requisito || 'Requisito sin nombre'} · {item.identificador_natural || item.sujeto_id}</h3>
     <dl>
       <dt>Categoría</dt><dd>{item.categoria}</dd>
-      <dt>Vigencia</dt><dd>{item.vigente_desde} — {item.vigente_hasta} ({item.dias_para_vencer >= 0 ? `vence en ${item.dias_para_vencer} días` : `venció hace ${Math.abs(item.dias_para_vencer)} días`})</dd>
+      <dt>Vigencia</dt><dd>{item.vigente_desde} — {item.vigente_hasta} ({formatDaysToExpiry(item.dias_para_vencer)})</dd>
       <dt>Confirmación</dt><dd>{item.estado_confirmacion}</dd>
       {item.archivo_validacion && <><dt>Archivo</dt><dd>{item.archivo_validacion}</dd></>}
     </dl>
