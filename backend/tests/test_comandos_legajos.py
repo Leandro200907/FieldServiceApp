@@ -243,8 +243,8 @@ def test_acreditacion_e_induccion(cliente_api, tenant_de_prueba):
     assert otra_loc.status_code == 422
 
     with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.acreditacion_competencia")).scalar() == 1
-        assert s.execute(text("SELECT count(*) FROM modulo1.induccion WHERE locacion_id = :l"), {"l": loc}).scalar() == 1
+        assert s.execute(text("SELECT count(*) FROM modulo1.documento d JOIN modulo1.definicion_requisito r USING (tenant_id, requisito_definicion_id) WHERE r.categoria = 'competencia'")).scalar() == 1
+        assert s.execute(text("SELECT count(*) FROM modulo1.documento d JOIN modulo1.definicion_requisito r USING (tenant_id, requisito_definicion_id) WHERE r.categoria = 'induccion' AND d.locacion_id = :l"), {"l": loc}).scalar() == 1
 
 # --------------------------------------------------------------------------- lotes
 
@@ -341,3 +341,4 @@ def test_idempotency_key_repite_respuesta_sin_duplicar(cliente_api, tenant_de_pr
     assert _post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", body, clave="alta-equipo-2").status_code == 409
 
 # --------------------------------------------------------------------------- supervisor
+

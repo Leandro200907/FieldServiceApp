@@ -12,8 +12,8 @@ sesiones en [BITACORA.md](BITACORA.md).
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
 - **Rutas HTTP:** 73 operaciones sobre 72 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 25 archivos en `migrations/versions/`, un solo head: `0022_espejo_operadoras`.
-- **Tests:** 525 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro,
+- **Migraciones:** 26 archivos en `migrations/versions/`, un solo head: `0023_documento_unificado`.
+- **Tests:** 523 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -41,7 +41,7 @@ app/
                         # revaluación declarativa, incumplimiento de empresa, etapa de alerta (pura)
   comun/                # eventos + outbox, idempotencia, reloj del tenant, paginación
   modules/
-    legajos/            # sujetos, documentos, acreditaciones, inducciones, lotes, supervisor
+    legajos/            # sujetos, documentos habilitantes unificados, lotes, supervisor
     requisitos/         # definiciones, matrices, requisitos particulares
     operacion/          # servicios internos heredados; sin rutas HTTP en Módulo 1
     alertas/            # alerta de vencimiento (agregado, políticas, coalescing, consultas)
@@ -240,3 +240,4 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Validación técnica de evidencia: formato/tipo de contenido real/PDF no corrupto, malware (`no_configurado` sin scanner real), eje `archivo_validacion` independiente de `estado_confirmacion`, caso A (declarado→`RechazarPropuesta`) / caso B (verificado→notifica + revaluación, nunca toca `estado_confirmacion`), bloquea descarga, fencing por token, recuperación manual (reemplazo o `invalidar_evidencia`) | Hecho (0021) |
 | Transporte real a Módulo 2 (hoy `PublicadorEnLog`; el drenaje ya tiene backoff/tope de reintentos/alerta obligatoria — 0020), storage S3, lectura de contenido más allá de tipo/sujeto/fecha (OCR general) | Pendiente / segunda etapa (declarado, no silencioso) |
 | Gestión de usuarios por API (alta/cambio/reset de contraseña, reactivación) | Pendiente (CLI `scripts/administracion.py`: tenant, usuarios, desactivación) |
+

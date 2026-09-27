@@ -279,8 +279,9 @@ Implementación declarativa de la tabla 7.2 en `app/core/revaluacion.py::EVENTOS
 los avisos abiertos de decisiones anteriores del mismo commitment (`AvisoDeRevaluacionCerrado`
 por la vía interna), nunca de otra OC.
 
-Ambigüedad registrada: acreditaciones e inducciones también son entradas del snapshot pero
-la tabla 7.2 no les asigna HRR; se respeta la tabla.
+Las competencias e inducciones también son entradas del snapshot pero la tabla 7.2 no les
+asigna HRR; se respeta la tabla. Desde la migración 0023 son categorías de la entidad
+canónica `documento`, no tablas de evidencia paralelas.
 
 ## 9. Semántica del borrado físico (A-05)
 
@@ -300,8 +301,7 @@ borran por arrastre). Ningún CASCADE nuevo. Las migraciones que agregan FKs sus
 existentes sea un escaneo real y no "cero filas visibles".
 
 **Excepciones intencionales (sin FK):** `usuario.sujeto_id` (el usuario técnico puede
-existir antes de importar su legajo; se valida en servicio), `acreditacion.evidencias[]`
-(array; `_exigir_documentos_del_sujeto`), `*_por` (texto de auditoría), `cliente_id` /
+existir antes de importar su legajo; se valida en servicio), `*_por` (texto de auditoría), `cliente_id` /
 `locacion_id` / `tipo_servicio_id` (maestros externos no modelados en Módulo 1),
 `aviso_revaluacion_causa.entidad_id` (polimórfico), `idempotency_keys.actor_id`,
 `job_queue.tenant_id` nullable (jobs de sistema).
@@ -562,7 +562,8 @@ construcción existente) — `True` SOLO cuando hay archivo real adjunto
 (`archivo_estado='confirmado'`) y su validación no llegó a `valido`; en ese caso
 `evaluar_documento_en_periodo` devuelve `Veredicto.REQUIERE_REVISION` (ya existía el
 enum, sin usar — reservado exactamente para esto, mismo patrón que el `declarado` sin
-confirmar). Acreditación/inducción no tienen archivo: nunca activan el gate.
+confirmar). Una competencia o inducción puede referenciar sus archivos probatorios por
+`documento_soporte`; si su propia fila no tiene archivo adjunto, no activa el gate.
 
 Descarga (`firmar_descarga`) exige `archivo_validacion = 'valido'` — 409 si `pendiente`
 (reintentar), 422 si `invalido`. Documentos legado (confirmados antes de esta migración)
@@ -573,3 +574,4 @@ Recuperación manual: `preparar_subida` reabre el ciclo SOLO sobre un archivo `i
 verificado que el chequeo automático no haya cubierto — ambos regeneran el token de
 fencing. Dead-letter del job: nunca silencioso, notifica a `configuracion`
 (`app/worker/main.py`, hook específico de esta cola, no genérico).
+

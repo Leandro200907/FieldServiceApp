@@ -5,7 +5,12 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0022_espejo_operadoras`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0023_documento_unificado`.
+
+Internamente existe una sola entidad `documento` para certificados, competencias e
+inducciones. La categoría la define el tipo de requisito. Las rutas históricas de
+acreditación e inducción siguen disponibles, por compatibilidad del contrato, pero ya no
+escriben ni leen tablas paralelas.
 Prefijo de todas las rutas: `/v1`.
 
 ### Espejo documental por operadora
@@ -389,3 +394,4 @@ corrió), `archivo_invalido` (422: la validación técnica dio inválido), `usar
   `OutboxEstancado`, a `configuracion`, vía el mismo canal que cualquier otra alerta) si un
   evento se queda estancado.
 - Storage: sólo backend local (`STORAGE_BACKEND=local`); el contrato ya es el de un bucket.
+

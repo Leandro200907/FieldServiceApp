@@ -132,14 +132,14 @@ def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str
                              {"t": tenant_id, "s": p["sujeto_id"]}).mappings().one()
     tenant = session.execute(text("SELECT nombre FROM modulo1.tenant WHERE tenant_id = :t"), {"t": tenant_id}).scalar()
     filas = session.execute(text(
-        "SELECT r.nombre AS requisito, r.categoria, x.vigente_hasta, x.estado_confirmacion FROM ("
-        "  SELECT requisito_definicion_id, vigente_hasta, estado_confirmacion FROM modulo1.documento WHERE tenant_id = :t AND sujeto_id = :s AND estado_version = 'vigente' "
-        "  UNION ALL SELECT requisito_definicion_id, vigente_hasta, estado_confirmacion FROM modulo1.acreditacion_competencia WHERE tenant_id = :t AND persona_id = :s "
-        "  UNION ALL SELECT requisito_definicion_id, vigente_hasta, estado_confirmacion FROM modulo1.induccion WHERE tenant_id = :t AND persona_id = :s) x "
-        "JOIN modulo1.definicion_requisito r ON r.tenant_id = :t AND r.requisito_definicion_id = x.requisito_definicion_id ORDER BY r.nombre"),
+        "SELECT r.nombre AS requisito, r.categoria, d.vigente_hasta, d.estado_confirmacion "
+        "FROM modulo1.documento d JOIN modulo1.definicion_requisito r "
+        "ON r.tenant_id=d.tenant_id AND r.requisito_definicion_id=d.requisito_definicion_id "
+        "WHERE d.tenant_id=:t AND d.sujeto_id=:s AND d.estado_version='vigente' ORDER BY r.nombre"),
         {"t": tenant_id, "s": p["sujeto_id"]}).mappings().all()
-    requisitos = [{"requisito": f["requisito"], "categoria": f["categoria"], "vigente_hasta": f["vigente_hasta"].isoformat(),
-                   "estado": "vencido" if f["vigente_hasta"] < hoy else ("vigente" if f["estado_confirmacion"] != "declarado" else "declarado_sin_verificar")} for f in filas]
+    requisitos = [{"requisito": f["requisito"], "categoria": f["categoria"],
+                   "vigente_hasta": f["vigente_hasta"].isoformat() if f["vigente_hasta"] else None,
+                   "estado": "vencido" if f["vigente_hasta"] is not None and f["vigente_hasta"] < hoy else ("vigente" if f["estado_confirmacion"] != "declarado" else "declarado_sin_verificar")} for f in filas]
     session.execute(text("UPDATE modulo1.paquete_entrega SET accesos = accesos + 1, ultimo_acceso_en = now() WHERE tenant_id = :t AND paquete_id = :p"),
                     {"t": tenant_id, "p": str(p["paquete_id"])})
     session.execute(text("INSERT INTO modulo1.paquete_acceso (tenant_id, paquete_id, origen_hash) VALUES (:t, :p, :o)"),
@@ -158,3 +158,4 @@ def qr_png(url: str) -> bytes:
     buf = io.BytesIO()
     segno.make(url, error="m").save(buf, kind="png", scale=6, border=2)
     return buf.getvalue()
+

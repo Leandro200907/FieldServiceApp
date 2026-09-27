@@ -198,27 +198,23 @@ def cargar_evidencias(
     session: Session, tenant_id: str, definiciones: dict[str, dict[str, Any]],
     sujeto_ids: list[str] | None = None,
 ) -> dict[tuple[str, str], Documento]:
-    """Mapa (sujeto_id, requisito_definicion_id) → Documento del motor, según categoría:
-    `documento` → tabla documento (estado_version=vigente; único por índice);
-    `competencia` → acreditacion_competencia (la de vigente_hasta mayor);
-    `induccion` → induccion (la de vigente_hasta mayor).
-    Acreditaciones e inducciones no versionan, así que entran siempre como `vigente`.
+    """Mapa (sujeto_id, requisito_definicion_id) → Documento del motor.
+
+    Documento, competencia e inducción comparten la tabla `documento`; la categoría vive
+    en la definición del requisito y el índice garantiza una sola versión vigente.
     `sujeto_ids`: filtro opcional (B-06) — cuando el llamador ya conoce el conjunto
     acotado de candidatos (p. ej. `app/modules/proyeccion/servicio.py`, que evalúa una
     sola OC a la vez), evita traer evidencia de sujetos del tenant que nunca se van a
     mirar. `None` (default) preserva el comportamiento anterior — tenant completo —
     tal como lo sigue usando `evaluar_compromiso` acá mismo."""
     evidencias: dict[tuple[str, str], Documento] = {}
-    por_categoria: dict[str, list[str]] = {"documento": [], "competencia": [], "induccion": []}
-    for req_id, d in definiciones.items():
-        por_categoria.setdefault(d["categoria"], []).append(req_id)
+    requisito_ids = list(definiciones)
     cond_sujeto = " AND sujeto_id = ANY(CAST(:sids AS text[]))" if sujeto_ids is not None else ""
-    cond_persona = " AND persona_id = ANY(CAST(:sids AS text[]))" if sujeto_ids is not None else ""
 
-    def _doc(fila: Any, id_col: str, sujeto_col: str, archivo_requiere_revision: bool = False) -> Documento:
+    def _doc(fila: Any, archivo_requiere_revision: bool = False) -> Documento:
         return Documento(
-            documento_id=str(fila[id_col]),
-            sujeto_id=str(fila[sujeto_col]),
+            documento_id=str(fila["documento_id"]),
+            sujeto_id=str(fila["sujeto_id"]),
             requisito_definicion_id=str(fila["requisito_definicion_id"]),
             vigente_desde=fila["vigente_desde"],
             vigente_hasta=fila["vigente_hasta"],
@@ -227,7 +223,7 @@ def cargar_evidencias(
             archivo_requiere_revision=archivo_requiere_revision,
         )
 
-    if por_categoria["documento"]:
+    if requisito_ids:
         for fila in session.execute(
             text(
                 "SELECT documento_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, "
@@ -235,41 +231,12 @@ def cargar_evidencias(
                 "WHERE tenant_id = :t AND estado_version = 'vigente' "
                 "  AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_sujeto
             ),
-            {"t": tenant_id, "ids": por_categoria["documento"], "sids": sujeto_ids},
+            {"t": tenant_id, "ids": requisito_ids, "sids": sujeto_ids},
         ).mappings():
-            # Sólo cuenta si hay un archivo real adjunto (reauditoría Fase 2 punto 2):
-            # acreditación/inducción no tienen esta columna y nunca activan el gate.
+            # El gate técnico aplica uniformemente a cualquier categoría documental.
             requiere = fila["archivo_estado"] == "confirmado" and fila["archivo_validacion"] != "valido"
             evidencias[(str(fila["sujeto_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, "documento_id", "sujeto_id", requiere
-            )
-    if por_categoria["competencia"]:
-        for fila in session.execute(
-            text(
-                "SELECT DISTINCT ON (persona_id, requisito_definicion_id) acreditacion_id, persona_id, "
-                "requisito_definicion_id, vigente_desde, vigente_hasta, estado_confirmacion "
-                "FROM modulo1.acreditacion_competencia "
-                "WHERE tenant_id = :t AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_persona + " "
-                "ORDER BY persona_id, requisito_definicion_id, vigente_hasta DESC, creado_en DESC"
-            ),
-            {"t": tenant_id, "ids": por_categoria["competencia"], "sids": sujeto_ids},
-        ).mappings():
-            evidencias[(str(fila["persona_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, "acreditacion_id", "persona_id"
-            )
-    if por_categoria["induccion"]:
-        for fila in session.execute(
-            text(
-                "SELECT DISTINCT ON (persona_id, requisito_definicion_id) induccion_id, persona_id, "
-                "requisito_definicion_id, vigente_desde, vigente_hasta, estado_confirmacion "
-                "FROM modulo1.induccion "
-                "WHERE tenant_id = :t AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_persona + " "
-                "ORDER BY persona_id, requisito_definicion_id, vigente_hasta DESC, creado_en DESC"
-            ),
-            {"t": tenant_id, "ids": por_categoria["induccion"], "sids": sujeto_ids},
-        ).mappings():
-            evidencias[(str(fila["persona_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, "induccion_id", "persona_id"
+                fila, requiere
             )
     return evidencias
 
@@ -831,3 +798,4 @@ def decidir_habilitacion(
         **r,
         "creado_en": fila[1].isoformat(),
     }
+

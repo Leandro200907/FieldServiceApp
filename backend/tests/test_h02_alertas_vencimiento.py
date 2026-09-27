@@ -263,8 +263,8 @@ def test_coalescing_por_destinatario_agrupa_varias_alertas_en_un_mensaje(cliente
     t, req, persona = esc["t"], esc["req"], esc["persona"]
     req2 = _alta_def(cliente_api, t, "Altura", categoria="competencia")
     with tenant_session(t.tenant_id) as s:
-        s.execute(text("INSERT INTO modulo1.acreditacion_competencia (tenant_id, persona_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencias) "
-                       "VALUES (:t, :p, :r, '2026-01-01', :h, ARRAY[gen_random_uuid()])"), {"t": t.tenant_id, "p": persona, "r": req2, "h": VENCE})
+        s.execute(text("INSERT INTO modulo1.documento (tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, origen) "
+                       "VALUES (:t, :p, :r, '2026-01-01', :h, 'carga_manual')"), {"t": t.tenant_id, "p": persona, "r": req2, "h": VENCE})
     r = _reloj(t, VENCE - timedelta(days=30))
     assert r["abiertas"] == 2 and r["notificaciones"] == 6 and r["mensajes"] == 3   # 2 alertas × 3 destinatarios → 3 mensajes
     msgs = _mensajes(t)
@@ -329,3 +329,4 @@ def test_vencimiento_dispara_revaluacion_de_decision_vigente(cliente_api, esc):
         avisos = s.execute(text("SELECT count(*) FROM modulo1.aviso_revaluacion WHERE tenant_id = :t AND referencia_evaluacion = :r AND estado = 'abierto'"),
                            {"t": t.tenant_id, "r": ev["referencia_evaluacion"]}).scalar()
     assert avisos == 1
+

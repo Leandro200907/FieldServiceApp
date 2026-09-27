@@ -7,7 +7,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0022_espejo_operadoras"
+    "x-migracion-head": "0023_documento_unificado"
   },
   "operations": 73,
   "paths": 72,
@@ -72,4 +72,5 @@
   "sources_note": "Las entradas de la línea base anterior (especificaciones/*.md, DECISIONES_DOMINIO.md, el informe y el zip de la auditoría bbf42b5) no están presentes en este repo con esos nombres/rutas y se retiraron de esta lista en vez de dejar hashes no verificables. Si existen en otro lugar, agregarlas de nuevo con su hash real.",
   "updated_on": "2026-09-27"
 }
+
 

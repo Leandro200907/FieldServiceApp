@@ -6,6 +6,29 @@ El legajo interno y el estado conocido por una operadora son realidades independ
 El Módulo 1 conserva ambas y señala cualquier diferencia sin convertirla en una decisión
 de planificación o asignación.
 
+## Modelo relacional
+
+No se crea una tabla `empleado` paralela: `legajo` es el maestro de sujetos y distingue
+personas, vehículos y equipos mediante `tipo_sujeto`. Para personas representa al
+empleado o técnico; así todas las clases de recurso comparten identidad, historial y
+aislamiento por tenant sin duplicar relaciones.
+
+- `legajo`: sujeto dueño del legajo;
+- `definicion_requisito`: catálogo equivalente a TipoDocumento, con categorías
+  `documento`, `competencia` e `induccion`;
+- `documento`: hecho documental versionado y fuente canónica de vigencia;
+- `documento_soporte`: archivos/documentos que prueban una competencia o inducción;
+- `operadora_documental`: catálogo de operadoras;
+- `operadora_legajo`: indica qué operadoras mantienen legajo del sujeto;
+- `entrega_documento_operadora`: hecho de exportación, envío, aceptación o rechazo de
+  una versión concreta;
+- `alerta_actualizacion_operadora`: diferencia detectada entre la versión interna vigente
+  y la versión conocida por cada operadora.
+
+La migración `0023_documento_unificado` elimina las antiguas tablas separadas de
+acreditaciones e inducciones. Las rutas con esos nombres continúan como comandos de
+negocio compatibles, pero escriben en `documento` y `documento_soporte`.
+
 ## Regla principal
 
 Cada combinación `operadora + sujeto + requisito` conserva qué versión documental fue
@@ -49,3 +72,4 @@ nueva notificación; aceptar la versión vigente cierra la alerta.
 
 El primer bloque responde si el documento interno está vigente. El segundo responde si
 cada operadora posee y aceptó esa misma versión.
+

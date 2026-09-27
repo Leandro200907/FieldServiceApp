@@ -6631,7 +6631,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0022_espejo_operadoras"
+    "x-migracion-head": "0023_documento_unificado"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -15102,3 +15102,4 @@
     }
   }
 }
+

@@ -144,15 +144,7 @@ def _evidencias(session: Session, tenant_id: str) -> dict[tuple[str, str], list[
                d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, d.estado_version,
                CASE WHEN d.archivo_estado = 'confirmado' THEN d.archivo_validacion
                     WHEN d.clave_storage IS NULL THEN 'sin_archivo' ELSE 'pendiente' END AS archivo_validacion
-        FROM modulo1.documento d WHERE d.tenant_id = :t
-        UNION ALL
-        SELECT a.acreditacion_id::text, a.persona_id, a.requisito_definicion_id::text,
-               a.vigente_desde, a.vigente_hasta, a.estado_confirmacion, 'vigente', 'sin_archivo'
-        FROM modulo1.acreditacion_competencia a WHERE a.tenant_id = :t
-        UNION ALL
-        SELECT i.induccion_id::text, i.persona_id, i.requisito_definicion_id::text,
-               i.vigente_desde, i.vigente_hasta, i.estado_confirmacion, 'vigente', 'sin_archivo'
-        FROM modulo1.induccion i WHERE i.tenant_id = :t
+        FROM modulo1.documento d WHERE d.tenant_id = :t AND d.vigente_hasta IS NOT NULL
     """), {"t": tenant_id}).mappings().all()
     salida: dict[tuple[str, str], list[EvidenciaDocumental]] = defaultdict(list)
     for f in filas:

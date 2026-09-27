@@ -393,23 +393,37 @@ def test_declarado_es_requiere_revision_y_no_puede_asignarse(tenant_de_prueba, s
     assert r["resultado_de_decision"] == "no_puede_asignarse"
 
 
-def test_competencia_se_lee_de_acreditacion(tenant_de_prueba, sesion):
+def test_competencia_se_lee_del_documento_unificado(tenant_de_prueba, sesion):
     t = tenant_de_prueba.tenant_id
     clave = clave_de_matriz()
     insertar_legajo(sesion, t, "persona_0042", "persona")
     req = insertar_definicion(sesion, t, "Trabajo en altura", "persona", categoria="competencia")
     insertar_matriz(sesion, t, clave, {req: "bloqueante_duro"})
     insertar_oc(sesion, t, "OC-comp", clave, date(2026, 10, 1), date(2026, 10, 5))
-    evidencia = insertar_documento(sesion, t, "persona_0042", req, date(2026, 1, 1), date(2026, 1, 31))  # no cuenta: es acreditación
+    evidencia = insertar_documento(sesion, t, "persona_0042", req, date(2026, 1, 1), date(2026, 1, 31))
     sesion.execute(text("UPDATE modulo1.documento SET requisito_definicion_id = NULL WHERE documento_id = :d"), {"d": evidencia})
-    for desde, hasta in ((date(2025, 1, 1), date(2025, 12, 31)), (date(2026, 1, 1), date(2026, 12, 31))):
-        sesion.execute(
+    anterior = sesion.execute(
             text(
-                "INSERT INTO modulo1.acreditacion_competencia (tenant_id, persona_id, requisito_definicion_id, vigente_desde, "
-                " vigente_hasta, estado_confirmacion, evidencias) VALUES (:t, 'persona_0042', :r, :d, :h, 'verificado', :ev)"
+                "INSERT INTO modulo1.documento (tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, "
+                " vigente_hasta, estado_confirmacion, estado_version, version, origen) "
+                "VALUES (:t, 'persona_0042', :r, '2025-01-01', '2025-12-31', 'verificado', 'sucedida', 1, 'carga_manual') "
+                "RETURNING documento_id"
             ),
-            {"t": t, "r": req, "d": desde, "h": hasta, "ev": [uuid.UUID(evidencia)]},
-        )
+            {"t": t, "r": req},
+        ).scalar_one()
+    actual = sesion.execute(
+        text(
+            "INSERT INTO modulo1.documento (tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, "
+            " vigente_hasta, estado_confirmacion, estado_version, version, origen, sucede_a) "
+            "VALUES (:t, 'persona_0042', :r, '2026-01-01', '2026-12-31', 'verificado', 'vigente', 2, 'carga_manual', :a) "
+            "RETURNING documento_id"
+        ),
+        {"t": t, "r": req, "a": anterior},
+    ).scalar_one()
+    sesion.execute(
+        text("INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) VALUES (:t, :d, :s)"),
+        {"t": t, "d": actual, "s": evidencia},
+    )
     r = evaluar_compromiso(sesion, t, "OC-comp", AHORA, None)
     assert r["veredicto_de_cumplimiento"] == "habilitado"
 
@@ -421,3 +435,4 @@ def test_sin_oc_y_sin_matriz(tenant_de_prueba, sesion):
     insertar_oc(sesion, t, "OC-sin-matriz", clave_de_matriz(), date(2026, 10, 1), date(2026, 10, 5))
     with pytest.raises(ErrorDeDominio, match="sin matriz vigente"):
         evaluar_compromiso(sesion, t, "OC-sin-matriz", AHORA, None)
+

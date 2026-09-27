@@ -126,6 +126,7 @@ def _insertar_version_documento(
     numero: str | None,
     origen: str,
     estado_confirmacion: str,
+    locacion_id: str | None = None,
     origen_propuesta: bool = False,
     confianza_extraccion: str | None = None,
     lote_id: str | None = None,
@@ -161,15 +162,15 @@ def _insertar_version_documento(
         text(
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, numero, "
             "vigente_desde, vigente_hasta, estado_confirmacion, estado_version, origen_propuesta, version, origen, "
-            "confianza_extraccion, lote_id, sucede_a) "
+            "confianza_extraccion, lote_id, sucede_a, locacion_id) "
             "VALUES (:d, :t, :sj, :r, :num, :desde, :hasta, :conf, 'vigente', :prop, :ver, :origen, "
-            ":confianza, :lote, :sucede_a)"
+            ":confianza, :lote, :sucede_a, :locacion)"
         ),
         {
             "d": documento_id, "t": t, "sj": sujeto_id, "r": requisito_definicion_id, "num": numero,
             "desde": vigente_desde, "hasta": vigente_hasta, "conf": estado_confirmacion, "prop": origen_propuesta,
             "ver": version, "origen": origen, "confianza": confianza_extraccion,
-            "lote": lote_id, "sucede_a": sucede_a,
+            "lote": lote_id, "sucede_a": sucede_a, "locacion": locacion_id,
         },
     )
 
@@ -448,16 +449,23 @@ def registrar_acreditacion_de_competencia(
     evidencias = [str(x) for x in body.evidencias]
     _exigir_documentos_del_sujeto(s, t, body.persona_id, evidencias)
 
-    acreditacion_id = str(uuid.uuid4())
-    s.execute(
-        text(
-            "INSERT INTO modulo1.acreditacion_competencia (acreditacion_id, tenant_id, persona_id, requisito_definicion_id, "
-            "vigente_desde, vigente_hasta, estado_confirmacion, evidencias) "
-            "VALUES (:a, :t, :p, :r, :desde, :hasta, :conf, CAST(:ev AS uuid[]))"
-        ),
-        {"a": acreditacion_id, "t": t, "p": body.persona_id, "r": str(body.requisito_definicion_id),
-         "desde": body.vigente_desde, "hasta": body.vigente_hasta, "conf": body.estado_confirmacion, "ev": evidencias},
+    eventos: list[str] = []
+    creada = _insertar_version_documento(
+        s, identidad, sujeto_id=body.persona_id,
+        requisito_definicion_id=str(body.requisito_definicion_id),
+        vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta,
+        numero=None, origen="carga_manual", estado_confirmacion=body.estado_confirmacion,
+        eventos=eventos,
     )
+    acreditacion_id = creada["documento_id"]
+    for evidencia in evidencias:
+        s.execute(
+            text(
+                "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) "
+                "VALUES (:t, :d, :e)"
+            ),
+            {"t": t, "d": acreditacion_id, "e": evidencia},
+        )
     registrar_evento(
         s, t, "AcreditacionDeCompetenciaRegistrada",
         {"acreditacion_id": acreditacion_id, "persona_id": body.persona_id, "requisito_definicion_id": str(body.requisito_definicion_id),
@@ -484,15 +492,21 @@ def registrar_induccion(s: Session, identidad: Identidad, body: e.RegistrarInduc
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
     _exigir_documentos_del_sujeto(s, t, body.persona_id, [str(body.evidencia)])
 
-    induccion_id = str(uuid.uuid4())
+    eventos: list[str] = []
+    creada = _insertar_version_documento(
+        s, identidad, sujeto_id=body.persona_id,
+        requisito_definicion_id=str(body.requisito_definicion_id),
+        vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta,
+        numero=None, origen="carga_manual", estado_confirmacion=body.estado_confirmacion,
+        locacion_id=str(body.locacion_id), eventos=eventos,
+    )
+    induccion_id = creada["documento_id"]
     s.execute(
         text(
-            "INSERT INTO modulo1.induccion (induccion_id, tenant_id, persona_id, locacion_id, requisito_definicion_id, "
-            "vigente_desde, vigente_hasta, estado_confirmacion, evidencia) "
-            "VALUES (:i, :t, :p, :loc, :r, :desde, :hasta, :conf, :ev)"
+            "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) "
+            "VALUES (:t, :d, :e)"
         ),
-        {"i": induccion_id, "t": t, "p": body.persona_id, "loc": str(body.locacion_id), "r": str(body.requisito_definicion_id),
-         "desde": body.vigente_desde, "hasta": body.vigente_hasta, "conf": body.estado_confirmacion, "ev": str(body.evidencia)},
+        {"t": t, "d": induccion_id, "e": str(body.evidencia)},
     )
     registrar_evento(
         s, t, "InduccionRegistrada",
@@ -824,3 +838,4 @@ def reasignar_supervisor(s: Session, identidad: Identidad, body: e.ReasignarSupe
         "asignacion_id": asignacion_id, "asignacion_cerrada_id": str(actual["asignacion_id"]), "sujeto_id": body.sujeto_id,
         "desde": desde, "hasta_anterior": hasta_anterior, "eventos": ["SupervisorReasignado"],
     }
+

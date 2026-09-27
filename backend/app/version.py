@@ -6,4 +6,5 @@ base: si difieren, la instancia no está lista (migración atrasada o código vi
 y con lo documentado (README, docs_schema_actual.sql).
 """
 VERSION = "1.0.0-rc1"
-MIGRACION_HEAD = "0022_espejo_operadoras"
+MIGRACION_HEAD = "0023_documento_unificado"
+

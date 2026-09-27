@@ -42,36 +42,28 @@ def _con_vigencia(fila: dict[str, Any], hoy: date) -> dict[str, Any]:
     """Agrega `vigente_hoy` (inclusive en ambos bordes) y `dias_para_vencer` (negativo si
     ya venció). `fila` trae las fechas crudas (date), no serializadas."""
     desde: date = fila["vigente_desde"]
-    hasta: date = fila["vigente_hasta"]
+    hasta: date | None = fila["vigente_hasta"]
     salida = _plano(fila)
-    salida["vigente_hoy"] = desde <= hoy <= hasta
-    salida["dias_para_vencer"] = (hasta - hoy).days
-    salida["vencido"] = hasta < hoy
+    salida["vigente_hoy"] = desde <= hoy and (hasta is None or hoy <= hasta)
+    salida["dias_para_vencer"] = (hasta - hoy).days if hasta is not None else None
+    salida["vencido"] = hasta is not None and hasta < hoy
     return salida
 
 
-# Evidencia vigente unificada: documentos (solo versión vigente), acreditaciones e
-# inducciones — las tres con la misma forma para legajo y tablero.
+# Evidencia vigente unificada físicamente en `documento`; la categoría del requisito
+# conserva la forma de respuesta histórica para no romper consumidores.
 _SQL_EVIDENCIA = """
     WITH evidencia AS (
-        SELECT 'documento' AS tipo, d.documento_id AS id, d.sujeto_id, d.requisito_definicion_id,
+        SELECT CASE r.categoria WHEN 'competencia' THEN 'acreditacion'
+                                WHEN 'induccion' THEN 'induccion'
+                                ELSE 'documento' END AS tipo,
+               d.documento_id AS id, d.sujeto_id, d.requisito_definicion_id,
                r.nombre AS requisito, r.categoria, d.vigente_desde, d.vigente_hasta,
-               d.estado_confirmacion, d.origen_propuesta, NULL::uuid AS locacion_id
+               d.estado_confirmacion, d.origen_propuesta, d.locacion_id
         FROM modulo1.documento d
-        LEFT JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = d.requisito_definicion_id
+        LEFT JOIN modulo1.definicion_requisito r
+          ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
         WHERE d.estado_version = 'vigente'
-        UNION ALL
-        SELECT 'acreditacion', a.acreditacion_id, a.persona_id, a.requisito_definicion_id,
-               r.nombre, r.categoria, a.vigente_desde, a.vigente_hasta,
-               a.estado_confirmacion, false, NULL::uuid
-        FROM modulo1.acreditacion_competencia a
-        LEFT JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = a.requisito_definicion_id
-        UNION ALL
-        SELECT 'induccion', i.induccion_id, i.persona_id, i.requisito_definicion_id,
-               r.nombre, r.categoria, i.vigente_desde, i.vigente_hasta,
-               i.estado_confirmacion, false, i.locacion_id
-        FROM modulo1.induccion i
-        LEFT JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = i.requisito_definicion_id
     )
 """
 
@@ -407,3 +399,4 @@ def incumplimiento_empresa(session: Session, identidad: Identidad) -> dict[str, 
 
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
     return {"aviso": _plano(estado_actual(session, identidad.tenant_id) or {}) or None}
+

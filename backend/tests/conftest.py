@@ -53,8 +53,7 @@ TABLAS_TENANT = [
     "matriz_requisitos",
     "periodo_custodia",
     "custodia_recurso",
-    "induccion",
-    "acreditacion_competencia",
+    "documento_soporte",
     "documento",
     "oc",
     "lote_importacion",
@@ -170,3 +169,4 @@ def cliente_api():
 
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
+
