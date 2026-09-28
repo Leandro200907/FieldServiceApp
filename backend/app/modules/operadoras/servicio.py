@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.errores import NoEncontrado, Prohibido
+from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.alcance import alcance_de_sujetos
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
@@ -183,6 +183,106 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
             "alerta": alerta, "eventos": ["EstadoDocumentoOperadoraRegistrado"]}
 
 
+def _resolver_documento_planilla(session: Session, identidad: Identidad, fila: dict[str, Any]) -> tuple[str, str]:
+    t = identidad.tenant_id
+    sujeto_id = str(fila.get("sujeto_id") or "").strip()
+    tipo_sujeto = str(fila.get("tipo_sujeto") or "").strip().lower()
+    identificador = str(fila.get("identificador_sujeto") or "").strip()
+    if tipo_sujeto not in {"empresa", "persona", "vehiculo", "equipo"}:
+        raise ErrorDeDominio("Tipo de sujeto inválido", {"tipo_sujeto": tipo_sujeto})
+    if not identificador:
+        raise ErrorDeDominio("Falta el identificador del sujeto")
+    sujetos = session.execute(text("""
+        SELECT sujeto_id FROM modulo1.legajo
+        WHERE tenant_id = :t AND tipo_sujeto = :tipo
+          AND lower(trim(identificador_natural)) = lower(trim(:ident))
+          AND dado_de_baja_en IS NULL
+    """), {"t": t, "tipo": tipo_sujeto, "ident": identificador}).scalars().all()
+    if sujeto_id:
+        if sujeto_id not in {str(s) for s in sujetos}:
+            raise ErrorDeDominio("El Sujeto ID no coincide con el tipo e identificador informados")
+    elif len(sujetos) == 1:
+        sujeto_id = str(sujetos[0])
+    elif not sujetos:
+        raise NoEncontrado("No existe un legajo activo para el sujeto informado")
+    else:
+        raise ErrorDeDominio("El sujeto es ambiguo; complete Sujeto ID")
+
+    documento_id = str(fila.get("documento_id") or "").strip()
+    requisito_id = str(fila.get("requisito_id") or "").strip()
+    tipo_documento = str(fila.get("tipo_documento") or "").strip()
+    if not tipo_documento:
+        raise ErrorDeDominio("Falta el tipo de documento")
+    parametros: dict[str, Any] = {"t": t, "s": sujeto_id, "nombre": tipo_documento}
+    condiciones = [
+        "d.tenant_id = :t", "d.sujeto_id = :s", "d.estado_version = 'vigente'",
+        "lower(trim(r.nombre)) = lower(trim(:nombre))",
+    ]
+    if documento_id:
+        parametros["d"] = documento_id; condiciones.append("d.documento_id = :d")
+    if requisito_id:
+        parametros["r"] = requisito_id; condiciones.append("d.requisito_definicion_id = :r")
+    if fila.get("fecha_emision") is not None:
+        parametros["desde"] = fila["fecha_emision"]; condiciones.append("d.vigente_desde = :desde")
+    if fila.get("fecha_vencimiento") is not None:
+        parametros["hasta"] = fila["fecha_vencimiento"]; condiciones.append("d.vigente_hasta = :hasta")
+    documentos = session.execute(text(f"""
+        SELECT d.documento_id FROM modulo1.documento d
+        JOIN modulo1.definicion_requisito r
+          ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
+        WHERE {' AND '.join(condiciones)}
+    """), parametros).scalars().all()
+    if not documentos:
+        raise NoEncontrado("No se encontró la versión documental vigente indicada por la fila")
+    if len(documentos) > 1:
+        raise ErrorDeDominio("El documento es ambiguo; complete Documento ID o Requisito ID")
+    return sujeto_id, str(documentos[0])
+
+
+def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja: str,
+                   filas: list[dict[str, Any]]) -> dict[str, Any]:
+    """Importa filas de forma parcial: una fila inválida no revierte las correctas."""
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    resultados: list[dict[str, Any]] = []
+    errores: list[dict[str, Any]] = []
+    for fila in filas:
+        numero = int(fila["fila"])
+        try:
+            with session.begin_nested():
+                estado = str(fila.get("estado") or "").strip().lower()
+                if estado not in {"exportado", "enviado", "aceptado", "rechazado"}:
+                    raise ErrorDeDominio("Estado inválido", {"estado": estado})
+                if estado == "exportado" and fila.get("fecha_exportacion") is None:
+                    raise ErrorDeDominio("El estado exportado requiere Fecha de exportación")
+                if estado in {"enviado", "aceptado", "rechazado"} and fila.get("fecha_presentacion") is None:
+                    raise ErrorDeDominio("El estado requiere Fecha de presentación")
+                if estado in {"aceptado", "rechazado"} and fila.get("fecha_respuesta") is None:
+                    raise ErrorDeDominio("El estado requiere Fecha de respuesta")
+                sujeto_id, documento_id = _resolver_documento_planilla(session, identidad, fila)
+                respuesta = registrar_estado(
+                    session, identidad, operadora=str(fila.get("operadora") or "").strip(),
+                    sujeto_id=sujeto_id, documento_id=documento_id, estado=estado,
+                    exportado_en=fila.get("fecha_exportacion"), enviado_en=fila.get("fecha_presentacion"),
+                    aceptado_en=fila.get("fecha_respuesta") if estado == "aceptado" else None,
+                    rechazado_en=fila.get("fecha_respuesta") if estado == "rechazado" else None,
+                    fuente_archivo=archivo, fuente_hoja=hoja, fuente_fila=numero,
+                    observacion=str(fila.get("observacion") or "").strip() or None,
+                )
+                resultados.append({"fila": numero, "documento_id": documento_id,
+                                   "operadora_id": respuesta["operadora_id"], "estado": estado})
+        except ErrorDeDominio as exc:
+            errores.append({"fila": numero, "codigo": exc.codigo, "mensaje": exc.mensaje,
+                            "detalles": exc.detalles})
+    registrar_evento_interno(session, identidad.tenant_id, "PlanillaOperadorasImportada", {
+        "archivo": archivo, "hoja": hoja, "filas_totales": len(filas),
+        "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
+    }, identidad.usuario_id)
+    return {"archivo": archivo, "hoja": hoja, "filas_totales": len(filas),
+            "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
+            "resultados": resultados, "errores": errores,
+            "eventos": ["PlanillaOperadorasImportada"]}
+
+
 def alertas(session: Session, identidad: Identidad, p: Pagina, *, sujeto_id: str | None = None,
             estado: str | None = None) -> dict[str, Any]:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
@@ -209,3 +309,4 @@ def alertas(session: Session, identidad: Identidad, p: Pagina, *, sujeto_id: str
         WHERE {desde} ORDER BY a.actualizada_en DESC OFFSET :off LIMIT :lim
     """), {**params, "off": p.offset, "lim": p.limit}).mappings().all()
     return envolver([{k: str(v) if k.endswith("_id") and v is not None else v for k, v in dict(f).items()} for f in filas], int(total or 0), p)
+
