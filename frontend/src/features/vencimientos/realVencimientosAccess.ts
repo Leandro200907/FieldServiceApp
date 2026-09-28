@@ -28,5 +28,17 @@ export const realVencimientosAccess: VencimientosAccess = {
       params: { query: { offset: query.offset, limit: query.limit } },
     }));
   },
+  async importarPlanilla(file) {
+    return unwrap(session.client.POST('/v1/comandos/importar_planilla_operadoras', {
+      params: {
+        query: { hoja: 'Presentaciones' },
+        header: { 'X-Nombre-Archivo': file.name, 'Idempotency-Key': crypto.randomUUID() },
+      },
+      body: file as unknown as string,
+      bodySerializer: body => body as unknown as BodyInit,
+      headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    }));
+  },
 };
+
 
