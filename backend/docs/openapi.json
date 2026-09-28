@@ -3038,6 +3038,42 @@
         "title": "ErrorEnvelope",
         "type": "object"
       },
+      "ErrorFilaImportada": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "detalles": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalles"
+          },
+          "fila": {
+            "title": "Fila",
+            "type": "integer"
+          },
+          "mensaje": {
+            "title": "Mensaje",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fila",
+          "codigo",
+          "mensaje",
+          "detalles"
+        ],
+        "title": "ErrorFilaImportada",
+        "type": "object"
+      },
       "EscanearDriveBody": {
         "properties": {
           "motivo": {
@@ -3754,6 +3790,63 @@
           "eventos"
         ],
         "title": "ImportarLoteResponse",
+        "type": "object"
+      },
+      "ImportarPlanillaOperadorasResponse": {
+        "properties": {
+          "archivo": {
+            "title": "Archivo",
+            "type": "string"
+          },
+          "errores": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorFilaImportada"
+            },
+            "title": "Errores",
+            "type": "array"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "filas_aceptadas": {
+            "title": "Filas Aceptadas",
+            "type": "integer"
+          },
+          "filas_rechazadas": {
+            "title": "Filas Rechazadas",
+            "type": "integer"
+          },
+          "filas_totales": {
+            "title": "Filas Totales",
+            "type": "integer"
+          },
+          "hoja": {
+            "title": "Hoja",
+            "type": "string"
+          },
+          "resultados": {
+            "items": {
+              "$ref": "#/components/schemas/ResultadoFilaImportada"
+            },
+            "title": "Resultados",
+            "type": "array"
+          }
+        },
+        "required": [
+          "archivo",
+          "hoja",
+          "filas_totales",
+          "filas_aceptadas",
+          "filas_rechazadas",
+          "resultados",
+          "errores",
+          "eventos"
+        ],
+        "title": "ImportarPlanillaOperadorasResponse",
         "type": "object"
       },
       "IncumplimientoEmpresaResponse": {
@@ -5917,6 +6010,34 @@
           "eventos"
         ],
         "title": "ResolverArchivoDriveResponse",
+        "type": "object"
+      },
+      "ResultadoFilaImportada": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fila": {
+            "title": "Fila",
+            "type": "integer"
+          },
+          "operadora_id": {
+            "title": "Operadora Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fila",
+          "documento_id",
+          "operadora_id",
+          "estado"
+        ],
+        "title": "ResultadoFilaImportada",
         "type": "object"
       },
       "ResumenLegajo": {
@@ -9142,6 +9263,146 @@
           }
         ],
         "summary": "Importar Lote Oc"
+      }
+    },
+    "/v1/comandos/importar_planilla_operadoras": {
+      "post": {
+        "operationId": "importar_planilla_operadoras_v1_comandos_importar_planilla_operadoras_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "hoja",
+            "required": false,
+            "schema": {
+              "default": "Presentaciones",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Hoja",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Nombre-Archivo",
+            "required": false,
+            "schema": {
+              "default": "presentaciones_operadoras.xlsx",
+              "maxLength": 500,
+              "title": "X-Nombre-Archivo",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "maxLength": 5242880,
+                "title": "Contenido",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportarPlanillaOperadorasResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Importar Planilla Operadoras",
+        "tags": [
+          "operadoras-documentales"
+        ]
       }
     },
     "/v1/comandos/invalidar_evidencia": {
