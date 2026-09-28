@@ -104,7 +104,11 @@ class DetalleOcRadarResponse(BaseModel):
     estado_documental: str
     matrices_utilizadas: list[dict[str, Any]]
     requisitos_particulares: list[dict[str, Any]]
+    huecos_matriz: list[dict[str, date]]
     grupos: list[dict[str, Any]]
+    total_legajos: int
+    offset: int
+    limit: int
     advertencia: str
 
 
@@ -135,9 +139,10 @@ def radar_documental_backlog(
 @router.get("/consultas/radar_documental_oc", response_model=DetalleOcRadarResponse)
 def radar_documental_oc(
     oc_id: UUID = Query(...), identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
 ) -> DetalleOcRadarResponse:
     with tenant_session(identidad.tenant_id) as session:
-        return DetalleOcRadarResponse(**radar.detalle_oc(session, identidad, str(oc_id)))
+        return DetalleOcRadarResponse(**radar.detalle_oc(session, identidad, str(oc_id), p))
 
 
 @router.get("/consultas/radar_documental_oc/{oc_id}/legajos/{sujeto_id}", response_model=DetalleLegajoRadarResponse)
@@ -146,4 +151,3 @@ def radar_documental_legajo(
 ) -> DetalleLegajoRadarResponse:
     with tenant_session(identidad.tenant_id) as session:
         return DetalleLegajoRadarResponse(**radar.detalle_legajo(session, identidad, str(oc_id), sujeto_id))
-
