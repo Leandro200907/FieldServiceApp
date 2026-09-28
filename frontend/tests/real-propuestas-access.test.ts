@@ -10,7 +10,7 @@ import { session } from '../src/api';
 import { realPropuestasAccess } from '../src/features/propuestas/realPropuestasAccess';
 
 const getMock = vi.mocked(session.client.GET);
-const postMock = vi.mocked(session.client.POST);
+const postMock = vi.mocked(session.client.POST) as any;
 
 // `session.client.POST` is typed as a union across every command path (each with its own
 // body/response shape); a loosely-typed fixture can't satisfy that union structurally, so
@@ -54,3 +54,5 @@ describe('realPropuestasAccess', () => {
     await expect(realPropuestasAccess.confirmarDocumento('doc-inexistente')).rejects.toMatchObject({ detail: { status: 404 } });
   });
 });
+
+
