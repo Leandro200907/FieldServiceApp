@@ -86,9 +86,18 @@ def test_archivo_invalido_se_informa_expresamente():
     assert resultado.estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA
 
 
-def test_version_historica_no_cubre_el_requisito():
-    resultado = evaluar(evidencia(version=EstadoVersionEvidencia.SUCEDIDA))
+def test_version_rechazada_no_cubre_el_requisito():
+    resultado = evaluar(evidencia(version=EstadoVersionEvidencia.RECHAZADA))
     assert resultado.estado == EstadoRequisitoDocumental.FALTANTE
+
+
+def test_compone_version_historica_y_actual_consecutivas():
+    resultado = evaluar(
+        evidencia(hasta=date(2026, 10, 19), version=EstadoVersionEvidencia.SUCEDIDA, evidencia_id="doc-anterior"),
+        evidencia(desde=date(2026, 10, 20), evidencia_id="doc-actual"),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VIGENTE_TODO_EL_PERIODO
+    assert resultado.evidencia_id == "doc-actual"
 
 
 def test_evidencia_probada_prevalece_sobre_otra_invalida():
@@ -118,5 +127,6 @@ def test_fechas_incompletas_no_son_evaluables():
 
 def test_evidencia_que_comienza_despues_del_inicio_no_cubre_el_periodo():
     resultado = evaluar(evidencia(desde=date(2026, 10, 19)))
-    assert resultado.estado == EstadoRequisitoDocumental.NO_EVALUABLE
+    assert resultado.estado == EstadoRequisitoDocumental.FALTANTE
+    assert resultado.primer_quiebre == DESDE
 
