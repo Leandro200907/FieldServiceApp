@@ -29,15 +29,20 @@ const radarItems: ItemRadar[] = [
   { oc_id: '44444444-4444-4444-4444-444444444444', clave_origen: 'OC-45000236', referencia: 'Servicio nuevo', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-03', tipo_servicio_id: 'mantenimiento', vigencia_desde: '2026-10-20', vigencia_hasta: '2026-10-22', estado_documental: 'sin_matriz', primer_quiebre: null, resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 0, con_alertas: 0, incompletos: 0 }, vehiculos: { total: 0, con_alertas: 0, incompletos: 0 }, equipos: { total: 0, con_alertas: 0, incompletos: 0 } }, motivos_resumidos: [] },
 ];
 
-function radarDetail(item: ItemRadar): DetalleOcRadarResponse {
+function radarDetail(item: ItemRadar, offset = 0, limit = 50): DetalleOcRadarResponse {
+  const mockLegajos = [{ sujeto_id: 'persona-marina', identificador_natural: 'Marina López', estado_documental: item.estado_documental, primer_quiebre: item.primer_quiebre, requisitos: [] }];
   return {
     oc: { oc_id: item.oc_id, clave_origen: item.clave_origen, referencia: item.referencia, vigencia_desde: item.vigencia_desde, vigencia_hasta: item.vigencia_hasta },
     estado_documental: item.estado_documental,
     matrices_utilizadas: item.estado_documental === 'sin_matriz' ? [] : [{ version: 3, desde: item.vigencia_desde, hasta: item.vigencia_hasta }],
     requisitos_particulares: [],
+    huecos_matriz: item.estado_documental === 'sin_matriz' ? [{ desde: item.vigencia_desde, hasta: item.vigencia_hasta }] : [],
     grupos: [
-      { tipo_sujeto: 'persona', legajos: [{ sujeto_id: 'persona-marina', identificador_natural: 'Marina López', estado_documental: item.estado_documental, primer_quiebre: item.primer_quiebre, requisitos: [] }] },
+      { tipo_sujeto: 'persona', requerido: true, sin_legajos_requeridos: false, total: mockLegajos.length, offset, limit, legajos: mockLegajos.slice(offset, offset + limit) },
     ],
+    total_legajos: mockLegajos.length,
+    offset,
+    limit,
     advertencia: ADVERTENCIA,
   };
 }
@@ -64,7 +69,7 @@ export const temporaryMockAccess: DocumentationPlanningAccess = {
   async readRadarOc(query: RadarOcQuery): Promise<DetalleOcRadarResponse> {
     const item = radarItems.find(row => row.oc_id === query.ocId);
     if (!item) throw new Error('El mock temporal no contiene la OC solicitada.');
-    return radarDetail(item);
+    return radarDetail(item, query.offset, query.limit);
   },
   async readRadarLegajo(query: RadarLegajoQuery): Promise<DetalleLegajoRadarResponse> {
     const detail = await temporaryMockAccess.readRadarOc({ ocId: query.ocId });
@@ -74,5 +79,4 @@ export const temporaryMockAccess: DocumentationPlanningAccess = {
     return { oc: detail.oc, legajo, advertencia: ADVERTENCIA };
   },
 };
-
 
