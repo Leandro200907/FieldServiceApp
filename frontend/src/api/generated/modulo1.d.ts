@@ -400,6 +400,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/comandos/importar_planilla_operadoras": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Importar Planilla Operadoras */
+        post: operations["importar_planilla_operadoras_v1_comandos_importar_planilla_operadoras_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comandos/invalidar_evidencia": {
         parameters: {
             query?: never;
@@ -2299,6 +2316,19 @@ export interface components {
                 request_id: string;
             };
         };
+        /** ErrorFilaImportada */
+        ErrorFilaImportada: {
+            /** Codigo */
+            codigo: string;
+            /** Detalles */
+            detalles: {
+                [key: string]: unknown;
+            } | null;
+            /** Fila */
+            fila: number;
+            /** Mensaje */
+            mensaje: string;
+        };
         /** EscanearDriveBody */
         EscanearDriveBody: {
             /** Motivo */
@@ -2561,6 +2591,25 @@ export interface components {
              * @default false
              */
             ya_aplicado: boolean;
+        };
+        /** ImportarPlanillaOperadorasResponse */
+        ImportarPlanillaOperadorasResponse: {
+            /** Archivo */
+            archivo: string;
+            /** Errores */
+            errores: components["schemas"]["ErrorFilaImportada"][];
+            /** Eventos */
+            eventos: string[];
+            /** Filas Aceptadas */
+            filas_aceptadas: number;
+            /** Filas Rechazadas */
+            filas_rechazadas: number;
+            /** Filas Totales */
+            filas_totales: number;
+            /** Hoja */
+            hoja: string;
+            /** Resultados */
+            resultados: components["schemas"]["ResultadoFilaImportada"][];
         };
         /** IncumplimientoEmpresaResponse */
         IncumplimientoEmpresaResponse: {
@@ -3354,6 +3403,17 @@ export interface components {
             documento_id: string;
             /** Eventos */
             eventos: string[];
+        };
+        /** ResultadoFilaImportada */
+        ResultadoFilaImportada: {
+            /** Documento Id */
+            documento_id: string;
+            /** Estado */
+            estado: string;
+            /** Fila */
+            fila: number;
+            /** Operadora Id */
+            operadora_id: string;
         };
         /** ResumenLegajo */
         ResumenLegajo: {
@@ -5379,6 +5439,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportarLoteOCResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    importar_planilla_operadoras_v1_comandos_importar_planilla_operadoras_post: {
+        parameters: {
+            query?: {
+                hoja?: string;
+            };
+            header?: {
+                "X-Nombre-Archivo"?: string;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportarPlanillaOperadorasResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
