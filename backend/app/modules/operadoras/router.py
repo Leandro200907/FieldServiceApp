@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+import hashlib
+
+from fastapi import APIRouter, Body, Depends, Header, Query
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import identidad_actual
@@ -12,6 +14,7 @@ from app.comun.paginacion import Pagina, pagina
 from app.db import tenant_session
 from app.modules.legajos.infra import clave_idempotencia, ejecutar_comando
 from app.modules.operadoras import servicio
+from app.modules.operadoras.lector_xlsx import leer_planilla
 
 router = APIRouter(tags=["operadoras-documentales"])
 
@@ -62,6 +65,31 @@ class AlertasOperadoraResponse(BaseModel):
     limit: int
 
 
+class ResultadoFilaImportada(BaseModel):
+    fila: int
+    documento_id: str
+    operadora_id: str
+    estado: str
+
+
+class ErrorFilaImportada(BaseModel):
+    fila: int
+    codigo: str
+    mensaje: str
+    detalles: dict[str, Any] | None
+
+
+class ImportarPlanillaOperadorasResponse(BaseModel):
+    archivo: str
+    hoja: str
+    filas_totales: int
+    filas_aceptadas: int
+    filas_rechazadas: int
+    resultados: list[ResultadoFilaImportada]
+    errores: list[ErrorFilaImportada]
+    eventos: list[str]
+
+
 @router.post("/comandos/registrar_estado_documento_operadora", response_model=RegistrarEstadoOperadoraResponse)
 def registrar_estado_documento_operadora(
     body: RegistrarEstadoOperadoraBody,
@@ -77,6 +105,25 @@ def registrar_estado_documento_operadora(
     return RegistrarEstadoOperadoraResponse(**resultado)
 
 
+@router.post("/comandos/importar_planilla_operadoras", response_model=ImportarPlanillaOperadorasResponse)
+def importar_planilla_operadoras(
+    contenido: bytes = Body(media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", max_length=5 * 1024 * 1024),
+    nombre_archivo: str = Header("presentaciones_operadoras.xlsx", alias="X-Nombre-Archivo", max_length=500),
+    hoja: str = Query("Presentaciones", min_length=1, max_length=200),
+    identidad: Identidad = Depends(identidad_actual),
+    clave: str | None = Depends(clave_idempotencia),
+) -> ImportarPlanillaOperadorasResponse:
+    filas = leer_planilla(contenido, hoja=hoja)
+    huella = hashlib.sha256(contenido).hexdigest()
+    resultado = ejecutar_comando(
+        identidad, clave, (Rol.RESPONSABLE_LEGAJOS,),
+        lambda s: servicio.importar_filas(s, identidad, archivo=nombre_archivo, hoja=hoja, filas=filas),
+        ruta="/comandos/importar_planilla_operadoras",
+        body={"archivo": nombre_archivo, "hoja": hoja, "sha256": huella},
+    )
+    return ImportarPlanillaOperadorasResponse(**resultado)
+
+
 @router.get("/consultas/alertas_actualizacion_operadora", response_model=AlertasOperadoraResponse)
 def alertas_actualizacion_operadora(
     sujeto_id: str | None = Query(None),
@@ -86,3 +133,4 @@ def alertas_actualizacion_operadora(
 ) -> AlertasOperadoraResponse:
     with tenant_session(identidad.tenant_id) as session:
         return AlertasOperadoraResponse(**servicio.alertas(session, identidad, p, sujeto_id=sujeto_id, estado=estado))
+
