@@ -18,6 +18,11 @@ Prefijo de todas las rutas: `/v1`.
 - `POST /v1/comandos/registrar_estado_documento_operadora` registra, desde una planilla
   u otra fuente, si una versión fue exportada, enviada, aceptada o rechazada por una
   operadora. Conserva archivo, hoja y fila de origen.
+- `POST /v1/comandos/importar_planilla_operadoras?hoja=Presentaciones` recibe el XLSX
+  como cuerpo binario (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`).
+  `X-Nombre-Archivo` conserva el nombre original e `Idempotency-Key` permite repetir el
+  envío con seguridad. Devuelve resultados y errores por fila; una fila rechazada no
+  revierte las correctas.
 - `GET /v1/consultas/alertas_actualizacion_operadora` devuelve las diferencias abiertas
   entre la versión vigente del legajo y la versión conocida por cada operadora.
 - Una renovación no modifica automáticamente el estado externo: abre una alerta por
@@ -25,6 +30,8 @@ Prefijo de todas las rutas: `/v1`.
   vigente la cierra.
 - El responsable de legajos y el supervisor vigente del sujeto reciben la notificación.
   El alcance del supervisor también se aplica a la consulta.
+- La importación sólo resuelve datos del tenant autenticado; aunque una fila contenga ids
+  de otra empresa cliente, éstos se consideran inexistentes y no se escriben.
 - Esta capacidad es documental: no asigna recursos ni confirma disponibilidad.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
