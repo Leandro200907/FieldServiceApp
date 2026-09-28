@@ -6,6 +6,7 @@ import type { EvidenciaVigente } from '../mi-legajo/contracts';
 // mismo shape que ya consume mi-legajo (misma derivación visual, `deriveVisualState`).
 export type TableroVencimientosResponse = components['schemas']['TableroVencimientosResponse'];
 export type AlertasOperadoraResponse = components['schemas']['AlertasOperadoraResponse'];
+export type ImportarPlanillaOperadorasResponse = components['schemas']['ImportarPlanillaOperadorasResponse'];
 export type { EvidenciaVigente };
 
 export interface VencimientosQuery {
@@ -17,5 +18,7 @@ export interface VencimientosQuery {
 export interface VencimientosAccess {
   readTableroVencimientos(query: VencimientosQuery): Promise<TableroVencimientosResponse>;
   readAlertasOperadora(query: Pick<VencimientosQuery, 'offset' | 'limit'>): Promise<AlertasOperadoraResponse>;
+  importarPlanilla(file: File): Promise<ImportarPlanillaOperadorasResponse>;
 }
+
 
