@@ -73,6 +73,71 @@ def test_detalle_usa_dos_versiones_y_requisito_particular(cliente_api, tenant_de
     assert {r["nombre"] for r in equipo["requisitos"]} == {"Calibración especial"}
 
 
+def test_tipo_requerido_sin_legajos_no_produce_falso_verde(cliente_api, tenant_de_prueba):
+    ids = _sembrar(tenant_de_prueba)
+    with tenant_session(tenant_de_prueba.tenant_id) as s:
+        s.execute(text("INSERT INTO modulo1.documento "
+                       "(tenant_id,sujeto_id,requisito_definicion_id,vigente_desde,vigente_hasta,estado_confirmacion,origen) "
+                       "VALUES (:t,'equipo-1',:r,'2026-01-01','2026-12-31','verificado','carga_manual')"),
+                  {"t": tenant_de_prueba.tenant_id, "r": ids["req_equipo"]})
+        s.execute(text("DELETE FROM modulo1.legajo WHERE tenant_id=:t AND tipo_sujeto='persona'"),
+                  {"t": tenant_de_prueba.tenant_id})
+    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("supervisor"))
+    item = next(i for i in respuesta.json()["items"] if i["oc_id"] == ids["oc"])
+    assert item["estado_documental"] == "informacion_incompleta"
+    assert any("tipo persona" in motivo for motivo in item["motivos_resumidos"])
+
+
+def test_hueco_parcial_de_matriz_no_oculta_alertas_reales(cliente_api, tenant_de_prueba):
+    ids = _sembrar(tenant_de_prueba)
+    with tenant_session(tenant_de_prueba.tenant_id) as s:
+        s.execute(text("UPDATE modulo1.matriz_requisitos SET vigente_hasta='2026-10-14' "
+                       "WHERE tenant_id=:t AND matriz_version_id=CAST(:m AS uuid)"),
+                  {"t": tenant_de_prueba.tenant_id, "m": ids["matriz_1"]})
+    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("supervisor"))
+    item = next(i for i in respuesta.json()["items"] if i["oc_id"] == ids["oc"])
+    assert item["estado_documental"] == "con_alertas_documentales"
+    assert "Hay períodos sin matriz de requisitos aplicable" in item["motivos_resumidos"]
+
+
+def test_requisito_particular_se_evalua_aun_sin_matriz(cliente_api, tenant_de_prueba):
+    ids = _sembrar(tenant_de_prueba)
+    with tenant_session(tenant_de_prueba.tenant_id) as s:
+        s.execute(text("INSERT INTO modulo1.requisito_particular "
+                       "(tenant_id,commitment_id,requisito_definicion_id,clasificacion,bloqueante_durante_ejecucion) "
+                       "VALUES (:t,'OC-SIN-MATRIZ',:r,'bloqueante_duro',true)"),
+                  {"t": tenant_de_prueba.tenant_id, "r": ids["req_equipo"]})
+    respuesta = cliente_api.get(
+        f"/v1/consultas/radar_documental_oc?oc_id={ids['oc_sin_matriz']}",
+        headers=tenant_de_prueba.headers("supervisor"),
+    )
+    cuerpo = respuesta.json()
+    equipo = next(g for g in cuerpo["grupos"] if g["tipo_sujeto"] == "equipo")["legajos"][0]
+    assert cuerpo["estado_documental"] == "con_alertas_documentales"
+    assert {r["nombre"] for r in equipo["requisitos"]} == {"Calibración especial"}
+    assert cuerpo["huecos_matriz"] == [{"desde": "2026-10-10", "hasta": "2026-10-20"}]
+
+
+def test_backlog_y_detalle_respetan_paginacion(cliente_api, tenant_de_prueba):
+    ids = _sembrar(tenant_de_prueba)
+    headers = tenant_de_prueba.headers("supervisor")
+    backlog = cliente_api.get(_url() + "&limit=1", headers=headers).json()
+    assert backlog["total"] == 2
+    assert len(backlog["items"]) == 1
+    with tenant_session(tenant_de_prueba.tenant_id) as s:
+        s.execute(text("INSERT INTO modulo1.legajo "
+                       "(tenant_id,sujeto_id,tipo_sujeto,identificador_natural) "
+                       "VALUES (:t,'persona-2','persona','Persona Dos')"),
+                  {"t": tenant_de_prueba.tenant_id})
+    detalle = cliente_api.get(
+        f"/v1/consultas/radar_documental_oc?oc_id={ids['oc']}&limit=1", headers=headers,
+    ).json()
+    personas = next(g for g in detalle["grupos"] if g["tipo_sujeto"] == "persona")
+    assert detalle["total_legajos"] == 5
+    assert personas["total"] == 2
+    assert sum(len(g["legajos"]) for g in detalle["grupos"]) == 1
+
+
 def test_asignacion_y_custodia_no_cambian_el_resultado(cliente_api, tenant_de_prueba):
     ids = _sembrar(tenant_de_prueba)
     headers = tenant_de_prueba.headers("supervisor")
