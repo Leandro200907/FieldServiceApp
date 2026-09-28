@@ -58,7 +58,7 @@ export interface BacklogQuery {
   limit?: number;
 }
 
-export interface RadarOcQuery { ocId: string }
+export interface RadarOcQuery { ocId: string; offset?: number; limit?: number }
 export interface RadarLegajoQuery { ocId: string; sujetoId: string }
 
 export interface DocumentationPlanningAccess {
@@ -67,5 +67,4 @@ export interface DocumentationPlanningAccess {
   readRadarOc(query: RadarOcQuery): Promise<DetalleOcRadarResponse>;
   readRadarLegajo(query: RadarLegajoQuery): Promise<DetalleLegajoRadarResponse>;
 }
-
 
