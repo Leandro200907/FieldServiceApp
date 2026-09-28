@@ -51,10 +51,16 @@ Estados calculados de la diferencia:
 
 ## Trazabilidad de Excel
 
-El registro puede conservar `fuente_archivo`, `fuente_hoja` y `fuente_fila`. El backend
-recibe filas normalizadas; la lectura física del libro Excel corresponde al adaptador de
-importación del frontend o de integración. Importar una fila nunca reemplaza el historial
-de versiones del legajo.
+El comando `POST /v1/comandos/importar_planilla_operadoras` recibe directamente un libro
+XLSX con la hoja `Presentaciones` y conserva `fuente_archivo`, `fuente_hoja` y
+`fuente_fila`. La plantilla estándar utiliza claves visibles y admite los ids internos
+opcionales para evitar ambigüedades.
+
+La importación se ejecuta siempre con el `tenant_id` de la identidad autenticada. Tanto
+las consultas explícitas como las políticas RLS de PostgreSQL impiden resolver o escribir
+legajos, documentos u operadoras de otra empresa cliente. Una fila inválida o ambigua se
+rechaza individualmente y no revierte las filas correctas. Importar nunca crea ni
+reemplaza una versión del legajo: sólo actualiza el espejo documental de la operadora.
 
 ## Alertas
 
