@@ -29,5 +29,10 @@ export const temporaryMockAccess: VencimientosAccess = {
   async readAlertasOperadora(query) {
     return { items: [], total: 0, offset: query.offset ?? 0, limit: query.limit ?? 50 };
   },
+  async importarPlanilla(file) {
+    return { archivo: file.name, hoja: 'Presentaciones', filas_totales: 0, filas_aceptadas: 0,
+      filas_rechazadas: 0, resultados: [], errores: [], eventos: ['PlanillaOperadorasImportada'] };
+  },
 };
+
 
