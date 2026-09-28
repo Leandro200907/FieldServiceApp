@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiFailure } from '../../api';
+import { ApiFailure, safeFailure, session } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import { deriveVisualState } from '../documentation-planning/contracts';
@@ -7,7 +7,9 @@ import type { VisualCalendarState } from '../documentation-planning/contracts';
 import { PAGE_SIZE, PaginationControls } from '../documentation-planning/PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isVencimientosIntegrated, vencimientosAccess } from './access';
+import type { ImportarPlanillaOperadorasResponse } from './contracts';
 import '../documentation-planning/planning.css';
+import './importacion.css';
 
 const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };
 const DIAS_OPTIONS = [7, 15, 30, 60, 90];
@@ -15,14 +17,36 @@ const DIAS_OPTIONS = [7, 15, 30, 60, 90];
 export function VencimientosScreen() {
   const [dias, setDias] = useState(30);
   const [offset, setOffset] = useState(0);
+  const [importRevision, setImportRevision] = useState(0);
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [importando, setImportando] = useState(false);
+  const [resultadoImportacion, setResultadoImportacion] = useState<ImportarPlanillaOperadorasResponse | null>(null);
+  const [errorImportacion, setErrorImportacion] = useState<ReturnType<typeof safeFailure> | null>(null);
   const tablero = usePrototypeRead(() => vencimientosAccess().readTableroVencimientos({ dias, offset, limit: PAGE_SIZE }), [dias, offset]);
-  const alertasOperadora = usePrototypeRead(() => vencimientosAccess().readAlertasOperadora({ offset: 0, limit: PAGE_SIZE }), []);
+  const alertasOperadora = usePrototypeRead(() => vencimientosAccess().readAlertasOperadora({ offset: 0, limit: PAGE_SIZE }), [importRevision]);
   const integrated = isVencimientosIntegrated();
+  const puedeImportar = session.getSnapshot().identity?.roles.includes('responsable_legajos') ?? false;
+  async function importar() {
+    if (!archivo || importando) return;
+    setImportando(true); setResultadoImportacion(null); setErrorImportacion(null);
+    try {
+      const resultado = await vencimientosAccess().importarPlanilla(archivo);
+      setResultadoImportacion(resultado); setImportRevision(value => value + 1);
+    } catch (error) { setErrorImportacion(safeFailure(error)); }
+    finally { setImportando(false); }
+  }
   return <>
     {integrated
       ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Tablero de vencimientos</strong><p>Evidencia vigente que vence dentro de la ventana elegida, o ya vencida.</p></div></div>
       : <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Ítems de ejemplo temporales. El contrato de forma ya es el real; el dato todavía no viene del backend.</p></div></div>}
     <div className="availability-warning" role="note"><strong>Solo consulta de vencimientos</strong><span>Sin agregado, políticas, recordatorios ni escalamiento — eso es el ciclo de alertas (H-02), una capacidad distinta.</span></div>
+    {puedeImportar && <section className="panel">
+      <div className="panel-top"><div><p className="eyebrow">Fuente controlada</p><h3>Importar presentaciones de operadoras</h3></div><Badge>Excel estándar</Badge></div>
+      <p className="muted">Carga la hoja <strong>Presentaciones</strong>. Cada fila actualiza sólo el espejo de una operadora; no crea ni reemplaza documentos del legajo.</p>
+      <div className="import-actions"><input aria-label="Planilla de presentaciones" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event => { setArchivo(event.target.files?.[0] ?? null); setResultadoImportacion(null); setErrorImportacion(null); }} /><button className="button button-primary" type="button" disabled={!archivo || importando} onClick={() => { void importar(); }}>{importando ? 'Importando…' : 'Importar planilla'}</button></div>
+      {resultadoImportacion && <div className="import-result" role="status"><strong>{resultadoImportacion.filas_aceptadas} fila{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'} aplicada{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'}</strong><span>{resultadoImportacion.filas_rechazadas} rechazada{resultadoImportacion.filas_rechazadas === 1 ? '' : 's'}.</span>{resultadoImportacion.errores.length > 0 && <ul>{resultadoImportacion.errores.map(error => <li key={error.fila}>Fila {error.fila}: {error.mensaje}</li>)}</ul>}</div>}
+      {errorImportacion && <ErrorState message={errorImportacion.message} requestId={errorImportacion.referenceSource === 'server' ? errorImportacion.requestId : undefined} />}
+    </section>}
     <section className="panel">
       <div className="panel-top"><div><p className="eyebrow">Espejo por operadora</p><h3>Actualizaciones documentales pendientes</h3></div>{alertasOperadora.data && <Badge tone={alertasOperadora.data.total > 0 ? 'warning' : 'accent'}>{alertasOperadora.data.total} pendiente{alertasOperadora.data.total === 1 ? '' : 's'}</Badge>}</div>
       <p className="muted">Compara la versión vigente del legajo con la última versión registrada ante cada operadora.</p>
@@ -58,4 +82,5 @@ export function VencimientosScreen() {
     </>}
   </>;
 }
+
 
