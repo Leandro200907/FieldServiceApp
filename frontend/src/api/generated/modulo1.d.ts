@@ -2118,6 +2118,12 @@ export interface components {
             grupos: {
                 [key: string]: unknown;
             }[];
+            /** Huecos Matriz */
+            huecos_matriz: {
+                [key: string]: string;
+            }[];
+            /** Limit */
+            limit: number;
             /** Matrices Utilizadas */
             matrices_utilizadas: {
                 [key: string]: unknown;
@@ -2126,10 +2132,14 @@ export interface components {
             oc: {
                 [key: string]: unknown;
             };
+            /** Offset */
+            offset: number;
             /** Requisitos Particulares */
             requisitos_particulares: {
                 [key: string]: unknown;
             }[];
+            /** Total Legajos */
+            total_legajos: number;
         };
         /**
          * DocumentoCargadoResponse
@@ -8491,6 +8501,8 @@ export interface operations {
         parameters: {
             query: {
                 oc_id: string;
+                offset?: number;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -9445,4 +9457,3 @@ export interface operations {
         };
     };
 }
-
