@@ -2439,6 +2439,21 @@
             "title": "Grupos",
             "type": "array"
           },
+          "huecos_matriz": {
+            "items": {
+              "additionalProperties": {
+                "format": "date",
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Huecos Matriz",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
           "matrices_utilizadas": {
             "items": {
               "additionalProperties": true,
@@ -2452,6 +2467,10 @@
             "title": "Oc",
             "type": "object"
           },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
           "requisitos_particulares": {
             "items": {
               "additionalProperties": true,
@@ -2459,6 +2478,10 @@
             },
             "title": "Requisitos Particulares",
             "type": "array"
+          },
+          "total_legajos": {
+            "title": "Total Legajos",
+            "type": "integer"
           }
         },
         "required": [
@@ -2466,7 +2489,11 @@
           "estado_documental",
           "matrices_utilizadas",
           "requisitos_particulares",
+          "huecos_matriz",
           "grupos",
+          "total_legajos",
+          "offset",
+          "limit",
           "advertencia"
         ],
         "title": "DetalleOcRadarResponse",
@@ -14048,6 +14075,29 @@
               "title": "Oc Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -15363,4 +15413,3 @@
     }
   }
 }
-
