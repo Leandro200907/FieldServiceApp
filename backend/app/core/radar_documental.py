@@ -51,8 +51,6 @@ def resumir_resultados(resultados: Iterable[ResultadoRequisitoDocumental]) -> Re
 def resumir_oc(resumenes_legajo: Iterable[ResumenDocumental], *, sin_matriz: bool = False) -> ResumenDocumental:
     """Aplica la precedencia cerrada del contrato funcional del radar."""
     resumenes = tuple(resumenes_legajo)
-    if sin_matriz:
-        return ResumenDocumental("sin_matriz", None, 0, 0)
     alertas = sum(r.estado == "con_alertas_documentales" for r in resumenes)
     incompletos = sum(r.estado == "informacion_incompleta" for r in resumenes)
     quiebres = [r.primer_quiebre for r in resumenes if r.primer_quiebre is not None]
@@ -60,6 +58,8 @@ def resumir_oc(resumenes_legajo: Iterable[ResumenDocumental], *, sin_matriz: boo
         estado = "con_alertas_documentales"
     elif incompletos:
         estado = "informacion_incompleta"
+    elif sin_matriz:
+        estado = "sin_matriz"
     else:
         estado = "sin_alertas_documentales"
     return ResumenDocumental(estado, min(quiebres) if quiebres else None, alertas, incompletos)
