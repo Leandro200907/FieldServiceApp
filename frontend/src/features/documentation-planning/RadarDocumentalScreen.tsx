@@ -33,7 +33,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function asText(value: unknown, fallback = 'Sin dato') { return typeof value === 'string' && value ? value : fallback; }
 function asArray(value: unknown) { return Array.isArray(value) ? value : []; }
 
-function DetailPanel({ detail, onLegajo }: { detail: DetalleOcRadarResponse; onLegajo: (sujetoId: string) => void }) {
+function DetailPanel({ detail, onLegajo, onOffsetChange }: { detail: DetalleOcRadarResponse; onLegajo: (sujetoId: string) => void; onOffsetChange: (offset: number) => void }) {
   const oc = asRecord(detail.oc);
   return <section className="panel backlog-detail" aria-live="polite">
     <div>
@@ -52,7 +52,8 @@ function DetailPanel({ detail, onLegajo }: { detail: DetalleOcRadarResponse; onL
           const group = asRecord(rawGroup);
           const legajos = asArray(group?.legajos);
           return <li key={`${asText(group?.tipo_sujeto)}-${groupIndex}`}>
-            {asText(group?.tipo_sujeto)}: {legajos.length}
+            {asText(group?.tipo_sujeto)}: {legajos.length} en esta página / {typeof group?.total === 'number' ? group.total : legajos.length} en total
+            {group?.sin_legajos_requeridos === true && <strong> · Falta información: no hay legajos activos de este tipo requerido</strong>}
             {legajos.length > 0 && <ul>{legajos.map((rawLegajo, index) => {
               const legajo = asRecord(rawLegajo);
               const sujetoId = asText(legajo?.sujeto_id, '');
@@ -65,6 +66,7 @@ function DetailPanel({ detail, onLegajo }: { detail: DetalleOcRadarResponse; onL
           </li>;
         })}
       </ul>
+      <PaginationControls offset={detail.offset} limit={detail.limit} total={detail.total_legajos} onOffsetChange={onOffsetChange} />
     </div>
   </section>;
 }
@@ -74,6 +76,7 @@ export function RadarDocumentalScreen({ roles }: { roles: readonly string[] }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedLegajo, setSelectedLegajo] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
+  const [detailOffset, setDetailOffset] = useState(0);
   const [search, setSearch] = useState('');
   const [state, setState] = useState<RadarState | ''>('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -83,7 +86,7 @@ export function RadarDocumentalScreen({ roles }: { roles: readonly string[] }) {
     () => backlogAccess().readRadarBacklog({ q: appliedSearch || undefined, estado: appliedState ? [appliedState] : undefined, offset, limit: PAGE_SIZE }),
     [appliedSearch, appliedState, offset],
   );
-  const detail = usePrototypeRead(() => selected ? backlogAccess().readRadarOc({ ocId: selected }) : Promise.resolve(null), [selected]);
+  const detail = usePrototypeRead(() => selected ? backlogAccess().readRadarOc({ ocId: selected, offset: detailOffset, limit: PAGE_SIZE }) : Promise.resolve(null), [selected, detailOffset]);
   const legajo = usePrototypeRead(
     () => selected && selectedLegajo ? backlogAccess().readRadarLegajo({ ocId: selected, sujetoId: selectedLegajo }) : Promise.resolve(null),
     [selected, selectedLegajo],
@@ -96,6 +99,7 @@ export function RadarDocumentalScreen({ roles }: { roles: readonly string[] }) {
     setOffset(0);
     setSelected(null);
     setSelectedLegajo(null);
+    setDetailOffset(0);
     setAppliedSearch(search.trim());
     setAppliedState(state);
   }
@@ -125,7 +129,7 @@ export function RadarDocumentalScreen({ roles }: { roles: readonly string[] }) {
           <td><span className={`projection-status projection-${row.estado_documental}`}>{stateLabels[row.estado_documental]}</span></td>
           <td>{displayDate(row.primer_quiebre)}</td>
           <td>{row.motivos_resumidos.length > 0 ? row.motivos_resumidos.join(' · ') : summaryLabel(row)}</td>
-          <td><button type="button" className="text-button" onClick={() => { setSelected(row.oc_id); setSelectedLegajo(null); }}>Ver detalle</button></td>
+          <td><button type="button" className="text-button" onClick={() => { setSelected(row.oc_id); setSelectedLegajo(null); setDetailOffset(0); }}>Ver detalle</button></td>
         </tr>)}
       </tbody></table></div>
       {radar.data?.items.length === 0 && <p className="empty-inline">No hay OC visibles para estos filtros.</p>}
@@ -133,11 +137,10 @@ export function RadarDocumentalScreen({ roles }: { roles: readonly string[] }) {
       {radar.data?.advertencia && <p className="detail-note">{radar.data.advertencia}</p>}
     </>}
 
-    {selected && (detail.loading ? <LoadingState /> : detail.error ? <ErrorState message={detail.error.message} /> : detail.data && <DetailPanel detail={detail.data} onLegajo={setSelectedLegajo} />)}
+    {selected && (detail.loading ? <LoadingState /> : detail.error ? <ErrorState message={detail.error.message} /> : detail.data && <DetailPanel detail={detail.data} onLegajo={setSelectedLegajo} onOffsetChange={value => { setDetailOffset(value); setSelectedLegajo(null); }} />)}
     {selectedLegajo && (legajo.loading ? <LoadingState /> : legajo.error ? <ErrorState message={legajo.error.message} /> : legajo.data && <section className="panel" aria-live="polite"><p className="eyebrow">Evidencia del legajo en esta OC</p><h3>{asText(asRecord(legajo.data.legajo)?.identificador_natural, selectedLegajo)}</h3><p>Estado: {asText(asRecord(legajo.data.legajo)?.estado_documental)}</p><p>{asArray(asRecord(legajo.data.legajo)?.requisitos).length} requisito{asArray(asRecord(legajo.data.legajo)?.requisitos).length === 1 ? '' : 's'} evaluado{asArray(asRecord(legajo.data.legajo)?.requisitos).length === 1 ? '' : 's'}.</p><p className="detail-note">{legajo.data.advertencia}</p></section>)}
 
     <section className="module-boundary"><strong>Límite del Módulo 1</strong><span>Sin disponibilidad</span><span>Sin candidatos</span><span>Sin asignar recursos</span><span>Sin modificar fechas ni crear OT</span></section>
   </>;
 }
-
 
