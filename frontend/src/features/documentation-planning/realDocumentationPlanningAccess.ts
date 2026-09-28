@@ -69,7 +69,11 @@ export const realDocumentationPlanningAccess: DocumentationPlanningAccess = {
   async readRadarOc(query: RadarOcQuery) {
     return unwrap(
       session.client.GET('/v1/consultas/radar_documental_oc', {
-        params: { query: { oc_id: query.ocId } },
+        params: { query: {
+          oc_id: query.ocId,
+          ...(query.offset === undefined ? {} : { offset: query.offset }),
+          ...(query.limit === undefined ? {} : { limit: query.limit }),
+        } },
       }),
     );
   },
@@ -81,5 +85,4 @@ export const realDocumentationPlanningAccess: DocumentationPlanningAccess = {
     );
   },
 };
-
 
