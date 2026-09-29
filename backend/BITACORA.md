@@ -218,3 +218,8 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 - **F1-3**: `test_lector_xlsx_seguridad` arma ZIP con payload descomprimido real > límite.
 - **F1-4**: README actualizado a 548 tests.
 - **F1-5**: workflow `.github/workflows/ci.yml` (Postgres 16, alembic, pytest, frontend check).
+
+## 2026-09-29 — Auditoría completa, Fase 2 ALTO-1
+
+- Radar documental filtra legajos con `alcance_de_sujetos` para supervisores; detalle de legajo
+  fuera del universo → 404.
