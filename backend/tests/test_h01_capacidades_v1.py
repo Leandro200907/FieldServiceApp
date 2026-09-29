@@ -174,8 +174,15 @@ def persona_con_docs(cliente_api, tenant_de_prueba):
     req = _alta_def(cliente_api, t, "Apto médico")
     req2 = _alta_def(cliente_api, t, "Altura", categoria="competencia")
     p = _alta_persona(cliente_api, t, "DNI 30.000.000")
-    _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2027-12-31")
-    _cargar(cliente_api, t, p, req2, desde="2026-01-01", hasta="2027-12-31", estado_confirmacion="declarado")
+    doc_apto = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2027-12-31")
+    _ok(_post(cliente_api, t, "responsable_legajos", "registrar_acreditacion_de_competencia", {
+        "persona_id": p,
+        "requisito_definicion_id": req2,
+        "vigente_desde": "2026-01-01",
+        "vigente_hasta": "2027-12-31",
+        "estado_confirmacion": "declarado",
+        "evidencias": [doc_apto["documento_id"]],
+    }))
     return {"t": t, "persona": p, "req": req}
 
 
