@@ -339,7 +339,7 @@ CREATE TABLE modulo1.documento (
     requisito_definicion_id uuid,
     numero text,
     vigente_desde date NOT NULL,
-    vigente_hasta date,
+    vigente_hasta date NOT NULL,
     estado_confirmacion text DEFAULT 'declarado'::text NOT NULL,
     estado_version text DEFAULT 'vigente'::text NOT NULL,
     origen_propuesta boolean DEFAULT false NOT NULL,
