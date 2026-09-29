@@ -2,7 +2,7 @@
 CancelarOC.
 
 ImportarLote es UNA transacción e idempotente por `lote_id` (regla dura 6): la clave
-`lote:<lote_id>` en idempotency_keys guarda el resultado y una segunda llamada lo
+`lote_oc:<lote_id>` en idempotency_keys guarda el resultado y una segunda llamada lo
 devuelve sin re-aplicar nada. Es incremental: `clave_origen` identifica la OC en el
 origen, así que una clave conocida actualiza la OC (y `actualizado_en`) en vez de
 duplicarla — para eso está `uq_oc_clave_origen` (migración 0003_oc_uq_clave_origen).
@@ -28,7 +28,7 @@ CAMPOS_OBLIGATORIOS = ("clave_origen", "cliente_id", "locacion_id", "tipo_servic
 
 
 def clave_idempotencia_lote(lote_id: str) -> str:
-    return f"lote:{lote_id}"
+    return f"lote_oc:{lote_id}"
 
 
 # --------------------------------------------------------------------- validación
@@ -85,7 +85,7 @@ def importar_lote_oc(
         raise ErrorDeDominio("origen inválido", {"origen": origen, "validos": list(ORIGENES)})
     lote_id = str(uuid.UUID(str(lote_id)))
 
-    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # La idempotencia por `lote_oc:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # La clave de idempotencia expira (24 h) pero el lote queda: si existe, tampoco se
     # re-aplica — se reconstruye el resultado desde lote_importacion.
     from app.comun.idempotencia import hash_canonico

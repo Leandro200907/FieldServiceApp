@@ -116,8 +116,8 @@ Todo error, de cualquier status, tiene esta forma exacta:
 - Misma clave + body distinto → **409** `clave_idempotencia_reutilizada`, siempre.
 - Misma clave mientras la primera ejecución todavía corre → **409** `operacion_en_proceso`
   (reintentar en unos segundos).
-- `importar_lote` deriva la clave del `lote_id` del body (`lote:<id>`); repetir el mismo
-  lote con otro contenido → **409** `lote_contenido_distinto`.
+- `importar_lote` deriva la clave del `lote_id` del body (`lote_doc:<id>`; OC usa
+  `lote_oc:<id>`); repetir el mismo lote con otro contenido → **409** `lote_contenido_distinto`.
 - Antes de reproducir un replay se vuelve a verificar la autorización actual (un
   supervisor que perdió a la persona de su universo recibe 403/404, no el replay).
 
