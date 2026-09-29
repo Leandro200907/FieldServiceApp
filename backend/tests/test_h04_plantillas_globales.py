@@ -219,3 +219,16 @@ def test_aislamiento_entre_tenants_de_copias_y_avisos(cliente_api, catalogo, dos
         assert control_plantillas(s, tb.tenant_id, T0) == {"copias_atrasadas": 0, "avisos_nuevos": 0}
     with tenant_session(ta.tenant_id) as s:
         assert control_plantillas(s, ta.tenant_id, T0)["avisos_nuevos"] == 1
+
+
+def test_control_plantillas_excluye_matriz_local_ya_vencida(cliente_api, catalogo, tenant_de_prueba):
+    """B-7: el filtro de vigencia usa hoy del tenant, no CURRENT_DATE del servidor."""
+    t = tenant_de_prueba
+    r, body = _copiar_matriz(
+        cliente_api, t, catalogo, vigente_desde="2026-01-01", vigente_hasta="2026-03-31",
+    )
+    assert r.status_code == 200
+    _subir_version(catalogo, matriz=True)
+    ahora = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    with tenant_session(t.tenant_id) as s:
+        assert control_plantillas(s, t.tenant_id, ahora) == {"copias_atrasadas": 0, "avisos_nuevos": 0}
