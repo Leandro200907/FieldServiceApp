@@ -8,6 +8,7 @@ import hashlib
 from fastapi import APIRouter, Body, Depends, Header, Query
 from pydantic import BaseModel, Field
 
+from app.api.errores import ErrorDeDominio
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, pagina
@@ -118,7 +119,13 @@ def importar_planilla_operadoras(
     nombre_archivo: str = Header("presentaciones_operadoras.xlsx", alias="X-Nombre-Archivo", max_length=500),
     hoja: str = Query("Presentaciones", min_length=1, max_length=200),
 ) -> ImportarPlanillaOperadorasResponse:
-    filas = leer_planilla(contenido, hoja=hoja)
+    filas, errores_lectura = leer_planilla(contenido, hoja=hoja)
+    if errores_lectura and not filas:
+        raise ErrorDeDominio(
+            "La planilla tiene filas con errores de formato",
+            {"errores": errores_lectura},
+            codigo="planilla_invalida",
+        )
     huella = hashlib.sha256(contenido).hexdigest()
     resultado = ejecutar_comando(
         identidad, clave, (Rol.RESPONSABLE_LEGAJOS,),

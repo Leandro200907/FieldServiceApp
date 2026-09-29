@@ -80,23 +80,24 @@ def _valor(celda: ET.Element, compartidos: list[str]) -> object:
         return None
     bruto = nodo.text
     if tipo == "s":
-        return compartidos[int(bruto)]
+        indice = int(bruto)
+        return compartidos[indice]
     if tipo in {"str", "e"}:
         return bruto
     if tipo == "b":
         return bruto == "1"
-    try:
-        numero = float(bruto)
-        return int(numero) if numero.is_integer() else numero
-    except ValueError:
-        return bruto
+    numero = float(bruto)
+    return int(numero) if numero.is_integer() else numero
 
 
 def _fecha(valor: object, *, con_hora: bool) -> date | datetime | None:
     if valor in (None, ""):
         return None
     if isinstance(valor, (int, float)):
-        resultado = datetime(1899, 12, 30) + timedelta(days=float(valor))
+        try:
+            resultado = datetime(1899, 12, 30) + timedelta(days=float(valor))
+        except OverflowError:
+            raise
         return resultado if con_hora else resultado.date()
     texto = str(valor).strip().replace("Z", "+00:00")
     try:
@@ -110,7 +111,11 @@ def _fecha(valor: object, *, con_hora: bool) -> date | datetime | None:
             raise ErrorDeDominio("Fecha inválida en la planilla", {"valor": str(valor)}) from exc
 
 
-def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dict]:
+def _error_fila(numero: int | None, codigo: str, mensaje: str, **detalles: object) -> dict:
+    return {"fila": numero, "codigo": codigo, "mensaje": mensaje, "detalles": detalles or None}
+
+
+def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> tuple[list[dict], list[dict]]:
     if not contenido:
         raise ErrorDeDominio("La planilla está vacía")
     if len(contenido) > 5 * 1024 * 1024:
@@ -137,9 +142,22 @@ def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dic
         raise ErrorDeDominio("El archivo no es una planilla XLSX válida") from exc
 
     filas: list[tuple[int, dict[int, object]]] = []
+    errores: list[dict] = []
     for fila in raiz.iter(f"{_NS}row"):
-        numero = int(fila.attrib.get("r", "0"))
-        valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
+        r_attr = fila.attrib.get("r", "0")
+        try:
+            numero = int(r_attr)
+        except ValueError:
+            errores.append(_error_fila(None, "fila_invalida", f"Número de fila inválido: {r_attr!r}", r=r_attr))
+            continue
+        try:
+            valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
+        except (IndexError, ValueError) as exc:
+            errores.append(_error_fila(numero, "celda_invalida", "Valor de celda inválido", causa=type(exc).__name__))
+            continue
+        except OverflowError:
+            errores.append(_error_fila(numero, "celda_invalida", "Valor numérico fuera de rango"))
+            continue
         filas.append((numero, valores))
 
     encabezado: tuple[int, dict[int, str]] | None = None
@@ -160,14 +178,29 @@ def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dic
         if not any(registro.get(c) not in (None, "") for c in _REQUERIDAS):
             continue
         registro["fila"] = numero
+        fila_invalida = False
         for campo in ("fecha_emision", "fecha_vencimiento"):
-            registro[campo] = _fecha(registro.get(campo), con_hora=False)
+            try:
+                registro[campo] = _fecha(registro.get(campo), con_hora=False)
+            except (ErrorDeDominio, OverflowError, ValueError):
+                errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+                fila_invalida = True
+                break
+        if fila_invalida:
+            continue
         for campo in ("fecha_exportacion", "fecha_presentacion", "fecha_respuesta"):
-            registro[campo] = _fecha(registro.get(campo), con_hora=True)
+            try:
+                registro[campo] = _fecha(registro.get(campo), con_hora=True)
+            except (ErrorDeDominio, OverflowError, ValueError):
+                errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+                fila_invalida = True
+                break
+        if fila_invalida:
+            continue
         resultado.append(registro)
-    if not resultado:
+    if not resultado and not errores:
         raise ErrorDeDominio("La hoja no contiene filas para importar", {"hoja": hoja})
     if len(resultado) > 1000:
         raise ErrorDeDominio("La planilla supera el máximo de 1000 filas")
-    return resultado
+    return resultado, errores
 
