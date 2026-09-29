@@ -1,6 +1,7 @@
 """Fase 4 X-1: errores de celda/fila en planilla → 422, nunca 500."""
 from __future__ import annotations
 
+import re
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -50,10 +51,9 @@ def _xlsx_fila_r_invalido() -> bytes:
         _ENCABEZADOS,
         ["Operadora Norte", "persona", "id1", "", "Apto", "", "", "", "exportado", "2026-01-01T00:00:00+00:00", "", "", ""],
     ])
-    marcador = b'<row r="6">'
-    if marcador not in base:
-        raise AssertionError("fixture XLSX sin fila de datos en r=6")
-    return base.replace(marcador, b'<row r="x2">', 1)
+    alterado, n = re.subn(rb'(<row r=")6(">)', br'\1x2\2', base, count=1)
+    assert n == 1, "fixture XLSX sin fila de datos en r=6"
+    return alterado
 
 
 def _xlsx_fecha_serial_enorme() -> bytes:

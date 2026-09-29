@@ -9350,6 +9350,16 @@
           },
           {
             "in": "header",
+            "name": "Content-Type",
+            "required": false,
+            "schema": {
+              "default": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "title": "Content-Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
