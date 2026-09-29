@@ -15,6 +15,7 @@ un lote.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import date, timedelta
 from typing import Any
@@ -25,11 +26,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
-from app.auth.identidad import Identidad
+from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
 from app.comun.idempotencia import hash_canonico
 from app.comun.reloj import hoy_del_tenant
 from app.modules.legajos import esquemas as e
+
+log = logging.getLogger("modulo1.legajos")
+
+
+def _hook_secundario(session: Session, etiqueta: str, fn) -> None:
+    """Best-effort en savepoint (DECISIONES D-C / B-5): no revierte la versión documental."""
+    try:
+        with session.begin_nested():
+            fn()
+    except Exception:
+        log.warning("Hook secundario %s falló; la transacción principal sigue", etiqueta, exc_info=True)
 
 # --------------------------------------------------------------------------- helpers
 
@@ -198,7 +210,10 @@ def _insertar_version_documento(
     if requisito_definicion_id is not None:
         from app.modules.alertas.servicio import registrar_accion
 
-        registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id)
+        _hook_secundario(
+            s, "registrar_accion",
+            lambda: registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id),
+        )
     if estado_confirmacion != "declarado" and requisito_definicion_id is not None:
         # Carga ya validada por el responsable = verificación implícita: se emite el evento
         # canónico (7.2) en vez de reinterpretar DocumentoCargado en la política (A-07).
@@ -217,8 +232,11 @@ def _insertar_version_documento(
     # notifica una sola vez por operadora + requisito + versión.
     from app.modules.operadoras.servicio import al_registrar_nueva_version
 
-    al_registrar_nueva_version(
-        s, identidad, sujeto_id=sujeto_id, requisito_definicion_id=str(requisito_definicion_id),
+    _hook_secundario(
+        s, "al_registrar_nueva_version",
+        lambda: al_registrar_nueva_version(
+            s, identidad, sujeto_id=sujeto_id, requisito_definicion_id=str(requisito_definicion_id),
+        ),
     )
 
     return {"documento_id": documento_id, "version": version, "sucede_a": sucede_a}
@@ -349,7 +367,12 @@ def _al_verificar(s: Session, identidad: Identidad, doc: dict[str, Any], eventos
 
         hasta = s.execute(text("SELECT vigente_hasta FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d"),
                           {"t": t, "d": str(doc["documento_id"])}).scalar()
-        resolver_por_verificacion(s, t, doc["sujeto_id"], str(doc["requisito_definicion_id"]), str(doc["documento_id"]), hasta)
+        _hook_secundario(
+            s, "resolver_por_verificacion",
+            lambda: resolver_por_verificacion(
+                s, t, doc["sujeto_id"], str(doc["requisito_definicion_id"]), str(doc["documento_id"]), hasta,
+            ),
+        )
     regularizadas: list[str] = []
     if doc["requisito_definicion_id"] is not None:
         filas = s.execute(

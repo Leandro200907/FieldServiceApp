@@ -226,3 +226,9 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 - **ALTO-2**: Drive valida tamaño/contenido antes de insertar versión; savepoint en escaneo;
   `archivo_demasiado_grande` como `ErrorDeDominio`.
 - **ALTO-3**: PUT `/storage/{firma}` solo con `subida_pendiente`; checksum en validación y descarga.
+
+## 2026-09-29 — Auditoría completa, Fase 3 B-5
+
+- Hooks secundarios de `_insertar_version_documento` (`registrar_accion`, `resolver_por_verificacion`,
+  `al_registrar_nueva_version`) en savepoint; eventos obligatorios sin cambio.
+- Tests: `tests/test_cargar_documento_savepoints.py`.
