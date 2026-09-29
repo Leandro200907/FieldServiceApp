@@ -316,7 +316,7 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
     assert c.post("/v1/comandos/confirmar_documento", json={"documento_id": a["doc"]}, headers=tb.headers("responsable_legajos")).status_code == 404
     assert c.post("/v1/comandos/cargar_documento", json={"sujeto_id": a["persona"], "requisito_definicion_id": a["req"],
                   "vigente_desde": "2026-01-01", "vigente_hasta": "2026-12-31"}, headers=tb.headers("responsable_legajos")).status_code == 404
-    assert c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("responsable_legajos")).status_code == 404
+    assert c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("responsable_legajos")).status_code == 404
     # listados: B ve solo lo suyo
     tab = _ok(c.get("/v1/consultas/tablero_vencimientos", params={"dias": 365}, headers=tb.headers("responsable_legajos")))
     assert {i["sujeto_id"] for i in tab["items"]} == {b["persona"]}
@@ -359,10 +359,10 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
         assert alcance_de_sujetos(s, sup_b, date(2026, 9, 18)) == [b["persona"]]
         assert not sujeto_en_alcance(s, sup_b, "persona_extra_de_A", date(2026, 9, 18), ROLES_CON_TODO_DESCARGA)
         assert not sujeto_en_alcance(s, sup_b, a["persona"], date(2026, 9, 18), ROLES_CON_TODO_DESCARGA)
-    assert c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("supervisor")).status_code == 404
+    assert c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("supervisor")).status_code == 404
 
     # --- storage: una URL firmada del tenant A no la puede usar B (firma atada al tenant)
-    url_a = _ok(c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=ta.headers("responsable_legajos")))["url"]
+    url_a = _ok(c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=ta.headers("responsable_legajos")))["url"]
     assert c.get(url_a, headers=tb.headers("responsable_legajos")).status_code == 403
 
     # --- token de A con tenant_id manipulado hacia B: la firma no valida → 401
