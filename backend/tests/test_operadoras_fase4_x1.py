@@ -46,10 +46,14 @@ def _xlsx_shared_string_indice_invalido() -> bytes:
 
 
 def _xlsx_fila_r_invalido() -> bytes:
-    return _xlsx([
+    base = _xlsx([
         _ENCABEZADOS,
         ["Operadora Norte", "persona", "id1", "", "Apto", "", "", "", "exportado", "2026-01-01T00:00:00+00:00", "", "", ""],
-    ]).replace(b'<row r="6">', b'<row r="x2">', 1)
+    ])
+    marcador = b'<row r="6">'
+    if marcador not in base:
+        raise AssertionError("fixture XLSX sin fila de datos en r=6")
+    return base.replace(marcador, b'<row r="x2">', 1)
 
 
 def _xlsx_fecha_serial_enorme() -> bytes:
@@ -76,6 +80,11 @@ def test_indice_shared_string_inexistente_devuelve_422(cliente_api, tenant_de_pr
 
 
 def test_numero_fila_xml_invalido_devuelve_422(cliente_api, tenant_de_prueba):
+    from app.modules.operadoras.lector_xlsx import leer_planilla
+
+    filas, errores = leer_planilla(_xlsx_fila_r_invalido())
+    assert not filas
+    assert any(e.get("codigo") == "fila_invalida" for e in errores)
     r = cliente_api.post(
         "/v1/comandos/importar_planilla_operadoras",
         content=_xlsx_fila_r_invalido(),

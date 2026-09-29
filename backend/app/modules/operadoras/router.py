@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import hashlib
 
-from fastapi import APIRouter, Body, Depends, Header, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.errores import ErrorDeDominio
@@ -18,6 +18,8 @@ from app.modules.operadoras import servicio
 from app.modules.operadoras.lector_xlsx import leer_planilla
 
 router = APIRouter(tags=["operadoras-documentales"])
+
+_MEDIA_TYPE_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _responsable_legajos(identidad: Identidad = Depends(identidad_actual)) -> Identidad:
@@ -115,10 +117,16 @@ def registrar_estado_documento_operadora(
 def importar_planilla_operadoras(
     identidad: Identidad = Depends(_responsable_legajos),
     clave: str | None = Depends(clave_idempotencia),
-    contenido: bytes = Body(media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", max_length=5 * 1024 * 1024),
+    contenido: bytes = Body(media_type=_MEDIA_TYPE_XLSX, max_length=5 * 1024 * 1024),
     nombre_archivo: str = Header("presentaciones_operadoras.xlsx", alias="X-Nombre-Archivo", max_length=500),
+    content_type: str = Header(_MEDIA_TYPE_XLSX, alias="Content-Type"),
     hoja: str = Query("Presentaciones", min_length=1, max_length=200),
 ) -> ImportarPlanillaOperadorasResponse:
+    if content_type.split(";")[0].strip().lower() != _MEDIA_TYPE_XLSX:
+        raise HTTPException(
+            status_code=415,
+            detail="Se requiere Content-Type application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
     filas, errores_lectura = leer_planilla(contenido, hoja=hoja)
     if errores_lectura and not filas:
         raise ErrorDeDominio(
