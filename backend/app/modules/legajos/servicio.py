@@ -442,6 +442,14 @@ def rechazar_propuesta(s: Session, identidad: Identidad, body: e.RechazarPropues
     return {"documento_id": str(doc["documento_id"]), "restaurado_documento_id": restaurado, "eventos": ["DocumentoRechazado"]}
 
 
+def _archivo_confirmado_presente(clave_storage: str | None) -> bool:
+    if not clave_storage:
+        return False
+    from app.storage import obtener_storage
+
+    return obtener_storage().existe(clave_storage)
+
+
 def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None:
     """Vuelve a `vigente` el antecesor no terminal más cercano de la versión que se está
     anulando, siguiendo la cadena `sucede_a`.
@@ -457,12 +465,21 @@ def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None
     while actual is not None and str(actual) not in visitados:
         visitados.add(str(actual))
         fila = s.execute(
-            text("SELECT estado_version, sucede_a FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"),
+            text(
+                "SELECT estado_version, sucede_a, archivo_estado, clave_storage FROM modulo1.documento "
+                "WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"
+            ),
             {"t": tenant_id, "d": str(actual)},
         ).mappings().first()
         if fila is None:
             return None
         if fila["estado_version"] == "sucedida":
+            if (
+                fila["archivo_estado"] == "confirmado"
+                and not _archivo_confirmado_presente(fila["clave_storage"])
+            ):
+                actual = fila["sucede_a"]
+                continue
             s.execute(
                 text("UPDATE modulo1.documento SET estado_version = 'vigente' WHERE tenant_id = :t AND documento_id = :d"),
                 {"t": tenant_id, "d": str(actual)},
@@ -598,13 +615,13 @@ def _politica_reimportacion(s: Session, tenant_id: str, fila: e.FilaDeLote) -> d
 
 def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dict[str, Any]:
     """Una transacción, idempotente por `lote_id` (8.2): si el lote ya existe se devuelve
-    el resultado guardado bajo `lote:<lote_id>` sin re-aplicar nada. Las filas inválidas
+    el resultado guardado bajo `lote_doc:<lote_id>` sin re-aplicar nada. Las filas inválidas
     se rechazan una por una (van a `detalle_filas_rechazadas`); las válidas se aplican
     como CargarDocumento con `lote_id`."""
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
 
-    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # La idempotencia por `lote_doc:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # Red de seguridad de dominio, válida también entre actores distintos: si el lote ya
     # existe, solo se reproduce el resultado si el contenido es el MISMO (hash canónico
     # de las filas, persistido en hash_archivo); con filas distintas es un conflicto.
