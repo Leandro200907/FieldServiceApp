@@ -232,3 +232,8 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 - Hooks secundarios de `_insertar_version_documento` (`registrar_accion`, `resolver_por_verificacion`,
   `al_registrar_nueva_version`) en savepoint; eventos obligatorios sin cambio.
 - Tests: `tests/test_cargar_documento_savepoints.py`.
+
+## 2026-09-29 — Auditoría completa, Fase 3 B-1 / B-2
+
+- **B-1**: job `drenaje_outbox` no drena si `drenar_outbox_habilitado` es false (transporte disabled).
+- **B-2**: retoma por lease vencido respeta `MAX_INTENTOS` → dead-letter.
