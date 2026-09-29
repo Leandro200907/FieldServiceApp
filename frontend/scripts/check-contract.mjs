@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
-const expectedHash = 'e7665a602f19541b5d94f31eaa4352cce0e8a5ecfcb838556971d700ece35867';
+const expectedHash = 'f3e9556c564de8a5de454c1cb0911754c530562f03df3ab04727d267ab76ee26';
 const bytes = await readFile(new URL('../contracts/modulo1/openapi.json', import.meta.url));
 const hash = createHash('sha256').update(bytes).digest('hex');
 if (hash !== expectedHash) {

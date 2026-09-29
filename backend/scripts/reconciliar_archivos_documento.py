@@ -36,10 +36,11 @@ def reconciliar(tenant_id: str, aplicar: bool) -> dict[str, int]:
             s.execute(
                 text(
                     "UPDATE modulo1.documento SET archivo_estado = 'sin_archivo', "
+                    "clave_storage = NULL, checksum_archivo = NULL, archivo_bytes = NULL, "
                     "archivo_validacion = 'invalido', archivo_validacion_motivo = 'archivo_ausente_en_storage' "
-                    "WHERE documento_id = ANY(CAST(:ids AS uuid[]))"
+                    "WHERE tenant_id = :t AND documento_id = ANY(CAST(:ids AS uuid[]))"
                 ),
-                {"ids": faltantes},
+                {"t": tenant_id, "ids": faltantes},
             )
     return {"revisados": len(filas), "faltantes": len(faltantes), "corregidos": len(faltantes) if aplicar else 0}
 

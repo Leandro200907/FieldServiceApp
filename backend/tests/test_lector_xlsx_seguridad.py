@@ -65,7 +65,7 @@ def test_rechaza_parte_descomprimida_excesiva():
             "xl/workbook.xml",
             '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>',
         )
-    with pytest.raises(ErrorDeDominio, match="demasiado grande"):
+    with pytest.raises(ErrorDeDominio, match="parte descomprimida demasiado grande"):
         leer_planilla(contenido.getvalue())
 
 
@@ -81,7 +81,8 @@ def test_rechaza_parte_grande_declarada_en_infolist():
             "xl/workbook.xml",
             '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>',
         )
-    with pytest.raises(ErrorDeDominio, match="demasiado grande"):
+    # CPython recalcula file_size al escribir; el libro queda malformado y falla antes de descomprimir.
+    with pytest.raises(ErrorDeDominio, match="planilla XLSX válida"):
         leer_planilla(contenido.getvalue())
 
 

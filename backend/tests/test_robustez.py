@@ -293,18 +293,18 @@ def _armar_tenant(c, t) -> dict:
     persona = _alta_persona(c, t, f"DNI-{t.slug}", t.sujeto_tecnico)
     doc = _cargar(c, t, persona, req, hasta="2026-12-31")["documento_id"]
     contenido = b"evidencia apto tenant"
-    clave = f"{t.tenant_id}/{doc}/apto.pdf"
-    checksum = StorageLocal().escribir(clave, contenido)
-    clave = {"cliente_id": str(uuid.uuid4()), "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4())}
-    _ok(_post(c, t, "configuracion", "publicar_version_de_matriz", {**clave, "vigente_desde": "2026-01-01", "lineas": [
+    clave_storage = f"{t.tenant_id}/{doc}/apto.pdf"
+    checksum = StorageLocal().escribir(clave_storage, contenido)
+    clave_matriz = {"cliente_id": str(uuid.uuid4()), "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4())}
+    _ok(_post(c, t, "configuracion", "publicar_version_de_matriz", {**clave_matriz, "vigente_desde": "2026-01-01", "lineas": [
         {"requisito_definicion_id": req, "clasificacion": "excepcionable", "bloqueante_durante_ejecucion": True}]}))
     _ok(_post(c, t, "responsable_legajos", "importar_lote_oc", {"lote_id": str(uuid.uuid4()), "origen": "planilla", "filas": [
-        {"clave_origen": f"OC-{t.slug}", **clave, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
+        {"clave_origen": f"OC-{t.slug}", **clave_matriz, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
     with tenant_session(t.tenant_id) as s:
         s.execute(text("UPDATE modulo1.documento SET clave_storage = :k, archivo_estado = 'confirmado', "
                        "checksum_archivo = :ck, archivo_bytes = :b, archivo_validacion = 'valido', "
                        "archivo_validacion_en = now() WHERE documento_id = :d"),
-                  {"k": clave, "ck": checksum, "b": len(contenido), "d": doc})
+                  {"k": clave_storage, "ck": checksum, "b": len(contenido), "d": doc})
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                        "VALUES (:t, :sj, :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "sj": persona, "u": t.usuarios["supervisor"]})
     return {"req": req, "persona": persona, "doc": doc, "oc": f"OC-{t.slug}"}

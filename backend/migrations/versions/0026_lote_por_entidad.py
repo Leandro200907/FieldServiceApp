@@ -1,11 +1,11 @@
 """Lote de importación único por (tenant, lote_id, entidad).
 
-Revision ID: 0026_lote_importacion_por_entidad
+Revision ID: 0026_lote_por_entidad
 Revises: 0025_vigente_hasta_not_null
 """
 from alembic import op
 
-revision = "0026_lote_importacion_por_entidad"
+revision = "0026_lote_por_entidad"
 down_revision = "0025_vigente_hasta_not_null"
 branch_labels = None
 depends_on = None

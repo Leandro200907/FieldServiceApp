@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0026_lote_importacion_por_entidad`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0026_lote_por_entidad`.
 
 Internamente existe una sola entidad `documento` para certificados, competencias e
 inducciones. La categoría la define el tipo de requisito. Las rutas históricas de

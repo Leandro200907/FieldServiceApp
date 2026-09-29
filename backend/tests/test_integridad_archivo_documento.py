@@ -56,6 +56,6 @@ def test_reconciliar_reporta_confirmado_sin_objeto(tenant_de_prueba):
     assert r2["corregidos"] == 1
     with tenant_session(t) as s:
         fila = s.execute(text(
-            "SELECT archivo_estado, archivo_validacion FROM modulo1.documento WHERE documento_id = :d"
+            "SELECT archivo_estado, clave_storage, archivo_validacion FROM modulo1.documento WHERE documento_id = :d"
         ), {"d": did}).one()
-        assert fila == ("sin_archivo", "invalido")
+        assert fila == ("sin_archivo", None, "invalido")
