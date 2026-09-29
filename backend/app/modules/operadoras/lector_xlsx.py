@@ -42,6 +42,14 @@ _COLUMNAS = {
     "observacion": "observacion",
 }
 _REQUERIDAS = {"operadora", "tipo_sujeto", "identificador_sujeto", "tipo_documento", "estado"}
+_MAX_PARTE_DESCOMPRIMIDA = 2 * 1024 * 1024
+
+
+def _leer_parte_zip(libro: ZipFile, nombre: str) -> bytes:
+    info = libro.getinfo(nombre)
+    if info.file_size > _MAX_PARTE_DESCOMPRIMIDA:
+        raise ErrorDeDominio("La planilla contiene una parte descomprimida demasiado grande")
+    return libro.read(nombre)
 
 
 def _normalizar(valor: object) -> str:
@@ -110,13 +118,13 @@ def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dic
     try:
         with ZipFile(BytesIO(contenido)) as libro:
             nombres = libro.namelist()
-            if any(info.file_size > 20 * 1024 * 1024 for info in libro.infolist()):
+            if any(info.file_size > _MAX_PARTE_DESCOMPRIMIDA for info in libro.infolist()):
                 raise ErrorDeDominio("La planilla contiene una parte descomprimida demasiado grande")
             compartidos: list[str] = []
             if "xl/sharedStrings.xml" in nombres:
-                compartidos = _texto_compartido(ET.fromstring(libro.read("xl/sharedStrings.xml")))
-            wb = ET.fromstring(libro.read("xl/workbook.xml"))
-            relaciones = ET.fromstring(libro.read("xl/_rels/workbook.xml.rels"))
+                compartidos = _texto_compartido(ET.fromstring(_leer_parte_zip(libro, "xl/sharedStrings.xml")))
+            wb = ET.fromstring(_leer_parte_zip(libro, "xl/workbook.xml"))
+            relaciones = ET.fromstring(_leer_parte_zip(libro, "xl/_rels/workbook.xml.rels"))
             destinos = {r.attrib["Id"]: r.attrib["Target"] for r in relaciones.findall(f"{_PKG_REL_NS}Relationship")}
             hojas = wb.find(f"{_NS}sheets")
             hoja_nodo = next((s for s in list(hojas) if s.attrib.get("name") == hoja), None) if hojas is not None else None
@@ -124,7 +132,7 @@ def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dic
                 raise ErrorDeDominio("No existe la hoja requerida", {"hoja": hoja})
             destino = destinos[hoja_nodo.attrib[f"{_REL_NS}id"]].lstrip("/")
             ruta = destino if destino.startswith("xl/") else f"xl/{destino}"
-            raiz = ET.fromstring(libro.read(ruta))
+            raiz = ET.fromstring(_leer_parte_zip(libro, ruta))
     except (BadZipFile, KeyError, ET.ParseError) as exc:
         raise ErrorDeDominio("El archivo no es una planilla XLSX válida") from exc
 

@@ -3,6 +3,7 @@
 Revision ID: 0023_documento_unificado
 Revises: 0022_espejo_operadoras
 """
+import sqlalchemy as sa
 from alembic import op
 
 
@@ -15,6 +16,36 @@ _POLICY = (
     "USING (tenant_id = current_setting('app.current_tenant')::uuid) "
     "WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid)"
 )
+
+_SQL_TABLAS_FORCE = (
+    "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+    "WHERE n.nspname = 'modulo1' AND c.relkind = 'r' AND c.relforcerowsecurity"
+)
+
+
+def _sin_force_rls(fn):
+    """Copia cruzando tenants: FORCE RLS + sin `app.current_tenant` deja 0 filas visibles
+    o aborta. Igual que 0011/0021, se suspende FORCE sólo durante la copia."""
+    conn = op.get_bind()
+    tablas = [r[0] for r in conn.execute(sa.text(_SQL_TABLAS_FORCE))]
+    for t in tablas:
+        op.execute(f"ALTER TABLE modulo1.{t} NO FORCE ROW LEVEL SECURITY")
+    try:
+        fn()
+    finally:
+        for t in tablas:
+            op.execute(f"ALTER TABLE modulo1.{t} FORCE ROW LEVEL SECURITY")
+
+
+def _contar(sql: str) -> int:
+    return int(op.get_bind().execute(sa.text(sql)).scalar() or 0)
+
+
+def _exigir_conteo(esperado: int, obtenido: int, que: str) -> None:
+    if esperado != obtenido:
+        raise RuntimeError(
+            f"Migración 0023 abortada: {que} esperadas={esperado} copiadas={obtenido}"
+        )
 
 
 def upgrade() -> None:
@@ -50,6 +81,20 @@ def upgrade() -> None:
     # Las filas se insertan primero como históricas para respetar el índice que permite
     # una sola versión vigente. Luego se promueve la más reciente si la clave no tenía
     # ya una versión vigente en documento.
+    _sin_force_rls(_copiar_acreditaciones_e_inducciones)
+
+    op.execute("DROP TABLE modulo1.acreditacion_competencia")
+    op.execute("DROP TABLE modulo1.induccion")
+
+    op.execute("ALTER TABLE modulo1.documento_soporte ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE modulo1.documento_soporte FORCE ROW LEVEL SECURITY")
+    op.execute(f"CREATE POLICY documento_soporte_aislamiento ON modulo1.documento_soporte {_POLICY}")
+    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON modulo1.documento_soporte TO modulo1_app")
+
+
+def _copiar_acreditaciones_e_inducciones() -> None:
+    n_acc = _contar("SELECT count(*) FROM modulo1.acreditacion_competencia")
+    n_ind = _contar("SELECT count(*) FROM modulo1.induccion")
     op.execute("""
         INSERT INTO modulo1.documento (
             documento_id, tenant_id, sujeto_id, requisito_definicion_id,
@@ -133,14 +178,24 @@ def upgrade() -> None:
         FROM elegidas e
         WHERE d.tenant_id = e.tenant_id AND d.documento_id = e.documento_id
     """)
-
-    op.execute("DROP TABLE modulo1.acreditacion_competencia")
-    op.execute("DROP TABLE modulo1.induccion")
-
-    op.execute("ALTER TABLE modulo1.documento_soporte ENABLE ROW LEVEL SECURITY")
-    op.execute("ALTER TABLE modulo1.documento_soporte FORCE ROW LEVEL SECURITY")
-    op.execute(f"CREATE POLICY documento_soporte_aislamiento ON modulo1.documento_soporte {_POLICY}")
-    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON modulo1.documento_soporte TO modulo1_app")
+    _exigir_conteo(
+        n_acc,
+        _contar(
+            "SELECT count(*) FROM modulo1.documento d "
+            "JOIN modulo1.acreditacion_competencia a "
+            "ON a.tenant_id = d.tenant_id AND a.acreditacion_id = d.documento_id"
+        ),
+        "acreditaciones",
+    )
+    _exigir_conteo(
+        n_ind,
+        _contar(
+            "SELECT count(*) FROM modulo1.documento d "
+            "JOIN modulo1.induccion i "
+            "ON i.tenant_id = d.tenant_id AND i.induccion_id = d.documento_id"
+        ),
+        "inducciones",
+    )
 
 
 def downgrade() -> None:
@@ -171,6 +226,27 @@ def downgrade() -> None:
             creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
+    _sin_force_rls(_restaurar_acreditaciones_e_inducciones)
+    op.execute("DROP TABLE modulo1.documento_soporte")
+    op.execute("ALTER TABLE modulo1.documento DROP COLUMN locacion_id")
+    op.execute("ALTER TABLE modulo1.documento ALTER COLUMN vigente_hasta SET NOT NULL")
+    op.execute("ALTER TABLE modulo1.documento DROP CONSTRAINT ck_vigencia_documento")
+    op.execute("ALTER TABLE modulo1.documento ADD CONSTRAINT ck_vigencia_documento CHECK (vigente_desde <= vigente_hasta)")
+
+
+def _restaurar_acreditaciones_e_inducciones() -> None:
+    n_acc = _contar(
+        "SELECT count(*) FROM modulo1.documento d "
+        "JOIN modulo1.definicion_requisito r "
+        "ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id "
+        "WHERE r.categoria = 'competencia' AND d.vigente_hasta IS NOT NULL"
+    )
+    n_ind = _contar(
+        "SELECT count(*) FROM modulo1.documento d "
+        "JOIN modulo1.definicion_requisito r "
+        "ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id "
+        "WHERE r.categoria = 'induccion' AND d.vigente_hasta IS NOT NULL AND d.locacion_id IS NOT NULL"
+    )
     op.execute("""
         INSERT INTO modulo1.acreditacion_competencia
         SELECT d.documento_id, d.tenant_id, d.sujeto_id, d.requisito_definicion_id,
@@ -196,10 +272,11 @@ def downgrade() -> None:
           ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
         WHERE r.categoria = 'induccion' AND d.vigente_hasta IS NOT NULL AND d.locacion_id IS NOT NULL
     """)
-    op.execute("DELETE FROM modulo1.documento d USING modulo1.definicion_requisito r WHERE r.tenant_id=d.tenant_id AND r.requisito_definicion_id=d.requisito_definicion_id AND r.categoria IN ('competencia','induccion')")
-    op.execute("DROP TABLE modulo1.documento_soporte")
-    op.execute("ALTER TABLE modulo1.documento DROP COLUMN locacion_id")
-    op.execute("ALTER TABLE modulo1.documento ALTER COLUMN vigente_hasta SET NOT NULL")
-    op.execute("ALTER TABLE modulo1.documento DROP CONSTRAINT ck_vigencia_documento")
-    op.execute("ALTER TABLE modulo1.documento ADD CONSTRAINT ck_vigencia_documento CHECK (vigente_desde <= vigente_hasta)")
+    _exigir_conteo(n_acc, _contar("SELECT count(*) FROM modulo1.acreditacion_competencia"), "acreditaciones restauradas")
+    _exigir_conteo(n_ind, _contar("SELECT count(*) FROM modulo1.induccion"), "inducciones restauradas")
+    op.execute(
+        "DELETE FROM modulo1.documento d USING modulo1.definicion_requisito r "
+        "WHERE r.tenant_id=d.tenant_id AND r.requisito_definicion_id=d.requisito_definicion_id "
+        "AND r.categoria IN ('competencia','induccion')"
+    )
 

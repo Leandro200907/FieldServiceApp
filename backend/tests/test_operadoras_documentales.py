@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from html import escape
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -191,4 +192,20 @@ def test_importador_no_puede_resolver_documentos_de_otro_tenant(cliente_api, dos
         assert session.execute(text(
             "SELECT count(*) FROM modulo1.entrega_documento_operadora WHERE documento_id = :d"
         ), {"d": doc_ajeno["documento_id"]}).scalar_one() == 0
+
+
+def test_importar_planilla_operadoras_exige_responsable_legajos(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    headers = {
+        **t.headers("tecnico"),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+    respuesta = cliente_api.post(
+        "/v1/comandos/importar_planilla_operadoras",
+        content=_xlsx([_ENCABEZADOS, ["Operadora Norte", "persona", "x", "y", "Apto", "z", "", "", "enviado", "", "", "", ""]]),
+        headers=headers,
+    )
+    assert respuesta.status_code == 403
+
+
 

@@ -77,6 +77,14 @@ def _exigir_vigencia(desde: date, hasta: date) -> None:
         raise ErrorDeDominio("vigente_desde no puede ser posterior a vigente_hasta", {"vigente_desde": str(desde), "vigente_hasta": str(hasta)})
 
 
+def _exigir_categoria_documento(definicion: dict[str, Any]) -> None:
+    if definicion["categoria"] != "documento":
+        raise ErrorDeDominio(
+            "El requisito no es de categoría documento",
+            {"categoria": definicion["categoria"]},
+        )
+
+
 def _bloquear_legajo(s: Session, tenant_id: str, sujeto_id: str) -> None:
     """Ancla de serialización: toda escritura que cambie qué versión está `vigente` para
     un sujeto (cargar/proponer, rechazar, revertir lote) toma primero el lock de la fila
@@ -287,6 +295,7 @@ def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) 
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
     definicion = _definicion_activa(s, t, str(body.requisito_definicion_id))
+    _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
 
@@ -308,6 +317,7 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
     definicion = _definicion_activa(s, t, str(body.requisito_definicion_id))
+    _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
 
@@ -621,6 +631,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
         try:
             legajo = _legajo_activo(s, t, fila.sujeto_id)
             definicion = _definicion_activa(s, t, str(fila.requisito_definicion_id))
+            _exigir_categoria_documento(definicion)
             _exigir_aplicable(definicion, legajo)
             _exigir_vigencia(fila.vigente_desde, fila.vigente_hasta)
             politica = _politica_reimportacion(s, t, fila)
