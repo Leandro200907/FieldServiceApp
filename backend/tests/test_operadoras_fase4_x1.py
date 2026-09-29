@@ -1,7 +1,7 @@
 """Fase 4 X-1: errores de celda/fila en planilla → 422, nunca 500."""
 from __future__ import annotations
 
-import re
+from html import escape
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -47,13 +47,44 @@ def _xlsx_shared_string_indice_invalido() -> bytes:
 
 
 def _xlsx_fila_r_invalido() -> bytes:
-    base = _xlsx([
-        _ENCABEZADOS,
-        ["Operadora Norte", "persona", "id1", "", "Apto", "", "", "", "exportado", "2026-01-01T00:00:00+00:00", "", "", ""],
-    ])
-    alterado, n = re.subn(rb'(<row r=")6(">)', br'\1x2\2', base, count=1)
-    assert n == 1, "fixture XLSX sin fila de datos en r=6"
-    return alterado
+    """Planilla mínima con fila de datos r=\"x2\" (no se puede parchear el ZIP comprimido)."""
+    valores = [
+        "Operadora Norte", "persona", "id1", "", "Apto", "", "", "",
+        "exportado", "2026-01-01T00:00:00+00:00", "", "", "",
+    ]
+
+    def celda(col: int, fila: int, valor: object) -> str:
+        letras = ""
+        n = col
+        while n:
+            n, resto = divmod(n - 1, 26)
+            letras = chr(65 + resto) + letras
+        return f'<c r="{letras}{fila}" t="inlineStr"><is><t>{escape(str(valor))}</t></is></c>'
+
+    enc = "".join(celda(i, 5, v) for i, v in enumerate(_ENCABEZADOS, 1))
+    datos = "".join(celda(i, 6, v) for i, v in enumerate(valores, 1))
+    contenido = BytesIO()
+    with ZipFile(contenido, "w", ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""")
+        z.writestr("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Presentaciones" sheetId="1" r:id="rId1"/></sheets></workbook>""")
+        z.writestr("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>""")
+        z.writestr(
+            "xl/worksheets/sheet1.xml",
+            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            f'<sheetData><row r="5">{enc}</row><row r="x2">{datos}</row></sheetData></worksheet>',
+        )
+    return contenido.getvalue()
 
 
 def _xlsx_fecha_serial_enorme() -> bytes:
