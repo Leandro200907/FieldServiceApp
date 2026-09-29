@@ -12,7 +12,7 @@ sesiones en [BITACORA.md](BITACORA.md).
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
 - **Rutas HTTP:** 74 operaciones sobre 73 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 29 archivos en `migrations/versions/`, un solo head: `0026_lote_por_entidad`.
+- **Migraciones:** 30 archivos en `migrations/versions/`, un solo head: `0027_operadora_nombre`.
 - **Tests:** 568 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro,
   concurrencia con hilos, aislamiento multi-tenant y dos workers).
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).

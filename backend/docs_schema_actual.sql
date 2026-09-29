@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0026_lote_por_entidad
+-- head: 0027_operadora_nombre
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -966,6 +966,9 @@ ALTER TABLE ONLY modulo1.notificacion_envio
 -- Name: oc oc_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
     ADD CONSTRAINT oc_pkey PRIMARY KEY (oc_id);
+-- Name: operadora_documental ck_operadora_documental_nombre; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.operadora_documental
+    ADD CONSTRAINT ck_operadora_documental_nombre CHECK ((btrim(nombre) <> ''::text));
 -- Name: operadora_documental operadora_documental_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.operadora_documental
     ADD CONSTRAINT operadora_documental_pkey PRIMARY KEY (operadora_id);

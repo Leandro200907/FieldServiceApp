@@ -6,4 +6,4 @@ base: si difieren, la instancia no está lista (migración atrasada o código vi
 y con lo documentado (README, docs_schema_actual.sql).
 """
 VERSION = "1.0.0-rc1"
-MIGRACION_HEAD = "0026_lote_por_entidad"
+MIGRACION_HEAD = "0027_operadora_nombre"
