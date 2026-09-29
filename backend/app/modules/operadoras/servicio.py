@@ -1,11 +1,16 @@
 """Estado interno versus la última versión conocida por cada operadora."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
+
+from app.comun.reloj import zona_horaria_del_tenant
 
 from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.alcance import alcance_de_sujetos
@@ -209,6 +214,11 @@ def _resolver_documento_planilla(session: Session, identidad: Identidad, fila: d
         raise ErrorDeDominio("El sujeto es ambiguo; complete Sujeto ID")
 
     documento_id = str(fila.get("documento_id") or "").strip()
+    if documento_id:
+        try:
+            uuid.UUID(documento_id)
+        except ValueError as exc:
+            raise ErrorDeDominio("Documento ID inválido", {"documento_id": documento_id}) from exc
     requisito_id = str(fila.get("requisito_id") or "").strip()
     tipo_documento = str(fila.get("tipo_documento") or "").strip()
     if not tipo_documento:
@@ -221,7 +231,12 @@ def _resolver_documento_planilla(session: Session, identidad: Identidad, fila: d
     if documento_id:
         parametros["d"] = documento_id; condiciones.append("d.documento_id = :d")
     if requisito_id:
-        parametros["r"] = requisito_id; condiciones.append("d.requisito_definicion_id = :r")
+        try:
+            uuid.UUID(requisito_id)
+        except ValueError as exc:
+            raise ErrorDeDominio("Requisito ID inválido", {"requisito_id": requisito_id}) from exc
+        parametros["r"] = requisito_id
+        condiciones.append("d.requisito_definicion_id = :r")
     if fila.get("fecha_emision") is not None:
         parametros["desde"] = fila["fecha_emision"]; condiciones.append("d.vigente_desde = :desde")
     if fila.get("fecha_vencimiento") is not None:
@@ -239,12 +254,22 @@ def _resolver_documento_planilla(session: Session, identidad: Identidad, fila: d
     return sujeto_id, str(documentos[0])
 
 
+def _instante_en_zona_tenant(session: Session, tenant_id: str, valor: datetime | None) -> datetime | None:
+    if valor is None:
+        return None
+    tz = ZoneInfo(zona_horaria_del_tenant(session, tenant_id))
+    if valor.tzinfo is None:
+        return valor.replace(tzinfo=tz)
+    return valor.astimezone(tz)
+
+
 def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja: str,
-                   filas: list[dict[str, Any]]) -> dict[str, Any]:
+                   filas: list[dict[str, Any]], errores_lectura: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Importa filas de forma parcial: una fila inválida no revierte las correctas."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
     resultados: list[dict[str, Any]] = []
-    errores: list[dict[str, Any]] = []
+    errores: list[dict[str, Any]] = list(errores_lectura or [])
+    t = identidad.tenant_id
     for fila in filas:
         numero = int(fila["fila"])
         try:
@@ -262,22 +287,27 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
                 respuesta = registrar_estado(
                     session, identidad, operadora=str(fila.get("operadora") or "").strip(),
                     sujeto_id=sujeto_id, documento_id=documento_id, estado=estado,
-                    exportado_en=fila.get("fecha_exportacion"), enviado_en=fila.get("fecha_presentacion"),
-                    aceptado_en=fila.get("fecha_respuesta") if estado == "aceptado" else None,
-                    rechazado_en=fila.get("fecha_respuesta") if estado == "rechazado" else None,
+                    exportado_en=_instante_en_zona_tenant(session, t, fila.get("fecha_exportacion")),
+                    enviado_en=_instante_en_zona_tenant(session, t, fila.get("fecha_presentacion")),
+                    aceptado_en=_instante_en_zona_tenant(session, t, fila.get("fecha_respuesta") if estado == "aceptado" else None),
+                    rechazado_en=_instante_en_zona_tenant(session, t, fila.get("fecha_respuesta") if estado == "rechazado" else None),
                     fuente_archivo=archivo, fuente_hoja=hoja, fuente_fila=numero,
                     observacion=str(fila.get("observacion") or "").strip() or None,
                 )
                 resultados.append({"fila": numero, "documento_id": documento_id,
                                    "operadora_id": respuesta["operadora_id"], "estado": estado})
-        except ErrorDeDominio as exc:
+        except (ErrorDeDominio, NoEncontrado) as exc:
             errores.append({"fila": numero, "codigo": exc.codigo, "mensaje": exc.mensaje,
                             "detalles": exc.detalles})
+        except DBAPIError as exc:
+            errores.append({"fila": numero, "codigo": "dato_invalido", "mensaje": "Identificador con formato inválido",
+                            "detalles": {"causa": str(exc.orig) if exc.orig else None}})
     registrar_evento_interno(session, identidad.tenant_id, "PlanillaOperadorasImportada", {
         "archivo": archivo, "hoja": hoja, "filas_totales": len(filas),
         "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
     }, identidad.usuario_id)
-    return {"archivo": archivo, "hoja": hoja, "filas_totales": len(filas),
+    total_filas = len(filas) + len(errores_lectura or [])
+    return {"archivo": archivo, "hoja": hoja, "filas_totales": total_filas,
             "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
             "resultados": resultados, "errores": errores,
             "eventos": ["PlanillaOperadorasImportada"]}
