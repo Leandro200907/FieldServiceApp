@@ -94,9 +94,9 @@ def importar_lote_oc(
     lote_existente = session.execute(
         text(
             "SELECT filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, estado, hash_archivo "
-            "FROM modulo1.lote_importacion WHERE lote_id = :l"
+            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'oc'"
         ),
-        {"l": lote_id},
+        {"t": tenant_id, "l": lote_id},
     ).mappings().first()
     if lote_existente is not None:
         if lote_existente["hash_archivo"] != hash_contenido:
@@ -175,8 +175,8 @@ def importar_lote_oc(
             text(
                 """
                 INSERT INTO modulo1.oc (tenant_id, clave_origen, referencia, cliente_id, locacion_id,
-                                        tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id)
-                VALUES (:t, :clave, :ref, :cli, :loc, :tipo, :desde, :hasta, :l)
+                                        tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id, lote_entidad)
+                VALUES (:t, :clave, :ref, :cli, :loc, :tipo, :desde, :hasta, :l, 'oc')
                 ON CONFLICT (tenant_id, clave_origen) DO UPDATE SET
                     referencia = EXCLUDED.referencia,
                     cliente_id = EXCLUDED.cliente_id,
@@ -185,6 +185,7 @@ def importar_lote_oc(
                     vigencia_desde = EXCLUDED.vigencia_desde,
                     vigencia_hasta = EXCLUDED.vigencia_hasta,
                     lote_id = EXCLUDED.lote_id,
+                    lote_entidad = EXCLUDED.lote_entidad,
                     actualizado_en = now()
                 RETURNING oc_id, (xmax = 0) AS insertada
                 """

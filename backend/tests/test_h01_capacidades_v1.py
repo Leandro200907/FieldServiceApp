@@ -303,7 +303,7 @@ def _remoto(id_, nombre, mime="application/pdf", h=None):
 def drive(cliente_api, tenant_de_prueba, tmp_path):
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto médico")
-    _alta_def(cliente_api, t, "Altura en andamios", categoria="competencia")
+    _alta_def(cliente_api, t, "Altura en andamios", categoria="documento")
     _alta_def(cliente_api, t, "Altura avanzada", categoria="competencia")
     p = _alta_persona(cliente_api, t, "DNI 1", sujeto_id="persona_0042")
     prov = ProveedorEnMemoria(carpetas={"carpeta-1": [

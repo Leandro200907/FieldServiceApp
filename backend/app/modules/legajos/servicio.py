@@ -183,15 +183,15 @@ def _insertar_version_documento(
         text(
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, numero, "
             "vigente_desde, vigente_hasta, estado_confirmacion, estado_version, origen_propuesta, version, origen, "
-            "confianza_extraccion, lote_id, sucede_a, locacion_id) "
+            "confianza_extraccion, lote_id, lote_entidad, sucede_a, locacion_id) "
             "VALUES (:d, :t, :sj, :r, :num, :desde, :hasta, :conf, 'vigente', :prop, :ver, :origen, "
-            ":confianza, :lote, :sucede_a, :locacion)"
+            ":confianza, :lote, :lote_ent, :sucede_a, :locacion)"
         ),
         {
             "d": documento_id, "t": t, "sj": sujeto_id, "r": requisito_definicion_id, "num": numero,
             "desde": vigente_desde, "hasta": vigente_hasta, "conf": estado_confirmacion, "prop": origen_propuesta,
             "ver": version, "origen": origen, "confianza": confianza_extraccion,
-            "lote": lote_id, "sucede_a": sucede_a, "locacion": locacion_id,
+            "lote": lote_id, "lote_ent": "legajos" if lote_id else None, "sucede_a": sucede_a, "locacion": locacion_id,
         },
     )
 
@@ -629,7 +629,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     existente = s.execute(
         text(
             "SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, hash_archivo "
-            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l"
+            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos'"
         ),
         {"t": t, "l": lote_id},
     ).mappings().first()
@@ -731,13 +731,11 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
     lote = s.execute(
-        text("SELECT estado, entidad FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l FOR UPDATE"),
+        text("SELECT estado FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos' FOR UPDATE"),
         {"t": t, "l": lote_id},
     ).mappings().first()
     if lote is None:
         raise NoEncontrado("Lote inexistente", {"lote_id": lote_id})
-    if lote["entidad"] != "legajos":
-        raise ErrorDeDominio("Este comando solo revierte lotes de legajos", {"entidad": lote["entidad"]})
     if lote["estado"] != "aplicado":
         raise Conflicto("Solo se revierte un lote aplicado", {"estado": lote["estado"]})
 
@@ -783,7 +781,7 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
             restaurados.append(r)
 
     s.execute(
-        text("UPDATE modulo1.lote_importacion SET estado = 'revertido' WHERE tenant_id = :t AND lote_id = :l"),
+        text("UPDATE modulo1.lote_importacion SET estado = 'revertido' WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos'"),
         {"t": t, "l": lote_id},
     )
     registrar_evento(

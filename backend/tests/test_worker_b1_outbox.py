@@ -16,7 +16,7 @@ def test_drenaje_outbox_job_no_publica_si_transporte_disabled(tenant_de_prueba):
     t = tenant_de_prueba.tenant_id
     pub = PublicadorEnMemoria()
     with tenant_session(t) as s:
-        encolar_outbox(s, t, "DocumentoVerificado", {"documento_id": str(uuid.uuid4())})
+        encolar_outbox(s, t, "CumplimientoEmpresaAfectado", {"requisito_definicion_id": str(uuid.uuid4())})
         jid = encolar(s, "drenaje_outbox", {}, tenant_id=t)
     ctx = {"publicador": pub, "drenar_outbox_habilitado": False}
     assert procesar_cola(t, "drenaje_outbox", handler_drenaje_outbox, ctx) == 1

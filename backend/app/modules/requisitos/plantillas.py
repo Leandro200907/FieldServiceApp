@@ -152,7 +152,7 @@ def copiar_matriz_global(s: Session, identidad: Identidad, body: e.CopiarMatrizG
         s, identidad,
         e.PublicarVersionDeMatriz(
             cliente_id=body.cliente_id, locacion_id=body.locacion_id, tipo_servicio_id=body.tipo_servicio_id,
-            vigente_desde=body.vigente_desde, lineas=lineas,
+            vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, lineas=lineas,
             fuente=f"plantilla global {m['operadora']} / {m['tipo_servicio']} v{m['version']}",
             autor=identidad.usuario_id,
         ),

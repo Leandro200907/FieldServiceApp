@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app.comun.reloj import hoy_del_tenant
 from app.core.incumplimiento_empresa import registrar_vencimientos_de_empresa
 from tests.test_a07_revaluacion import _base, insertar_definicion
+from tests.test_orquestacion import sesion  # noqa: F401
 
 
 def test_incumplimiento_por_ausencia_de_documento_verificado(tenant_de_prueba, sesion):

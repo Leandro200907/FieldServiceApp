@@ -14,9 +14,11 @@ from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _post
 def test_rechazar_propuesta_no_restaura_sucedido_sin_archivo_en_storage(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto restaurar")
-    p = _alta_persona(cliente_api, t, "restaurar")
+    p = _alta_persona(cliente_api, t, "restaurar", sujeto_id=t.sujeto_tecnico)
     v1 = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2026-12-31")
-    prop = _cargar(cliente_api, t, p, req, desde="2026-02-01", hasta="2026-12-31", estado_confirmacion="declarado")
+    prop = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {
+        "sujeto_id": p, "requisito_definicion_id": req, "vigente_desde": "2026-02-01", "vigente_hasta": "2026-12-31",
+    }))
     did_v1 = v1["documento_id"]
     with tenant_session(t.tenant_id) as s:
         s.execute(text(
@@ -47,7 +49,7 @@ def test_reconciliar_reporta_confirmado_sin_objeto(tenant_de_prueba):
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, "
             "origen, estado_version, clave_storage, archivo_estado, checksum_archivo, archivo_bytes) "
             "VALUES (:d, :t, 'persona_rec', :r, '2026-01-01', '2026-12-31', 'carga_manual', 'vigente', :c, 'confirmado', 'x', 1)"
-        ), {"d": did, "t": t, "c": f"{t}/{did}/ausente.pdf"})
+        ), {"d": did, "t": t, "r": req, "c": f"{t}/{did}/ausente.pdf"})
     r = reconciliar(t, aplicar=False)
     assert r["faltantes"] == 1
     r2 = reconciliar(t, aplicar=True)

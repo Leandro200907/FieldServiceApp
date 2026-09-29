@@ -35,7 +35,11 @@ def test_pdf_vacio_no_pisa_version_verificada_vigente(cliente_api, tenant_de_pru
     req = _alta_def(cliente_api, t, "Apto médico")
     p = _alta_persona(cliente_api, t, "DNI 9", sujeto_id="persona_v1_ok")
     vigente = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2027-06-30")
-    _ok(_post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": vigente["documento_id"]}))
+    with tenant_session(t.tenant_id) as s:
+        s.execute(text(
+            "UPDATE modulo1.documento SET estado_confirmacion = 'verificado', archivo_estado = 'confirmado', "
+            "checksum_archivo = 'ok', archivo_bytes = 1 WHERE documento_id = :d"
+        ), {"d": vigente["documento_id"]})
     prov = ProveedorEnMemoria(
         carpetas={"carpeta-1": [_remoto("vac", "persona_v1_ok__Apto_medico__2027-07-01.pdf", h="hash-vacio")]},
         contenidos={"vac": b""},

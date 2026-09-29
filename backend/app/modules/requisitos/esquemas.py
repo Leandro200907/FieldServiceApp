@@ -39,6 +39,7 @@ class PublicarVersionDeMatriz(BaseModel):
     locacion_id: UUID
     tipo_servicio_id: UUID
     vigente_desde: date
+    vigente_hasta: date | None = None
     lineas: list[LineaDeMatriz]
     fuente: str | None = None
     archivo_de_respaldo: str | None = None
@@ -73,3 +74,4 @@ class CopiarMatrizGlobal(BaseModel):
     locacion_id: UUID
     tipo_servicio_id: UUID
     vigente_desde: date
+    vigente_hasta: date | None = None
