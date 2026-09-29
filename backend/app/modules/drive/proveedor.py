@@ -111,7 +111,8 @@ class GoogleDrive:
             for chunk in r.iter_bytes():
                 total += len(chunk)
                 if total > max_bytes:
-                    raise ValueError("archivo_demasiado_grande")
+                    from app.api.errores import ErrorDeDominio
+                    raise ErrorDeDominio("El archivo supera el tamaño máximo permitido", codigo="archivo_demasiado_grande")
                 partes.append(chunk)
         return b"".join(partes)
 
@@ -133,7 +134,8 @@ class ProveedorEnMemoria:
         self.descargas.append(id_externo)
         datos = self.contenidos[id_externo]
         if len(datos) > max_bytes:
-            raise ValueError("archivo_demasiado_grande")
+            from app.api.errores import ErrorDeDominio
+            raise ErrorDeDominio("El archivo supera el tamaño máximo permitido", codigo="archivo_demasiado_grande")
         return datos
 
 
