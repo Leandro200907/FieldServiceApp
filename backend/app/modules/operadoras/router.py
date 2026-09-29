@@ -129,7 +129,9 @@ def importar_planilla_operadoras(
     huella = hashlib.sha256(contenido).hexdigest()
     resultado = ejecutar_comando(
         identidad, clave, (Rol.RESPONSABLE_LEGAJOS,),
-        lambda s: servicio.importar_filas(s, identidad, archivo=nombre_archivo, hoja=hoja, filas=filas),
+        lambda s: servicio.importar_filas(
+            s, identidad, archivo=nombre_archivo, hoja=hoja, filas=filas, errores_lectura=errores_lectura,
+        ),
         ruta="/comandos/importar_planilla_operadoras",
         body={"archivo": nombre_archivo, "hoja": hoja, "sha256": huella},
     )

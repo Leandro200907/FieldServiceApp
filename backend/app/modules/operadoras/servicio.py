@@ -18,6 +18,7 @@ from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
+from app.modules.operadoras.esquemas import validar_campos_planilla
 from app.worker.cola import encolar
 
 
@@ -274,6 +275,7 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
         numero = int(fila["fila"])
         try:
             with session.begin_nested():
+                validar_campos_planilla(fila)
                 estado = str(fila.get("estado") or "").strip().lower()
                 if estado not in {"exportado", "enviado", "aceptado", "rechazado"}:
                     raise ErrorDeDominio("Estado inválido", {"estado": estado})
@@ -302,11 +304,11 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
         except DBAPIError as exc:
             errores.append({"fila": numero, "codigo": "dato_invalido", "mensaje": "Identificador con formato inválido",
                             "detalles": {"causa": str(exc.orig) if exc.orig else None}})
+    total_filas = len(filas) + len(errores_lectura or [])
     registrar_evento_interno(session, identidad.tenant_id, "PlanillaOperadorasImportada", {
-        "archivo": archivo, "hoja": hoja, "filas_totales": len(filas),
+        "archivo": archivo, "hoja": hoja, "filas_totales": total_filas,
         "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
     }, identidad.usuario_id)
-    total_filas = len(filas) + len(errores_lectura or [])
     return {"archivo": archivo, "hoja": hoja, "filas_totales": total_filas,
             "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
             "resultados": resultados, "errores": errores,
