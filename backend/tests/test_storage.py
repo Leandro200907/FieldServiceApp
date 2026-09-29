@@ -136,6 +136,20 @@ def test_flujo_preparar_put_confirmar_descargar(api, storage, tenant_de_prueba):
                     json={"documento_id": doc, "nombre_archivo": "otro.pdf", "content_type": "application/pdf"}).status_code == 409
 
 
+def test_put_solo_con_subida_pendiente_y_no_tras_confirmar(api, storage, tenant_de_prueba):
+    t = tenant_de_prueba
+    doc = _documento(t.tenant_id)
+    prep = api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": doc, "nombre_archivo": "apto.pdf", "content_type": "application/pdf"})
+    assert prep.status_code == 200
+    url = prep.json()["url_subida"]
+    contenido = _pdf("v1")
+    assert api.put(url, content=contenido, headers={"Content-Type": "application/pdf"}).status_code == 200
+    assert api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": doc}).status_code == 200
+    assert api.put(url, content=_pdf("sobrescribir"), headers={"Content-Type": "application/pdf"}).status_code == 409
+
+
 def test_el_cliente_no_puede_elegir_la_clave_ni_el_checksum(api, tenant_de_prueba):
     """Los bodies públicos ya no aceptan clave_storage/checksum_archivo (se ignoran) y el
     nombre de archivo se sanea: la clave siempre es tenant/documento/nombre."""

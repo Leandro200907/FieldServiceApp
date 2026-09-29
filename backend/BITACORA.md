@@ -223,3 +223,6 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 
 - Radar documental filtra legajos con `alcance_de_sujetos` para supervisores; detalle de legajo
   fuera del universo → 404.
+- **ALTO-2**: Drive valida tamaño/contenido antes de insertar versión; savepoint en escaneo;
+  `archivo_demasiado_grande` como `ErrorDeDominio`.
+- **ALTO-3**: PUT `/storage/{firma}` solo con `subida_pendiente`; checksum en validación y descarga.

@@ -31,6 +31,7 @@ Recuperación manual: `preparar_subida` permite reemplazar un archivo `invalido`
 verificado que el chequeo automático no haya podido detectar."""
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 import uuid
@@ -197,7 +198,7 @@ def procesar(session: Session, job: Any, contexto: dict[str, Any]) -> None:
         raise JobNoProcesable("validacion_evidencia sin documento_id/token en el payload")
 
     doc = session.execute(
-        text("SELECT archivo_estado, archivo_validacion_token, clave_storage, archivo_content_type "
+        text("SELECT archivo_estado, archivo_validacion_token, clave_storage, archivo_content_type, checksum_archivo "
              "FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"),
         {"t": tenant_id, "d": documento_id},
     ).mappings().first()
@@ -214,6 +215,11 @@ def procesar(session: Session, job: Any, contexto: dict[str, Any]) -> None:
         contenido = storage.leer(doc["clave_storage"])
     except FileNotFoundError as exc:
         raise JobNoProcesable(f"documento {documento_id}: archivo ausente en storage") from exc
+    checksum_real = hashlib.sha256(contenido).hexdigest()
+    if doc["checksum_archivo"] and checksum_real != doc["checksum_archivo"]:
+        _marcar_resultado(session, tenant_id, documento_id, token, False, "checksum_no_coincide",
+                          {"checksum_esperado": doc["checksum_archivo"], "checksum_real": checksum_real})
+        return
     # cualquier otra excepción de storage.leer (red, permisos, storage caído) es
     # TRANSITORIA: se deja propagar tal cual, sin envolver en JobNoProcesable, para que
     # el worker reintente con su backoff genérico.

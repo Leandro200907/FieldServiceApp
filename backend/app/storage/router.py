@@ -16,7 +16,9 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
+from sqlalchemy import text
+
+from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
 from app.auth.jwt import validar_access_token
@@ -148,7 +150,25 @@ async def subir(
     contenido = b"".join(partes)
     if not contenido:
         raise ErrorDeDominio("Archivo vacío", codigo="archivo_vacio")
-    checksum = storage.escribir(cuerpo["clave"], contenido)
+    clave = str(cuerpo["clave"])
+    partes = clave.split("/")
+    if len(partes) < 3:
+        raise Prohibido("Clave de storage inválida para subida")
+    documento_id = partes[1]
+    with tenant_session(cuerpo["tenant"]) as s:
+        fila = s.execute(
+            text(
+                "SELECT archivo_estado, clave_storage FROM modulo1.documento "
+                "WHERE documento_id = CAST(:d AS uuid) FOR UPDATE"
+            ),
+            {"d": documento_id},
+        ).mappings().first()
+        if fila is None or fila["clave_storage"] != clave or fila["archivo_estado"] != "subida_pendiente":
+            raise Conflicto(
+                "No hay una subida pendiente para esta URL",
+                {"documento_id": documento_id, "archivo_estado": fila["archivo_estado"] if fila else None},
+            )
+    checksum = storage.escribir(clave, contenido)
     return SubirArchivoResponse(bytes=len(contenido), checksum_sha256=checksum)
 
 
