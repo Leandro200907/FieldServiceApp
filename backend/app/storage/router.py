@@ -7,7 +7,7 @@
   API), por eso no exigen JWT; la firma lleva tenant, clave, operación, vencimiento y —para
   PUT— Content-Type y tamaño máximo, todos verificados. Si el request igual trae
   Authorization válido, el tenant del token tiene que coincidir con el de la firma.
-- `GET /storage/documentos/{documento_id}/url` es DescargarArchivoDeEvidencia (2.2).
+- `POST /storage/documentos/{documento_id}/url` es DescargarArchivoDeEvidencia (2.2).
 """
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ def confirmar_subida_de_evidencia(
     return ConfirmarSubidaResponse(**resultado)
 
 
-@router.get("/storage/documentos/{documento_id}/url", response_model=UrlDeDescargaResponse)
+@router.post("/storage/documentos/{documento_id}/url", response_model=UrlDeDescargaResponse)
 def url_de_descarga(documento_id: str, identidad: Identidad = Depends(identidad_actual)) -> UrlDeDescargaResponse:
     """DescargarArchivoDeEvidencia: responsable_legajos (todo), supervisor (su universo),
     técnico (solo su propio legajo). Audita en event_log y devuelve la URL efímera."""

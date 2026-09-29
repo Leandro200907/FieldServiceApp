@@ -10,8 +10,9 @@ Algoritmo (tabla `idempotency_keys`, migraciones 0007 + 0009):
   Tx A — RESERVA (transacción corta, commiteada):
     INSERT (tenant, actor, clave, 'en_proceso', fingerprint, reservation_token=T) ON CONFLICT
     DO NOTHING RETURNING. Si no insertó, la clave ya existe para este actor:
-      - fingerprint distinto → 409 `clave_idempotencia_reutilizada`. SIEMPRE, en cualquier
-        estado: una clave nunca cambia de fingerprint (ni por vencimiento ni por fallo).
+      - fingerprint distinto → 409 `clave_idempotencia_reutilizada` mientras la clave
+        está retenida. Al vencer `expira_en`, la fila se elimina antes de reservar y la
+        misma cadena vuelve a quedar disponible.
       - `completada` → REPLAY del resultado guardado.
       - `en_proceso` → se intenta la recuperación en Tx B.
 
@@ -98,6 +99,13 @@ def _conflicto_en_proceso(clave: str) -> Conflicto:
 
 def _reservar(s: Session, tenant_id: str, actor_id: str, clave: str, fingerprint: str, token: uuid.UUID) -> dict | None:
     """None → seguir a Tx B. dict → replay. Conflicto → fingerprint distinto."""
+    s.execute(
+        text(
+            "DELETE FROM modulo1.idempotency_keys "
+            "WHERE tenant_id = :t AND actor_id = :a AND idempotency_key = :k AND expira_en <= now()"
+        ),
+        {"t": tenant_id, "a": actor_id, "k": clave},
+    )
     insertada = s.execute(
         text(
             "INSERT INTO modulo1.idempotency_keys (tenant_id, actor_id, idempotency_key, estado, fingerprint, "

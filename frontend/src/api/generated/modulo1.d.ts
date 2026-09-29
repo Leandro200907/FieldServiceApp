@@ -838,10 +838,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Exportar Legajo */
-        get: operations["exportar_legajo_v1_consultas_exportar_legajo_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** Exportar Legajo */
+        post: operations["exportar_legajo_v1_consultas_exportar_legajo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1239,14 +1239,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Url De Descarga
          * @description DescargarArchivoDeEvidencia: responsable_legajos (todo), supervisor (su universo),
          *     técnico (solo su propio legajo). Audita en event_log y devuelve la URL efímera.
          */
-        get: operations["url_de_descarga_v1_storage_documentos__documento_id__url_get"];
-        put?: never;
-        post?: never;
+        post: operations["url_de_descarga_v1_storage_documentos__documento_id__url_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2509,6 +2509,8 @@ export interface components {
             tenant_id: string;
             /** Usuario Id */
             usuario_id: string;
+            /** Zona Horaria */
+            zona_horaria: string;
         };
         /**
          * ImportarLote
@@ -7490,7 +7492,7 @@ export interface operations {
             };
         };
     };
-    exportar_legajo_v1_consultas_exportar_legajo_get: {
+    exportar_legajo_v1_consultas_exportar_legajo_post: {
         parameters: {
             query: {
                 sujeto_id: string;
@@ -9228,7 +9230,7 @@ export interface operations {
             };
         };
     };
-    url_de_descarga_v1_storage_documentos__documento_id__url_get: {
+    url_de_descarga_v1_storage_documentos__documento_id__url_post: {
         parameters: {
             query?: never;
             header?: never;

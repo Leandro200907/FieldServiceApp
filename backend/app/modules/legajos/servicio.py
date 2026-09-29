@@ -21,6 +21,7 @@ from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
@@ -225,7 +226,7 @@ def alta_de_sujeto(s: Session, identidad: Identidad, body: e.AltaDeSujeto) -> di
     repetido = s.execute(
         text(
             "SELECT sujeto_id FROM modulo1.legajo WHERE tenant_id = :t AND tipo_sujeto = :tipo "
-            "AND identificador_natural = :ident AND dado_de_baja_en IS NULL"
+            "AND lower(btrim(identificador_natural)) = lower(btrim(:ident)) AND dado_de_baja_en IS NULL"
         ),
         {"t": t, "tipo": body.tipo_sujeto, "ident": body.identificador_natural},
     ).first()
@@ -243,13 +244,23 @@ def alta_de_sujeto(s: Session, identidad: Identidad, body: e.AltaDeSujeto) -> di
         raise Conflicto("Ya existe un legajo con ese sujeto_id", {"sujeto_id": sujeto_id})
 
     legajo_id = str(uuid.uuid4())
-    s.execute(
-        text(
-            "INSERT INTO modulo1.legajo (legajo_id, tenant_id, sujeto_id, tipo_sujeto, identificador_natural) "
-            "VALUES (:l, :t, :sj, :tipo, :ident)"
-        ),
-        {"l": legajo_id, "t": t, "sj": sujeto_id, "tipo": body.tipo_sujeto, "ident": body.identificador_natural},
-    )
+    try:
+        with s.begin_nested():
+            s.execute(
+                text(
+                    "INSERT INTO modulo1.legajo (legajo_id, tenant_id, sujeto_id, tipo_sujeto, identificador_natural) "
+                    "VALUES (:l, :t, :sj, :tipo, :ident)"
+                ),
+                {"l": legajo_id, "t": t, "sj": sujeto_id, "tipo": body.tipo_sujeto, "ident": body.identificador_natural},
+            )
+    except IntegrityError as exc:
+        restriccion = getattr(getattr(getattr(exc, "orig", None), "diag", None), "constraint_name", None)
+        if restriccion == "uq_legajo_identificador_activo":
+            raise Conflicto(
+                "Ya existe un legajo activo con ese identificador natural",
+                {"tipo_sujeto": body.tipo_sujeto, "identificador_natural": body.identificador_natural},
+            ) from None
+        raise
     registrar_evento(
         s, t, "LegajoCreado",
         {"legajo_id": legajo_id, "sujeto_id": sujeto_id, "tipo_sujeto": body.tipo_sujeto, "identificador_natural": body.identificador_natural},
@@ -838,4 +849,3 @@ def reasignar_supervisor(s: Session, identidad: Identidad, body: e.ReasignarSupe
         "asignacion_id": asignacion_id, "asignacion_cerrada_id": str(actual["asignacion_id"]), "sujeto_id": body.sujeto_id,
         "desde": desde, "hasta_anterior": hasta_anterior, "eventos": ["SupervisorReasignado"],
     }
-

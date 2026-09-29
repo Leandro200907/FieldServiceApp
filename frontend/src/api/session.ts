@@ -11,8 +11,8 @@ function tokens(value: unknown): Tokens {
   return value as Tokens;
 }
 function identity(value: unknown): Identity {
-  if (!object(value) || typeof value.tenant_id !== 'string' || typeof value.usuario_id !== 'string' || !Array.isArray(value.roles) || !value.roles.every(role => typeof role === 'string') || !(value.sujeto_id === null || typeof value.sujeto_id === 'string')) throw new Error('Invalid identity');
-  return { tenant_id: value.tenant_id, usuario_id: value.usuario_id, roles: [...value.roles], sujeto_id: value.sujeto_id };
+  if (!object(value) || typeof value.tenant_id !== 'string' || typeof value.usuario_id !== 'string' || !Array.isArray(value.roles) || !value.roles.every(role => typeof role === 'string') || !(value.sujeto_id === null || typeof value.sujeto_id === 'string') || typeof value.zona_horaria !== 'string' || !value.zona_horaria) throw new Error('Invalid identity');
+  return { tenant_id: value.tenant_id, usuario_id: value.usuario_id, roles: [...value.roles], sujeto_id: value.sujeto_id, zona_horaria: value.zona_horaria };
 }
 export function createSession(options: Options = {}) {
   const origin = options.baseUrl || (typeof location === 'undefined' ? 'http://localhost' : location.origin);
@@ -69,7 +69,14 @@ export function createSession(options: Options = {}) {
         const who = identity(await raw('/v1/auth/yo', undefined, next.access_token)); check(version);
         pair = next; deadline = expiresAt;
         publish({ status: 'authenticated', identity: who, error: null });
-      } catch (error) { if (version === generation) clear(safeFailure(error)); throw error; }
+      } catch (error) {
+        if (version === generation) {
+          const failure = safeFailure(error);
+          if (failure.status === 0) publish({ ...snapshot, status: 'authenticated', error: failure });
+          else clear(failure);
+        }
+        throw error;
+      }
     })();
     refreshFlight = pending;
     void pending.finally(() => { if (refreshFlight === pending) refreshFlight = null; }).catch(() => {});
@@ -104,7 +111,8 @@ export function createSession(options: Options = {}) {
     const current = pair; clear(); const version = generation;
     if (!current) return;
     try { await raw('/v1/auth/logout', { refresh_token: current.refresh_token }, current.access_token); }
-    catch { if (version === generation) publish({ status: 'anonymous', identity: null, error: { message: 'Sesión cerrada en este dispositivo; no se pudo confirmar la revocación.', code: 'LOGOUT_UNCONFIRMED', status: 0, requestId: crypto.randomUUID(), referenceSource: 'local' } }); }
+    catch { if (version === generation) publish({ status: 'anonymous', identity: null, error: { message: 'Sesión cerrada en este dispositivo; no se pudo confirmar la revocación.', code: 'LOGOUT_UNCONFIRMED', status: 0, requestId: crypto.randomUUID(), referenceSource: 'local', details: null } }); }
   }
   return { subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, getSnapshot: () => snapshot, login, logout, refresh, client: createClient<paths>({ baseUrl: url.origin, fetch: authorizedFetch }) };
 }
+

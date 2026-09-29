@@ -26,16 +26,19 @@ export const realPropuestasAccess: PropuestasAccess = {
       params: { query: { offset: query.offset, limit: query.limit } },
     }));
   },
-  async confirmarDocumento(documentoId: string) {
+  async confirmarDocumento(documentoId: string, idempotencyKey?: string) {
     const intent = createCommandIntent('/v1/comandos/confirmar_documento', { documento_id: documentoId });
     return unwrap(session.client.POST('/v1/comandos/confirmar_documento', {
-      body: { documento_id: documentoId }, headers: intent.headers,
+      body: { documento_id: documentoId },
+      headers: { ...intent.headers, ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     }));
   },
-  async rechazarPropuesta(documentoId: string, motivo?: string) {
+  async rechazarPropuesta(documentoId: string, motivo?: string, idempotencyKey?: string) {
     const intent = createCommandIntent('/v1/comandos/rechazar_propuesta', { documento_id: documentoId, motivo: motivo ?? null });
     return unwrap(session.client.POST('/v1/comandos/rechazar_propuesta', {
-      body: { documento_id: documentoId, motivo: motivo ?? null }, headers: intent.headers,
+      body: { documento_id: documentoId, motivo: motivo ?? null },
+      headers: { ...intent.headers, ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     }));
   },
 };
+

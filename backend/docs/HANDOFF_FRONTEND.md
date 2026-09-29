@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0023_documento_unificado`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0024_integridad_operativa`.
 
 Internamente existe una sola entidad `documento` para certificados, competencias e
 inducciones. La categoría la define el tipo de requisito. Las rutas históricas de
@@ -18,7 +18,7 @@ Prefijo de todas las rutas: `/v1`.
 - `POST /v1/comandos/registrar_estado_documento_operadora` registra, desde una planilla
   u otra fuente, si una versión fue exportada, enviada, aceptada o rechazada por una
   operadora. Conserva archivo, hoja y fila de origen.
-- `POST /v1/comandos/importar_planilla_operadoras?hoja=Presentaciones` recibe el XLSX
+- `POST /v1/comandos/importar_planilla_operadoras` recibe el XLSX; admite `hoja=Presentaciones`
   como cuerpo binario (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`).
   `X-Nombre-Archivo` conserva el nombre original e `Idempotency-Key` permite repetir el
   envío con seguridad. Devuelve resultados y errores por fila; una fila rechazada no
@@ -154,7 +154,7 @@ archivo crudo y el mismo `Content-Type` (sin JWT: la URL firmada es el permiso; 
 `expira_en_seg`; `max_bytes` se exige) → `confirmar_subida` (mide el archivo real; 422
 `archivo_ausente` / `archivo_vacio` / `archivo_demasiado_grande` si no cierra; encola la
 validación técnica asincrónica, ver más abajo). Descarga:
-`GET /v1/storage/documentos/{documento_id}/url` (roles responsable/supervisor/técnico, según
+`POST /v1/storage/documentos/{documento_id}/url` (roles responsable/supervisor/técnico, según
 alcance) → `{url}` efímera → `GET <url>` — **sólo si la validación técnica ya dio
 `valido`** (ver 409 `archivo_pendiente_de_validacion` / 422 `archivo_invalido` abajo).
 
@@ -238,7 +238,7 @@ override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_a
 | `GET /v1/publico/paquete/{token}` | **público (sin JWT)** | → estado de cumplimiento del sujeto (requisitos con `vigente` / `vencido` / `declarado_sin_verificar`), sin archivos; 404 si vencido/revocado/token inválido; 422 `rate_limit` |
 | `GET /v1/publico/paquete/{token}/qr.png` | **público** | PNG del QR que apunta al link |
 | `GET /v1/consultas/score_documental` | configuracion, responsable_legajos, supervisor (alcance) | → `{score, exigidos, cubiertos, sujetos, sujetos_completos, por_tipo_sujeto{}, peores[], historial[]}` |
-| `GET /v1/consultas/exportar_legajo` | responsable_legajos | `sujeto_id`, `formato=json\|csv` → descarga (`Content-Disposition`), deja traza `LegajoExportado` |
+| `POST /v1/consultas/exportar_legajo` | responsable_legajos | `sujeto_id`, `formato=json\|csv` → descarga (`Content-Disposition`), deja traza `LegajoExportado` |
 | `POST /v1/comandos/configurar_drive` | configuracion | `{habilitado, carpeta_id, intervalo_horas?}` (intervalo → escaneo programado por el worker) |
 | `POST /v1/comandos/escanear_drive` | responsable_legajos, configuracion | `{motivo?}` → `{vistos, nuevos, importados, bandeja, ya_vistos}` |
 | `POST /v1/comandos/resolver_archivo_drive` | responsable_legajos | `{archivo_drive_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta}` → importa desde la bandeja |
@@ -357,7 +357,7 @@ independiente del alcance:
   custodia (otro supervisor con alcance real también puede).
 
 ## 5. Storage
-- `GET /v1/storage/documentos/{documento_id}/url` — URL firmada de descarga (efímera; no persistirla).
+- `POST /v1/storage/documentos/{documento_id}/url` — URL firmada de descarga (efímera; no persistirla).
 - `PUT /v1/storage/{firma}` — subida con URL firmada (sin JWT; `Content-Type` y tamaño verificados; si va un Bearer, su tenant debe coincidir).
 - `GET /v1/storage/{firma}` — descarga con URL firmada.
 
@@ -401,4 +401,3 @@ corrió), `archivo_invalido` (422: la validación técnica dio inválido), `usar
   `OutboxEstancado`, a `configuracion`, vía el mismo canal que cualquier otra alerta) si un
   evento se queda estancado.
 - Storage: sólo backend local (`STORAGE_BACKEND=local`); el contrato ya es el de un bucket.
-

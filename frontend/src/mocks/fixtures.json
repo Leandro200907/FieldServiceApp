@@ -40,7 +40,8 @@
         "roles": [
           "configuracion"
         ],
-        "sujeto_id": null
+        "sujeto_id": null,
+        "zona_horaria": "America/Argentina/Buenos_Aires"
       }
     },
     {
@@ -55,7 +56,8 @@
         "roles": [
           "responsable_legajos"
         ],
-        "sujeto_id": null
+        "sujeto_id": null,
+        "zona_horaria": "America/Argentina/Buenos_Aires"
       }
     },
     {
@@ -70,7 +72,8 @@
         "roles": [
           "supervisor"
         ],
-        "sujeto_id": null
+        "sujeto_id": null,
+        "zona_horaria": "America/Argentina/Buenos_Aires"
       }
     },
     {
@@ -85,7 +88,8 @@
         "roles": [
           "tecnico"
         ],
-        "sujeto_id": "SYNTHETIC_PERSON"
+        "sujeto_id": "SYNTHETIC_PERSON",
+        "zona_horaria": "America/Argentina/Buenos_Aires"
       }
     },
     {
@@ -120,3 +124,4 @@
     }
   ]
 }
+

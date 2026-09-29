@@ -76,7 +76,9 @@ def drenar_outbox(session: Session, tenant_id: str, publicador: Publicador, lote
     """Publica hasta `lote` eventos pendientes y disponibles (backoff vencido, no
     estancados) del tenant en sesión. Devuelve cuántos quedaron marcados como
     procesados (no cuenta fallidos ni estancados — para eso ver `estancados_de`)."""
-    ahora = ahora or ahora_utc()
+    # Los eventos normales nacen con `now()` de PostgreSQL; comparar contra el mismo
+    # reloj evita que una pequeña deriva del host los haga parecer futuros.
+    ahora = ahora or session.execute(text("SELECT now()")).scalar_one()
     filas = session.execute(
         text(
             """

@@ -109,6 +109,22 @@ def test_misma_clave_con_body_o_ruta_distintos_es_conflicto(tenant_de_prueba):
         assert e.value.codigo == "clave_idempotencia_reutilizada"
     assert ejecuciones["n"] == 1
 
+
+def test_clave_completada_vencida_se_puede_reutilizar(tenant_de_prueba):
+    t = tenant_de_prueba.tenant_id
+    efecto, ejecuciones = _efecto_instrumentado(t)
+    _run(t, "k-vencida", efecto)
+    with tenant_session(t) as s:
+        s.execute(text(
+            "UPDATE modulo1.idempotency_keys SET expira_en = now() - interval '1 second' "
+            "WHERE actor_id = :a AND idempotency_key = 'k-vencida'"
+        ), {"a": ACTOR})
+
+    nuevo_fp = fingerprint_de("POST", "/otra", {"a": 2})
+    assert _run(t, "k-vencida", efecto, fp=nuevo_fp)["ok"] is True
+    assert ejecuciones["n"] == 2
+    assert _fila(t, "k-vencida")["fingerprint"] == nuevo_fp
+
 def test_2_clave_vencida_o_fallida_con_fingerprint_distinto_es_409(tenant_de_prueba):
     """Ni el vencimiento de la reserva ni el fallo del efecto permiten asociar la clave a
     otra operación: el fingerprint original se conserva."""

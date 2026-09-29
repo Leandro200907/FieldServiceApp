@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSession } from '../src/api/session';
 import { parseApiError } from '../src/api/errors';
 import { createCommandIntent } from '../src/api/idempotency';
-const who = { tenant_id: 'tenant', usuario_id: 'user', roles: ['tecnico'], sujeto_id: null };
+const who = { tenant_id: 'tenant', usuario_id: 'user', roles: ['tecnico'], sujeto_id: null, zona_horaria: 'America/Argentina/Buenos_Aires' };
 const pair = { access_token: 'access', refresh_token: 'refresh', expires_in: 60, token_type: 'bearer' };
 const reply = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 const login = { tenant_slug: 'tenant', email: 'user@example.com', password: 'secret' };
@@ -56,6 +56,12 @@ it('parses malformed errors safely and distinguishes local references', () => {
   response.headers.set('X-Request-ID', 'header-id');
   expect(parseApiError(null, response, 'local-id').requestId).toBe('header-id');
 });
+it('shows the business detail returned by a 422', () => {
+  const response = reply({}, 422);
+  const parsed = parseApiError({ error: { codigo: 'regla_de_dominio', mensaje: 'No se puede confirmar', detalles: [{ mensaje: 'La fecha de vigencia es inconsistente' }] } }, response, 'local-id');
+  expect(parsed.message).toContain('La fecha de vigencia es inconsistente');
+  expect(parsed.details).toEqual([{ mensaje: 'La fecha de vigencia es inconsistente' }]);
+});
 it('keeps intent payload and key immutable across retries', () => {
   const body = { sujeto_id: 'real-selected-id' };
   const intent = createCommandIntent('/v1/comandos/baja_de_sujeto', body);
@@ -76,7 +82,8 @@ it('does not retry a consumable refresh after network uncertainty', async () => 
   const { session, mock, advance } = fixture(); await session.login(login); advance();
   mock.mockRejectedValueOnce(new TypeError('Network failure'));
   await expect(session.client.GET('/v1/auth/yo')).rejects.toThrow();
-  expect(mock).toHaveBeenCalledTimes(3); expect(session.getSnapshot().status).toBe('anonymous');
+  expect(mock).toHaveBeenCalledTimes(3); expect(session.getSnapshot().status).toBe('authenticated');
+  expect(session.getSnapshot().error?.code).toBe('TRANSPORT_ERROR');
 });
 it('blocks auth commands through the generic bearer client', async () => {
   const { session, mock } = fixture(); await session.login(login);
@@ -100,3 +107,4 @@ it('keeps signed storage outside the bearer client', async () => {
   await expect(session.client.GET('/v1/storage/{firma}', { params: { path: { firma: 'signed-value' } } })).rejects.toThrow('dedicated transport');
   expect(mock).toHaveBeenCalledTimes(2);
 });
+

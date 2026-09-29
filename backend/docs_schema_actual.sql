@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0023_documento_unificado
+-- head: 0024_integridad_operativa
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -11,8 +11,23 @@ CREATE SCHEMA plataforma;
 -- Name: listar_tenants(); Type: FUNCTION; Schema: modulo1; Owner: -
 CREATE FUNCTION modulo1.listar_tenants() RETURNS SETOF uuid
     LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'modulo1'
     AS $$
             SELECT tenant_id FROM modulo1.tenant ORDER BY creado_en, tenant_id
+        $$;
+-- Name: marcar_cambio_vigencia_documento(); Type: FUNCTION; Schema: modulo1; Owner: -
+CREATE FUNCTION modulo1.marcar_cambio_vigencia_documento() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'pg_catalog', 'modulo1'
+    AS $$
+        BEGIN
+            IF NEW.estado_version = 'vigente' THEN
+                NEW.dejo_de_ser_vigente_en := NULL;
+            ELSIF OLD.estado_version IS DISTINCT FROM NEW.estado_version THEN
+                NEW.dejo_de_ser_vigente_en := now();
+            END IF;
+            RETURN NEW;
+        END
         $$;
 -- Name: resolver_tenant_por_paquete(text); Type: FUNCTION; Schema: modulo1; Owner: -
 CREATE FUNCTION modulo1.resolver_tenant_por_paquete(p_token_hash text) RETURNS uuid
@@ -24,6 +39,7 @@ CREATE FUNCTION modulo1.resolver_tenant_por_paquete(p_token_hash text) RETURNS u
 -- Name: resolver_tenant_por_slug(text); Type: FUNCTION; Schema: modulo1; Owner: -
 CREATE FUNCTION modulo1.resolver_tenant_por_slug(p_slug text) RETURNS uuid
     LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'modulo1'
     AS $$
             SELECT tenant_id FROM modulo1.tenant_slug WHERE slug = p_slug
         $$;
@@ -44,6 +60,7 @@ CREATE FUNCTION modulo1.sincronizar_paquete_token() RETURNS trigger
 -- Name: sincronizar_tenant_slug(); Type: FUNCTION; Schema: modulo1; Owner: -
 CREATE FUNCTION modulo1.sincronizar_tenant_slug() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'modulo1'
     AS $$
         BEGIN
             IF TG_OP IN ('UPDATE', 'DELETE') THEN
@@ -344,6 +361,7 @@ CREATE TABLE modulo1.documento (
     archivo_validacion_token uuid,
     archivo_scan_estado text,
     locacion_id uuid,
+    dejo_de_ser_vigente_en timestamp with time zone,
     CONSTRAINT ck_archivo_clave_del_documento CHECK (((clave_storage IS NULL) OR (clave_storage ~~ ((((tenant_id)::text || '/'::text) || (documento_id)::text) || '/%'::text)))),
     CONSTRAINT ck_archivo_clave_segun_estado CHECK ((((archivo_estado = ANY (ARRAY['sin_archivo'::text, 'purgado'::text])) AND (clave_storage IS NULL)) OR ((archivo_estado <> ALL (ARRAY['sin_archivo'::text, 'purgado'::text])) AND (clave_storage IS NOT NULL)))),
     CONSTRAINT ck_archivo_confirmado_con_checksum CHECK (((archivo_estado <> 'confirmado'::text) OR ((checksum_archivo IS NOT NULL) AND (archivo_bytes IS NOT NULL)))),
@@ -1197,12 +1215,16 @@ CREATE UNIQUE INDEX uq_documento_vigente ON modulo1.documento USING btree (tenan
 CREATE UNIQUE INDEX uq_excepcion_activa ON modulo1.excepcion USING btree (tenant_id, sujeto_id, requisito_definicion_id, commitment_id) WHERE (estado = 'otorgada'::text);
 -- Name: uq_latido_proceso; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_latido_proceso ON modulo1.latido_proceso USING btree (nombre, COALESCE(tenant_id, '00000000-0000-0000-0000-000000000000'::uuid));
+-- Name: uq_legajo_identificador_activo; Type: INDEX; Schema: modulo1; Owner: -
+CREATE UNIQUE INDEX uq_legajo_identificador_activo ON modulo1.legajo USING btree (tenant_id, tipo_sujeto, lower(btrim(identificador_natural))) WHERE (dado_de_baja_en IS NULL);
 -- Name: uq_operadora_documental_nombre; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_operadora_documental_nombre ON modulo1.operadora_documental USING btree (tenant_id, lower(nombre));
 -- Name: uq_periodo_custodia_vigente; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_periodo_custodia_vigente ON modulo1.periodo_custodia USING btree (custodia_id) WHERE (estado = 'vigente'::text);
 -- Name: uq_tenant_slug; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_tenant_slug ON modulo1.tenant USING btree (slug);
+-- Name: documento trg_documento_cambio_vigencia; Type: TRIGGER; Schema: modulo1; Owner: -
+CREATE TRIGGER trg_documento_cambio_vigencia BEFORE UPDATE OF estado_version ON modulo1.documento FOR EACH ROW EXECUTE FUNCTION modulo1.marcar_cambio_vigencia_documento();
 -- Name: paquete_entrega trg_paquete_token; Type: TRIGGER; Schema: modulo1; Owner: -
 CREATE TRIGGER trg_paquete_token AFTER INSERT OR DELETE ON modulo1.paquete_entrega FOR EACH ROW EXECUTE FUNCTION modulo1.sincronizar_paquete_token();
 -- Name: tenant trg_tenant_slug; Type: TRIGGER; Schema: modulo1; Owner: -
@@ -1669,4 +1691,3 @@ ALTER TABLE modulo1.usuario ENABLE ROW LEVEL SECURITY;
 -- Name: usuario usuario_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY usuario_aislamiento ON modulo1.usuario USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- PostgreSQL database dump complete
-

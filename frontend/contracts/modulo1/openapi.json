@@ -3568,13 +3568,18 @@
           "usuario_id": {
             "title": "Usuario Id",
             "type": "string"
+          },
+          "zona_horaria": {
+            "title": "Zona Horaria",
+            "type": "string"
           }
         },
         "required": [
           "tenant_id",
           "usuario_id",
           "roles",
-          "sujeto_id"
+          "sujeto_id",
+          "zona_horaria"
         ],
         "title": "IdentidadResponse",
         "type": "object"
@@ -6779,7 +6784,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0023_documento_unificado"
+    "x-migracion-head": "0024_integridad_operativa"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -12466,8 +12471,8 @@
       }
     },
     "/v1/consultas/exportar_legajo": {
-      "get": {
-        "operationId": "exportar_legajo_v1_consultas_exportar_legajo_get",
+      "post": {
+        "operationId": "exportar_legajo_v1_consultas_exportar_legajo_post",
         "parameters": [
           {
             "in": "query",
@@ -15132,9 +15137,9 @@
       }
     },
     "/v1/storage/documentos/{documento_id}/url": {
-      "get": {
+      "post": {
         "description": "DescargarArchivoDeEvidencia: responsable_legajos (todo), supervisor (su universo),\ntécnico (solo su propio legajo). Audita en event_log y devuelve la URL efímera.",
-        "operationId": "url_de_descarga_v1_storage_documentos__documento_id__url_get",
+        "operationId": "url_de_descarga_v1_storage_documentos__documento_id__url_post",
         "parameters": [
           {
             "in": "path",

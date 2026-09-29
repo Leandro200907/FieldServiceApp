@@ -53,7 +53,7 @@ function Login() {
 function Profile() {
   const { identity, status, error } = useSession();
   if (!identity) return null;
-  return <><section className="panel"><h3>Identidad de la sesión</h3><dl className="identity-list"><dt>Empresa / tenant</dt><dd>{identity.tenant_id}</dd><dt>Usuario</dt><dd>{identity.usuario_id}</dd><dt>Roles</dt><dd>{identity.roles.map(role => roleLabels[role as Role] || 'Rol no reconocido').join(' · ') || 'Sin roles disponibles'}</dd><dt>Sujeto asociado</dt><dd>{identity.sujeto_id || 'Sin legajo asociado'}</dd></dl><p className="muted">Información recibida de /auth/yo. Este panel es de consulta.</p><button className="button button-secondary" disabled={status === 'refreshing'} onClick={() => { void session.refresh().catch(() => {}); }}>{status === 'refreshing' ? 'Renovando sesión…' : 'Renovar sesión y actualizar permisos'}</button></section>{error && <ErrorState message={error.message} requestId={error.referenceSource === 'server' ? error.requestId : undefined} />}</>;
+  return <><section className="panel"><h3>Identidad de la sesión</h3><dl className="identity-list"><dt>Empresa / tenant</dt><dd>{identity.tenant_id}</dd><dt>Usuario</dt><dd>{identity.usuario_id}</dd><dt>Roles</dt><dd>{identity.roles.map(role => roleLabels[role as Role] || 'Rol no reconocido').join(' · ') || 'Sin roles disponibles'}</dd><dt>Sujeto asociado</dt><dd>{identity.sujeto_id || 'Sin legajo asociado'}</dd><dt>Zona horaria</dt><dd>{identity.zona_horaria}</dd></dl><p className="muted">Información recibida de /auth/yo. Este panel es de consulta.</p><button className="button button-secondary" disabled={status === 'refreshing'} onClick={() => { void session.refresh().catch(() => {}); }}>{status === 'refreshing' ? 'Renovando sesión…' : 'Renovar sesión y actualizar permisos'}</button></section>{error && <ErrorState message={error.message} requestId={error.referenceSource === 'server' ? error.requestId : undefined} />}</>;
 }
 function Workspace() {
   const snapshot = useSession();
@@ -82,5 +82,4 @@ function Workspace() {
 export function App() {
   return <><a className="skip-link" href="#main-content">Saltar al contenido</a><Routes><Route path="/login" element={<Login />} /><Route path="/diseno" element={<DesignCatalog />} /><Route path="/" element={<Navigate to="/login" replace />} /><Route path="*" element={<Workspace />} /></Routes></>;
 }
-
 

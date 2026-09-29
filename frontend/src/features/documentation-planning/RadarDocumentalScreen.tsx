@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiFailure } from '../../api';
+import { ApiFailure, session } from '../../api';
 import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import type { DetalleOcRadarResponse, ItemRadar, RadarState } from './contracts';
 import { backlogAccess, isBacklogIntegrated } from './access';
@@ -18,6 +18,11 @@ const stateLabels: Record<RadarState, string> = {
 
 function displayDate(value: string | null | undefined) {
   return value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)) : 'Sin fecha';
+}
+
+function displayInstant(value: string) {
+  const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone }).format(new Date(value));
 }
 
 function summaryLabel(row: ItemRadar) {
@@ -120,7 +125,7 @@ export function RadarDocumentalScreen({ roles }: { roles: readonly string[] }) {
     </section>
 
     {radar.loading ? <LoadingState /> : radar.error ? <ErrorState message={radar.error.message} requestId={radar.error instanceof ApiFailure && radar.error.detail.referenceSource === 'server' ? radar.error.detail.requestId : undefined} /> : <>
-      <section className="panel projection-summary"><div><p className="eyebrow">Ventana observada</p><strong>{displayDate(radar.data?.desde)} — {displayDate(radar.data?.hasta)}</strong></div><div><p className="eyebrow">OC visibles</p><strong>{radar.data?.total}</strong></div><div><p className="eyebrow">Calculado</p><strong>{radar.data ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(radar.data.calculado_en)) : '—'}</strong></div></section>
+      <section className="panel projection-summary"><div><p className="eyebrow">Ventana observada</p><strong>{displayDate(radar.data?.desde)} — {displayDate(radar.data?.hasta)}</strong></div><div><p className="eyebrow">OC visibles</p><strong>{radar.data?.total}</strong></div><div><p className="eyebrow">Calculado</p><strong>{radar.data ? displayInstant(radar.data.calculado_en) : '—'}</strong></div></section>
       <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>OC</th><th>Ejecución prevista</th><th>Contexto documental</th><th>Estado</th><th>Primera señal</th><th>Resumen informativo</th><th></th></tr></thead><tbody>
         {radar.data?.items.map(row => <tr key={row.oc_id} className={selected === row.oc_id ? 'selected-row' : ''}>
           <td><strong>{row.clave_origen}</strong><small>{row.referencia || row.oc_id}</small></td>

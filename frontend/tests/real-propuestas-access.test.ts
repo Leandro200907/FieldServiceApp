@@ -40,6 +40,12 @@ describe('realPropuestasAccess', () => {
     expect(options?.headers).toMatchObject({ 'Idempotency-Key': expect.any(String) });
   });
 
+  it('reutiliza la Idempotency-Key entregada por la fila al reintentar', async () => {
+    postMock.mockResolvedValueOnce(okResponse({ documento_id: 'doc-1', excepciones_regularizadas: [], eventos: [] }));
+    await realPropuestasAccess.confirmarDocumento('doc-1', 'clave-estable-del-reintento');
+    expect(postMock.mock.calls[0][1]?.headers).toMatchObject({ 'Idempotency-Key': 'clave-estable-del-reintento' });
+  });
+
   it('rechazarPropuesta llama POST /v1/comandos/rechazar_propuesta con motivo e Idempotency-Key', async () => {
     postMock.mockResolvedValueOnce(okResponse({ documento_id: 'doc-2', restaurado_documento_id: null, eventos: ['propuesta_rechazada'] }));
     await realPropuestasAccess.rechazarPropuesta('doc-2', 'sin evidencia adjunta');
@@ -54,5 +60,4 @@ describe('realPropuestasAccess', () => {
     await expect(realPropuestasAccess.confirmarDocumento('doc-inexistente')).rejects.toMatchObject({ detail: { status: 404 } });
   });
 });
-
 

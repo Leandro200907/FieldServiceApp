@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.errores import ErrorDeDominio, NoAutenticado
+from app.api.errores import DemasiadasSolicitudes, NoAutenticado
 from app.auth import jwt as tokens
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
@@ -77,6 +77,7 @@ class IdentidadResponse(BaseModel):
     usuario_id: str
     roles: list[str]
     sujeto_id: str | None
+    zona_horaria: str
 
 
 class LogoutResponse(BaseModel):
@@ -91,7 +92,7 @@ def login(body: LoginRequest, request: Request) -> ParDeTokens:
     origen = origen_real(request.client.host if request.client else None,
                          request.headers.get("x-forwarded-for"), settings.proxies_confiables)
     if not _limiter_login.permitir(f"origen:{origen}"):
-        raise ErrorDeDominio("Demasiados intentos; reintentar en un minuto", codigo="rate_limit")
+        raise DemasiadasSolicitudes("Demasiados intentos; reintentar en un minuto")
     with platform_session() as s:
         tenant_id = s.execute(
             text("SELECT modulo1.resolver_tenant_por_slug(:slug)"), {"slug": body.tenant_slug}
@@ -135,11 +136,17 @@ def logout(body: LogoutRequest, identidad: Identidad = Depends(identidad_actual)
 
 @router.get("/yo", response_model=IdentidadResponse)
 def yo(identidad: Identidad = Depends(identidad_actual)) -> IdentidadResponse:
+    with tenant_session(identidad.tenant_id) as s:
+        zona_horaria = s.execute(
+            text("SELECT zona_horaria FROM modulo1.tenant WHERE tenant_id = :t"),
+            {"t": identidad.tenant_id},
+        ).scalar_one()
     return IdentidadResponse(
         tenant_id=identidad.tenant_id,
         usuario_id=identidad.usuario_id,
         roles=sorted(r.value for r in identidad.roles),
         sujeto_id=identidad.sujeto_id,
+        zona_horaria=zona_horaria,
     )
 
 

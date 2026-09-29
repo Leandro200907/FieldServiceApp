@@ -68,7 +68,7 @@ def test_alta_carga_y_sucesion_un_solo_vigente(cliente_api, tenant_de_prueba):
     sujeto = alta["sujeto_id"]
 
     # identificador_natural único por tenant+tipo (mismo tipo → 409; otro tipo → ok)
-    repetido = _post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", {"tipo_sujeto": "persona", "identificador_natural": "DNI 30111222"})
+    repetido = _post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", {"tipo_sujeto": "persona", "identificador_natural": "  dni 30111222  "})
     assert repetido.status_code == 409 and repetido.json()["error"]["codigo"] == "conflicto"
     _ok(_post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", {"tipo_sujeto": "vehiculo", "identificador_natural": "DNI 30111222"}))
 
@@ -341,4 +341,3 @@ def test_idempotency_key_repite_respuesta_sin_duplicar(cliente_api, tenant_de_pr
     assert _post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", body, clave="alta-equipo-2").status_code == 409
 
 # --------------------------------------------------------------------------- supervisor
-
