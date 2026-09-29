@@ -28,6 +28,7 @@ _COLUMNAS = {
     "tipo documento": "tipo_documento",
     "tipo de documento": "tipo_documento",
     "requisito id": "requisito_id",
+    "documento id": "documento_id",
     "fecha emision": "fecha_emision",
     "fecha de emision": "fecha_emision",
     "fecha vencimiento": "fecha_vencimiento",
@@ -115,6 +116,85 @@ def _error_fila(numero: int | None, codigo: str, mensaje: str, **detalles: objec
     return {"fila": numero, "codigo": codigo, "mensaje": mensaje, "detalles": detalles or None}
 
 
+def _parsear_fila_xml(fila: ET.Element, compartidos: list[str], errores: list[dict]) -> tuple[int, dict[int, object]] | None:
+    r_attr = fila.attrib.get("r", "0")
+    try:
+        numero = int(r_attr)
+    except ValueError:
+        errores.append(_error_fila(None, "fila_invalida", f"Número de fila inválido: {r_attr!r}", r=r_attr))
+        return None
+    try:
+        valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
+    except (IndexError, ValueError) as exc:
+        errores.append(_error_fila(numero, "celda_invalida", "Valor de celda inválido", causa=type(exc).__name__))
+        return None
+    except OverflowError:
+        errores.append(_error_fila(numero, "celda_invalida", "Valor numérico fuera de rango"))
+        return None
+    return numero, valores
+
+
+def _registro_desde_valores(
+    numero: int,
+    valores: dict[int, object],
+    columnas: dict[int, str],
+    errores: list[dict],
+) -> dict | None:
+    registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
+    if not any(registro.get(c) not in (None, "") for c in _REQUERIDAS):
+        return None
+    registro["fila"] = numero
+    for campo in ("fecha_emision", "fecha_vencimiento"):
+        try:
+            registro[campo] = _fecha(registro.get(campo), con_hora=False)
+        except (ErrorDeDominio, OverflowError, ValueError):
+            errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+            return None
+    for campo in ("fecha_exportacion", "fecha_presentacion", "fecha_respuesta"):
+        try:
+            registro[campo] = _fecha(registro.get(campo), con_hora=True)
+        except (ErrorDeDominio, OverflowError, ValueError):
+            errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+            return None
+    return registro
+
+
+def _leer_filas_hoja(xml_bytes: bytes, compartidos: list[str], *, hoja: str) -> tuple[list[dict], list[dict]]:
+    encabezado: tuple[int, dict[int, str]] | None = None
+    resultado: list[dict] = []
+    errores: list[dict] = []
+    source = BytesIO(xml_bytes)
+    for _, elem in ET.iterparse(source, events=("end",)):
+        if elem.tag != f"{_NS}row":
+            continue
+        parseada = _parsear_fila_xml(elem, compartidos, errores)
+        elem.clear()
+        if parseada is None:
+            continue
+        numero, valores = parseada
+        if encabezado is None and numero <= 20:
+            mapeo = {col: _COLUMNAS[n] for col, valor in valores.items() if (n := _normalizar(valor)) in _COLUMNAS}
+            if _REQUERIDAS <= set(mapeo.values()):
+                encabezado = numero, mapeo
+            continue
+        if encabezado is None:
+            continue
+        fila_encabezado, columnas = encabezado
+        if numero <= fila_encabezado:
+            continue
+        registro = _registro_desde_valores(numero, valores, columnas, errores)
+        if registro is None:
+            continue
+        if len(resultado) >= 1000:
+            raise ErrorDeDominio("La planilla supera el máximo de 1000 filas")
+        resultado.append(registro)
+    if encabezado is None:
+        raise ErrorDeDominio("No se encontraron las columnas obligatorias de la plantilla")
+    if not resultado and not errores:
+        raise ErrorDeDominio("La hoja no contiene filas para importar", {"hoja": hoja})
+    return resultado, errores
+
+
 def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> tuple[list[dict], list[dict]]:
     if not contenido:
         raise ErrorDeDominio("La planilla está vacía")
@@ -137,70 +217,9 @@ def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> tuple[li
                 raise ErrorDeDominio("No existe la hoja requerida", {"hoja": hoja})
             destino = destinos[hoja_nodo.attrib[f"{_REL_NS}id"]].lstrip("/")
             ruta = destino if destino.startswith("xl/") else f"xl/{destino}"
-            raiz = ET.fromstring(_leer_parte_zip(libro, ruta))
+            hoja_xml = _leer_parte_zip(libro, ruta)
     except (BadZipFile, KeyError, ET.ParseError) as exc:
         raise ErrorDeDominio("El archivo no es una planilla XLSX válida") from exc
 
-    filas: list[tuple[int, dict[int, object]]] = []
-    errores: list[dict] = []
-    for fila in raiz.iter(f"{_NS}row"):
-        r_attr = fila.attrib.get("r", "0")
-        try:
-            numero = int(r_attr)
-        except ValueError:
-            errores.append(_error_fila(None, "fila_invalida", f"Número de fila inválido: {r_attr!r}", r=r_attr))
-            continue
-        try:
-            valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
-        except (IndexError, ValueError) as exc:
-            errores.append(_error_fila(numero, "celda_invalida", "Valor de celda inválido", causa=type(exc).__name__))
-            continue
-        except OverflowError:
-            errores.append(_error_fila(numero, "celda_invalida", "Valor numérico fuera de rango"))
-            continue
-        filas.append((numero, valores))
-
-    encabezado: tuple[int, dict[int, str]] | None = None
-    for numero, valores in filas[:20]:
-        mapeo = {col: _COLUMNAS[n] for col, valor in valores.items() if (n := _normalizar(valor)) in _COLUMNAS}
-        if _REQUERIDAS <= set(mapeo.values()):
-            encabezado = numero, mapeo
-            break
-    if encabezado is None:
-        raise ErrorDeDominio("No se encontraron las columnas obligatorias de la plantilla")
-
-    fila_encabezado, columnas = encabezado
-    resultado: list[dict] = []
-    for numero, valores in filas:
-        if numero <= fila_encabezado:
-            continue
-        registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
-        if not any(registro.get(c) not in (None, "") for c in _REQUERIDAS):
-            continue
-        registro["fila"] = numero
-        fila_invalida = False
-        for campo in ("fecha_emision", "fecha_vencimiento"):
-            try:
-                registro[campo] = _fecha(registro.get(campo), con_hora=False)
-            except (ErrorDeDominio, OverflowError, ValueError):
-                errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
-                fila_invalida = True
-                break
-        if fila_invalida:
-            continue
-        for campo in ("fecha_exportacion", "fecha_presentacion", "fecha_respuesta"):
-            try:
-                registro[campo] = _fecha(registro.get(campo), con_hora=True)
-            except (ErrorDeDominio, OverflowError, ValueError):
-                errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
-                fila_invalida = True
-                break
-        if fila_invalida:
-            continue
-        resultado.append(registro)
-    if not resultado and not errores:
-        raise ErrorDeDominio("La hoja no contiene filas para importar", {"hoja": hoja})
-    if len(resultado) > 1000:
-        raise ErrorDeDominio("La planilla supera el máximo de 1000 filas")
-    return resultado, errores
+    return _leer_filas_hoja(hoja_xml, compartidos, hoja=hoja)
 
