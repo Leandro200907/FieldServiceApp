@@ -1953,6 +1953,8 @@ export interface components {
              * Format: date
              */
             vigente_desde: string;
+            /** Vigente Hasta */
+            vigente_hasta?: string | null;
         };
         /** CopiarMatrizGlobalResponse */
         CopiarMatrizGlobalResponse: {
@@ -3148,6 +3150,8 @@ export interface components {
              * Format: date
              */
             vigente_desde: string;
+            /** Vigente Hasta */
+            vigente_hasta?: string | null;
         };
         /** PublicarVersionDeMatrizResponse */
         PublicarVersionDeMatrizResponse: {

@@ -79,6 +79,10 @@ def handler_notificaciones(session: Session, job: Job, contexto: dict[str, Any])
 
 
 def handler_drenaje_outbox(session: Session, job: Job, contexto: dict[str, Any]) -> None:
+    if not contexto.get("drenar_outbox_habilitado", True):
+        raise JobNoProcesable(
+            "outbox deshabilitado: el job drenaje_outbox no publica ni marca eventos como procesados"
+        )
     if job.tenant_id:
         drenar_outbox(session, job.tenant_id, contexto["publicador"])
 
@@ -243,8 +247,11 @@ def correr_una_vuelta(
     drenar_outbox_habilitado: bool = True,
 ) -> dict[str, Any]:
     handlers = handlers_completos(handlers)
-    contexto = {"publicador": publicador, "storage": storage, "canal_notificaciones": canal_notificaciones,
-                "proveedor_drive": proveedor_drive, "canales": canales}
+    contexto = {
+        "publicador": publicador, "storage": storage, "canal_notificaciones": canal_notificaciones,
+        "proveedor_drive": proveedor_drive, "canales": canales,
+        "drenar_outbox_habilitado": drenar_outbox_habilitado,
+    }
     def instante() -> datetime:
         return ahora if ahora is not None else ahora_utc()
 

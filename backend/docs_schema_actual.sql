@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0024_integridad_operativa
+-- head: 0026_lote_por_entidad
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -339,7 +339,7 @@ CREATE TABLE modulo1.documento (
     requisito_definicion_id uuid,
     numero text,
     vigente_desde date NOT NULL,
-    vigente_hasta date,
+    vigente_hasta date NOT NULL,
     estado_confirmacion text DEFAULT 'declarado'::text NOT NULL,
     estado_version text DEFAULT 'vigente'::text NOT NULL,
     origen_propuesta boolean DEFAULT false NOT NULL,
@@ -349,6 +349,7 @@ CREATE TABLE modulo1.documento (
     clave_storage text,
     checksum_archivo text,
     lote_id uuid,
+    lote_entidad text,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     sucede_a uuid,
     archivo_estado text DEFAULT 'sin_archivo'::text NOT NULL,
@@ -373,6 +374,7 @@ CREATE TABLE modulo1.documento (
     CONSTRAINT documento_confianza_extraccion_check CHECK ((confianza_extraccion = ANY (ARRAY['alta'::text, 'media'::text, 'baja'::text]))),
     CONSTRAINT documento_estado_confirmacion_check CHECK ((estado_confirmacion = ANY (ARRAY['declarado'::text, 'verificado'::text, 'confirmado_en_fuente'::text]))),
     CONSTRAINT documento_estado_version_check CHECK ((estado_version = ANY (ARRAY['vigente'::text, 'sucedida'::text, 'revertida_por_lote'::text, 'rechazada'::text]))),
+    CONSTRAINT documento_lote_entidad_check CHECK (((lote_entidad IS NULL) OR (lote_entidad = 'legajos'::text))),
     CONSTRAINT documento_origen_check CHECK ((origen = ANY (ARRAY['planilla'::text, 'carga_manual'::text, 'drive'::text])))
 );
 ALTER TABLE ONLY modulo1.documento FORCE ROW LEVEL SECURITY;
@@ -645,9 +647,11 @@ CREATE TABLE modulo1.oc (
     vigencia_hasta date NOT NULL,
     estado text DEFAULT 'activo'::text NOT NULL,
     lote_id uuid,
+    lote_entidad text,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT ck_vigencia_oc CHECK ((vigencia_desde <= vigencia_hasta)),
+    CONSTRAINT oc_lote_entidad_check CHECK (((lote_entidad IS NULL) OR (lote_entidad = 'oc'::text))),
     CONSTRAINT oc_estado_check CHECK ((estado = ANY (ARRAY['activo'::text, 'cancelado'::text])))
 );
 ALTER TABLE ONLY modulo1.oc FORCE ROW LEVEL SECURITY;
@@ -952,7 +956,7 @@ ALTER TABLE ONLY modulo1.linea_requisito
     ADD CONSTRAINT linea_requisito_pkey PRIMARY KEY (matriz_version_id, requisito_definicion_id);
 -- Name: lote_importacion lote_importacion_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.lote_importacion
-    ADD CONSTRAINT lote_importacion_pkey PRIMARY KEY (lote_id);
+    ADD CONSTRAINT lote_importacion_pkey PRIMARY KEY (tenant_id, lote_id, entidad);
 -- Name: matriz_requisitos matriz_requisitos_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.matriz_requisitos
     ADD CONSTRAINT matriz_requisitos_pkey PRIMARY KEY (matriz_version_id);
@@ -1061,9 +1065,6 @@ ALTER TABLE ONLY modulo1.legajo
 -- Name: legajo uq_legajo_tenant_sujeto; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.legajo
     ADD CONSTRAINT uq_legajo_tenant_sujeto UNIQUE (tenant_id, sujeto_id);
--- Name: lote_importacion uq_lote_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
-ALTER TABLE ONLY modulo1.lote_importacion
-    ADD CONSTRAINT uq_lote_tenant_id UNIQUE (tenant_id, lote_id);
 -- Name: matriz_requisitos uq_matriz_clave_version; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.matriz_requisitos
     ADD CONSTRAINT uq_matriz_clave_version UNIQUE (tenant_id, cliente_id, locacion_id, tipo_servicio_id, version);
@@ -1363,7 +1364,7 @@ ALTER TABLE ONLY modulo1.custodia_recurso
     ADD CONSTRAINT fk_custodia_recurso__recurso_id FOREIGN KEY (tenant_id, recurso_id) REFERENCES modulo1.legajo(tenant_id, sujeto_id);
 -- Name: documento fk_documento__lote_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.documento
-    ADD CONSTRAINT fk_documento__lote_id FOREIGN KEY (tenant_id, lote_id) REFERENCES modulo1.lote_importacion(tenant_id, lote_id);
+    ADD CONSTRAINT fk_documento__lote_id FOREIGN KEY (tenant_id, lote_id, lote_entidad) REFERENCES modulo1.lote_importacion(tenant_id, lote_id, entidad);
 -- Name: documento fk_documento__requisito_definicion_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.documento
     ADD CONSTRAINT fk_documento__requisito_definicion_id FOREIGN KEY (tenant_id, requisito_definicion_id) REFERENCES modulo1.definicion_requisito(tenant_id, requisito_definicion_id);
@@ -1408,7 +1409,7 @@ ALTER TABLE ONLY modulo1.linea_requisito
     ADD CONSTRAINT fk_linea_requisito__requisito_definicion_id FOREIGN KEY (tenant_id, requisito_definicion_id) REFERENCES modulo1.definicion_requisito(tenant_id, requisito_definicion_id);
 -- Name: oc fk_oc__lote_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.oc
-    ADD CONSTRAINT fk_oc__lote_id FOREIGN KEY (tenant_id, lote_id) REFERENCES modulo1.lote_importacion(tenant_id, lote_id);
+    ADD CONSTRAINT fk_oc__lote_id FOREIGN KEY (tenant_id, lote_id, lote_entidad) REFERENCES modulo1.lote_importacion(tenant_id, lote_id, entidad);
 -- Name: paquete_entrega fk_paquete__sujeto_id; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.paquete_entrega
     ADD CONSTRAINT fk_paquete__sujeto_id FOREIGN KEY (tenant_id, sujeto_id) REFERENCES modulo1.legajo(tenant_id, sujeto_id);

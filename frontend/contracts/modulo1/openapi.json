@@ -1964,6 +1964,18 @@
             "format": "date",
             "title": "Vigente Desde",
             "type": "string"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
           }
         },
         "required": [
@@ -5337,6 +5349,18 @@
             "format": "date",
             "title": "Vigente Desde",
             "type": "string"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
           }
         },
         "required": [
@@ -6784,7 +6808,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0024_integridad_operativa"
+    "x-migracion-head": "0026_lote_por_entidad"
   },
   "openapi": "3.1.0",
   "paths": {

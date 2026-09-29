@@ -175,11 +175,11 @@ def publicar_version_de_matriz(s: Session, identidad: Identidad, body: e.Publica
             text(
                 "INSERT INTO modulo1.matriz_requisitos (matriz_version_id, tenant_id, cliente_id, locacion_id, tipo_servicio_id, "
                 "version, vigente_desde, vigente_hasta, fuente, archivo_de_respaldo, autor) "
-                "VALUES (:m, :t, :c, :l, :ts, :v, :desde, NULL, :fuente, :archivo, :autor)"
+                "VALUES (:m, :t, :c, :l, :ts, :v, :desde, :hasta, :fuente, :archivo, :autor)"
             ),
             {"m": matriz_version_id, "t": t, "c": cliente, "l": locacion, "ts": tipo_servicio, "v": version,
-             "desde": body.vigente_desde, "fuente": body.fuente, "archivo": body.archivo_de_respaldo,
-             "autor": body.autor or identidad.usuario_id},
+             "desde": body.vigente_desde, "hasta": body.vigente_hasta, "fuente": body.fuente,
+             "archivo": body.archivo_de_respaldo, "autor": body.autor or identidad.usuario_id},
         )
     except IntegrityError as err:  # dos publicaciones concurrentes de la primera versión
         raise Conflicto("Otra versión de la matriz se publicó al mismo tiempo; reintentar", {"version": version}) from err

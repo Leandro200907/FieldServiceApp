@@ -32,6 +32,9 @@ def upgrade() -> None:
     # Para históricos previos no conocemos el instante real: `now()` evita una purga
     # inmediata al desplegar y abre un período de retención completo desde la migración.
     op.execute("ALTER TABLE modulo1.documento ADD COLUMN dejo_de_ser_vigente_en TIMESTAMPTZ")
+    # Backfill cruzando tenants (como 0021): sin FORCE RLS no hay empresa actual y el
+    # UPDATE no ve filas, o aborta por `app.current_tenant`.
+    op.execute("ALTER TABLE modulo1.documento NO FORCE ROW LEVEL SECURITY")
     op.execute(
         "UPDATE modulo1.documento SET dejo_de_ser_vigente_en = now() "
         "WHERE estado_version <> 'vigente'"
@@ -40,6 +43,7 @@ def upgrade() -> None:
         "UPDATE modulo1.documento SET archivo_estado = 'confirmado' "
         "WHERE estado_version = 'sucedida' AND archivo_estado = 'purga_pendiente'"
     )
+    op.execute("ALTER TABLE modulo1.documento FORCE ROW LEVEL SECURITY")
     op.execute("""
         CREATE FUNCTION modulo1.marcar_cambio_vigencia_documento() RETURNS trigger
         LANGUAGE plpgsql SET search_path = pg_catalog, modulo1 AS $$

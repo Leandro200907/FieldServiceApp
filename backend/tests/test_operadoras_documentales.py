@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from html import escape
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -191,4 +192,53 @@ def test_importador_no_puede_resolver_documentos_de_otro_tenant(cliente_api, dos
         assert session.execute(text(
             "SELECT count(*) FROM modulo1.entrega_documento_operadora WHERE documento_id = :d"
         ), {"d": doc_ajeno["documento_id"]}).scalar_one() == 0
+
+
+def test_importar_planilla_operadoras_exige_responsable_legajos(cliente_api, tenant_de_prueba, monkeypatch):
+    t = tenant_de_prueba
+    invocaciones: list[int] = []
+
+    def _no_debe_parsear(*_args, **_kwargs):
+        invocaciones.append(1)
+        raise AssertionError("leer_planilla no debe ejecutarse sin rol responsable_legajos")
+
+    monkeypatch.setattr("app.modules.operadoras.router.leer_planilla", _no_debe_parsear)
+    headers = {
+        **t.headers("tecnico"),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+    respuesta = cliente_api.post(
+        "/v1/comandos/importar_planilla_operadoras",
+        content=_xlsx([_ENCABEZADOS, ["Operadora Norte", "persona", "x", "y", "Apto", "z", "", "", "enviado", "", "", "", ""]]),
+        headers=headers,
+    )
+    assert respuesta.status_code == 403
+    assert invocaciones == []
+
+
+def test_importar_planilla_operadoras_idempotente_por_clave(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    req = _alta_def(cliente_api, t, "Apto idem")
+    sujeto = _alta_persona(cliente_api, t, "persona_idem")
+    doc = _cargar(cliente_api, t, sujeto, req, desde="2026-09-27", hasta="2027-09-25")
+    filas = [
+        _ENCABEZADOS,
+        ["Operadora Norte", "persona", "persona_idem", sujeto, "Apto idem", req,
+         "2026-09-27", "2027-09-25", "enviado", "", "2026-09-27T11:00:00+00:00", "", ""],
+    ]
+    xlsx = _xlsx(filas)
+    base = {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Nombre-Archivo": "idem.xlsx",
+    }
+    h1 = {**t.headers("responsable_legajos", "planilla-idem-1"), **base}
+    h2 = {**t.headers("responsable_legajos", "planilla-idem-2"), **base}
+    r1 = cliente_api.post("/v1/comandos/importar_planilla_operadoras", content=xlsx, headers=h1)
+    r2 = cliente_api.post("/v1/comandos/importar_planilla_operadoras", content=xlsx, headers=h2)
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json() == r2.json()
+    assert r2.json()["filas_aceptadas"] == 1
+    assert r2.json()["resultados"][0]["documento_id"] == doc["documento_id"]
+
+
 

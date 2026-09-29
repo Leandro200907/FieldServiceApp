@@ -69,7 +69,7 @@ def importar_lote_oc(body: ImportarLoteOC, identidad: Identidad = Depends(identi
     # Idempotente por lote_id del body (regla dura 6); el header Idempotency-Key no aplica acá.
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
     resultado = ejecutar_idempotente(
-        identidad.tenant_id, identidad.usuario_id, f"lote:{body.lote_id}",
+        identidad.tenant_id, identidad.usuario_id, f"lote_oc:{body.lote_id}",
         fingerprint_de("POST", "/comandos/importar_lote_oc", body.model_dump(mode="json")),
         lambda s: servicio.importar_lote_oc(s, identidad, str(body.lote_id), body.origen, body.filas),
     )

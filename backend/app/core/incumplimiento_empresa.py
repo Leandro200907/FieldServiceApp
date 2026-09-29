@@ -38,18 +38,22 @@ _SQL_REQUISITOS_EMPRESA_INCUMPLIDOS = """
 """
 
 
+def _desde_causa_incumplimiento(vigente_hasta: date | None, hoy: date) -> date:
+    return hoy if vigente_hasta is None else vigente_hasta
+
+
 def registrar_vencimientos_de_empresa(session: Session, tenant_id: str, hoy: date) -> dict[str, Any]:
-    """Proceso de reloj: detecta requisitos de empresa con documento vencido (vigente_hasta <
-    hoy, o sin documento verificado) SOLO cuando antes hubo un documento (vencimiento, no
-    ausencia inicial) y los registra como causas activas del aviso abierto del tenant."""
+    """Proceso de reloj: requisitos de empresa sin documento verificado vigente o con vigencia
+    vencida; los registra como causas activas del aviso abierto del tenant."""
     filas = session.execute(text(_SQL_REQUISITOS_EMPRESA_INCUMPLIDOS), {"t": tenant_id}).mappings().all()
-    vencidos = [f for f in filas if f["vigente_hasta"] is not None and f["vigente_hasta"] < hoy]
+    vencidos = [f for f in filas if f["vigente_hasta"] is None or f["vigente_hasta"] < hoy]
     if not vencidos:
         return {"causas_nuevas": 0, "aviso_abierto": False}
+    desde_aviso = min(_desde_causa_incumplimiento(f["vigente_hasta"], hoy) for f in vencidos)
     fila = session.execute(
         text("INSERT INTO modulo1.aviso_incumplimiento_empresa (tenant_id, desde) VALUES (:t, :d) "
              "ON CONFLICT (tenant_id) WHERE estado = 'abierto' DO NOTHING RETURNING aviso_id"),
-        {"t": tenant_id, "d": min(f["vigente_hasta"] for f in vencidos)},
+        {"t": tenant_id, "d": desde_aviso},
     ).first()
     abierto_ahora = fila is not None
     aviso_id = str(fila[0]) if fila else str(session.execute(
@@ -62,18 +66,19 @@ def registrar_vencimientos_de_empresa(session: Session, tenant_id: str, hoy: dat
             text("INSERT INTO modulo1.aviso_incumplimiento_empresa_causa (tenant_id, aviso_id, requisito_definicion_id, desde) "
                  "VALUES (:t, :a, :r, :d) ON CONFLICT (tenant_id, aviso_id, requisito_definicion_id) WHERE estado = 'activa' "
                  "DO NOTHING RETURNING causa_id"),
-            {"t": tenant_id, "a": aviso_id, "r": str(f["requisito_definicion_id"]), "d": f["vigente_hasta"]},
+            {"t": tenant_id, "a": aviso_id, "r": str(f["requisito_definicion_id"]),
+             "d": _desde_causa_incumplimiento(f["vigente_hasta"], hoy)},
         ).first()
         nuevas += 1 if insertada else 0
     if abierto_ahora:
         evento_id = registrar_evento_interno(
             session, tenant_id, "CumplimientoEmpresaAfectado",
-            {"aviso_id": aviso_id, "desde": min(f["vigente_hasta"] for f in vencidos).isoformat(), "causas_iniciales": nuevas},
+            {"aviso_id": aviso_id, "desde": desde_aviso.isoformat(), "causas_iniciales": nuevas},
             usuario_id=None,
         )
         encolar_outbox(
             session, tenant_id, "CumplimientoEmpresaAfectado",
-            {"aviso_id": aviso_id, "desde": min(f["vigente_hasta"] for f in vencidos).isoformat(),
+            {"aviso_id": aviso_id, "desde": desde_aviso.isoformat(),
              "emitido_en": ahora_utc().isoformat()},
             clave_dedup=f"cea:{aviso_id}",
         )

@@ -209,3 +209,50 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
   dos procesos de worker sobre 43 jobs (24/19, ningún job dos veces, 3 en dead-letter, outbox
   drenado) · upgrade/downgrade/upgrade de 0015 en las tres bases · integridad: 0 en todos los
   chequeos · `git status` limpio · `alembic heads` = 1.
+
+## 2026-09-29 — Auditoría completa, Fase 1 (suite en verde)
+
+- **F1-1**: tests de URL de descarga usan `POST /v1/storage/documentos/{id}/url` (ya no GET).
+- **F1-2**: fixture `persona_con_docs` en `test_h01_capacidades_v1` registra competencia con
+  `registrar_acreditacion_de_competencia` en lugar de `cargar_documento`.
+- **F1-3**: `test_lector_xlsx_seguridad` arma ZIP con payload descomprimido real > límite.
+- **F1-4**: README actualizado a 548 tests.
+- **F1-5**: workflow `.github/workflows/ci.yml` (Postgres 16, alembic, pytest, frontend check).
+
+## 2026-09-29 — Auditoría completa, Fase 2 ALTO-1
+
+- Radar documental filtra legajos con `alcance_de_sujetos` para supervisores; detalle de legajo
+  fuera del universo → 404.
+- **ALTO-2**: Drive valida tamaño/contenido antes de insertar versión; savepoint en escaneo;
+  `archivo_demasiado_grande` como `ErrorDeDominio`.
+- **ALTO-3**: PUT `/storage/{firma}` solo con `subida_pendiente`; checksum en validación y descarga.
+
+## 2026-09-29 — Auditoría completa, Fase 3 B-5
+
+- Hooks secundarios de `_insertar_version_documento` (`registrar_accion`, `resolver_por_verificacion`,
+  `al_registrar_nueva_version`) en savepoint; eventos obligatorios sin cambio.
+- Tests: `tests/test_cargar_documento_savepoints.py`.
+
+## 2026-09-29 — Auditoría completa, Fase 3 B-1 / B-2
+
+- **B-1**: job `drenaje_outbox` no drena si `drenar_outbox_habilitado` es false (transporte disabled).
+- **B-2**: retoma por lease vencido respeta `MAX_INTENTOS` → dead-letter.
+
+## 2026-09-29 — Auditoría completa, Fase 3 B-3 … B-8
+
+- **B-3**: `_restaurar_sucedido` no revive versión `confirmada` sin objeto en storage; script
+  `scripts/reconciliar_archivos_documento.py`.
+- **B-4**: migración `0025_vigente_hasta_not_null` (NULL → `9999-12-31`, NOT NULL en documento).
+- **B-6**: incumplimiento de empresa incluye requisitos sin documento verificado vigente.
+- **B-7**: `control_plantillas` filtra matrices locales vencidas con `hoy_del_tenant`.
+- **B-8**: prefijos de idempotencia `lote_doc:` / `lote_oc:` (mismo UUID no colisiona entre comandos).
+
+## 2026-09-29 — Auditoría completa, Fase 4 (XLSX operadoras)
+
+- **X-1**: `importar_planilla_operadoras` exige rol antes de leer el body XLSX.
+- **X-2**: rechazo por tamaño descomprimido en directorio ZIP (`infolist`) y en lectura.
+- **X-3**: planilla vacía → error de dominio.
+- **X-4**: importación idempotente por `Idempotency-Key` + huella del archivo.
+- **X-5**: hoja inexistente → error explícito.
+- **X-6**: encabezados obligatorios ausentes → error explícito.
+- **X-7**: tope de 1000 filas de datos en el lector.

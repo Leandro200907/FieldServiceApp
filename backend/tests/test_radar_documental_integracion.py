@@ -7,6 +7,8 @@ from datetime import date
 from sqlalchemy import text
 
 from app.db import tenant_session
+from tests import apoyo
+from tests.test_comandos_legajos import _alta_def, _alta_persona
 
 
 def _sembrar(t):
@@ -52,7 +54,7 @@ def _url():
 
 def test_todos_los_legajos_aparecen_sin_asignacion_ni_custodia(cliente_api, tenant_de_prueba):
     ids = _sembrar(tenant_de_prueba)
-    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("supervisor"))
+    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("responsable_legajos"))
     assert respuesta.status_code == 200, respuesta.text
     items = {i["oc_id"]: i for i in respuesta.json()["items"]}
     radar = items[ids["oc"]]
@@ -64,7 +66,7 @@ def test_todos_los_legajos_aparecen_sin_asignacion_ni_custodia(cliente_api, tena
 
 def test_detalle_usa_dos_versiones_y_requisito_particular(cliente_api, tenant_de_prueba):
     ids = _sembrar(tenant_de_prueba)
-    respuesta = cliente_api.get(f"/v1/consultas/radar_documental_oc?oc_id={ids['oc']}", headers=tenant_de_prueba.headers("supervisor"))
+    respuesta = cliente_api.get(f"/v1/consultas/radar_documental_oc?oc_id={ids['oc']}", headers=tenant_de_prueba.headers("responsable_legajos"))
     assert respuesta.status_code == 200, respuesta.text
     cuerpo = respuesta.json()
     assert [m["version"] for m in cuerpo["matrices_utilizadas"]] == [1, 2]
@@ -82,7 +84,7 @@ def test_tipo_requerido_sin_legajos_no_produce_falso_verde(cliente_api, tenant_d
                   {"t": tenant_de_prueba.tenant_id, "r": ids["req_equipo"]})
         s.execute(text("DELETE FROM modulo1.legajo WHERE tenant_id=:t AND tipo_sujeto='persona'"),
                   {"t": tenant_de_prueba.tenant_id})
-    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("supervisor"))
+    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("responsable_legajos"))
     item = next(i for i in respuesta.json()["items"] if i["oc_id"] == ids["oc"])
     assert item["estado_documental"] == "informacion_incompleta"
     assert any("tipo persona" in motivo for motivo in item["motivos_resumidos"])
@@ -94,7 +96,7 @@ def test_hueco_parcial_de_matriz_no_oculta_alertas_reales(cliente_api, tenant_de
         s.execute(text("UPDATE modulo1.matriz_requisitos SET vigente_hasta='2026-10-14' "
                        "WHERE tenant_id=:t AND matriz_version_id=CAST(:m AS uuid)"),
                   {"t": tenant_de_prueba.tenant_id, "m": ids["matriz_1"]})
-    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("supervisor"))
+    respuesta = cliente_api.get(_url(), headers=tenant_de_prueba.headers("responsable_legajos"))
     item = next(i for i in respuesta.json()["items"] if i["oc_id"] == ids["oc"])
     assert item["estado_documental"] == "con_alertas_documentales"
     assert "Hay períodos sin matriz de requisitos aplicable" in item["motivos_resumidos"]
@@ -109,7 +111,7 @@ def test_requisito_particular_se_evalua_aun_sin_matriz(cliente_api, tenant_de_pr
                   {"t": tenant_de_prueba.tenant_id, "r": ids["req_equipo"]})
     respuesta = cliente_api.get(
         f"/v1/consultas/radar_documental_oc?oc_id={ids['oc_sin_matriz']}",
-        headers=tenant_de_prueba.headers("supervisor"),
+        headers=tenant_de_prueba.headers("responsable_legajos"),
     )
     cuerpo = respuesta.json()
     equipo = next(g for g in cuerpo["grupos"] if g["tipo_sujeto"] == "equipo")["legajos"][0]
@@ -120,7 +122,7 @@ def test_requisito_particular_se_evalua_aun_sin_matriz(cliente_api, tenant_de_pr
 
 def test_backlog_y_detalle_respetan_paginacion(cliente_api, tenant_de_prueba):
     ids = _sembrar(tenant_de_prueba)
-    headers = tenant_de_prueba.headers("supervisor")
+    headers = tenant_de_prueba.headers("responsable_legajos")
     backlog = cliente_api.get(_url() + "&limit=1", headers=headers).json()
     assert backlog["total"] == 2
     assert len(backlog["items"]) == 1
@@ -138,10 +140,37 @@ def test_backlog_y_detalle_respetan_paginacion(cliente_api, tenant_de_prueba):
     assert sum(len(g["legajos"]) for g in detalle["grupos"]) == 1
 
 
-def test_asignacion_y_custodia_no_cambian_el_resultado(cliente_api, tenant_de_prueba):
+def test_supervisor_radar_solo_legajos_de_su_alcance(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    ids = _sembrar(t)
+    _alta_def(cliente_api, t, "Apto")
+    asignado = _alta_persona(cliente_api, t, "asignado")
+    otro = _alta_persona(cliente_api, t, "otro")
+    with tenant_session(t.tenant_id) as s:
+        apoyo.supervisor_de(s, t, asignado)
+    headers = t.headers("supervisor")
+    item = next(i for i in cliente_api.get(_url(), headers=headers).json()["items"] if i["oc_id"] == ids["oc"])
+    assert item["resumen"]["personas"]["total"] == 1
+    detalle = cliente_api.get(f"/v1/consultas/radar_documental_oc?oc_id={ids['oc']}", headers=headers).json()
+    personas = next(g for g in detalle["grupos"] if g["tipo_sujeto"] == "persona")
+    assert personas["total"] == 1 and personas["legajos"][0]["sujeto_id"] == asignado
+    assert cliente_api.get(
+        f"/v1/consultas/radar_documental_oc/{ids['oc']}/legajos/{otro}", headers=headers,
+    ).status_code == 404
+    assert cliente_api.get(
+        f"/v1/consultas/radar_documental_oc/{ids['oc']}/legajos/{asignado}", headers=headers,
+    ).status_code == 200
+    assert cliente_api.get(
+        f"/v1/consultas/radar_documental_oc/{ids['oc']}/legajos/empresa-1", headers=headers,
+    ).status_code == 200
+
+
+def test_asignacion_y_custodia_amplian_alcance_del_supervisor_en_radar(cliente_api, tenant_de_prueba):
     ids = _sembrar(tenant_de_prueba)
     headers = tenant_de_prueba.headers("supervisor")
-    antes = cliente_api.get(_url(), headers=headers).json()["items"]
+    antes = next(i for i in cliente_api.get(_url(), headers=headers).json()["items"] if i["oc_id"] == ids["oc"])
+    assert antes["resumen"]["personas"]["total"] == 0
+    assert antes["resumen"]["empresa"]["total"] == 1
     with tenant_session(tenant_de_prueba.tenant_id) as s:
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id,sujeto_id,supervisor_usuario_id,desde,asignada_por) VALUES (:t,'persona-1',:u,'2026-01-01','test')"),
                   {"t": tenant_de_prueba.tenant_id, "u": tenant_de_prueba.usuarios["supervisor"]})
@@ -149,12 +178,16 @@ def test_asignacion_y_custodia_no_cambian_el_resultado(cliente_api, tenant_de_pr
                   {"c": ids["custodia"], "t": tenant_de_prueba.tenant_id})
         s.execute(text("INSERT INTO modulo1.periodo_custodia (tenant_id,custodia_id,custodio_id,desde) VALUES (:t,:c,'persona-1','2026-01-01')"),
                   {"t": tenant_de_prueba.tenant_id, "c": ids["custodia"]})
-    despues = cliente_api.get(_url(), headers=headers).json()["items"]
-    assert despues == antes
+    despues = next(i for i in cliente_api.get(_url(), headers=headers).json()["items"] if i["oc_id"] == ids["oc"])
+    assert despues["resumen"]["personas"]["total"] == 1
+    assert despues["resumen"]["vehiculos"]["total"] == 1
 
 
 def test_cambio_documental_modifica_el_resultado_del_legajo(cliente_api, tenant_de_prueba):
-    ids = _sembrar(tenant_de_prueba); headers = tenant_de_prueba.headers("supervisor")
+    ids = _sembrar(tenant_de_prueba)
+    with tenant_session(tenant_de_prueba.tenant_id) as s:
+        apoyo.supervisor_de(s, tenant_de_prueba, "persona-1")
+    headers = tenant_de_prueba.headers("supervisor")
     url = f"/v1/consultas/radar_documental_oc/{ids['oc']}/legajos/persona-1"
     assert cliente_api.get(url, headers=headers).json()["legajo"]["estado_documental"] == "con_alertas_documentales"
     with tenant_session(tenant_de_prueba.tenant_id) as s:

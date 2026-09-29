@@ -42,7 +42,7 @@ recurso (universo del supervisor, visibilidad de la decisión, …): si el actor
 alcance desde que ejecutó, recibe 403/404 y no el replay almacenado. El rol se exige
 antes de llamar. No repite el efecto de negocio.
 
-Para ImportarLote la clave es `lote:<lote_id>` y el fingerprint incluye el hash canónico
+Para ImportarLote la clave es `lote_doc:<lote_id>` (OC usa `lote_oc:<lote_id>`); el fingerprint incluye el hash canónico
 de las filas (8.2: idempotente por lote, pero un mismo lote con contenido distinto es un
 conflicto, no un replay silencioso).
 """

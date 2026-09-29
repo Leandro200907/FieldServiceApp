@@ -246,6 +246,18 @@ def test_acreditacion_e_induccion(cliente_api, tenant_de_prueba):
         assert s.execute(text("SELECT count(*) FROM modulo1.documento d JOIN modulo1.definicion_requisito r USING (tenant_id, requisito_definicion_id) WHERE r.categoria = 'competencia'")).scalar() == 1
         assert s.execute(text("SELECT count(*) FROM modulo1.documento d JOIN modulo1.definicion_requisito r USING (tenant_id, requisito_definicion_id) WHERE r.categoria = 'induccion' AND d.locacion_id = :l"), {"l": loc}).scalar() == 1
 
+
+def test_cargar_y_proponer_documento_exigen_categoria_documento(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    req_doc = _alta_def(cliente_api, t, "Apto médico")
+    req_comp = _alta_def(cliente_api, t, "Trabajo en altura", "competencia")
+    sujeto = _alta_persona(cliente_api, t, "DNI cat-doc", t.sujeto_tecnico)
+    base = {"sujeto_id": sujeto, "requisito_definicion_id": req_comp, "vigente_desde": "2026-03-01", "vigente_hasta": "2027-03-01"}
+    assert _post(cliente_api, t, "responsable_legajos", "cargar_documento", base).status_code == 422
+    assert _post(cliente_api, t, "tecnico", "proponer_documento", base).status_code == 422
+    ok = _ok(_post(cliente_api, t, "responsable_legajos", "cargar_documento", {**base, "requisito_definicion_id": req_doc}))
+    assert ok["documento_id"]
+
 # --------------------------------------------------------------------------- lotes
 
 def test_importar_lote_idempotente_por_lote_id(cliente_api, tenant_de_prueba):

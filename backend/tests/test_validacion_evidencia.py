@@ -177,7 +177,7 @@ def test_caso_b_verificado_invalido_no_toca_estado_confirmacion_notifica_y_reval
     assert fila["estado_confirmacion"] == "verificado"  # NUNCA se toca solo (caso B)
     assert fila["estado_version"] == "vigente"  # tampoco se rechaza
 
-    r = cliente_api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos"))
+    r = cliente_api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos"))
     assert r.status_code == 422 and r.json()["error"]["codigo"] == "archivo_invalido"
 
     with tenant_session(t.tenant_id) as s:
@@ -369,7 +369,7 @@ def test_reemplazo_de_archivo_invalido_permite_nueva_subida_y_valida(cliente_api
     assert _fila(t.tenant_id, doc)["archivo_validacion"] == "pendiente"
     _validar(t, storage)
     assert _fila(t.tenant_id, doc)["archivo_validacion"] == "valido"
-    assert cliente_api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).status_code == 200
+    assert cliente_api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).status_code == 200
 
 
 def test_invalidar_evidencia_verificada_manual_responsable_only(cliente_api, storage, escenario_caso_b):

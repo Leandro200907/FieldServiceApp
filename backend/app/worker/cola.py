@@ -121,13 +121,32 @@ def encolar(
     return int(fila[0])
 
 
-def tomar(session: Session, cola: str, lease_seg: int = 60, ahora: datetime | None = None) -> Job | None:
+def tomar(
+    session: Session,
+    cola: str,
+    lease_seg: int = 60,
+    ahora: datetime | None = None,
+    max_intentos: int = MAX_INTENTOS,
+) -> Job | None:
     """Toma el próximo job disponible de la cola con un lease de `lease_seg` segundos y un
     `lease_token` nuevo. Pendientes, o en_curso con lease vencido (worker caído). SKIP
     LOCKED: dos workers concurrentes nunca reciben el mismo job. `fallido` (dead-letter)
     y `completado` nunca se toman."""
     if lease_seg <= 0:
         raise ValueError("lease_seg debe ser positivo: el lease es obligatorio")
+    session.execute(
+        text(
+            """
+            UPDATE modulo1.job_queue
+            SET estado = 'fallido', lease_hasta = NULL, lease_token = NULL,
+                ultimo_error = 'lease agotado: se alcanzó el máximo de intentos',
+                ultimo_error_en = COALESCE(:ahora, now()), fallido_en = COALESCE(:ahora, now())
+            WHERE cola = :c AND estado = 'en_curso' AND lease_hasta < COALESCE(:ahora, now())
+              AND intentos >= :max
+            """
+        ),
+        {"c": cola, "ahora": ahora, "max": max_intentos},
+    )
     token = uuid.uuid4()
     fila = session.execute(
         text(
@@ -138,7 +157,10 @@ def tomar(session: Session, cola: str, lease_seg: int = 60, ahora: datetime | No
             WHERE id = (
                 SELECT id FROM modulo1.job_queue
                 WHERE cola = :c
-                  AND (estado = 'pendiente' OR (estado = 'en_curso' AND lease_hasta < COALESCE(:ahora, now())))
+                  AND (
+                    estado = 'pendiente'
+                    OR (estado = 'en_curso' AND lease_hasta < COALESCE(:ahora, now()) AND intentos < :max)
+                  )
                   AND disponible_en <= COALESCE(:ahora, now())
                 ORDER BY id
                 FOR UPDATE SKIP LOCKED
@@ -147,7 +169,7 @@ def tomar(session: Session, cola: str, lease_seg: int = 60, ahora: datetime | No
             RETURNING id, tenant_id, cola, payload, intentos, lease_hasta, estado, lease_token
             """
         ),
-        {"c": cola, "lease": lease_seg, "token": token, "ahora": ahora},
+        {"c": cola, "lease": lease_seg, "token": token, "ahora": ahora, "max": max_intentos},
     ).first()
     return _fila_a_job(fila) if fila else None
 

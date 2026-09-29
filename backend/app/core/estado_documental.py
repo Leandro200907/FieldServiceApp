@@ -6,7 +6,7 @@ explicable. No realiza I/O y usa fechas inclusivas.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from enum import Enum
 from typing import Iterable
@@ -98,11 +98,26 @@ def _resultado(
 
 
 def _utilizables(evidencias: Iterable[EvidenciaDocumental]) -> list[EvidenciaDocumental]:
-    """Conserva la versión actual y el histórico válido para componer períodos."""
-    return [
-        e for e in evidencias
-        if e.estado_version in (EstadoVersionEvidencia.VIGENTE, EstadoVersionEvidencia.SUCEDIDA)
-    ]
+    """La vigente cubre desde su inicio. Las sucedidas sólo cubren días previos a ese inicio."""
+    lista = list(evidencias)
+    vigentes = [e for e in lista if e.estado_version == EstadoVersionEvidencia.VIGENTE]
+    if not vigentes:
+        return []
+    inicios = [e.vigente_desde for e in vigentes if e.vigente_desde is not None]
+    if not inicios:
+        return list(vigentes)
+    limite = min(inicios) - timedelta(days=1)
+    recortadas: list[EvidenciaDocumental] = []
+    for e in lista:
+        if e.estado_version != EstadoVersionEvidencia.SUCEDIDA:
+            continue
+        if e.vigente_desde is None or e.vigente_hasta is None:
+            continue
+        hasta = min(e.vigente_hasta, limite)
+        if hasta < e.vigente_desde:
+            continue
+        recortadas.append(e if hasta == e.vigente_hasta else replace(e, vigente_hasta=hasta))
+    return vigentes + recortadas
 
 
 def evaluar_requisito_documental(
@@ -161,8 +176,16 @@ def evaluar_requisito_documental(
             continue
         validas.append(evidencia)
 
-    if validas:
-        ordenadas = sorted(validas, key=lambda e: (e.vigente_desde, e.vigente_hasta, e.evidencia_id))
+    hay_vigente_no_probada = any(
+        e.estado_version == EstadoVersionEvidencia.VIGENTE for e in pendientes + invalidas
+    )
+    validas_probada = [
+        e for e in validas
+        if e.estado_version == EstadoVersionEvidencia.VIGENTE or not hay_vigente_no_probada
+    ]
+
+    if validas_probada:
+        ordenadas = sorted(validas_probada, key=lambda e: (e.vigente_desde, e.vigente_hasta, e.evidencia_id))
         iniciales = [e for e in ordenadas if e.vigente_desde <= desde <= e.vigente_hasta]
         if iniciales:
             elegida = max(iniciales, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
@@ -199,7 +222,7 @@ def evaluar_requisito_documental(
                 accion=f"Incorporar evidencia vigente desde el {desde.isoformat()}",
             )
 
-        elegida = max(validas, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
+        elegida = max(validas_probada, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
         return _resultado(
             EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO,
             f"{requisito.nombre} está vencido antes del inicio del período",

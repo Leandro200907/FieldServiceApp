@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.errores import ErrorDeDominio, NoEncontrado
+from app.auth.alcance import alcance_de_sujetos, sujeto_en_alcance
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
@@ -86,6 +87,24 @@ def _legajos(session: Session, tenant_id: str) -> list[dict[str, Any]]:
         "WHERE tenant_id = :t AND dado_de_baja_en IS NULL ORDER BY tipo_sujeto, identificador_natural, sujeto_id"
     ), {"t": tenant_id}).mappings().all()
     return [dict(f) for f in filas]
+
+
+def _legajos_visibles(session: Session, identidad: Identidad) -> list[dict[str, Any]]:
+    """Legajos del tenant acotados al universo del supervisor (A-04); responsable/configuración ven todos.
+
+    Excepción radar: el legajo `empresa` entra siempre — no es sujeto propuesto ni entra en
+    `alcance_de_sujetos`, pero la matriz lo evalúa implícitamente (habilitante 1.8) y ocultarlo
+    daría un falso verde documental en el backlog."""
+    todos = _legajos(session, identidad.tenant_id)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    if alcance is None:
+        return todos
+    permitidos = set(alcance)
+    return [
+        legajo for legajo in todos
+        if legajo["tipo_sujeto"] == "empresa" or legajo["sujeto_id"] in permitidos
+    ]
 
 
 def _matrices_y_requisitos(session: Session, tenant_id: str, oc: dict[str, Any], desde: date, hasta: date) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, date]]]:
@@ -260,7 +279,7 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
     _exigir_rango(desde, hasta)
     if estados and any(e not in ESTADOS_OC for e in estados):
         raise ErrorDeDominio("estado inválido", {"validos": list(ESTADOS_OC)})
-    legajos = _legajos(session, identidad.tenant_id); evidencias = _evidencias(session, identidad.tenant_id)
+    legajos = _legajos_visibles(session, identidad); evidencias = _evidencias(session, identidad.tenant_id)
     items: list[dict[str, Any]] = []
 
     def evaluar_item(oc: dict[str, Any]) -> dict[str, Any] | None:
@@ -322,7 +341,7 @@ def _oc_por_id(session: Session, tenant_id: str, oc_id: str) -> dict[str, Any]:
 def detalle_oc(session: Session, identidad: Identidad, oc_id: str, p: Pagina | None = None) -> dict[str, Any]:
     identidad.exigir_rol(*ROLES_DETALLE)
     p = p or Pagina(offset=0, limit=50)
-    oc = _oc_por_id(session, identidad.tenant_id, oc_id); legajos = _legajos(session, identidad.tenant_id)
+    oc = _oc_por_id(session, identidad.tenant_id, oc_id); legajos = _legajos_visibles(session, identidad)
     calculo = _evaluar_oc(session, identidad.tenant_id, oc, legajos, _evidencias(session, identidad.tenant_id), oc["vigencia_desde"], oc["vigencia_hasta"])
     matrices = [{k: t[k] for k in ("matriz_version_id", "version", "fuente", "desde", "hasta")}
                 for t in calculo["tramos"] if t["matriz_version_id"] is not None]
@@ -347,17 +366,20 @@ def detalle_oc(session: Session, identidad: Identidad, oc_id: str, p: Pagina | N
 def detalle_legajo(session: Session, identidad: Identidad, oc_id: str, sujeto_id: str) -> dict[str, Any]:
     identidad.exigir_rol(*ROLES_DETALLE)
     oc = _oc_por_id(session, identidad.tenant_id, oc_id)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
     fila = session.execute(text(
         "SELECT sujeto_id, tipo_sujeto, identificador_natural FROM modulo1.legajo "
         "WHERE tenant_id=:t AND sujeto_id=:s AND dado_de_baja_en IS NULL"
     ), {"t": identidad.tenant_id, "s": sujeto_id}).mappings().first()
     if fila is None:
         raise NoEncontrado("Legajo inexistente o inactivo", {"sujeto_id": sujeto_id})
-    tipos_disponibles = set(session.execute(text(
-        "SELECT DISTINCT tipo_sujeto FROM modulo1.legajo WHERE tenant_id=:t AND dado_de_baja_en IS NULL"
-    ), {"t": identidad.tenant_id}).scalars().all())
+    legajo = dict(fila)
+    if legajo["tipo_sujeto"] != "empresa" and not sujeto_en_alcance(session, identidad, sujeto_id, hoy):
+        raise NoEncontrado("Legajo inexistente o inactivo", {"sujeto_id": sujeto_id})
+    legajos_visibles = _legajos_visibles(session, identidad)
+    tipos_disponibles = {l["tipo_sujeto"] for l in legajos_visibles}
     calculo = _evaluar_oc(
-        session, identidad.tenant_id, oc, [dict(fila)], _evidencias(session, identidad.tenant_id, sujeto_id),
+        session, identidad.tenant_id, oc, [legajo], _evidencias(session, identidad.tenant_id, sujeto_id),
         oc["vigencia_desde"], oc["vigencia_hasta"], tipos_disponibles=tipos_disponibles,
     )
     return {"oc": {k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()},

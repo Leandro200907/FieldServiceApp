@@ -15,6 +15,7 @@ un lote.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import date, timedelta
 from typing import Any
@@ -25,11 +26,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
-from app.auth.identidad import Identidad
+from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
 from app.comun.idempotencia import hash_canonico
 from app.comun.reloj import hoy_del_tenant
 from app.modules.legajos import esquemas as e
+
+log = logging.getLogger("modulo1.legajos")
+
+
+def _hook_secundario(session: Session, etiqueta: str, fn) -> None:
+    """Best-effort en savepoint (DECISIONES D-C / B-5): no revierte la versión documental."""
+    try:
+        with session.begin_nested():
+            fn()
+    except Exception:
+        log.warning("Hook secundario %s falló; la transacción principal sigue", etiqueta, exc_info=True)
 
 # --------------------------------------------------------------------------- helpers
 
@@ -75,6 +87,14 @@ def _exigir_aplicable(definicion: dict[str, Any], legajo: dict[str, Any]) -> Non
 def _exigir_vigencia(desde: date, hasta: date) -> None:
     if desde > hasta:
         raise ErrorDeDominio("vigente_desde no puede ser posterior a vigente_hasta", {"vigente_desde": str(desde), "vigente_hasta": str(hasta)})
+
+
+def _exigir_categoria_documento(definicion: dict[str, Any]) -> None:
+    if definicion["categoria"] != "documento":
+        raise ErrorDeDominio(
+            "El requisito no es de categoría documento",
+            {"categoria": definicion["categoria"]},
+        )
 
 
 def _bloquear_legajo(s: Session, tenant_id: str, sujeto_id: str) -> None:
@@ -163,15 +183,15 @@ def _insertar_version_documento(
         text(
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, numero, "
             "vigente_desde, vigente_hasta, estado_confirmacion, estado_version, origen_propuesta, version, origen, "
-            "confianza_extraccion, lote_id, sucede_a, locacion_id) "
+            "confianza_extraccion, lote_id, lote_entidad, sucede_a, locacion_id) "
             "VALUES (:d, :t, :sj, :r, :num, :desde, :hasta, :conf, 'vigente', :prop, :ver, :origen, "
-            ":confianza, :lote, :sucede_a, :locacion)"
+            ":confianza, :lote, :lote_ent, :sucede_a, :locacion)"
         ),
         {
             "d": documento_id, "t": t, "sj": sujeto_id, "r": requisito_definicion_id, "num": numero,
             "desde": vigente_desde, "hasta": vigente_hasta, "conf": estado_confirmacion, "prop": origen_propuesta,
             "ver": version, "origen": origen, "confianza": confianza_extraccion,
-            "lote": lote_id, "sucede_a": sucede_a, "locacion": locacion_id,
+            "lote": lote_id, "lote_ent": "legajos" if lote_id else None, "sucede_a": sucede_a, "locacion": locacion_id,
         },
     )
 
@@ -190,7 +210,10 @@ def _insertar_version_documento(
     if requisito_definicion_id is not None:
         from app.modules.alertas.servicio import registrar_accion
 
-        registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id)
+        _hook_secundario(
+            s, "registrar_accion",
+            lambda: registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id),
+        )
     if estado_confirmacion != "declarado" and requisito_definicion_id is not None:
         # Carga ya validada por el responsable = verificación implícita: se emite el evento
         # canónico (7.2) en vez de reinterpretar DocumentoCargado en la política (A-07).
@@ -209,8 +232,11 @@ def _insertar_version_documento(
     # notifica una sola vez por operadora + requisito + versión.
     from app.modules.operadoras.servicio import al_registrar_nueva_version
 
-    al_registrar_nueva_version(
-        s, identidad, sujeto_id=sujeto_id, requisito_definicion_id=str(requisito_definicion_id),
+    _hook_secundario(
+        s, "al_registrar_nueva_version",
+        lambda: al_registrar_nueva_version(
+            s, identidad, sujeto_id=sujeto_id, requisito_definicion_id=str(requisito_definicion_id),
+        ),
     )
 
     return {"documento_id": documento_id, "version": version, "sucede_a": sucede_a}
@@ -287,6 +313,7 @@ def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) 
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
     definicion = _definicion_activa(s, t, str(body.requisito_definicion_id))
+    _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
 
@@ -308,6 +335,7 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
     definicion = _definicion_activa(s, t, str(body.requisito_definicion_id))
+    _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
 
@@ -339,7 +367,12 @@ def _al_verificar(s: Session, identidad: Identidad, doc: dict[str, Any], eventos
 
         hasta = s.execute(text("SELECT vigente_hasta FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d"),
                           {"t": t, "d": str(doc["documento_id"])}).scalar()
-        resolver_por_verificacion(s, t, doc["sujeto_id"], str(doc["requisito_definicion_id"]), str(doc["documento_id"]), hasta)
+        _hook_secundario(
+            s, "resolver_por_verificacion",
+            lambda: resolver_por_verificacion(
+                s, t, doc["sujeto_id"], str(doc["requisito_definicion_id"]), str(doc["documento_id"]), hasta,
+            ),
+        )
     regularizadas: list[str] = []
     if doc["requisito_definicion_id"] is not None:
         filas = s.execute(
@@ -409,6 +442,14 @@ def rechazar_propuesta(s: Session, identidad: Identidad, body: e.RechazarPropues
     return {"documento_id": str(doc["documento_id"]), "restaurado_documento_id": restaurado, "eventos": ["DocumentoRechazado"]}
 
 
+def _archivo_confirmado_presente(clave_storage: str | None) -> bool:
+    if not clave_storage:
+        return False
+    from app.storage import obtener_storage
+
+    return obtener_storage().existe(clave_storage)
+
+
 def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None:
     """Vuelve a `vigente` el antecesor no terminal más cercano de la versión que se está
     anulando, siguiendo la cadena `sucede_a`.
@@ -424,12 +465,21 @@ def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None
     while actual is not None and str(actual) not in visitados:
         visitados.add(str(actual))
         fila = s.execute(
-            text("SELECT estado_version, sucede_a FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"),
+            text(
+                "SELECT estado_version, sucede_a, archivo_estado, clave_storage FROM modulo1.documento "
+                "WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"
+            ),
             {"t": tenant_id, "d": str(actual)},
         ).mappings().first()
         if fila is None:
             return None
         if fila["estado_version"] == "sucedida":
+            if (
+                fila["archivo_estado"] == "confirmado"
+                and not _archivo_confirmado_presente(fila["clave_storage"])
+            ):
+                actual = fila["sucede_a"]
+                continue
             s.execute(
                 text("UPDATE modulo1.documento SET estado_version = 'vigente' WHERE tenant_id = :t AND documento_id = :d"),
                 {"t": tenant_id, "d": str(actual)},
@@ -565,13 +615,13 @@ def _politica_reimportacion(s: Session, tenant_id: str, fila: e.FilaDeLote) -> d
 
 def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dict[str, Any]:
     """Una transacción, idempotente por `lote_id` (8.2): si el lote ya existe se devuelve
-    el resultado guardado bajo `lote:<lote_id>` sin re-aplicar nada. Las filas inválidas
+    el resultado guardado bajo `lote_doc:<lote_id>` sin re-aplicar nada. Las filas inválidas
     se rechazan una por una (van a `detalle_filas_rechazadas`); las válidas se aplican
     como CargarDocumento con `lote_id`."""
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
 
-    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # La idempotencia por `lote_doc:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # Red de seguridad de dominio, válida también entre actores distintos: si el lote ya
     # existe, solo se reproduce el resultado si el contenido es el MISMO (hash canónico
     # de las filas, persistido en hash_archivo); con filas distintas es un conflicto.
@@ -579,7 +629,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     existente = s.execute(
         text(
             "SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, hash_archivo "
-            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l"
+            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos'"
         ),
         {"t": t, "l": lote_id},
     ).mappings().first()
@@ -621,6 +671,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
         try:
             legajo = _legajo_activo(s, t, fila.sujeto_id)
             definicion = _definicion_activa(s, t, str(fila.requisito_definicion_id))
+            _exigir_categoria_documento(definicion)
             _exigir_aplicable(definicion, legajo)
             _exigir_vigencia(fila.vigente_desde, fila.vigente_hasta)
             politica = _politica_reimportacion(s, t, fila)
@@ -680,13 +731,11 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
     lote = s.execute(
-        text("SELECT estado, entidad FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l FOR UPDATE"),
+        text("SELECT estado FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos' FOR UPDATE"),
         {"t": t, "l": lote_id},
     ).mappings().first()
     if lote is None:
         raise NoEncontrado("Lote inexistente", {"lote_id": lote_id})
-    if lote["entidad"] != "legajos":
-        raise ErrorDeDominio("Este comando solo revierte lotes de legajos", {"entidad": lote["entidad"]})
     if lote["estado"] != "aplicado":
         raise Conflicto("Solo se revierte un lote aplicado", {"estado": lote["estado"]})
 
@@ -732,7 +781,7 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
             restaurados.append(r)
 
     s.execute(
-        text("UPDATE modulo1.lote_importacion SET estado = 'revertido' WHERE tenant_id = :t AND lote_id = :l"),
+        text("UPDATE modulo1.lote_importacion SET estado = 'revertido' WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos'"),
         {"t": t, "l": lote_id},
     )
     registrar_evento(

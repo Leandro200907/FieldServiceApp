@@ -287,19 +287,24 @@ def test_oc_anterior_a_toda_matriz_no_se_evalua(tenant_de_prueba, sesion):
 
 
 def _armar_tenant(c, t) -> dict:
+    from app.storage.local import StorageLocal
+
     req = _alta_def(c, t, "Apto")
     persona = _alta_persona(c, t, f"DNI-{t.slug}", t.sujeto_tecnico)
     doc = _cargar(c, t, persona, req, hasta="2026-12-31")["documento_id"]
-    clave = {"cliente_id": str(uuid.uuid4()), "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4())}
-    _ok(_post(c, t, "configuracion", "publicar_version_de_matriz", {**clave, "vigente_desde": "2026-01-01", "lineas": [
+    contenido = b"evidencia apto tenant"
+    clave_storage = f"{t.tenant_id}/{doc}/apto.pdf"
+    checksum = StorageLocal().escribir(clave_storage, contenido)
+    clave_matriz = {"cliente_id": str(uuid.uuid4()), "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4())}
+    _ok(_post(c, t, "configuracion", "publicar_version_de_matriz", {**clave_matriz, "vigente_desde": "2026-01-01", "lineas": [
         {"requisito_definicion_id": req, "clasificacion": "excepcionable", "bloqueante_durante_ejecucion": True}]}))
     _ok(_post(c, t, "responsable_legajos", "importar_lote_oc", {"lote_id": str(uuid.uuid4()), "origen": "planilla", "filas": [
-        {"clave_origen": f"OC-{t.slug}", **clave, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
+        {"clave_origen": f"OC-{t.slug}", **clave_matriz, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
     with tenant_session(t.tenant_id) as s:
         s.execute(text("UPDATE modulo1.documento SET clave_storage = :k, archivo_estado = 'confirmado', "
-                       "checksum_archivo = 'ck', archivo_bytes = 1, archivo_validacion = 'valido', "
+                       "checksum_archivo = :ck, archivo_bytes = :b, archivo_validacion = 'valido', "
                        "archivo_validacion_en = now() WHERE documento_id = :d"),
-                  {"k": f"{t.tenant_id}/{doc}/apto.pdf", "d": doc})
+                  {"k": clave_storage, "ck": checksum, "b": len(contenido), "d": doc})
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                        "VALUES (:t, :sj, :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "sj": persona, "u": t.usuarios["supervisor"]})
     return {"req": req, "persona": persona, "doc": doc, "oc": f"OC-{t.slug}"}
@@ -316,7 +321,7 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
     assert c.post("/v1/comandos/confirmar_documento", json={"documento_id": a["doc"]}, headers=tb.headers("responsable_legajos")).status_code == 404
     assert c.post("/v1/comandos/cargar_documento", json={"sujeto_id": a["persona"], "requisito_definicion_id": a["req"],
                   "vigente_desde": "2026-01-01", "vigente_hasta": "2026-12-31"}, headers=tb.headers("responsable_legajos")).status_code == 404
-    assert c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("responsable_legajos")).status_code == 404
+    assert c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("responsable_legajos")).status_code == 404
     # listados: B ve solo lo suyo
     tab = _ok(c.get("/v1/consultas/tablero_vencimientos", params={"dias": 365}, headers=tb.headers("responsable_legajos")))
     assert {i["sujeto_id"] for i in tab["items"]} == {b["persona"]}
@@ -359,10 +364,10 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
         assert alcance_de_sujetos(s, sup_b, date(2026, 9, 18)) == [b["persona"]]
         assert not sujeto_en_alcance(s, sup_b, "persona_extra_de_A", date(2026, 9, 18), ROLES_CON_TODO_DESCARGA)
         assert not sujeto_en_alcance(s, sup_b, a["persona"], date(2026, 9, 18), ROLES_CON_TODO_DESCARGA)
-    assert c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("supervisor")).status_code == 404
+    assert c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("supervisor")).status_code == 404
 
     # --- storage: una URL firmada del tenant A no la puede usar B (firma atada al tenant)
-    url_a = _ok(c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=ta.headers("responsable_legajos")))["url"]
+    url_a = _ok(c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=ta.headers("responsable_legajos")))["url"]
     assert c.get(url_a, headers=tb.headers("responsable_legajos")).status_code == 403
 
     # --- token de A con tenant_id manipulado hacia B: la firma no valida → 401

@@ -19,6 +19,11 @@ from app.modules.operadoras.lector_xlsx import leer_planilla
 router = APIRouter(tags=["operadoras-documentales"])
 
 
+def _responsable_legajos(identidad: Identidad = Depends(identidad_actual)) -> Identidad:
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    return identidad
+
+
 class RegistrarEstadoOperadoraBody(BaseModel):
     operadora: str = Field(min_length=1, max_length=200)
     sujeto_id: str = Field(min_length=1)
@@ -107,11 +112,11 @@ def registrar_estado_documento_operadora(
 
 @router.post("/comandos/importar_planilla_operadoras", response_model=ImportarPlanillaOperadorasResponse)
 def importar_planilla_operadoras(
+    identidad: Identidad = Depends(_responsable_legajos),
+    clave: str | None = Depends(clave_idempotencia),
     contenido: bytes = Body(media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", max_length=5 * 1024 * 1024),
     nombre_archivo: str = Header("presentaciones_operadoras.xlsx", alias="X-Nombre-Archivo", max_length=500),
     hoja: str = Query("Presentaciones", min_length=1, max_length=200),
-    identidad: Identidad = Depends(identidad_actual),
-    clave: str | None = Depends(clave_idempotencia),
 ) -> ImportarPlanillaOperadorasResponse:
     filas = leer_planilla(contenido, hoja=hoja)
     huella = hashlib.sha256(contenido).hexdigest()

@@ -152,7 +152,7 @@ def copiar_matriz_global(s: Session, identidad: Identidad, body: e.CopiarMatrizG
         s, identidad,
         e.PublicarVersionDeMatriz(
             cliente_id=body.cliente_id, locacion_id=body.locacion_id, tipo_servicio_id=body.tipo_servicio_id,
-            vigente_desde=body.vigente_desde, lineas=lineas,
+            vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, lineas=lineas,
             fuente=f"plantilla global {m['operadora']} / {m['tipo_servicio']} v{m['version']}",
             autor=identidad.usuario_id,
         ),
@@ -230,8 +230,10 @@ def plantillas_globales(s: Session, identidad: Identidad) -> dict[str, Any]:
 def control_plantillas(s: Session, tenant_id: str, ahora: datetime) -> dict[str, int]:
     """Copias locales atrasadas respecto de la versión global → `PlantillaGlobalActualizada`
     (una vez por plantilla y versión nueva) + notificación al responsable de legajos."""
+    from app.comun.reloj import hoy_del_tenant
     from app.worker.cola import encolar
 
+    hoy = hoy_del_tenant(s, tenant_id, ahora)
     avisos = 0
     atrasadas = s.execute(text(
         "SELECT 'definicion_requisito' AS plantilla_tipo, g.definicion_global_id AS plantilla_global_id, g.version AS version_nueva, "
@@ -242,8 +244,8 @@ def control_plantillas(s: Session, tenant_id: str, ahora: datetime) -> dict[str,
         "SELECT 'matriz', g.matriz_global_id, g.version, g.actualizado_en, g.operadora || ' / ' || g.tipo_servicio, "
         "       m.matriz_version_id::text, m.copiada_de_version "
         "FROM modulo1.matriz_requisitos m JOIN plataforma.matriz_global g USING (matriz_global_id) "
-        "WHERE m.tenant_id = :t AND m.copiada_de_version < g.version AND (m.vigente_hasta IS NULL OR m.vigente_hasta >= CURRENT_DATE)"
-    ), {"t": tenant_id}).mappings().all()
+        "WHERE m.tenant_id = :t AND m.copiada_de_version < g.version AND (m.vigente_hasta IS NULL OR m.vigente_hasta >= :hoy)"
+    ), {"t": tenant_id, "hoy": hoy}).mappings().all()
     for a in atrasadas:
         insertado = s.execute(text(
             "INSERT INTO modulo1.plantilla_aviso (tenant_id, plantilla_tipo, plantilla_global_id, version_nueva, notificado_en) "

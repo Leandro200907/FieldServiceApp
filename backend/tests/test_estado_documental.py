@@ -130,3 +130,58 @@ def test_evidencia_que_comienza_despues_del_inicio_no_cubre_el_periodo():
     assert resultado.estado == EstadoRequisitoDocumental.FALTANTE
     assert resultado.primer_quiebre == DESDE
 
+
+def test_sucedida_no_cubre_despues_del_inicio_de_la_vigente():
+    """La versión anterior no puede enmascarar una vigente declarada o inválida."""
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 12, 31),
+            version=EstadoVersionEvidencia.SUCEDIDA,
+            evidencia_id="doc-anterior",
+        ),
+        evidencia(
+            desde=date(2026, 10, 18),
+            hasta=date(2026, 10, 22),
+            confirmacion=EstadoConfirmacionDocumental.DECLARADO,
+            evidencia_id="doc-vigente",
+        ),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.PENDIENTE_REVISION
+    assert resultado.evidencia_id == "doc-vigente"
+
+
+def test_sucedida_no_enmascara_vigente_con_vencimiento_anterior():
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 12, 31),
+            version=EstadoVersionEvidencia.SUCEDIDA,
+            evidencia_id="doc-anterior",
+        ),
+        evidencia(
+            desde=date(2026, 10, 10),
+            hasta=date(2026, 10, 19),
+            evidencia_id="doc-vigente",
+        ),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO
+    assert resultado.primer_quiebre == date(2026, 10, 20)
+    assert resultado.evidencia_id == "doc-vigente"
+
+
+def test_sucedida_no_enmascara_vigente_con_archivo_invalido():
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 12, 31),
+            version=EstadoVersionEvidencia.SUCEDIDA,
+            evidencia_id="doc-anterior",
+        ),
+        evidencia(
+            desde=date(2026, 10, 18),
+            hasta=date(2026, 10, 22),
+            validacion=EstadoValidacionArchivo.INVALIDO,
+            evidencia_id="doc-vigente",
+        ),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA
+    assert resultado.evidencia_id == "doc-vigente"
+

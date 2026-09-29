@@ -111,6 +111,19 @@ def test_lease_vencido_permite_retomar_y_lease_obligatorio(tenant_de_prueba):
         assert s.execute(text("SELECT estado FROM modulo1.job_queue WHERE id = :id"), {"id": jid}).scalar() == "completado"
 
 
+def test_lease_vencido_respeta_max_intentos_y_dead_letter(tenant_de_prueba):
+    t = tenant_de_prueba.tenant_id
+    max_i = 3
+    with tenant_session(t) as s:
+        jid = encolar(s, "score_documental", {}, tenant_id=t)
+        for _ in range(max_i):
+            job = tomar(s, "score_documental", lease_seg=30, max_intentos=max_i)
+            assert job is not None and job.id == jid
+            s.execute(text("UPDATE modulo1.job_queue SET lease_hasta = now() - interval '1 minute' WHERE id = :id"), {"id": jid})
+        assert tomar(s, "score_documental", lease_seg=30, max_intentos=max_i) is None
+        assert s.execute(text("SELECT estado, intentos FROM modulo1.job_queue WHERE id = :id"), {"id": jid}).one() == ("fallido", max_i)
+
+
 def test_fallar_reintenta_con_backoff_y_pasa_a_fallido(tenant_de_prueba):
     t = tenant_de_prueba.tenant_id
     with tenant_session(t) as s:

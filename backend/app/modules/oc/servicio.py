@@ -2,7 +2,7 @@
 CancelarOC.
 
 ImportarLote es UNA transacción e idempotente por `lote_id` (regla dura 6): la clave
-`lote:<lote_id>` en idempotency_keys guarda el resultado y una segunda llamada lo
+`lote_oc:<lote_id>` en idempotency_keys guarda el resultado y una segunda llamada lo
 devuelve sin re-aplicar nada. Es incremental: `clave_origen` identifica la OC en el
 origen, así que una clave conocida actualiza la OC (y `actualizado_en`) en vez de
 duplicarla — para eso está `uq_oc_clave_origen` (migración 0003_oc_uq_clave_origen).
@@ -28,7 +28,7 @@ CAMPOS_OBLIGATORIOS = ("clave_origen", "cliente_id", "locacion_id", "tipo_servic
 
 
 def clave_idempotencia_lote(lote_id: str) -> str:
-    return f"lote:{lote_id}"
+    return f"lote_oc:{lote_id}"
 
 
 # --------------------------------------------------------------------- validación
@@ -85,7 +85,7 @@ def importar_lote_oc(
         raise ErrorDeDominio("origen inválido", {"origen": origen, "validos": list(ORIGENES)})
     lote_id = str(uuid.UUID(str(lote_id)))
 
-    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # La idempotencia por `lote_oc:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # La clave de idempotencia expira (24 h) pero el lote queda: si existe, tampoco se
     # re-aplica — se reconstruye el resultado desde lote_importacion.
     from app.comun.idempotencia import hash_canonico
@@ -94,9 +94,9 @@ def importar_lote_oc(
     lote_existente = session.execute(
         text(
             "SELECT filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, estado, hash_archivo "
-            "FROM modulo1.lote_importacion WHERE lote_id = :l"
+            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'oc'"
         ),
-        {"l": lote_id},
+        {"t": tenant_id, "l": lote_id},
     ).mappings().first()
     if lote_existente is not None:
         if lote_existente["hash_archivo"] != hash_contenido:
@@ -175,8 +175,8 @@ def importar_lote_oc(
             text(
                 """
                 INSERT INTO modulo1.oc (tenant_id, clave_origen, referencia, cliente_id, locacion_id,
-                                        tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id)
-                VALUES (:t, :clave, :ref, :cli, :loc, :tipo, :desde, :hasta, :l)
+                                        tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id, lote_entidad)
+                VALUES (:t, :clave, :ref, :cli, :loc, :tipo, :desde, :hasta, :l, 'oc')
                 ON CONFLICT (tenant_id, clave_origen) DO UPDATE SET
                     referencia = EXCLUDED.referencia,
                     cliente_id = EXCLUDED.cliente_id,
@@ -185,6 +185,7 @@ def importar_lote_oc(
                     vigencia_desde = EXCLUDED.vigencia_desde,
                     vigencia_hasta = EXCLUDED.vigencia_hasta,
                     lote_id = EXCLUDED.lote_id,
+                    lote_entidad = EXCLUDED.lote_entidad,
                     actualizado_en = now()
                 RETURNING oc_id, (xmax = 0) AS insertada
                 """
