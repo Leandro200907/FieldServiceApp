@@ -90,14 +90,21 @@ def _legajos(session: Session, tenant_id: str) -> list[dict[str, Any]]:
 
 
 def _legajos_visibles(session: Session, identidad: Identidad) -> list[dict[str, Any]]:
-    """Legajos del tenant acotados al universo del supervisor (A-04); responsable/configuración ven todos."""
+    """Legajos del tenant acotados al universo del supervisor (A-04); responsable/configuración ven todos.
+
+    Excepción radar: el legajo `empresa` entra siempre — no es sujeto propuesto ni entra en
+    `alcance_de_sujetos`, pero la matriz lo evalúa implícitamente (habilitante 1.8) y ocultarlo
+    daría un falso verde documental en el backlog."""
     todos = _legajos(session, identidad.tenant_id)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     alcance = alcance_de_sujetos(session, identidad, hoy)
     if alcance is None:
         return todos
     permitidos = set(alcance)
-    return [legajo for legajo in todos if legajo["sujeto_id"] in permitidos]
+    return [
+        legajo for legajo in todos
+        if legajo["tipo_sujeto"] == "empresa" or legajo["sujeto_id"] in permitidos
+    ]
 
 
 def _matrices_y_requisitos(session: Session, tenant_id: str, oc: dict[str, Any], desde: date, hasta: date) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, date]]]:
@@ -360,18 +367,19 @@ def detalle_legajo(session: Session, identidad: Identidad, oc_id: str, sujeto_id
     identidad.exigir_rol(*ROLES_DETALLE)
     oc = _oc_por_id(session, identidad.tenant_id, oc_id)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
-    if not sujeto_en_alcance(session, identidad, sujeto_id, hoy):
-        raise NoEncontrado("Legajo inexistente o inactivo", {"sujeto_id": sujeto_id})
     fila = session.execute(text(
         "SELECT sujeto_id, tipo_sujeto, identificador_natural FROM modulo1.legajo "
         "WHERE tenant_id=:t AND sujeto_id=:s AND dado_de_baja_en IS NULL"
     ), {"t": identidad.tenant_id, "s": sujeto_id}).mappings().first()
     if fila is None:
         raise NoEncontrado("Legajo inexistente o inactivo", {"sujeto_id": sujeto_id})
+    legajo = dict(fila)
+    if legajo["tipo_sujeto"] != "empresa" and not sujeto_en_alcance(session, identidad, sujeto_id, hoy):
+        raise NoEncontrado("Legajo inexistente o inactivo", {"sujeto_id": sujeto_id})
     legajos_visibles = _legajos_visibles(session, identidad)
     tipos_disponibles = {l["tipo_sujeto"] for l in legajos_visibles}
     calculo = _evaluar_oc(
-        session, identidad.tenant_id, oc, [dict(fila)], _evidencias(session, identidad.tenant_id, sujeto_id),
+        session, identidad.tenant_id, oc, [legajo], _evidencias(session, identidad.tenant_id, sujeto_id),
         oc["vigencia_desde"], oc["vigencia_hasta"], tipos_disponibles=tipos_disponibles,
     )
     return {"oc": {k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()},

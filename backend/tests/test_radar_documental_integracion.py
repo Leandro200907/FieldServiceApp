@@ -160,6 +160,9 @@ def test_supervisor_radar_solo_legajos_de_su_alcance(cliente_api, tenant_de_prue
     assert cliente_api.get(
         f"/v1/consultas/radar_documental_oc/{ids['oc']}/legajos/{asignado}", headers=headers,
     ).status_code == 200
+    assert cliente_api.get(
+        f"/v1/consultas/radar_documental_oc/{ids['oc']}/legajos/empresa-1", headers=headers,
+    ).status_code == 200
 
 
 def test_asignacion_y_custodia_amplian_alcance_del_supervisor_en_radar(cliente_api, tenant_de_prueba):
@@ -167,6 +170,7 @@ def test_asignacion_y_custodia_amplian_alcance_del_supervisor_en_radar(cliente_a
     headers = tenant_de_prueba.headers("supervisor")
     antes = next(i for i in cliente_api.get(_url(), headers=headers).json()["items"] if i["oc_id"] == ids["oc"])
     assert antes["resumen"]["personas"]["total"] == 0
+    assert antes["resumen"]["empresa"]["total"] == 1
     with tenant_session(tenant_de_prueba.tenant_id) as s:
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id,sujeto_id,supervisor_usuario_id,desde,asignada_por) VALUES (:t,'persona-1',:u,'2026-01-01','test')"),
                   {"t": tenant_de_prueba.tenant_id, "u": tenant_de_prueba.usuarios["supervisor"]})

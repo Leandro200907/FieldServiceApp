@@ -575,3 +575,50 @@ verificado que el chequeo automático no haya cubierto — ambos regeneran el to
 fencing. Dead-letter del job: nunca silencioso, notifica a `configuracion`
 (`app/worker/main.py`, hook específico de esta cola, no genérico).
 
+## Auditoría 2026-09-29 — Cierre de tres decisiones pendientes
+
+### D-A. Superficie HTTP operativa (`aa62dbe`) — **no reponer en Módulo 1**
+
+**Decisión:** Mantener retirados de la API pública los comandos/consultas de custodia,
+excepciones, constancias, evaluación de habilitación, backlog/cobertura/decisiones y
+asignación de supervisores (`test_superficie_modulo1.py::RUTAS_OPERATIVAS_RETIRADAS`).
+
+**Motivo:** Frontera de producto Módulo 1 (documentación habilitante + radar informativo) vs.
+Módulo 2 (operación/asignación). Exponer de nuevo esas rutas duplicaría responsabilidades y
+reintroduciría en el frontend flujos que ya se retiraron (`SupervisionScreen`).
+
+**Qué se conserva:** Toda la lógica de dominio en `app/modules/operacion/servicio.py`,
+`app/core/orquestacion.py::decidir_habilitacion`, tablas `evaluacion_habilitacion`, revaluación
+(A-07) y tests que llaman al **servicio** directamente. `evaluar_habilitacion` queda documentado
+como servicio interno para integración autenticada desde Módulo 2, no como contrato HTTP de M1.
+
+### D-B. Empresa en el radar para supervisor — **siempre visible en radar documental**
+
+**Decisión:** En `radar.py`, al filtrar legajos por `alcance_de_sujetos`, el legajo
+`tipo_sujeto = 'empresa'` **no se filtra**: entra en backlog, detalle de OC y detalle de legajo
+empresa aunque el supervisor no tenga asignaciones.
+
+**Motivo:** A-04 acota **decisiones** y sujetos **propuestos**; la empresa nunca es propuesta
+(`DECISIONES §7`, `filtro_decisiones_visibles`). En habilitante 1.8 la empresa es única y
+**siempre evaluada** en el motor. Ocultarla en el radar haría que una OC parezca documentalmente
+completa cuando faltan requisitos de empresa — falso verde informativo.
+
+**Límite:** No ensancha excepciones ni custodia sobre empresa; `excepcion_de_empresa_deshabilitada`
+sigue vigente.
+
+### D-C. B-5 — Handlers de `CargarDocumento` (`_insertar_version_documento`)
+
+**Decisión para savepoints (`begin_nested`) solo en secundarios:**
+
+| Handler | Líneas ~ | Rol |
+|---|---|---|
+| `DocumentoCargado` | 186–194 | **Obligatorio** — evento canónico del comando |
+| `DocumentoSucedido` | 207–213 | **Obligatorio** — invariante de cadena de versiones |
+| `_al_verificar` (evento `DocumentoVerificado`, regularización de excepciones `otorgada`) | 202–206 → 335+ | **Obligatorio** — semántica de carga ya verificada / confirmación |
+| `registrar_accion` (alertas vencimiento) | 198–201 | **Secundario** — pausa recordatorios; no debe abortar la carga |
+| `resolver_por_verificacion` (dentro de `_al_verificar`) | 347–352 | **Secundario** — cierre de alertas; best-effort |
+| `al_registrar_nueva_version` (operadoras) | 218–222 | **Secundario** — espejo operadoras; best-effort |
+
+Los obligatorios comparten commit con el INSERT/UPDATE de `documento`. Los secundarios se
+envuelven en savepoint en la fase B-5 (fallo → rollback parcial, la versión documental queda).
+
