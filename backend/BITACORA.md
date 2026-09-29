@@ -209,3 +209,12 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
   dos procesos de worker sobre 43 jobs (24/19, ningún job dos veces, 3 en dead-letter, outbox
   drenado) · upgrade/downgrade/upgrade de 0015 en las tres bases · integridad: 0 en todos los
   chequeos · `git status` limpio · `alembic heads` = 1.
+
+## 2026-09-29 — Auditoría completa, Fase 1 (suite en verde)
+
+- **F1-1**: tests de URL de descarga usan `POST /v1/storage/documentos/{id}/url` (ya no GET).
+- **F1-2**: fixture `persona_con_docs` en `test_h01_capacidades_v1` registra competencia con
+  `registrar_acreditacion_de_competencia` en lugar de `cargar_documento`.
+- **F1-3**: `test_lector_xlsx_seguridad` arma ZIP con payload descomprimido real > límite.
+- **F1-4**: README actualizado a 548 tests.
+- **F1-5**: workflow `.github/workflows/ci.yml` (Postgres 16, alembic, pytest, frontend check).
