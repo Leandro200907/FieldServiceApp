@@ -237,3 +237,12 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 
 - **B-1**: job `drenaje_outbox` no drena si `drenar_outbox_habilitado` es false (transporte disabled).
 - **B-2**: retoma por lease vencido respeta `MAX_INTENTOS` → dead-letter.
+
+## 2026-09-29 — Auditoría completa, Fase 3 B-3 … B-8
+
+- **B-3**: `_restaurar_sucedido` no revive versión `confirmada` sin objeto en storage; script
+  `scripts/reconciliar_archivos_documento.py`.
+- **B-4**: migración `0025_vigente_hasta_not_null` (NULL → `9999-12-31`, NOT NULL en documento).
+- **B-6**: incumplimiento de empresa incluye requisitos sin documento verificado vigente.
+- **B-7**: `control_plantillas` filtra matrices locales vencidas con `hoy_del_tenant`.
+- **B-8**: prefijos de idempotencia `lote_doc:` / `lote_oc:` (mismo UUID no colisiona entre comandos).
