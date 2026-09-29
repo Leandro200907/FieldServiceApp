@@ -246,3 +246,13 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 - **B-6**: incumplimiento de empresa incluye requisitos sin documento verificado vigente.
 - **B-7**: `control_plantillas` filtra matrices locales vencidas con `hoy_del_tenant`.
 - **B-8**: prefijos de idempotencia `lote_doc:` / `lote_oc:` (mismo UUID no colisiona entre comandos).
+
+## 2026-09-29 — Auditoría completa, Fase 4 (XLSX operadoras)
+
+- **X-1**: `importar_planilla_operadoras` exige rol antes de leer el body XLSX.
+- **X-2**: rechazo por tamaño descomprimido en directorio ZIP (`infolist`) y en lectura.
+- **X-3**: planilla vacía → error de dominio.
+- **X-4**: importación idempotente por `Idempotency-Key` + huella del archivo.
+- **X-5**: hoja inexistente → error explícito.
+- **X-6**: encabezados obligatorios ausentes → error explícito.
+- **X-7**: tope de 1000 filas de datos en el lector.
