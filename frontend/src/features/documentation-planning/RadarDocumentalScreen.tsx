@@ -9,11 +9,12 @@ import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
 import './radar.css';
 
-const stateLabels: Record<RadarState, string> = {
+const stateLabels: Record<string, string> = {
   sin_alertas_documentales: 'Sin alertas documentales',
   con_alertas_documentales: 'Con alertas documentales',
   informacion_incompleta: 'Información incompleta',
   sin_matriz: 'Sin matriz aplicable',
+  fuera_de_alcance: 'Recursos fuera de tu alcance',
 };
 
 function displayDate(value: string | null | undefined) {
@@ -58,7 +59,7 @@ function DetailPanel({ detail, onLegajo, onOffsetChange }: { detail: DetalleOcRa
           const legajos = asArray(group?.legajos);
           return <li key={`${asText(group?.tipo_sujeto)}-${groupIndex}`}>
             {asText(group?.tipo_sujeto)}: {legajos.length} en esta página / {typeof group?.total === 'number' ? group.total : legajos.length} en total
-            {group?.sin_legajos_requeridos === true && <strong> · Falta información: no hay legajos activos de este tipo requerido</strong>}
+            {group?.sin_legajos_requeridos === true && <strong> · Hay recursos de este tipo fuera de tu alcance o sin legajos visibles</strong>}
             {legajos.length > 0 && <ul>{legajos.map((rawLegajo, index) => {
               const legajo = asRecord(rawLegajo);
               const sujetoId = asText(legajo?.sujeto_id, '');

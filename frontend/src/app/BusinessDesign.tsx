@@ -3,6 +3,8 @@ import type { Page } from './capabilities';
 import { BlockedSelector } from '../ui/States';
 import { CalendarDocumentalScreen } from '../features/documentation-planning/CalendarDocumentalScreen';
 import { RadarDocumentalScreen } from '../features/documentation-planning/RadarDocumentalScreen';
+import { BacklogOcScreen } from '../features/documentation-planning/BacklogOcScreen';
+import { TimelineRecursosScreen } from '../features/documentation-planning/TimelineRecursosScreen';
 import { MiLegajoScreen } from '../features/mi-legajo/MiLegajoScreen';
 import { VencimientosScreen } from '../features/vencimientos/VencimientosScreen';
 import { LegajosScreen } from '../features/legajos/LegajosScreen';
@@ -17,6 +19,8 @@ const selectors: Partial<Record<Page['id'], Array<[string, string]>>> = {
 export function BusinessDesign({ page, technicalNotes = false, roles = [], propuestasDeDiseno, propuestasSoloLectura = false }: { page: Page; technicalNotes?: boolean; roles?: readonly string[]; propuestasDeDiseno?: PropuestasAccess; propuestasSoloLectura?: boolean }) {
   if (page.id === 'calendario-vigencias') return <><CalendarDocumentalScreen roles={roles} />{technicalNotes && <p className="technical-note">Q-DOC-01 · GET /v1/consultas/calendario_vigencias implementado y con adaptador real (`realDocumentationPlanningAccess`); activación detrás de `featureFlags.documentationCalendarIntegration` (hoy `false`). Q-DOC-03 (GET /v1/consultas/detalle_proyeccion_documental, detalle de tramo por referencia) también implementado en el backend — el frontend todavía no lo consume desde esta pantalla (F-08).</p>}</>;
   if (page.id === 'radar-documental') return <><RadarDocumentalScreen roles={roles} />{technicalNotes && <p className="technical-note">GET /v1/consultas/radar_documental_backlog, radar_documental_oc y detalle por legajo integrados. La consulta es informativa y no asigna recursos.</p>}</>;
+  if (page.id === 'backlog-oc') return <><BacklogOcScreen roles={roles} />{technicalNotes && <p className="technical-note">GET /v1/consultas/backlog_oc y cobertura_oc · modo consulta.</p>}</>;
+  if (page.id === 'timeline-recursos') return <><TimelineRecursosScreen />{technicalNotes && <p className="technical-note">GET /v1/consultas/timeline_recursos</p>}</>;
   if (page.id === 'mi-legajo') return <><MiLegajoScreen />{technicalNotes && <p className="technical-note">GET /v1/consultas/mi_legajo integrado. La pantalla presenta únicamente el legajo personal; las custodias y asignaciones de recursos quedan fuera del Módulo 1 visible.</p>}</>;
   if (page.id === 'vencimientos') return <><VencimientosScreen />{technicalNotes && <p className="technical-note">G-01 / H-02 · GET /v1/consultas/tablero_vencimientos implementado, tipado y con adaptador real (`realVencimientosAccess`); activación detrás de `featureFlags.expirationsBoardIntegration` (hoy `false`). Muestra solo la consulta de vencimientos — el ciclo de alertas (agregado persistente, políticas, recordatorio, escalamiento) sigue detrás de `alertConfiguration`/`alertLifecycle`, capacidad distinta y no implementada.</p>}</>;
   if (page.id === 'legajos') return <><LegajosScreen />{technicalNotes && <p className="technical-note">SEL-01 · GET /v1/consultas/sujetos (búsqueda) y GET /v1/consultas/legajo (detalle por sujeto_id) implementados y con adaptador real (`realLegajosAccess`); activación detrás de `featureFlags.legajoLookupIntegration` (hoy `false`). El sujeto elegido siempre sale de una búsqueda ya acotada al alcance del usuario, nunca de un id libre.</p>}</>;

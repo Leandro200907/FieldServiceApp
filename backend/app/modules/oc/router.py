@@ -4,8 +4,11 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, Field
+
+from app.api.errores import ErrorDeDominio
+from app.modules.oc.lector_planilla_oc import leer_planilla_oc
 
 from app.auth.identidad import Identidad, Rol
 from app.comun.idempotencia import ejecutar_idempotente, fingerprint_de
@@ -62,6 +65,41 @@ class CancelarOCResponse(BaseModel):
     clave_origen: str
     estado: str
     eventos: list[str]
+
+
+class ImportarPlanillaOcResponse(ImportarLoteOCResponse):
+    errores_lectura: list[str] = Field(default_factory=list)
+
+
+@router.post("/comandos/importar_planilla_oc", response_model=ImportarPlanillaOcResponse)
+async def importar_planilla_oc(
+    request: Request,
+    identidad: Identidad = Depends(identidad_actual),
+    lote_id: UUID = Query(...),
+    hoja: str = Query("OC", max_length=80),
+    nombre_archivo: str = Header("planilla_oc.xlsx", alias="X-Nombre-Archivo", max_length=500),
+) -> ImportarPlanillaOcResponse:
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
+    if not nombre_archivo.lower().endswith(".xlsx"):
+        raise ErrorDeDominio("Solo se admite extensión .xlsx", {"nombre": nombre_archivo})
+    media = request.headers.get("content-type", "")
+    if "spreadsheet" not in media and media != "application/octet-stream":
+        raise ErrorDeDominio("Content-Type debe ser XLSX", {"content_type": media})
+    contenido = await request.body()
+    if len(contenido) > 5 * 1024 * 1024:
+        raise ErrorDeDominio("Archivo demasiado grande (máx. 5 MiB)")
+    filas, errores_lectura = leer_planilla_oc(contenido, hoja=hoja)
+    if errores_lectura and not filas:
+        return ImportarPlanillaOcResponse(
+            lote_id=str(lote_id), estado="rechazado", filas_totales=0, filas_aceptadas=0, filas_rechazadas=0,
+            detalle_filas_rechazadas=[], oc_ids=[], ya_aplicado=False, eventos=[], errores_lectura=errores_lectura,
+        )
+    resultado = ejecutar_idempotente(
+        identidad.tenant_id, identidad.usuario_id, f"lote_oc:{lote_id}",
+        fingerprint_de("POST", "/comandos/importar_planilla_oc", {"lote_id": str(lote_id), "hoja": hoja, "filas": len(filas)}),
+        lambda s: servicio.importar_lote_oc(s, identidad, str(lote_id), "planilla", filas),
+    )
+    return ImportarPlanillaOcResponse(**resultado, errores_lectura=errores_lectura)
 
 
 @router.post("/comandos/importar_lote_oc", response_model=ImportarLoteOCResponse)

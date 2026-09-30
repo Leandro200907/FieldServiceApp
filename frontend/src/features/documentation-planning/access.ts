@@ -22,4 +22,12 @@ export function isBacklogIntegrated(): boolean {
   return featureFlags.radarDocumentationIntegration;
 }
 
+export function isOcBacklogIntegrated(): boolean {
+  return featureFlags.ocBacklogIntegration;
+}
+
+export function isTimelineIntegrated(): boolean {
+  return featureFlags.resourceTimelineIntegration;
+}
+
 
