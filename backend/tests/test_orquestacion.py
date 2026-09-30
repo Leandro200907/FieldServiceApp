@@ -52,10 +52,13 @@ def insertar_catalogos_maestros(
     tenant_id: str,
     clave: dict,
     *,
-    operadora: str = "Operadora prueba",
-    locacion: str = "Planta norte",
-    tipo_servicio: str = "Mantenimiento",
+    operadora: str | None = None,
+    locacion: str | None = None,
+    tipo_servicio: str | None = None,
 ) -> None:
+    operadora = operadora or f"Operadora {clave['c'][:8]}"
+    locacion = locacion or f"Planta {clave['l'][:8]}"
+    tipo_servicio = tipo_servicio or f"Servicio {clave['ts'][:8]}"
     s.execute(
         text(
             "INSERT INTO modulo1.operadora_documental (operadora_id, tenant_id, nombre) "

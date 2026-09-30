@@ -154,14 +154,17 @@ def evaluar_oc_backlog(
 
         # Tramos sin ningún legajo habilitado
         tramos_sin: list[dict[str, str]] = []
+
+        def _ok_en_dia(dia: date) -> bool:
+            tramo_dia = next((t for t in tramos if t["desde"] <= dia <= t["hasta"]), None)
+            if tramo_dia is None:
+                return True
+            mini = {"desde": dia, "hasta": dia, "requisitos": tramo_dia["requisitos"]}
+            return any(_eval_legajo_tramo(l, mini, evidencias)[0] for l in legajos_tipo)
+
         cursor = inicio
         while cursor <= fin:
-            tramo_dia = next((t for t in tramos if t["desde"] <= cursor <= t["hasta"]), None)
-            if tramo_dia is None:
-                cursor += timedelta(days=1)
-                continue
-            alguno = any(_eval_legajo_tramo(l, tramo_dia, evidencias)[0] for l in legajos_tipo)
-            if not alguno and legajos_tipo:
+            if legajos_tipo and not _ok_en_dia(cursor):
                 tramos_sin.append({"desde": cursor.isoformat(), "hasta": cursor.isoformat()})
             cursor += timedelta(days=1)
         # Comprimir tramos consecutivos
