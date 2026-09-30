@@ -109,20 +109,17 @@ def alta_operadora(session: Session, identidad: Identidad, nombre: str) -> dict[
     nombre = nombre.strip()
     if not nombre:
         raise ErrorDeDominio("nombre obligatorio")
-    existente = session.execute(
-        text(
-            "SELECT operadora_id FROM modulo1.operadora_documental "
-            "WHERE tenant_id = :t AND lower(nombre) = lower(:n)"
-        ),
+    clave = normalizar_clave(nombre)
+    for fila in session.execute(
+        text("SELECT operadora_id, nombre FROM modulo1.operadora_documental WHERE tenant_id = :t"),
+        {"t": identidad.tenant_id},
+    ):
+        if normalizar_clave(fila[1]) == clave:
+            raise ErrorDeDominio("operadora duplicada", {"nombre": nombre})
+    oid = session.execute(
+        text("INSERT INTO modulo1.operadora_documental (tenant_id, nombre) VALUES (:t, :n) RETURNING operadora_id"),
         {"t": identidad.tenant_id, "n": nombre},
     ).scalar()
-    if existente:
-        oid = existente
-    else:
-        oid = session.execute(
-            text("INSERT INTO modulo1.operadora_documental (tenant_id, nombre) VALUES (:t, :n) RETURNING operadora_id"),
-            {"t": identidad.tenant_id, "n": nombre},
-        ).scalar()
     return {"operadora_id": str(oid), "nombre": nombre}
 
 
