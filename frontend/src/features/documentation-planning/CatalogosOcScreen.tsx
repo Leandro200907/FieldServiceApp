@@ -58,7 +58,7 @@ export function CatalogosOcScreen() {
       <header className="panel">
         <h2>Catálogos de OC</h2>
         <p>Operadoras, locaciones y tipos de servicio usados en la planilla de OC.</p>
-        {msg && <p role="status">{msg}</p>}
+        {msg && <p className={msg === 'Guardado correctamente' ? undefined : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
       </header>
 
       <section className="panel">
