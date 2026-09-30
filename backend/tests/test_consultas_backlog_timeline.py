@@ -21,21 +21,23 @@ from tests.test_orquestacion import (
 AHORA = datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)
 
 
-def _contar_evaluaciones(s, extra: str = "") -> int:
-    return s.execute(text(f"SELECT count(*) FROM modulo1.evaluacion_habilitacion {extra}")).scalar()
-
-
 def test_backlog_oc_cubierta(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     _escenario(sesion, t)
     sesion.commit()
-    antes = _contar_evaluaciones(sesion)
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos"))
+    antes = sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
+    r = cliente_api.get(
+        "/v1/consultas/backlog_oc",
+        params={"q": "OC-1"},
+        headers=t.headers("responsable_legajos"),
+    )
     assert r.status_code == 200, r.text
     item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-1")
     assert item["estado_cobertura"] == "cubierta"
     assert "ultima_decision" not in item
-    assert _contar_evaluaciones(sesion) == antes
+    sesion.rollback()
+    despues = sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
+    assert despues == antes
 
 
 def test_backlog_oc_motivo_112(cliente_api, tenant_de_prueba, sesion):
