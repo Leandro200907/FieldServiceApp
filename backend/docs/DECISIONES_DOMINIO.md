@@ -640,3 +640,49 @@ sigue vigente.
 Los obligatorios comparten commit con el INSERT/UPDATE de `documento`. Los secundarios se
 envuelven en savepoint en la fase B-5 (fallo → rollback parcial, la versión documental queda).
 
+### D-E. Backlog sin veredicto de cobertura — **Módulo 1 (2026-09-30)**
+
+**Principio:** El Módulo 1 **no afirma “OC cubierta”**. No conoce la dotación que necesita
+cada OC: eso lo define la planificación del supervisor (Módulo 2). El Módulo 1 solo marca en
+rojo **certezas** (verdaderas para cualquier dotación) y muestra la **disponibilidad
+documental** como información. Nunca asigna personas, vehículos ni equipos.
+
+**Vocabulario:** *habilitado / no habilitado* (estado documental en la ventana de la OC).
+Prohibido en UI y contratos de backlog: *asignable*, *cubierta*, *no cubierta*.
+
+**Alertas ciertas por OC** (modo consulta, sin persistir):
+
+| Código | Significado |
+|---|---|
+| `empresa_no_habilitada` | La empresa no cumple en algún tramo de la ventana (con fechas). |
+| `tipo_sin_habilitados` | Un tipo de recurso exigido por la matriz tiene **cero** legajos habilitados en algún tramo de la ventana (con fechas). |
+| `sin_matriz` | La OC no tiene matriz aplicable en algún tramo de su ventana. |
+
+**Disponibilidad por tipo exigido** (informativo, sin veredicto): conteos de legajos
+habilitados toda la ventana; habilitados que se caen dentro de la ventana (cada uno con fecha
+y requisito); no habilitados. Ejemplo: «Técnicos: 4 habilitados toda la ventana · 2 se caen
+el 18/11 (apto médico) · 3 no habilitados».
+
+**Impacto cierto:** por tipo exigido, cantidad de días de la ventana **sin ningún** legajo
+habilitado, más los tramos exactos. `vigente_hasta` es **inclusivo**: si el único habilitado
+vence el 18/11 y la ventana termina el 25/11, el impacto es 19/11–25/11 = 7 días.
+
+**Supervisor (D-B):** universo propio + empresa. Si un tipo tiene cero habilitados **solo**
+porque los legajos están fuera de su universo → `fuera_de_alcance`; **nunca**
+`tipo_sin_habilitados` ni “falta información”.
+
+**Reprogramación de OC:** comando auditado con motivo; historial desde `event_log`
+(`CompromisoModificado`); efecto documental antes/después de la ventana.
+
+**Catálogo único de operadoras:** la operadora de la OC es la misma entidad que
+`operadora_documental` (`cliente_id` = `operadora_id`). Locaciones y tipos de servicio tienen
+catálogo con nombre; planilla de OC y pantallas usan nombres, no UUIDs crudos.
+
+**Evolución futura (Módulo 2):** cuando informe la dotación requerida por OC (evento con
+versión), el Módulo 1 podrá mostrar «X de N» recursos; **hoy no** — no hay N conocido en M1.
+
+**Modo consulta:** `GET backlog_oc`, `cobertura_oc`, `timeline_recursos`, `acciones_pendientes`
+no persisten evaluaciones ni emiten eventos.
+
+**Código / tests:** `app/modules/consultas/backlog_documental.py`, `tests/test_backlog_m1_de.py`.
+
