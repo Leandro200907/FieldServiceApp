@@ -1,6 +1,8 @@
 """Consultas backlog OC, cobertura y timeline (D-A bis)."""
 from __future__ import annotations
 
+pytest_plugins = ("tests.test_orquestacion",)
+
 import uuid
 from datetime import date, datetime, timezone
 
