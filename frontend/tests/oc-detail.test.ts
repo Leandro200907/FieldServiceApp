@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatFecha } from '../src/features/documentation-planning/dates';
-import { lineasDisponibilidad, textoAlertaCierta, textoHistorial } from '../src/features/documentation-planning/ocDetail';
+import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial } from '../src/features/documentation-planning/ocDetail';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
@@ -32,6 +32,17 @@ describe('detalle de OC', () => {
       TZ,
     );
     expect(texto).toBe('Personas: 7 días sin ningún habilitado, 19/11/2026 al 25/11/2026');
+  });
+
+  it('resume alertas e impacto en texto, nunca booleanos', () => {
+    const r = resumenDocumental({
+      tiene_alertas: true,
+      alertas_ciertas: [{ codigo: 'tipo_sin_habilitados', mensaje: 'x', tipo_sujeto: 'persona', tramos: [{ desde: '2026-11-19', hasta: '2026-11-25' }] }],
+      impacto_por_tipo: [{ tipo_sujeto: 'persona', dias_sin_habilitados: 7 }],
+    }, TZ);
+    expect(r.alertas.join(' ')).not.toMatch(/true|false/);
+    expect(r.impacto[0]).toBe('Personas: 7 días');
+    expect(resumenDocumental({ tiene_alertas: false, alertas_ciertas: [], impacto_por_tipo: [] }, TZ).alertas).toEqual(['Sin alertas ciertas']);
   });
 
   it('formatea el historial sin ISO crudo', () => {

@@ -51,6 +51,24 @@ export function textoAlertaCierta(alerta: Alerta, impactos: Impacto[], timeZone:
   return tramoTxt ? `${alerta.mensaje} (${tramoTxt})` : alerta.mensaje;
 }
 
+export function resumenDocumental(
+  ev: { alertas_ciertas?: Alerta[]; impacto_por_tipo?: Impacto[]; tiene_alertas?: boolean } | null | undefined,
+  timeZone: string,
+): { alertas: string[]; impacto: string[] } {
+  const alertasSrc = ev?.alertas_ciertas || [];
+  const impactos = ev?.impacto_por_tipo || [];
+  const alertas = alertasSrc.length
+    ? alertasSrc.map(a => textoAlertaCierta(a, impactos, timeZone))
+    : ['Sin alertas ciertas'];
+  const impacto = impactos.length
+    ? impactos.map(i => {
+        const etiqueta = i.tipo_sujeto === 'persona' ? 'Personas' : i.tipo_sujeto === 'vehiculo' ? 'Vehículos' : i.tipo_sujeto === 'equipo' ? 'Equipos' : (i.tipo_sujeto || 'Tipo');
+        return `${etiqueta}: ${i.dias_sin_habilitados ?? 0} días`;
+      })
+    : ['Sin días sin habilitados'];
+  return { alertas, impacto };
+}
+
 export function textoHistorial(h: { fecha?: unknown; origen?: unknown; motivo?: unknown }, timeZone: string): string {
   const fecha = typeof h.fecha === 'string' && h.fecha ? formatFecha(h.fecha, timeZone) : '';
   const origen = typeof h.origen === 'string' ? h.origen : '';

@@ -10,7 +10,7 @@ import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
 import { formatFecha } from './dates';
-import { lineasDisponibilidad, textoAlertaCierta, textoHistorial } from './ocDetail';
+import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial } from './ocDetail';
 import './planning.css';
 import './timeline.css';
 
@@ -24,10 +24,8 @@ function fmtDate(value: string) {
   return formatFecha(value, tz);
 }
 
-function addDays(iso: string, days: number) {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+function tenantTz() {
+  return session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
 }
 
 function necesitaCatalogo(motivo: string) {
@@ -47,6 +45,12 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
   const [importError, setImportError] = useState<string | null>(null);
   const [rechazadas, setRechazadas] = useState<FilaRechazada[]>([]);
   const [comparacion, setComparacion] = useState<Record<string, unknown> | null>(null);
+  const [ventanaAntes, setVentanaAntes] = useState<{ desde: string; hasta: string } | null>(null);
+  const [ventanaNueva, setVentanaNueva] = useState<{ desde: string; hasta: string } | null>(null);
+  const [reproDesde, setReproDesde] = useState('');
+  const [reproHasta, setReproHasta] = useState('');
+  const [reproMotivo, setReproMotivo] = useState('');
+  const [reproError, setReproError] = useState<string | null>(null);
   const puedeImportar = roles.includes('responsable_legajos');
   const puedeReprogramar = roles.includes('responsable_legajos') || roles.includes('configuracion');
   const hoy = new Date().toISOString().slice(0, 10);
@@ -83,7 +87,7 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
     });
     if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
     return data as Cobertura;
-  }, [selected]);
+  }, [selected, reloadKey]);
 
   const items = backlogQuery.data?.items ?? [];
   const autoDesde = useMemo(() => {
@@ -264,10 +268,33 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
               </ul>
             </>
           )}
-          {comparacion && (
+          {comparacion && ventanaAntes && ventanaNueva && (
             <section className="reprog-comparacion">
               <h4>Efecto documental (antes → después)</h4>
-              <p>Alertas: {String(comparacion.tiene_alertas_antes)} → {String(comparacion.tiene_alertas_despues)}</p>
+              <div>
+                <p><strong>Antes</strong> {fmtDate(ventanaAntes.desde)} – {fmtDate(ventanaAntes.hasta)}</p>
+                {(() => {
+                  const r = resumenDocumental(comparacion.documental_anterior as Parameters<typeof resumenDocumental>[0], tenantTz());
+                  return (
+                    <>
+                      <p>Alertas: {r.alertas.join(' · ')}</p>
+                      <p>Impacto: {r.impacto.join(' · ')}</p>
+                    </>
+                  );
+                })()}
+              </div>
+              <div>
+                <p><strong>Después</strong> {fmtDate(ventanaNueva.desde)} – {fmtDate(ventanaNueva.hasta)}</p>
+                {(() => {
+                  const r = resumenDocumental(comparacion.documental_nuevo as Parameters<typeof resumenDocumental>[0], tenantTz());
+                  return (
+                    <>
+                      <p>Alertas: {r.alertas.join(' · ')}</p>
+                      <p>Impacto: {r.impacto.join(' · ')}</p>
+                    </>
+                  );
+                })()}
+              </div>
               <ul>{((comparacion.mensajes as string[]) || []).map(m => <li key={m}>{m}</li>)}</ul>
             </section>
           )}
@@ -282,32 +309,46 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
             </details>
           )}
           {puedeReprogramar && (
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={async () => {
-                const motivo = window.prompt('Motivo de reprogramación');
-                if (!motivo) return;
+            <form
+              className="form-grid"
+              onSubmit={async e => {
+                e.preventDefault();
+                setReproError(null);
+                if (!reproDesde || !reproHasta || !reproMotivo.trim()) {
+                  setReproError('Completá fecha desde, fecha hasta y motivo');
+                  return;
+                }
+                const anterior = {
+                  desde: detailQuery.data!.oc.vigencia_desde as string,
+                  hasta: detailQuery.data!.oc.vigencia_hasta as string,
+                };
                 const res = await session.client.POST('/v1/comandos/reprogramar_oc', {
                   body: {
                     oc_id: detailQuery.data!.oc.oc_id as string,
-                    vigencia_desde: detailQuery.data!.oc.vigencia_desde as string,
-                    vigencia_hasta: addDays(detailQuery.data!.oc.vigencia_hasta as string, 7),
-                    motivo,
+                    vigencia_desde: reproDesde,
+                    vigencia_hasta: reproHasta,
+                    motivo: reproMotivo.trim(),
                   },
                   headers: { 'Idempotency-Key': crypto.randomUUID() },
                 } as never);
                 if (res.error || !res.response.ok) {
-                  window.alert(parseApiError(res.error, res.response, res.response.headers.get('X-Request-ID') || crypto.randomUUID()).message);
+                  setReproError(parseApiError(res.error, res.response, res.response.headers.get('X-Request-ID') || crypto.randomUUID()).message);
                   return;
                 }
                 const body = res.data as { comparacion_documental?: Record<string, unknown> };
+                setVentanaAntes(anterior);
+                setVentanaNueva({ desde: reproDesde, hasta: reproHasta });
                 setComparacion(body.comparacion_documental ?? null);
+                setReproMotivo('');
                 setReloadKey(k => k + 1);
               }}
             >
-              Reprogramar
-            </button>
+              <label>Fecha desde<input type="date" value={reproDesde || (detailQuery.data.oc.vigencia_desde as string)} onChange={e => setReproDesde(e.target.value)} /></label>
+              <label>Fecha hasta<input type="date" value={reproHasta || (detailQuery.data.oc.vigencia_hasta as string)} onChange={e => setReproHasta(e.target.value)} /></label>
+              <label>Motivo<input value={reproMotivo} onChange={e => setReproMotivo(e.target.value)} /></label>
+              <button type="submit" className="button button-secondary">Reprogramar</button>
+              {reproError && <p className="field-error" role="alert">{reproError}</p>}
+            </form>
           )}
           <Link className="button button-secondary" to={`/timeline-recursos?oc_id=${detailQuery.data.oc.oc_id as string}`}>Ver recursos en el tiempo</Link>
         </section>
