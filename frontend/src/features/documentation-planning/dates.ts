@@ -56,3 +56,12 @@ export function clipSegment(
   const right = dayPosition(end, vistaDesde, vistaHasta);
   return { left, width: Math.max(right - left, 0) };
 }
+
+const FECHA_SOLA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Fecha de calendario en la zona del tenant, sin ISO ni hora. */
+export function formatFecha(value: string, timeZone: string): string {
+  const date = FECHA_SOLA.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone }).format(date);
+}

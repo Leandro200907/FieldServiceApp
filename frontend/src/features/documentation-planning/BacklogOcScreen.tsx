@@ -9,6 +9,8 @@ import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
+import { formatFecha } from './dates';
+import { lineasDisponibilidad, textoAlertaCierta, textoHistorial } from './ocDetail';
 import './planning.css';
 import './timeline.css';
 
@@ -18,7 +20,8 @@ type Catalogos = components['schemas']['CatalogosOcResponse'];
 type FilaRechazada = components['schemas']['FilaRechazada'];
 
 function fmtDate(value: string) {
-  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+  const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  return formatFecha(value, tz);
 }
 
 function addDays(iso: string, days: number) {
@@ -238,11 +241,29 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
           <h3>{detailQuery.data.oc.clave_origen as string}</h3>
           <p>{fmtDate(detailQuery.data.oc.vigencia_desde as string)} – {fmtDate(detailQuery.data.oc.vigencia_hasta as string)}</p>
           <p>{detailQuery.data.tiene_alertas ? 'Con alertas ciertas' : 'Sin alertas'}</p>
+          <h4>Disponibilidad por tipo</h4>
           <ul>
             {(detailQuery.data.disponibilidad_por_tipo || []).map(d => (
-              <li key={d.tipo_sujeto}>{d.texto}</li>
+              <li key={d.tipo_sujeto}>
+                <strong>{d.etiqueta}</strong>
+                <ul>
+                  {lineasDisponibilidad(d, session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires').map(linea => (
+                    <li key={linea}>{linea}</li>
+                  ))}
+                </ul>
+              </li>
             ))}
           </ul>
+          {(detailQuery.data.alertas_ciertas || []).length > 0 && (
+            <>
+              <h4>Alertas ciertas</h4>
+              <ul>
+                {(detailQuery.data.alertas_ciertas || []).map((a, i) => (
+                  <li key={`${a.codigo}-${i}`}>{textoAlertaCierta(a, (detailQuery.data!.impacto_por_tipo || []) as { tipo_sujeto?: string; dias_sin_habilitados?: number }[], session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires')}</li>
+                ))}
+              </ul>
+            </>
+          )}
           {comparacion && (
             <section className="reprog-comparacion">
               <h4>Efecto documental (antes → después)</h4>
@@ -254,12 +275,9 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
             <details>
               <summary>Historial de cambios</summary>
               <ul>
-                {detailQuery.data.historial_compromiso!.map((h, i) => {
-                  const row = h as { fecha?: string; origen?: string; motivo?: string };
-                  return (
-                    <li key={i}>{String(row.fecha ?? '')} · {String(row.origen ?? '')} · {row.motivo || '—'}</li>
-                  );
-                })}
+                {detailQuery.data.historial_compromiso!.map((h, i) => (
+                  <li key={i}>{textoHistorial(h as { fecha?: string; origen?: string; motivo?: string }, session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires')}</li>
+                ))}
               </ul>
             </details>
           )}
