@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 
 from app.auth.dependencies import identidad_actual
@@ -95,11 +95,11 @@ class TableroVencimientosResponse(BaseModel):
 
 # --------------------------------------------------------------------------- servicio.py: OC / decisiones
 
-class UltimaDecisionOC(BaseModel):
-    referencia_evaluacion: str
-    veredicto_de_cumplimiento: str
-    resultado_de_decision: str
-    creado_en: str
+class ResumenCoberturaTipo(BaseModel):
+    tipo_sujeto: str
+    estado: str
+    candidatos_cumplen: int
+    motivo: str | None = None
 
 
 class OcBacklogItem(BaseModel):
@@ -115,7 +115,9 @@ class OcBacklogItem(BaseModel):
     lote_id: str | None
     creado_en: str
     actualizado_en: str
-    ultima_decision: UltimaDecisionOC | None
+    modo: str
+    estado_cobertura: str
+    por_tipo: list[ResumenCoberturaTipo]
 
 
 class BacklogOcResponse(BaseModel):
@@ -176,15 +178,32 @@ class OcResumenCobertura(BaseModel):
     vigencia_hasta: str
 
 
+class CandidatoCobertura(BaseModel):
+    sujeto_id: str
+    tipo_sujeto: str
+    asignable: bool
+    veredicto: str
+    primer_quiebre: str | None
+    requisitos: list[dict[str, Any]]
+
+
+class GrupoCandidatosCobertura(BaseModel):
+    tipo_sujeto: str
+    candidatos: list[CandidatoCobertura]
+
+
 class CoberturaOcResponse(BaseModel):
     commitment_id: str
     oc: OcResumenCobertura
     modo: str
-    veredicto_de_cumplimiento: str
-    resultado_de_decision: str
-    por_sujeto: list[SujetoEvaluado]
+    estado_cobertura: str
+    veredicto_de_cumplimiento: str | None = None
+    resultado_de_decision: str | None = None
+    por_tipo: list[ResumenCoberturaTipo]
+    grupos_candidatos: list[GrupoCandidatosCobertura]
     requisitos_faltantes: list[RequisitoFaltante]
-    version_matriz: VersionMatrizEvaluada
+    version_matriz: VersionMatrizEvaluada | None = None
+    tipos_fuera_de_alcance: list[str]
 
 
 class DecisionResumen(BaseModel):
@@ -305,6 +324,104 @@ def legajo(sujeto_id: str = Query(...), identidad: Identidad = Depends(identidad
 def propuestas_pendientes(identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> PropuestasPendientesResponse:
     with tenant_session(identidad.tenant_id) as s:
         return PropuestasPendientesResponse(**servicio.propuestas_pendientes(s, identidad, p))
+
+
+@router.get("/consultas/backlog_oc", response_model=BacklogOcResponse)
+def backlog_oc(
+    response: Response,
+    estado: str | None = Query("activo"),
+    estado_cobertura: str | None = Query(None),
+    vigencia_desde: date | None = Query(None),
+    vigencia_hasta: date | None = Query(None),
+    q: str | None = Query(None, max_length=200),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> BacklogOcResponse:
+    response.headers["Cache-Control"] = "no-store"
+    with tenant_session(identidad.tenant_id) as s:
+        return BacklogOcResponse(**servicio.backlog_oc(
+            s, identidad, p, estado=estado, estado_cobertura=estado_cobertura,
+            vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta, q=q,
+        ))
+
+
+@router.get("/consultas/cobertura_oc", response_model=CoberturaOcResponse)
+def cobertura_oc(
+    response: Response,
+    oc_id: UUID | None = Query(None),
+    commitment_id: str | None = Query(None),
+    identidad: Identidad = Depends(identidad_actual),
+) -> CoberturaOcResponse:
+    response.headers["Cache-Control"] = "no-store"
+    with tenant_session(identidad.tenant_id) as s:
+        return CoberturaOcResponse(**servicio.cobertura_oc(
+            s, identidad, commitment_id=commitment_id, oc_id=str(oc_id) if oc_id else None,
+        ))
+
+
+class TramoTimeline(BaseModel):
+    requisito_definicion_id: str | None
+    requisito: str | None
+    categoria: str | None
+    vigente_desde: str
+    vigente_hasta: str
+    estado_confirmacion: str
+    estado_visual: str
+
+
+class QuiebreOcTimeline(BaseModel):
+    fecha: str
+    requisito: str | None
+
+
+class CruceOcTimeline(BaseModel):
+    oc_id: str
+    clave_origen: str
+    referencia: str | None
+    vigencia_desde: str
+    vigencia_hasta: str
+    llega_cubierto: bool
+    quiebres: list[QuiebreOcTimeline]
+
+
+class RecursoTimeline(BaseModel):
+    sujeto_id: str
+    tipo_sujeto: str
+    identificador: str
+    tramos: list[TramoTimeline]
+    ocs: list[CruceOcTimeline]
+
+
+class TimelineRecursosResponse(BaseModel):
+    hoy: str
+    desde: str
+    hasta: str
+    items: list[RecursoTimeline]
+    total: int
+    offset: int
+    limit: int
+
+
+@router.get("/consultas/timeline_recursos", response_model=TimelineRecursosResponse)
+def timeline_recursos(
+    response: Response,
+    desde: date = Query(...),
+    hasta: date = Query(...),
+    tipo_sujeto: Literal["empresa", "persona", "vehiculo", "equipo"] | None = Query(None),
+    oc_id: UUID | None = Query(None),
+    q: str | None = Query(None, max_length=200),
+    solo_quiebres: bool = Query(False),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> TimelineRecursosResponse:
+    from app.modules.consultas import timeline as timeline_servicio
+
+    response.headers["Cache-Control"] = "no-store"
+    with tenant_session(identidad.tenant_id) as s:
+        return TimelineRecursosResponse(**timeline_servicio.timeline_recursos(
+            s, identidad, p, desde=desde, hasta=hasta, tipo_sujeto=tipo_sujeto,
+            oc_id=str(oc_id) if oc_id else None, q=q, solo_quiebres=solo_quiebres,
+        ))
 
 
 @router.get("/consultas/tablero_vencimientos", response_model=TableroVencimientosResponse)

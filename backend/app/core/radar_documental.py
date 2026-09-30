@@ -53,11 +53,14 @@ def resumir_oc(resumenes_legajo: Iterable[ResumenDocumental], *, sin_matriz: boo
     resumenes = tuple(resumenes_legajo)
     alertas = sum(r.estado == "con_alertas_documentales" for r in resumenes)
     incompletos = sum(r.estado == "informacion_incompleta" for r in resumenes)
+    fuera = sum(r.estado == "fuera_de_alcance" for r in resumenes)
     quiebres = [r.primer_quiebre for r in resumenes if r.primer_quiebre is not None]
     if alertas:
         estado = "con_alertas_documentales"
     elif incompletos:
         estado = "informacion_incompleta"
+    elif fuera:
+        estado = "fuera_de_alcance"
     elif sin_matriz:
         estado = "sin_matriz"
     else:

@@ -774,6 +774,37 @@
         "title": "AvisoIncumplimiento",
         "type": "object"
       },
+      "BacklogOcResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OcBacklogItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "BacklogOcResponse",
+        "type": "object"
+      },
       "BajaDeSujeto": {
         "properties": {
           "sujeto_id": {
@@ -962,6 +993,55 @@
           "eventos"
         ],
         "title": "CancelarOCResponse",
+        "type": "object"
+      },
+      "CandidatoCobertura": {
+        "properties": {
+          "asignable": {
+            "title": "Asignable",
+            "type": "boolean"
+          },
+          "primer_quiebre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primer Quiebre"
+          },
+          "requisitos": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Requisitos",
+            "type": "array"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "asignable",
+          "veredicto",
+          "primer_quiebre",
+          "requisitos"
+        ],
+        "title": "CandidatoCobertura",
         "type": "object"
       },
       "CargarDocumento": {
@@ -1156,6 +1236,97 @@
           "regularizada_en"
         ],
         "title": "CausaIncumplimiento",
+        "type": "object"
+      },
+      "CoberturaOcResponse": {
+        "properties": {
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "estado_cobertura": {
+            "title": "Estado Cobertura",
+            "type": "string"
+          },
+          "grupos_candidatos": {
+            "items": {
+              "$ref": "#/components/schemas/GrupoCandidatosCobertura"
+            },
+            "title": "Grupos Candidatos",
+            "type": "array"
+          },
+          "modo": {
+            "title": "Modo",
+            "type": "string"
+          },
+          "oc": {
+            "$ref": "#/components/schemas/OcResumenCobertura"
+          },
+          "por_tipo": {
+            "items": {
+              "$ref": "#/components/schemas/ResumenCoberturaTipo"
+            },
+            "title": "Por Tipo",
+            "type": "array"
+          },
+          "requisitos_faltantes": {
+            "items": {
+              "$ref": "#/components/schemas/RequisitoFaltante"
+            },
+            "title": "Requisitos Faltantes",
+            "type": "array"
+          },
+          "resultado_de_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado De Decision"
+          },
+          "tipos_fuera_de_alcance": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tipos Fuera De Alcance",
+            "type": "array"
+          },
+          "veredicto_de_cumplimiento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Veredicto De Cumplimiento"
+          },
+          "version_matriz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionMatrizEvaluada"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "commitment_id",
+          "oc",
+          "modo",
+          "estado_cobertura",
+          "por_tipo",
+          "grupos_candidatos",
+          "requisitos_faltantes",
+          "tipos_fuera_de_alcance"
+        ],
+        "title": "CoberturaOcResponse",
         "type": "object"
       },
       "ConfiguracionAlertasResponse": {
@@ -2047,6 +2218,59 @@
           "eventos"
         ],
         "title": "CopiarMatrizGlobalResponse",
+        "type": "object"
+      },
+      "CruceOcTimeline": {
+        "properties": {
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "llega_cubierto": {
+            "title": "Llega Cubierto",
+            "type": "boolean"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "quiebres": {
+            "items": {
+              "$ref": "#/components/schemas/QuiebreOcTimeline"
+            },
+            "title": "Quiebres",
+            "type": "array"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "referencia",
+          "vigencia_desde",
+          "vigencia_hasta",
+          "llega_cubierto",
+          "quiebres"
+        ],
+        "title": "CruceOcTimeline",
         "type": "object"
       },
       "DarDeAltaDefinicionDeRequisito": {
@@ -3494,6 +3718,27 @@
         "title": "GenerarPaqueteResponse",
         "type": "object"
       },
+      "GrupoCandidatosCobertura": {
+        "properties": {
+          "candidatos": {
+            "items": {
+              "$ref": "#/components/schemas/CandidatoCobertura"
+            },
+            "title": "Candidatos",
+            "type": "array"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_sujeto",
+          "candidatos"
+        ],
+        "title": "GrupoCandidatosCobertura",
+        "type": "object"
+      },
       "HistorialAlertasResponse": {
         "properties": {
           "items": {
@@ -4071,7 +4316,8 @@
               "sin_alertas_documentales",
               "con_alertas_documentales",
               "informacion_incompleta",
-              "sin_matriz"
+              "sin_matriz",
+              "fuera_de_alcance"
             ],
             "title": "Estado Documental",
             "type": "string"
@@ -4888,6 +5134,106 @@
         "title": "MiLegajoResponse",
         "type": "object"
       },
+      "OcBacklogItem": {
+        "properties": {
+          "actualizado_en": {
+            "title": "Actualizado En",
+            "type": "string"
+          },
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "estado_cobertura": {
+            "title": "Estado Cobertura",
+            "type": "string"
+          },
+          "locacion_id": {
+            "title": "Locacion Id",
+            "type": "string"
+          },
+          "lote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lote Id"
+          },
+          "modo": {
+            "title": "Modo",
+            "type": "string"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "por_tipo": {
+            "items": {
+              "$ref": "#/components/schemas/ResumenCoberturaTipo"
+            },
+            "title": "Por Tipo",
+            "type": "array"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "tipo_servicio_id": {
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "referencia",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "vigencia_desde",
+          "vigencia_hasta",
+          "estado",
+          "lote_id",
+          "creado_en",
+          "actualizado_en",
+          "modo",
+          "estado_cobertura",
+          "por_tipo"
+        ],
+        "title": "OcBacklogItem",
+        "type": "object"
+      },
       "OcModificada": {
         "properties": {
           "campos_modificados": {
@@ -4912,6 +5258,39 @@
           "evento_id"
         ],
         "title": "OcModificada",
+        "type": "object"
+      },
+      "OcResumenCobertura": {
+        "properties": {
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "estado",
+          "vigencia_desde",
+          "vigencia_hasta"
+        ],
+        "title": "OcResumenCobertura",
         "type": "object"
       },
       "PaqueteEntrega": {
@@ -5416,6 +5795,31 @@
         "title": "PublicarVersionDeMatrizResponse",
         "type": "object"
       },
+      "QuiebreOcTimeline": {
+        "properties": {
+          "fecha": {
+            "title": "Fecha",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          }
+        },
+        "required": [
+          "fecha",
+          "requisito"
+        ],
+        "title": "QuiebreOcTimeline",
+        "type": "object"
+      },
       "RadarBacklogResponse": {
         "properties": {
           "advertencia": {
@@ -5637,6 +6041,45 @@
           "resumen"
         ],
         "title": "RecursoCustodiado",
+        "type": "object"
+      },
+      "RecursoTimeline": {
+        "properties": {
+          "identificador": {
+            "title": "Identificador",
+            "type": "string"
+          },
+          "ocs": {
+            "items": {
+              "$ref": "#/components/schemas/CruceOcTimeline"
+            },
+            "title": "Ocs",
+            "type": "array"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "tramos": {
+            "items": {
+              "$ref": "#/components/schemas/TramoTimeline"
+            },
+            "title": "Tramos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "identificador",
+          "tramos",
+          "ocs"
+        ],
+        "title": "RecursoTimeline",
         "type": "object"
       },
       "RefreshRequest": {
@@ -5978,6 +6421,69 @@
         "title": "RegistrarInduccionResponse",
         "type": "object"
       },
+      "RequisitoFaltante": {
+        "properties": {
+          "bajo_excepcion": {
+            "title": "Bajo Excepcion",
+            "type": "boolean"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sujeto Id"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "veredicto": {
+            "title": "Veredicto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_sujeto",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "veredicto",
+          "motivo",
+          "bajo_excepcion"
+        ],
+        "title": "RequisitoFaltante",
+        "type": "object"
+      },
       "RequisitoPaquete": {
         "properties": {
           "categoria": {
@@ -6094,6 +6600,40 @@
           "estado"
         ],
         "title": "ResultadoFilaImportada",
+        "type": "object"
+      },
+      "ResumenCoberturaTipo": {
+        "properties": {
+          "candidatos_cumplen": {
+            "title": "Candidatos Cumplen",
+            "type": "integer"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_sujeto",
+          "estado",
+          "candidatos_cumplen"
+        ],
+        "title": "ResumenCoberturaTipo",
         "type": "object"
       },
       "ResumenLegajo": {
@@ -6462,6 +7002,116 @@
         "title": "TableroVencimientosResponse",
         "type": "object"
       },
+      "TimelineRecursosResponse": {
+        "properties": {
+          "desde": {
+            "title": "Desde",
+            "type": "string"
+          },
+          "hasta": {
+            "title": "Hasta",
+            "type": "string"
+          },
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecursoTimeline"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hoy",
+          "desde",
+          "hasta",
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "TimelineRecursosResponse",
+        "type": "object"
+      },
+      "TramoTimeline": {
+        "properties": {
+          "categoria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria"
+          },
+          "estado_confirmacion": {
+            "title": "Estado Confirmacion",
+            "type": "string"
+          },
+          "estado_visual": {
+            "title": "Estado Visual",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "vigente_desde": {
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "title": "Vigente Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "requisito",
+          "categoria",
+          "vigente_desde",
+          "vigente_hasta",
+          "estado_confirmacion",
+          "estado_visual"
+        ],
+        "title": "TramoTimeline",
+        "type": "object"
+      },
       "UrlDeDescargaResponse": {
         "properties": {
           "documento_id": {
@@ -6602,6 +7252,24 @@
           "vigente_hasta"
         ],
         "title": "VersionAnteriorDeMatriz",
+        "type": "object"
+      },
+      "VersionMatrizEvaluada": {
+        "properties": {
+          "matriz_version_id": {
+            "title": "Matriz Version Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matriz_version_id",
+          "version"
+        ],
+        "title": "VersionMatrizEvaluada",
         "type": "object"
       },
       "VincularTelegramBody": {
@@ -11240,6 +11908,198 @@
         ]
       }
     },
+    "/v1/consultas/backlog_oc": {
+      "get": {
+        "operationId": "backlog_oc_v1_consultas_backlog_oc_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "activo",
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "estado_cobertura",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado Cobertura"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vigencia_desde",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vigencia Desde"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vigencia_hasta",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vigencia Hasta"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacklogOcResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Backlog Oc"
+      }
+    },
     "/v1/consultas/bandeja_drive": {
       "get": {
         "operationId": "bandeja_drive_v1_consultas_bandeja_drive_get",
@@ -11718,6 +12578,124 @@
         "tags": [
           "proyeccion"
         ]
+      }
+    },
+    "/v1/consultas/cobertura_oc": {
+      "get": {
+        "operationId": "cobertura_oc_v1_consultas_cobertura_oc_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "oc_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Oc Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "commitment_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Commitment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoberturaOcResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Cobertura Oc"
       }
     },
     "/v1/consultas/configuracion_alertas": {
@@ -14687,6 +15665,200 @@
           }
         ],
         "summary": "Tablero Vencimientos"
+      }
+    },
+    "/v1/consultas/timeline_recursos": {
+      "get": {
+        "operationId": "timeline_recursos_v1_consultas_timeline_recursos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "desde",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Desde",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasta",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Hasta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tipo_sujeto",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "persona",
+                    "vehiculo",
+                    "equipo",
+                    "empresa"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Sujeto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "oc_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Oc Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "solo_quiebres",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Solo Quiebres",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineRecursosResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Timeline Recursos"
       }
     },
     "/v1/consultas/usuarios": {

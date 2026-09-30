@@ -672,6 +672,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/consultas/backlog_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backlog Oc */
+        get: operations["backlog_oc_v1_consultas_backlog_oc_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/consultas/bandeja_drive": {
         parameters: {
             query?: never;
@@ -715,6 +732,23 @@ export interface paths {
         };
         /** Calendario Vigencias */
         get: operations["calendario_vigencias_v1_consultas_calendario_vigencias_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/consultas/cobertura_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cobertura Oc */
+        get: operations["cobertura_oc_v1_consultas_cobertura_oc_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1144,6 +1178,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/consultas/timeline_recursos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timeline Recursos */
+        get: operations["timeline_recursos_v1_consultas_timeline_recursos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/consultas/usuarios": {
         parameters: {
             query?: never;
@@ -1509,6 +1560,17 @@ export interface components {
             /** Regularizado En */
             regularizado_en: string | null;
         };
+        /** BacklogOcResponse */
+        BacklogOcResponse: {
+            /** Items */
+            items: components["schemas"]["OcBacklogItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** BajaDeSujeto */
         BajaDeSujeto: {
             /** Sujeto Id */
@@ -1581,6 +1643,23 @@ export interface components {
             eventos: string[];
             /** Oc Id */
             oc_id: string;
+        };
+        /** CandidatoCobertura */
+        CandidatoCobertura: {
+            /** Asignable */
+            asignable: boolean;
+            /** Primer Quiebre */
+            primer_quiebre: string | null;
+            /** Requisitos */
+            requisitos: {
+                [key: string]: unknown;
+            }[];
+            /** Sujeto Id */
+            sujeto_id: string;
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+            /** Veredicto */
+            veredicto: string;
         };
         /** CargarDocumento */
         CargarDocumento: {
@@ -1664,6 +1743,29 @@ export interface components {
             regularizada_en: string | null;
             /** Requisito Definicion Id */
             requisito_definicion_id: string;
+        };
+        /** CoberturaOcResponse */
+        CoberturaOcResponse: {
+            /** Commitment Id */
+            commitment_id: string;
+            /** Estado Cobertura */
+            estado_cobertura: string;
+            /** Grupos Candidatos */
+            grupos_candidatos: components["schemas"]["GrupoCandidatosCobertura"][];
+            /** Modo */
+            modo: string;
+            oc: components["schemas"]["OcResumenCobertura"];
+            /** Por Tipo */
+            por_tipo: components["schemas"]["ResumenCoberturaTipo"][];
+            /** Requisitos Faltantes */
+            requisitos_faltantes: components["schemas"]["RequisitoFaltante"][];
+            /** Resultado De Decision */
+            resultado_de_decision?: string | null;
+            /** Tipos Fuera De Alcance */
+            tipos_fuera_de_alcance: string[];
+            /** Veredicto De Cumplimiento */
+            veredicto_de_cumplimiento?: string | null;
+            version_matriz?: components["schemas"]["VersionMatrizEvaluada"] | null;
         };
         /** ConfiguracionAlertasResponse */
         ConfiguracionAlertasResponse: {
@@ -1976,6 +2078,23 @@ export interface components {
              * Format: date
              */
             vigente_desde: string;
+        };
+        /** CruceOcTimeline */
+        CruceOcTimeline: {
+            /** Clave Origen */
+            clave_origen: string;
+            /** Llega Cubierto */
+            llega_cubierto: boolean;
+            /** Oc Id */
+            oc_id: string;
+            /** Quiebres */
+            quiebres: components["schemas"]["QuiebreOcTimeline"][];
+            /** Referencia */
+            referencia: string | null;
+            /** Vigencia Desde */
+            vigencia_desde: string;
+            /** Vigencia Hasta */
+            vigencia_hasta: string;
         };
         /** DarDeAltaDefinicionDeRequisito */
         DarDeAltaDefinicionDeRequisito: {
@@ -2479,6 +2598,13 @@ export interface components {
             /** Url Qr */
             url_qr: string;
         };
+        /** GrupoCandidatosCobertura */
+        GrupoCandidatosCobertura: {
+            /** Candidatos */
+            candidatos: components["schemas"]["CandidatoCobertura"][];
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+        };
         /** HistorialAlertasResponse */
         HistorialAlertasResponse: {
             /** Items */
@@ -2688,7 +2814,7 @@ export interface components {
              * Estado Documental
              * @enum {string}
              */
-            estado_documental: "sin_alertas_documentales" | "con_alertas_documentales" | "informacion_incompleta" | "sin_matriz";
+            estado_documental: "sin_alertas_documentales" | "con_alertas_documentales" | "informacion_incompleta" | "sin_matriz" | "fuera_de_alcance";
             /** Locacion Id */
             locacion_id: string;
             /** Motivos Resumidos */
@@ -2964,6 +3090,39 @@ export interface components {
             recursos_bajo_custodia: components["schemas"]["RecursoCustodiado"][];
             resumen: components["schemas"]["ResumenMiLegajo"];
         };
+        /** OcBacklogItem */
+        OcBacklogItem: {
+            /** Actualizado En */
+            actualizado_en: string;
+            /** Clave Origen */
+            clave_origen: string;
+            /** Cliente Id */
+            cliente_id: string;
+            /** Creado En */
+            creado_en: string;
+            /** Estado */
+            estado: string;
+            /** Estado Cobertura */
+            estado_cobertura: string;
+            /** Locacion Id */
+            locacion_id: string;
+            /** Lote Id */
+            lote_id: string | null;
+            /** Modo */
+            modo: string;
+            /** Oc Id */
+            oc_id: string;
+            /** Por Tipo */
+            por_tipo: components["schemas"]["ResumenCoberturaTipo"][];
+            /** Referencia */
+            referencia: string | null;
+            /** Tipo Servicio Id */
+            tipo_servicio_id: string;
+            /** Vigencia Desde */
+            vigencia_desde: string;
+            /** Vigencia Hasta */
+            vigencia_hasta: string;
+        };
         /** OcModificada */
         OcModificada: {
             /** Campos Modificados */
@@ -2972,6 +3131,19 @@ export interface components {
             commitment_id: string;
             /** Evento Id */
             evento_id: string;
+        };
+        /** OcResumenCobertura */
+        OcResumenCobertura: {
+            /** Clave Origen */
+            clave_origen: string;
+            /** Estado */
+            estado: string;
+            /** Oc Id */
+            oc_id: string;
+            /** Vigencia Desde */
+            vigencia_desde: string;
+            /** Vigencia Hasta */
+            vigencia_hasta: string;
         };
         /** PaqueteEntrega */
         PaqueteEntrega: {
@@ -3168,6 +3340,13 @@ export interface components {
              */
             vigente_desde: string;
         };
+        /** QuiebreOcTimeline */
+        QuiebreOcTimeline: {
+            /** Fecha */
+            fecha: string;
+            /** Requisito */
+            requisito: string | null;
+        };
         /** RadarBacklogResponse */
         RadarBacklogResponse: {
             /** Advertencia */
@@ -3252,6 +3431,19 @@ export interface components {
             resumen: components["schemas"]["ResumenLegajo"];
             /** Tipo Recurso */
             tipo_recurso: string;
+        };
+        /** RecursoTimeline */
+        RecursoTimeline: {
+            /** Identificador */
+            identificador: string;
+            /** Ocs */
+            ocs: components["schemas"]["CruceOcTimeline"][];
+            /** Sujeto Id */
+            sujeto_id: string;
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+            /** Tramos */
+            tramos: components["schemas"]["TramoTimeline"][];
         };
         /** RefreshRequest */
         RefreshRequest: {
@@ -3381,6 +3573,23 @@ export interface components {
             /** Induccion Id */
             induccion_id: string;
         };
+        /** RequisitoFaltante */
+        RequisitoFaltante: {
+            /** Bajo Excepcion */
+            bajo_excepcion: boolean;
+            /** Motivo */
+            motivo: string;
+            /** Nombre */
+            nombre?: string | null;
+            /** Requisito Definicion Id */
+            requisito_definicion_id: string | null;
+            /** Sujeto Id */
+            sujeto_id: string | null;
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+            /** Veredicto */
+            veredicto: string;
+        };
         /** RequisitoPaquete */
         RequisitoPaquete: {
             /** Categoria */
@@ -3430,6 +3639,17 @@ export interface components {
             fila: number;
             /** Operadora Id */
             operadora_id: string;
+        };
+        /** ResumenCoberturaTipo */
+        ResumenCoberturaTipo: {
+            /** Candidatos Cumplen */
+            candidatos_cumplen: number;
+            /** Estado */
+            estado: string;
+            /** Motivo */
+            motivo?: string | null;
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
         };
         /** ResumenLegajo */
         ResumenLegajo: {
@@ -3568,6 +3788,40 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** TimelineRecursosResponse */
+        TimelineRecursosResponse: {
+            /** Desde */
+            desde: string;
+            /** Hasta */
+            hasta: string;
+            /** Hoy */
+            hoy: string;
+            /** Items */
+            items: components["schemas"]["RecursoTimeline"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** TramoTimeline */
+        TramoTimeline: {
+            /** Categoria */
+            categoria: string | null;
+            /** Estado Confirmacion */
+            estado_confirmacion: string;
+            /** Estado Visual */
+            estado_visual: string;
+            /** Requisito */
+            requisito: string | null;
+            /** Requisito Definicion Id */
+            requisito_definicion_id: string | null;
+            /** Vigente Desde */
+            vigente_desde: string;
+            /** Vigente Hasta */
+            vigente_hasta: string;
+        };
         /** UrlDeDescargaResponse */
         UrlDeDescargaResponse: {
             /** Documento Id */
@@ -3616,6 +3870,13 @@ export interface components {
             version: number;
             /** Vigente Hasta */
             vigente_hasta: string | null;
+        };
+        /** VersionMatrizEvaluada */
+        VersionMatrizEvaluada: {
+            /** Matriz Version Id */
+            matriz_version_id: string;
+            /** Version */
+            version: number;
         };
         /** VincularTelegramBody */
         VincularTelegramBody: {
@@ -6794,6 +7055,88 @@ export interface operations {
             };
         };
     };
+    backlog_oc_v1_consultas_backlog_oc_get: {
+        parameters: {
+            query?: {
+                estado?: string | null;
+                estado_cobertura?: string | null;
+                vigencia_desde?: string | null;
+                vigencia_hasta?: string | null;
+                q?: string | null;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacklogOcResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     bandeja_drive_v1_consultas_bandeja_drive_get: {
         parameters: {
             query?: {
@@ -6975,6 +7318,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CalendarioVigenciasResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cobertura_oc_v1_consultas_cobertura_oc_get: {
+        parameters: {
+            query?: {
+                oc_id?: string | null;
+                commitment_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoberturaOcResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
@@ -8832,6 +9252,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TableroVencimientosResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    timeline_recursos_v1_consultas_timeline_recursos_get: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                tipo_sujeto?: ("persona" | "vehiculo" | "equipo" | "empresa") | null;
+                oc_id?: string | null;
+                q?: string | null;
+                solo_quiebres?: boolean;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineRecursosResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */

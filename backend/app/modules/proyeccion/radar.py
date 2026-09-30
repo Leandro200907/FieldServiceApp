@@ -35,7 +35,13 @@ ADVERTENCIA = (
 )
 ROLES_RADAR = (Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR, Rol.CONFIGURACION)
 ROLES_DETALLE = (Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
-ESTADOS_OC = ("sin_alertas_documentales", "con_alertas_documentales", "informacion_incompleta", "sin_matriz")
+ESTADOS_OC = (
+    "sin_alertas_documentales",
+    "con_alertas_documentales",
+    "informacion_incompleta",
+    "sin_matriz",
+    "fuera_de_alcance",
+)
 LIMITE_DIAS = 366
 
 
@@ -207,14 +213,46 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
     return salida
 
 
-def _evaluar_oc(session: Session, tenant_id: str, oc: dict[str, Any], legajos: list[dict[str, Any]],
-                evidencias: dict[tuple[str, str], list[EvidenciaDocumental]], desde: date, hasta: date,
-                *, tipos_disponibles: set[str] | None = None) -> dict[str, Any]:
+def _tipos_fuera_de_alcance(
+    session: Session,
+    tenant_id: str,
+    identidad: Identidad,
+    tipos_requeridos: set[str],
+    legajos_visibles: list[dict[str, Any]],
+) -> list[str]:
+    hoy = hoy_del_tenant(session, tenant_id)
+    alcance = alcance_de_sujetos(session, identidad, hoy)
+    if alcance is None:
+        return []
+    visibles = {l["tipo_sujeto"] for l in legajos_visibles}
+    todos = _legajos(session, tenant_id)
+    fuera: list[str] = []
+    for tipo in sorted(tipos_requeridos):
+        if tipo == "empresa" or tipo in visibles:
+            continue
+        if any(l["tipo_sujeto"] == tipo for l in todos):
+            fuera.append(tipo)
+    return fuera
+
+
+def _evaluar_oc(
+    session: Session,
+    tenant_id: str,
+    oc: dict[str, Any],
+    legajos: list[dict[str, Any]],
+    evidencias: dict[tuple[str, str], list[EvidenciaDocumental]],
+    desde: date,
+    hasta: date,
+    *,
+    tipos_disponibles: set[str] | None = None,
+    tipos_fuera_de_alcance: list[str] | None = None,
+) -> dict[str, Any]:
     inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
     tramos, particulares, huecos_matriz = _matrices_y_requisitos(session, tenant_id, oc, inicio, fin)
     tipos_requeridos = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
     disponibles = tipos_disponibles if tipos_disponibles is not None else {l["tipo_sujeto"] for l in legajos}
-    tipos_sin_legajos = sorted(tipos_requeridos - disponibles)
+    fuera_set = set(tipos_fuera_de_alcance or [])
+    tipos_sin_legajos = sorted(tipos_requeridos - disponibles - fuera_set)
     detalle_legajos: list[dict[str, Any]] = []
     for legajo in legajos:
         resultados = []
@@ -248,12 +286,18 @@ def _evaluar_oc(session: Session, tenant_id: str, oc: dict[str, Any], legajos: l
         ResumenDocumental("informacion_incompleta", None, 0, 1)
         for _ in tipos_sin_legajos
     )
+    resumenes_oc.extend(
+        ResumenDocumental("fuera_de_alcance", None, 0, 0)
+        for _ in fuera_set
+        if _ in tipos_requeridos
+    )
     resumen_oc = resumir_oc(resumenes_oc, sin_matriz=bool(huecos_matriz))
     for legajo in detalle_legajos:
         legajo.pop("_resumen")
     return {"estado": resumen_oc, "tramos": tramos, "requisitos_particulares": particulares,
             "legajos": detalle_legajos, "tipos_requeridos": sorted(tipos_requeridos),
-            "tipos_sin_legajos": tipos_sin_legajos, "huecos_matriz": huecos_matriz}
+            "tipos_sin_legajos": tipos_sin_legajos, "tipos_fuera_de_alcance": sorted(fuera_set & tipos_requeridos),
+            "huecos_matriz": huecos_matriz}
 
 
 def _resultado_desde_dict(d: dict[str, Any]):
@@ -279,11 +323,19 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
     _exigir_rango(desde, hasta)
     if estados and any(e not in ESTADOS_OC for e in estados):
         raise ErrorDeDominio("estado inválido", {"validos": list(ESTADOS_OC)})
-    legajos = _legajos_visibles(session, identidad); evidencias = _evidencias(session, identidad.tenant_id)
+    legajos = _legajos_visibles(session, identidad)
+    evidencias = _evidencias(session, identidad.tenant_id)
     items: list[dict[str, Any]] = []
 
     def evaluar_item(oc: dict[str, Any]) -> dict[str, Any] | None:
-        calculo = _evaluar_oc(session, identidad.tenant_id, oc, legajos, evidencias, desde, hasta)
+        inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
+        tramos, _, _ = _matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
+        tipos_req = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
+        fuera = _tipos_fuera_de_alcance(session, identidad.tenant_id, identidad, tipos_req, legajos)
+        calculo = _evaluar_oc(
+            session, identidad.tenant_id, oc, legajos, evidencias, desde, hasta,
+            tipos_fuera_de_alcance=fuera,
+        )
         estado: ResumenDocumental = calculo["estado"]
         if estados and estado.estado not in estados:
             return None
@@ -292,6 +344,10 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
         motivos.extend(
             f"Sin legajos activos del tipo {tipo} para evaluar los requisitos documentales"
             for tipo in calculo["tipos_sin_legajos"]
+        )
+        motivos.extend(
+            f"Hay recursos del tipo {tipo} fuera de tu alcance"
+            for tipo in calculo.get("tipos_fuera_de_alcance") or []
         )
         if calculo["huecos_matriz"]:
             motivos.append("Hay períodos sin matriz de requisitos aplicable")
@@ -341,8 +397,17 @@ def _oc_por_id(session: Session, tenant_id: str, oc_id: str) -> dict[str, Any]:
 def detalle_oc(session: Session, identidad: Identidad, oc_id: str, p: Pagina | None = None) -> dict[str, Any]:
     identidad.exigir_rol(*ROLES_DETALLE)
     p = p or Pagina(offset=0, limit=50)
-    oc = _oc_por_id(session, identidad.tenant_id, oc_id); legajos = _legajos_visibles(session, identidad)
-    calculo = _evaluar_oc(session, identidad.tenant_id, oc, legajos, _evidencias(session, identidad.tenant_id), oc["vigencia_desde"], oc["vigencia_hasta"])
+    oc = _oc_por_id(session, identidad.tenant_id, oc_id)
+    legajos = _legajos_visibles(session, identidad)
+    tramos, _, _ = _matrices_y_requisitos(
+        session, identidad.tenant_id, oc, oc["vigencia_desde"], oc["vigencia_hasta"],
+    )
+    tipos_req = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
+    fuera = _tipos_fuera_de_alcance(session, identidad.tenant_id, identidad, tipos_req, legajos)
+    calculo = _evaluar_oc(
+        session, identidad.tenant_id, oc, legajos, _evidencias(session, identidad.tenant_id),
+        oc["vigencia_desde"], oc["vigencia_hasta"], tipos_fuera_de_alcance=fuera,
+    )
     matrices = [{k: t[k] for k in ("matriz_version_id", "version", "fuente", "desde", "hasta")}
                 for t in calculo["tramos"] if t["matriz_version_id"] is not None]
     legajos_pagina = calculo["legajos"][p.offset:p.offset + p.limit]

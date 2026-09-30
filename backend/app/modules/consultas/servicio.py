@@ -20,6 +20,11 @@ from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import ahora_utc, hoy_del_tenant
 from app.auth.alcance import alcance_de_sujetos, filtro_decisiones_visibles
 from app.core.orquestacion import cobertura_de_oc
+from app.modules.consultas.cobertura_live import (
+    candidatos_detalle,
+    estado_cobertura_global,
+    resumen_por_tipo,
+)
 
 
 # --------------------------------------------------------------------- utilidades
@@ -156,88 +161,169 @@ def tablero_vencimientos(session: Session, identidad: Identidad, dias: int, p: P
     return salida
 
 
-def backlog_oc(session: Session, identidad: Identidad, estado: str | None, p: Pagina) -> dict[str, Any]:
-    """OCs (por defecto las activas) con su ÚLTIMA decisión global. Para el supervisor,
-    esa última decisión se devuelve solo si todos sus sujetos propuestos están en su
-    universo (2.3 §3); si no, `ultima_decision` es null — nunca se sustituye por una
-    decisión anterior visible, porque se presentaría como "última" algo que no lo es.
-    La cobertura en vivo se pide aparte con `cobertura_oc`."""
-    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+def _evaluar_cobertura_oc(
+    session: Session,
+    identidad: Identidad,
+    clave_origen: str,
+) -> tuple[dict[str, Any], dict[str, Any], bool]:
+    """Devuelve (fila_oc, evaluación_viva, sin_matriz). Modo consulta; no persiste."""
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     alcance = alcance_de_sujetos(session, identidad, hoy)
-    params: dict[str, Any] = {"alcance": list(alcance) if alcance is not None else None}
-    condicion = ""
+    try:
+        ev = cobertura_de_oc(session, identidad.tenant_id, clave_origen, ahora_utc(), candidatos=alcance)
+        oc = session.execute(
+            text(
+                "SELECT oc_id, clave_origen, referencia, cliente_id, locacion_id, tipo_servicio_id, "
+                "estado, vigencia_desde, vigencia_hasta FROM modulo1.oc WHERE clave_origen = :c"
+            ),
+            {"c": clave_origen},
+        ).mappings().first()
+        return dict(oc or {}), ev, False
+    except ErrorDeDominio as exc:
+        if exc.codigo != "sin_matriz_vigente":
+            raise
+        oc = session.execute(
+            text(
+                "SELECT oc_id, clave_origen, referencia, cliente_id, locacion_id, tipo_servicio_id, "
+                "estado, vigencia_desde, vigencia_hasta FROM modulo1.oc WHERE clave_origen = :c"
+            ),
+            {"c": clave_origen},
+        ).mappings().first()
+        if oc is None:
+            raise NoEncontrado("OC inexistente", {"commitment_id": clave_origen}) from exc
+        return dict(oc), {"por_sujeto": [], "requisitos_faltantes": [], "resultado_de_decision": "no_puede_asignarse"}, True
+
+
+def backlog_oc(
+    session: Session,
+    identidad: Identidad,
+    p: Pagina,
+    *,
+    estado: str | None = "activo",
+    estado_cobertura: str | None = None,
+    vigencia_desde: date | None = None,
+    vigencia_hasta: date | None = None,
+    q: str | None = None,
+) -> dict[str, Any]:
+    """Backlog de OC con cobertura en vivo (1.12 / D-A bis). Sin `ultima_decision`."""
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    estados_cov = ("cubierta", "no_cubierta", "sin_matriz", "empresa_bloquea")
+    if estado_cobertura and estado_cobertura not in estados_cov:
+        raise ErrorDeDominio("estado_cobertura inválido", {"validos": list(estados_cov)})
+    if estado and estado not in ("activo", "cancelado"):
+        raise ErrorDeDominio("estado inválido", {"estado": estado, "validos": ["activo", "cancelado"]})
+
+    condiciones: list[str] = []
+    params: dict[str, Any] = {}
     if estado:
-        if estado not in ("activo", "cancelado"):
-            raise ErrorDeDominio("estado inválido", {"estado": estado, "validos": ["activo", "cancelado"]})
-        condicion = "WHERE o.estado = :estado"
+        condiciones.append("o.estado = :estado")
         params["estado"] = estado
-    total = session.execute(text(f"SELECT count(*) FROM modulo1.oc o {condicion}"), params).scalar()
+    if vigencia_desde:
+        condiciones.append("o.vigencia_hasta >= :vdesde")
+        params["vdesde"] = vigencia_desde
+    if vigencia_hasta:
+        condiciones.append("o.vigencia_desde <= :vhasta")
+        params["vhasta"] = vigencia_hasta
+    if q:
+        condiciones.append("(o.clave_origen ILIKE :q OR o.referencia ILIKE :q)")
+        params["q"] = f"%{q.strip()}%"
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+
+    def _enriquecer(fila: Any) -> dict[str, Any] | None:
+        d = _plano(fila)
+        clave = d["clave_origen"]
+        _, ev, sin_matriz = _evaluar_cobertura_oc(session, identidad, clave)
+        ec = estado_cobertura_global(ev, sin_matriz=sin_matriz)
+        if estado_cobertura and ec != estado_cobertura:
+            return None
+        d["estado_cobertura"] = ec
+        d["por_tipo"] = resumen_por_tipo(ev) if not sin_matriz else []
+        d["modo"] = "consulta"
+        return d
+
+    if estado_cobertura:
+        total = 0
+        items: list[dict[str, Any]] = []
+        cursor = 0
+        lote = 50
+        while True:
+            filas = session.execute(
+                text(
+                    f"SELECT o.oc_id, o.clave_origen, o.referencia, o.cliente_id, o.locacion_id, o.tipo_servicio_id, "
+                    f"o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.creado_en, o.actualizado_en "
+                    f"FROM modulo1.oc o {where} ORDER BY o.vigencia_desde, o.clave_origen "
+                    f"OFFSET :off LIMIT :lim"
+                ),
+                {**params, "off": cursor, "lim": lote},
+            ).mappings().all()
+            if not filas:
+                break
+            for f in filas:
+                item = _enriquecer(f)
+                if item is None:
+                    continue
+                if total >= p.offset and len(items) < p.limit:
+                    items.append(item)
+                total += 1
+            cursor += len(filas)
+            if len(filas) < lote:
+                break
+        return envolver(items, total, p)
+
+    total = session.execute(text(f"SELECT count(*) FROM modulo1.oc o {where}"), params).scalar()
     filas = session.execute(
         text(
-            f"""
-            SELECT o.oc_id, o.clave_origen, o.referencia, o.cliente_id, o.locacion_id, o.tipo_servicio_id,
-                   o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.creado_en, o.actualizado_en,
-                   e.referencia_evaluacion, e.veredicto_de_cumplimiento, e.resultado_de_decision,
-                   e.creado_en AS evaluada_en, e.visible
-            FROM modulo1.oc o
-            LEFT JOIN LATERAL (
-                SELECT e.referencia_evaluacion, e.veredicto_de_cumplimiento, e.resultado_de_decision, e.creado_en,
-                       (true {filtro_decisiones_visibles(alcance)}) AS visible
-                FROM modulo1.evaluacion_habilitacion e
-                WHERE e.commitment_id = o.clave_origen
-                ORDER BY e.creado_en DESC, e.referencia_evaluacion DESC LIMIT 1
-            ) e ON true
-            {condicion}
-            ORDER BY o.vigencia_desde, o.clave_origen OFFSET :off LIMIT :lim
-            """
+            f"SELECT o.oc_id, o.clave_origen, o.referencia, o.cliente_id, o.locacion_id, o.tipo_servicio_id, "
+            f"o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.creado_en, o.actualizado_en "
+            f"FROM modulo1.oc o {where} ORDER BY o.vigencia_desde, o.clave_origen OFFSET :off LIMIT :lim"
         ),
         {**params, "off": p.offset, "lim": p.limit},
     ).mappings().all()
-    items = []
-    for f in filas:
-        d = _plano(f)
-        decision = None
-        visible = d.pop("visible", None)
-        if d.pop("referencia_evaluacion", None) is not None and visible:
-            decision = {
-                "referencia_evaluacion": str(f["referencia_evaluacion"]),
-                "veredicto_de_cumplimiento": d["veredicto_de_cumplimiento"],
-                "resultado_de_decision": d["resultado_de_decision"],
-                "creado_en": d["evaluada_en"],
-            }
-        for k in ("veredicto_de_cumplimiento", "resultado_de_decision", "evaluada_en"):
-            d.pop(k, None)
-        d["ultima_decision"] = decision
-        items.append(d)
-    return envolver(items, int(total or 0), p)
+    items = [_enriquecer(f) for f in filas]
+    return envolver([i for i in items if i is not None], int(total or 0), p)
 
 
-def cobertura_oc(session: Session, identidad: Identidad, commitment_id: str) -> dict[str, Any]:
-    """Cobertura de una OC en MODO CONSULTA (2.1: no persiste, no crea tareas, no emite
-    eventos). Candidatos: todo el tenant para el responsable; solo su universo para el
-    supervisor (matriz 2.2: "su universo"). Nunca reutiliza una decisión persistida ni
-    devuelve sujetos fuera del alcance."""
+def cobertura_oc(
+    session: Session,
+    identidad: Identidad,
+    *,
+    commitment_id: str | None = None,
+    oc_id: str | None = None,
+) -> dict[str, Any]:
+    """Detalle de cobertura en vivo de una OC (modo consulta)."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    if oc_id and not commitment_id:
+        fila = session.execute(
+            text("SELECT clave_origen FROM modulo1.oc WHERE oc_id = CAST(:id AS uuid)"),
+            {"id": oc_id},
+        ).scalar()
+        if fila is None:
+            raise NoEncontrado("OC inexistente", {"oc_id": oc_id})
+        commitment_id = str(fila)
+    if not commitment_id:
+        raise ErrorDeDominio("Indique oc_id o commitment_id (clave_origen)")
     oc = session.execute(
-        text("SELECT oc_id, clave_origen, estado, vigencia_desde, vigencia_hasta FROM modulo1.oc WHERE clave_origen = :c"),
+        text(
+            "SELECT oc_id, clave_origen, referencia, cliente_id, locacion_id, tipo_servicio_id, "
+            "estado, vigencia_desde, vigencia_hasta FROM modulo1.oc WHERE clave_origen = :c"
+        ),
         {"c": commitment_id},
     ).mappings().first()
     if oc is None:
         raise NoEncontrado("OC inexistente", {"commitment_id": commitment_id})
-    hoy = hoy_del_tenant(session, identidad.tenant_id)
-    alcance = alcance_de_sujetos(session, identidad, hoy)
-    cobertura = cobertura_de_oc(session, identidad.tenant_id, commitment_id, ahora_utc(), candidatos=alcance)
-    ev = _plano(cobertura)
+    _, ev, sin_matriz = _evaluar_cobertura_oc(session, identidad, commitment_id)
     return {
-        "commitment_id": oc["clave_origen"],
+        "commitment_id": commitment_id,
         "oc": _plano(oc),
         "modo": "consulta",
-        "veredicto_de_cumplimiento": ev["veredicto_de_cumplimiento"],
-        "resultado_de_decision": ev["resultado_de_decision"],
-        "por_sujeto": ev["por_sujeto"],
-        "requisitos_faltantes": ev["requisitos_faltantes"],
-        "version_matriz": ev["version_matriz"],
+        "estado_cobertura": estado_cobertura_global(ev, sin_matriz=sin_matriz),
+        "veredicto_de_cumplimiento": ev.get("veredicto_de_cumplimiento"),
+        "resultado_de_decision": ev.get("resultado_de_decision"),
+        "por_tipo": resumen_por_tipo(ev) if not sin_matriz else [],
+        "grupos_candidatos": candidatos_detalle(ev) if not sin_matriz else [],
+        "requisitos_faltantes": ev.get("requisitos_faltantes") or [],
+        "version_matriz": ev.get("version_matriz"),
+        "tipos_fuera_de_alcance": ev.get("tipos_fuera_de_alcance") or [],
     }
 
 
