@@ -20,11 +20,8 @@ from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import ahora_utc, hoy_del_tenant
 from app.auth.alcance import alcance_de_sujetos, filtro_decisiones_visibles
 from app.core.orquestacion import cobertura_de_oc
-from app.modules.consultas.cobertura_live import (
-    candidatos_detalle,
-    estado_cobertura_global,
-    resumen_por_tipo,
-)
+from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+from app.modules.oc.catalogos_maestros import nombres_oc
 
 
 # --------------------------------------------------------------------- utilidades
@@ -194,24 +191,78 @@ def _evaluar_cobertura_oc(
         return dict(oc), {"por_sujeto": [], "requisitos_faltantes": [], "resultado_de_decision": "no_puede_asignarse"}, True
 
 
+def _rango_mes(mes: str) -> tuple[date, date]:
+    """`mes` = YYYY-MM → primer y último día del mes."""
+    try:
+        anio_s, mes_s = mes.split("-", 1)
+        anio, mes_i = int(anio_s), int(mes_s)
+        if mes_i < 1 or mes_i > 12:
+            raise ValueError
+    except ValueError as exc:
+        raise ErrorDeDominio("mes inválido (use YYYY-MM)", {"mes": mes}) from exc
+    desde = date(anio, mes_i, 1)
+    if mes_i == 12:
+        hasta = date(anio, 12, 31)
+    else:
+        hasta = date(anio, mes_i + 1, 1) - timedelta(days=1)
+    return desde, hasta
+
+
+def _oc_reprogramada(session: Session, oc_id: str) -> bool:
+    n = session.execute(
+        text(
+            "SELECT count(*) FROM modulo1.event_log "
+            "WHERE tipo = 'CompromisoModificado' AND payload->>'oc_id' = :id"
+        ),
+        {"id": oc_id},
+    ).scalar()
+    return int(n or 0) > 0
+
+
+def _enriquecer_backlog(session: Session, identidad: Identidad, fila: Any) -> dict[str, Any]:
+    d = _plano(fila)
+    oc_datos = {
+        "clave_origen": fila["clave_origen"],
+        "cliente_id": str(fila["cliente_id"]),
+        "locacion_id": str(fila["locacion_id"]),
+        "tipo_servicio_id": str(fila["tipo_servicio_id"]),
+        "vigencia_desde": fila["vigencia_desde"],
+        "vigencia_hasta": fila["vigencia_hasta"],
+    }
+    evaluacion = evaluar_oc_backlog(session, identidad, oc_datos)
+    d.update(nombres_oc(session, identidad.tenant_id, d["cliente_id"], d["locacion_id"], d["tipo_servicio_id"]))
+    d.update(evaluacion)
+    d["modo"] = "consulta"
+    d["reprogramada"] = _oc_reprogramada(session, d["oc_id"])
+    if "origen_oc" in fila.keys():
+        d["origen_oc"] = fila["origen_oc"]
+    return d
+
+
 def backlog_oc(
     session: Session,
     identidad: Identidad,
     p: Pagina,
     *,
     estado: str | None = "activo",
-    estado_cobertura: str | None = None,
     vigencia_desde: date | None = None,
     vigencia_hasta: date | None = None,
+    mes: str | None = None,
     q: str | None = None,
+    operadora_id: list[str] | None = None,
+    locacion_id: str | None = None,
+    tipo_recurso: str | None = None,
+    solo_con_alertas: bool | None = None,
+    solo_reprogramadas: bool | None = None,
 ) -> dict[str, Any]:
-    """Backlog de OC con cobertura en vivo (1.12 / D-A bis). Sin `ultima_decision`."""
+    """Backlog de OC en modo consulta (D-E): alertas ciertas, sin veredicto de cobertura."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
-    estados_cov = ("cubierta", "no_cubierta", "sin_matriz", "empresa_bloquea")
-    if estado_cobertura and estado_cobertura not in estados_cov:
-        raise ErrorDeDominio("estado_cobertura inválido", {"validos": list(estados_cov)})
     if estado and estado not in ("activo", "cancelado"):
         raise ErrorDeDominio("estado inválido", {"estado": estado, "validos": ["activo", "cancelado"]})
+    if mes:
+        m_desde, m_hasta = _rango_mes(mes)
+        vigencia_desde = m_desde if vigencia_desde is None else max(vigencia_desde, m_desde)
+        vigencia_hasta = m_hasta if vigencia_hasta is None else min(vigencia_hasta, m_hasta)
 
     condiciones: list[str] = []
     params: dict[str, Any] = {}
@@ -227,21 +278,28 @@ def backlog_oc(
     if q:
         condiciones.append("(o.clave_origen ILIKE :q OR o.referencia ILIKE :q)")
         params["q"] = f"%{q.strip()}%"
+    if operadora_id:
+        condiciones.append("o.cliente_id = ANY(CAST(:ops AS uuid[]))")
+        params["ops"] = operadora_id
+    if locacion_id:
+        condiciones.append("o.locacion_id = CAST(:loc AS uuid)")
+        params["loc"] = locacion_id
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
 
-    def _enriquecer(fila: Any) -> dict[str, Any] | None:
-        d = _plano(fila)
-        clave = d["clave_origen"]
-        _, ev, sin_matriz = _evaluar_cobertura_oc(session, identidad, clave)
-        ec = estado_cobertura_global(ev, sin_matriz=sin_matriz)
-        if estado_cobertura and ec != estado_cobertura:
-            return None
-        d["estado_cobertura"] = ec
-        d["por_tipo"] = resumen_por_tipo(ev) if not sin_matriz else []
-        d["modo"] = "consulta"
-        return d
+    def _filtrar_post(item: dict[str, Any]) -> bool:
+        if solo_con_alertas and not item.get("tiene_alertas"):
+            return False
+        if solo_reprogramadas and not item.get("reprogramada"):
+            return False
+        if tipo_recurso:
+            tipos = {a.get("tipo_sujeto") for a in item.get("alertas_ciertas", []) if a.get("tipo_sujeto")}
+            disp = item.get("disponibilidad_por_tipo") or []
+            if tipo_recurso not in tipos and not any(d.get("tipo_sujeto") == tipo_recurso for d in disp):
+                return False
+        return True
 
-    if estado_cobertura:
+    necesita_post = bool(solo_con_alertas or solo_reprogramadas or tipo_recurso)
+    if necesita_post:
         total = 0
         items: list[dict[str, Any]] = []
         cursor = 0
@@ -250,17 +308,16 @@ def backlog_oc(
             filas = session.execute(
                 text(
                     f"SELECT o.oc_id, o.clave_origen, o.referencia, o.cliente_id, o.locacion_id, o.tipo_servicio_id, "
-                    f"o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.creado_en, o.actualizado_en "
-                    f"FROM modulo1.oc o {where} ORDER BY o.vigencia_desde, o.clave_origen "
-                    f"OFFSET :off LIMIT :lim"
+                    f"o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.origen_oc, o.creado_en, o.actualizado_en "
+                    f"FROM modulo1.oc o {where} ORDER BY o.vigencia_desde, o.clave_origen OFFSET :off LIMIT :lim"
                 ),
                 {**params, "off": cursor, "lim": lote},
             ).mappings().all()
             if not filas:
                 break
             for f in filas:
-                item = _enriquecer(f)
-                if item is None:
+                item = _enriquecer_backlog(session, identidad, f)
+                if not _filtrar_post(item):
                     continue
                 if total >= p.offset and len(items) < p.limit:
                     items.append(item)
@@ -274,13 +331,13 @@ def backlog_oc(
     filas = session.execute(
         text(
             f"SELECT o.oc_id, o.clave_origen, o.referencia, o.cliente_id, o.locacion_id, o.tipo_servicio_id, "
-            f"o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.creado_en, o.actualizado_en "
+            f"o.vigencia_desde, o.vigencia_hasta, o.estado, o.lote_id, o.origen_oc, o.creado_en, o.actualizado_en "
             f"FROM modulo1.oc o {where} ORDER BY o.vigencia_desde, o.clave_origen OFFSET :off LIMIT :lim"
         ),
         {**params, "off": p.offset, "lim": p.limit},
     ).mappings().all()
-    items = [_enriquecer(f) for f in filas]
-    return envolver([i for i in items if i is not None], int(total or 0), p)
+    items = [_enriquecer_backlog(session, identidad, f) for f in filas]
+    return envolver(items, int(total or 0), p)
 
 
 def cobertura_oc(
@@ -311,20 +368,114 @@ def cobertura_oc(
     ).mappings().first()
     if oc is None:
         raise NoEncontrado("OC inexistente", {"commitment_id": commitment_id})
-    _, ev, sin_matriz = _evaluar_cobertura_oc(session, identidad, commitment_id)
+    oc_plano = _plano(oc)
+    evaluacion = evaluar_oc_backlog(
+        session,
+        identidad,
+        {
+            "clave_origen": oc["clave_origen"],
+            "cliente_id": str(oc["cliente_id"]),
+            "locacion_id": str(oc["locacion_id"]),
+            "tipo_servicio_id": str(oc["tipo_servicio_id"]),
+            "vigencia_desde": oc["vigencia_desde"],
+            "vigencia_hasta": oc["vigencia_hasta"],
+        },
+    )
+    oc_plano.update(nombres_oc(session, identidad.tenant_id, oc_plano["cliente_id"], oc_plano["locacion_id"], oc_plano["tipo_servicio_id"]))
+    historial = session.execute(
+        text(
+            "SELECT ocurrido_en, payload FROM modulo1.event_log "
+            "WHERE tipo = 'CompromisoModificado' AND payload->>'commitment_id' = :c ORDER BY ocurrido_en"
+        ),
+        {"c": commitment_id},
+    ).mappings().all()
     return {
         "commitment_id": commitment_id,
-        "oc": _plano(oc),
+        "oc": oc_plano,
         "modo": "consulta",
-        "estado_cobertura": estado_cobertura_global(ev, sin_matriz=sin_matriz),
-        "veredicto_de_cumplimiento": ev.get("veredicto_de_cumplimiento"),
-        "resultado_de_decision": ev.get("resultado_de_decision"),
-        "por_tipo": resumen_por_tipo(ev) if not sin_matriz else [],
-        "grupos_candidatos": candidatos_detalle(ev) if not sin_matriz else [],
-        "requisitos_faltantes": ev.get("requisitos_faltantes") or [],
-        "version_matriz": ev.get("version_matriz"),
-        "tipos_fuera_de_alcance": ev.get("tipos_fuera_de_alcance") or [],
+        "reprogramada": len(historial) > 0,
+        "historial_compromiso": [
+            {
+                "fecha": h["ocurrido_en"].isoformat(),
+                "motivo": (h["payload"] or {}).get("motivo"),
+                "origen": (h["payload"] or {}).get("origen", "planilla"),
+                "anterior": (h["payload"] or {}).get("anterior"),
+                "nuevo": (h["payload"] or {}).get("nuevo"),
+            }
+            for h in historial
+        ],
+        **evaluacion,
     }
+
+
+def acciones_pendientes(
+    session: Session,
+    identidad: Identidad,
+    p: Pagina,
+    *,
+    vigencia_desde: date | None = None,
+    vigencia_hasta: date | None = None,
+    mes: str | None = None,
+    q: str | None = None,
+    operadora_id: list[str] | None = None,
+    locacion_id: str | None = None,
+    tipo_recurso: str | None = None,
+) -> dict[str, Any]:
+    """Renovaciones/regularizaciones que afectan OCs activas (modo consulta)."""
+    from app.modules.proyeccion import radar as radar_mod
+
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    desde = vigencia_desde or hoy
+    hasta = vigencia_hasta or (hoy + timedelta(days=60))
+    if mes:
+        m_desde, m_hasta = _rango_mes(mes)
+        desde, hasta = m_desde, m_hasta
+    legajos = radar_mod._legajos_visibles(session, identidad)
+    evidencias = radar_mod._evidencias(session, identidad.tenant_id)
+    filtros = {"q": q, "locacion_id": locacion_id}
+    if operadora_id and len(operadora_id) == 1:
+        filtros["cliente_id"] = operadora_id[0]
+    ocs = radar_mod._ocs(session, identidad.tenant_id, desde, hasta, filtros, offset=0, limit=500)
+    if operadora_id and len(operadora_id) > 1:
+        permitidos = set(operadora_id)
+        ocs = [o for o in ocs if str(o["cliente_id"]) in permitidos]
+    acciones: list[dict[str, Any]] = []
+    for oc in ocs:
+        inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
+        calc = radar_mod._evaluar_oc(session, identidad.tenant_id, oc, legajos, evidencias, inicio, fin)
+        eval_oc = evaluar_oc_backlog(session, identidad, {**oc, "vigencia_desde": inicio, "vigencia_hasta": fin})
+        genera_alerta = eval_oc.get("tiene_alertas")
+        for leg in calc["legajos"]:
+            if tipo_recurso and leg["tipo_sujeto"] != tipo_recurso:
+                continue
+            for req in leg.get("requisitos") or []:
+                if not req.get("accion_sugerida"):
+                    continue
+                fecha_limite = req.get("primer_quiebre") or inicio
+                acciones.append(
+                    {
+                        "requisito": req.get("nombre"),
+                        "legajo_id": leg["sujeto_id"],
+                        "legajo_nombre": leg.get("identificador_natural") or leg["sujeto_id"],
+                        "tipo_sujeto": leg["tipo_sujeto"],
+                        "fecha_limite": str(fecha_limite),
+                        "accion_sugerida": req["accion_sugerida"],
+                        "ocs_afectadas": [{"clave_origen": oc["clave_origen"], "oc_id": str(oc["oc_id"])}],
+                        "efecto": req.get("motivo"),
+                        "genera_alerta_cierta": genera_alerta,
+                    }
+                )
+    acciones.sort(
+        key=lambda a: (
+            0 if a.get("genera_alerta_cierta") else 1,
+            a.get("fecha_limite") or "",
+            -len(a.get("ocs_afectadas") or []),
+        )
+    )
+    total = len(acciones)
+    pagina = acciones[p.offset : p.offset + p.limit]
+    return envolver(pagina, total, p)
 
 
 def _filas_decision(fila: Any) -> dict[str, Any]:

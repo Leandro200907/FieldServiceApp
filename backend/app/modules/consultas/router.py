@@ -6,7 +6,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad
@@ -95,11 +95,23 @@ class TableroVencimientosResponse(BaseModel):
 
 # --------------------------------------------------------------------------- servicio.py: OC / decisiones
 
-class ResumenCoberturaTipo(BaseModel):
+class AlertaCiertaOc(BaseModel):
+    codigo: str
+    mensaje: str
+    tipo_sujeto: str | None = None
+    desde: str | None = None
+    hasta: str | None = None
+    tramos: list[dict[str, Any]] | None = None
+
+
+class DisponibilidadTipoOc(BaseModel):
     tipo_sujeto: str
+    etiqueta: str
     estado: str
-    candidatos_cumplen: int
-    motivo: str | None = None
+    texto: str
+    habilitados_toda_ventana: list[dict[str, Any]]
+    se_cae_en_ventana: list[dict[str, Any]]
+    no_habilitados: list[dict[str, Any]]
 
 
 class OcBacklogItem(BaseModel):
@@ -109,15 +121,23 @@ class OcBacklogItem(BaseModel):
     cliente_id: str
     locacion_id: str
     tipo_servicio_id: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    tipo_servicio_nombre: str | None = None
     vigencia_desde: str
     vigencia_hasta: str
     estado: str
     lote_id: str | None
+    origen_oc: str | None = None
     creado_en: str
     actualizado_en: str
     modo: str
-    estado_cobertura: str
-    por_tipo: list[ResumenCoberturaTipo]
+    reprogramada: bool = False
+    tiene_alertas: bool
+    alertas_ciertas: list[AlertaCiertaOc]
+    disponibilidad_por_tipo: list[DisponibilidadTipoOc]
+    impacto_por_tipo: list[dict[str, Any]]
+    tipos_fuera_de_alcance: list[str]
 
 
 class BacklogOcResponse(BaseModel):
@@ -194,15 +214,14 @@ class GrupoCandidatosCobertura(BaseModel):
 
 class CoberturaOcResponse(BaseModel):
     commitment_id: str
-    oc: OcResumenCobertura
+    oc: dict[str, Any]
     modo: str
-    estado_cobertura: str
-    veredicto_de_cumplimiento: str | None = None
-    resultado_de_decision: str | None = None
-    por_tipo: list[ResumenCoberturaTipo]
-    grupos_candidatos: list[GrupoCandidatosCobertura]
-    requisitos_faltantes: list[RequisitoFaltante]
-    version_matriz: VersionMatrizEvaluada | None = None
+    reprogramada: bool = False
+    historial_compromiso: list[dict[str, Any]] = Field(default_factory=list)
+    tiene_alertas: bool
+    alertas_ciertas: list[AlertaCiertaOc]
+    disponibilidad_por_tipo: list[DisponibilidadTipoOc]
+    impacto_por_tipo: list[dict[str, Any]]
     tipos_fuera_de_alcance: list[str]
 
 
@@ -330,18 +349,67 @@ def propuestas_pendientes(identidad: Identidad = Depends(identidad_actual), p: P
 def backlog_oc(
     response: Response,
     estado: str | None = Query("activo"),
-    estado_cobertura: str | None = Query(None),
     vigencia_desde: date | None = Query(None),
     vigencia_hasta: date | None = Query(None),
+    mes: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
     q: str | None = Query(None, max_length=200),
+    operadora_id: list[UUID] | None = Query(None),
+    locacion_id: UUID | None = Query(None),
+    tipo_recurso: str | None = Query(None),
+    solo_con_alertas: bool | None = Query(None),
+    solo_reprogramadas: bool | None = Query(None),
     identidad: Identidad = Depends(identidad_actual),
     p: Pagina = Depends(pagina),
 ) -> BacklogOcResponse:
     response.headers["Cache-Control"] = "no-store"
+    ops = [str(o) for o in operadora_id] if operadora_id else None
     with tenant_session(identidad.tenant_id) as s:
         return BacklogOcResponse(**servicio.backlog_oc(
-            s, identidad, p, estado=estado, estado_cobertura=estado_cobertura,
-            vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta, q=q,
+            s, identidad, p, estado=estado,
+            vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta, mes=mes, q=q,
+            operadora_id=ops, locacion_id=str(locacion_id) if locacion_id else None,
+            tipo_recurso=tipo_recurso, solo_con_alertas=solo_con_alertas, solo_reprogramadas=solo_reprogramadas,
+        ))
+
+
+class AccionPendienteItem(BaseModel):
+    requisito: str | None = None
+    legajo_id: str
+    legajo_nombre: str
+    tipo_sujeto: str
+    fecha_limite: str
+    accion_sugerida: str
+    ocs_afectadas: list[dict[str, Any]]
+    efecto: str | None = None
+    genera_alerta_cierta: bool = False
+
+
+class AccionesPendientesResponse(BaseModel):
+    items: list[AccionPendienteItem]
+    total: int
+    offset: int
+    limit: int
+
+
+@router.get("/consultas/acciones_pendientes", response_model=AccionesPendientesResponse)
+def acciones_pendientes(
+    response: Response,
+    vigencia_desde: date | None = Query(None),
+    vigencia_hasta: date | None = Query(None),
+    mes: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    q: str | None = Query(None, max_length=200),
+    operadora_id: list[UUID] | None = Query(None),
+    locacion_id: UUID | None = Query(None),
+    tipo_recurso: str | None = Query(None),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> AccionesPendientesResponse:
+    response.headers["Cache-Control"] = "no-store"
+    ops = [str(o) for o in operadora_id] if operadora_id else None
+    with tenant_session(identidad.tenant_id) as s:
+        return AccionesPendientesResponse(**servicio.acciones_pendientes(
+            s, identidad, p, vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta, mes=mes, q=q,
+            operadora_id=ops, locacion_id=str(locacion_id) if locacion_id else None, tipo_recurso=tipo_recurso,
         ))
 
 

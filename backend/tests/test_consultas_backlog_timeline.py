@@ -1,15 +1,10 @@
-"""Consultas backlog OC, cobertura y timeline (D-A bis)."""
+"""Timeline de recursos (consulta Módulo 1)."""
 from __future__ import annotations
 
 pytest_plugins = ("tests.test_orquestacion",)
 
-import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 
-from sqlalchemy import text
-
-from app.db import tenant_session
-from tests.test_a04_alcance_evaluacion import _asignar
 from tests.test_orquestacion import (
     clave_de_matriz,
     insertar_definicion,
@@ -18,101 +13,6 @@ from tests.test_orquestacion import (
     insertar_matriz,
     insertar_oc,
 )
-
-AHORA = datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)
-
-
-def test_backlog_oc_cubierta(cliente_api, tenant_de_prueba, sesion):
-    t = tenant_de_prueba
-    clave = clave_de_matriz()
-    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
-    insertar_legajo(sesion, t.tenant_id, "persona_0042", "persona")
-    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
-    req_p = insertar_definicion(sesion, t.tenant_id, "Apto médico", "persona")
-    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_p: "bloqueante_duro"})
-    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
-    insertar_documento(sesion, t.tenant_id, "persona_0042", req_p, date(2026, 1, 1), date(2026, 12, 31))
-    insertar_oc(sesion, t.tenant_id, "OC-CUB", clave, date(2026, 10, 1), date(2026, 10, 5))
-    sesion.commit()
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos"))
-    assert r.status_code == 200, r.text
-    item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-CUB")
-    assert item["estado_cobertura"] == "cubierta"
-    assert "ultima_decision" not in item
-
-
-def test_backlog_no_inserta_evaluacion(cliente_api, tenant_de_prueba, sesion):
-    t = tenant_de_prueba
-    clave = clave_de_matriz()
-    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
-    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
-    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro"})
-    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
-    insertar_oc(sesion, t.tenant_id, "OC-NOPERS", clave, date(2026, 10, 1), date(2026, 10, 5))
-    sesion.commit()
-    with tenant_session(t.tenant_id) as s:
-        antes = s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
-    assert cliente_api.get("/v1/consultas/backlog_oc", params={"q": "OC-NOPERS"}, headers=t.headers("responsable_legajos")).status_code == 200
-    with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == antes
-
-
-def test_backlog_oc_motivo_112(cliente_api, tenant_de_prueba, sesion):
-    t = tenant_de_prueba
-    clave = clave_de_matriz()
-    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
-    insertar_legajo(sesion, t.tenant_id, "vehiculo_x", "vehiculo")
-    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
-    req_v = insertar_definicion(sesion, t.tenant_id, "VTV", "vehiculo")
-    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_v: "bloqueante_duro"})
-    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
-    insertar_oc(sesion, t.tenant_id, "OC-VTV", clave, date(2026, 10, 1), date(2026, 10, 5))
-    sesion.commit()
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos"))
-    item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-VTV")
-    assert item["estado_cobertura"] == "no_cubierta"
-    veh = next(p for p in item["por_tipo"] if p["tipo_sujeto"] == "vehiculo")
-    assert veh["candidatos_cumplen"] == 0
-    assert veh["motivo"] == "requisito_faltante: VTV — ningún legajo de tipo vehículo lo posee"
-
-
-def test_backlog_empresa_vencida_bloquea(cliente_api, tenant_de_prueba, sesion):
-    t = tenant_de_prueba
-    clave = clave_de_matriz()
-    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
-    insertar_legajo(sesion, t.tenant_id, "persona_0042", "persona")
-    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
-    req_p = insertar_definicion(sesion, t.tenant_id, "Apto", "persona")
-    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_p: "bloqueante_duro"})
-    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 9, 1))
-    insertar_documento(sesion, t.tenant_id, "persona_0042", req_p, date(2026, 1, 1), date(2026, 12, 31))
-    insertar_oc(sesion, t.tenant_id, "OC-EMP", clave, date(2026, 10, 1), date(2026, 10, 5))
-    sesion.commit()
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos"))
-    item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-EMP")
-    assert item["estado_cobertura"] == "empresa_bloquea"
-
-
-def test_supervisor_fuera_de_alcance_en_backlog(cliente_api, tenant_de_prueba, sesion):
-    t = tenant_de_prueba
-    clave = clave_de_matriz()
-    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
-    insertar_legajo(sesion, t.tenant_id, "persona_A", "persona")
-    insertar_legajo(sesion, t.tenant_id, "vehiculo_Z", "vehiculo")
-    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
-    req_p = insertar_definicion(sesion, t.tenant_id, "Apto", "persona")
-    req_v = insertar_definicion(sesion, t.tenant_id, "VTV", "vehiculo")
-    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_p: "bloqueante_duro", req_v: "bloqueante_duro"})
-    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
-    insertar_documento(sesion, t.tenant_id, "persona_A", req_p, date(2026, 1, 1), date(2026, 12, 31))
-    insertar_oc(sesion, t.tenant_id, "OC-ALC", clave, date(2026, 10, 1), date(2026, 10, 5))
-    _asignar(sesion, t.tenant_id, "persona_A", t.usuarios["supervisor"])
-    sesion.commit()
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("supervisor"))
-    item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-ALC")
-    veh = next(p for p in item["por_tipo"] if p["tipo_sujeto"] == "vehiculo")
-    assert veh["estado"] == "fuera_de_alcance"
-    assert "fuera de tu alcance" in (veh["motivo"] or "")
 
 
 def test_timeline_quiebre_dentro_de_oc(cliente_api, tenant_de_prueba, sesion):
