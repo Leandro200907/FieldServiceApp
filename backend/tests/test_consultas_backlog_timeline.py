@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import text
 
+from app.db import tenant_session
 from tests.test_a04_alcance_evaluacion import _asignar
 from tests.test_orquestacion import (
     clave_de_matriz,
@@ -38,7 +39,22 @@ def test_backlog_oc_cubierta(cliente_api, tenant_de_prueba, sesion):
     item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-CUB")
     assert item["estado_cobertura"] == "cubierta"
     assert "ultima_decision" not in item
-    assert sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 0
+
+
+def test_backlog_no_inserta_evaluacion(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    clave = clave_de_matriz()
+    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
+    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
+    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro"})
+    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
+    insertar_oc(sesion, t.tenant_id, "OC-NOPERS", clave, date(2026, 10, 1), date(2026, 10, 5))
+    sesion.commit()
+    with tenant_session(t.tenant_id) as s:
+        antes = s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
+    assert cliente_api.get("/v1/consultas/backlog_oc", params={"q": "OC-NOPERS"}, headers=t.headers("responsable_legajos")).status_code == 200
+    with tenant_session(t.tenant_id) as s:
+        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == antes
 
 
 def test_backlog_oc_motivo_112(cliente_api, tenant_de_prueba, sesion):
