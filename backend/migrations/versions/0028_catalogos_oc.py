@@ -25,6 +25,8 @@ def _rls(tabla: str) -> None:
 
 def upgrade() -> None:
     op.execute("ALTER TABLE modulo1.operadora_documental NO FORCE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE modulo1.oc NO FORCE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE modulo1.matriz_requisitos NO FORCE ROW LEVEL SECURITY")
     op.execute(
         """
         DO $$ BEGIN
@@ -124,6 +126,8 @@ def upgrade() -> None:
     """)
 
     op.execute("ALTER TABLE modulo1.operadora_documental FORCE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE modulo1.oc FORCE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE modulo1.matriz_requisitos FORCE ROW LEVEL SECURITY")
 
     for tabla in ("locacion_oc", "tipo_servicio_oc"):
         op.execute(f"ALTER TABLE modulo1.{tabla} ENABLE ROW LEVEL SECURITY")
