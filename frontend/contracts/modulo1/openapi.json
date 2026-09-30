@@ -6178,6 +6178,17 @@
               }
             ],
             "title": "Requisito"
+          },
+          "tipo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo"
           }
         },
         "required": [

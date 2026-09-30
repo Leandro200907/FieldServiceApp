@@ -440,6 +440,7 @@ class TramoTimeline(BaseModel):
 class QuiebreOcTimeline(BaseModel):
     fecha: str
     requisito: str | None
+    tipo: str | None = None
 
 
 class CruceOcTimeline(BaseModel):

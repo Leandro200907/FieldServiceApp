@@ -3599,6 +3599,8 @@ export interface components {
             fecha: string;
             /** Requisito */
             requisito: string | null;
+            /** Tipo */
+            tipo?: string | null;
         };
         /** RadarBacklogResponse */
         RadarBacklogResponse: {
