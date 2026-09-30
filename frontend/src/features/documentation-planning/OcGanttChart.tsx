@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { clipSegment, dayPosition, inVista } from './dates';
 import './timeline.css';
 
 export type GanttBandaOc = {
@@ -32,29 +33,21 @@ type Props = {
   selectedId?: string | null;
 };
 
-function parseDay(iso: string) {
-  return new Date(`${iso}T12:00:00`).getTime();
-}
-
-function pct(iso: string, min: number, max: number) {
-  return ((parseDay(iso) - min) / (max - min)) * 100;
-}
-
 export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, selectedId }: Props) {
-  const min = parseDay(vistaDesde);
-  const max = parseDay(vistaHasta);
-  const hoyPct = hoy ? pct(hoy, min, max) : null;
-  const hoyEnVista = hoyPct != null && hoyPct >= 0 && hoyPct <= 100;
+  const hoyEnVista = Boolean(hoy && inVista(hoy, vistaDesde, vistaHasta));
+  const hoyPct = hoyEnVista && hoy ? dayPosition(hoy, vistaDesde, vistaHasta) : null;
 
   const ticks = useMemo(() => {
     const out: string[] = [];
     const d = new Date(`${vistaDesde}T12:00:00`);
     const end = new Date(`${vistaHasta}T12:00:00`);
+    const spanDays = Math.max(1, Math.round((end.getTime() - d.getTime()) / 86400000));
+    const step = Math.max(1, Math.round(spanDays / 8));
     while (d <= end) {
       out.push(d.toISOString().slice(0, 10));
-      d.setDate(d.getDate() + Math.max(1, Math.round((end.getTime() - parseDay(vistaDesde)) / (86400000 * 8))));
+      d.setDate(d.getDate() + step);
     }
-    return out;
+    return out.filter(t => inVista(t, vistaDesde, vistaHasta));
   }, [vistaDesde, vistaHasta]);
 
   return (
@@ -73,15 +66,14 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
         <div className="oc-gantt-plots">
           <div className="oc-gantt-axis-track">
             {ticks.map(t => (
-              <span key={t} style={{ left: `${pct(t, min, max)}%` }}>
+              <span key={t} style={{ left: `${dayPosition(t, vistaDesde, vistaHasta)}%` }}>
                 {new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(`${t}T12:00:00`))}
               </span>
             ))}
           </div>
-          {hoyEnVista && <div className="oc-gantt-hoy" style={{ left: `${hoyPct}%` }} title="Hoy" />}
+          {hoyEnVista && hoyPct != null && <div className="oc-gantt-hoy" style={{ left: `${hoyPct}%` }} title="Hoy" />}
           {filas.map(f => {
-            const left = pct(f.desde, min, max);
-            const width = Math.max(0.5, pct(f.hasta, min, max) - left);
+            const barra = clipSegment(f.desde, f.hasta, vistaDesde, vistaHasta);
             const barClass = f.barTone && f.barTone !== 'default' ? ` oc-gantt-bar-${f.barTone}` : '';
             return (
               <button
@@ -90,35 +82,37 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
                 className={`oc-gantt-track${selectedId === f.id ? ' selected' : ''}`}
                 onClick={() => onSelect?.(f.id)}
               >
-                {(f.bandasOc || []).map((b, i) => (
-                  <div
-                    key={`${b.desde}-${i}`}
-                    className={`oc-gantt-banda-oc${b.filtrada ? ' filtrada' : ''}`}
-                    style={{
-                      left: `${pct(b.desde, min, max)}%`,
-                      width: `${Math.max(0.3, pct(b.hasta, min, max) - pct(b.desde, min, max))}%`,
-                    }}
-                    title={b.label}
-                  />
-                ))}
-                {!f.ocultarBarra && (
-                  <div className={`oc-gantt-bar${barClass}`} style={{ left: `${left}%`, width: `${width}%` }} />
+                {(f.bandasOc || []).map((b, i) => {
+                  const seg = clipSegment(b.desde, b.hasta, vistaDesde, vistaHasta);
+                  if (!seg) return null;
+                  return (
+                    <div
+                      key={`${b.desde}-${i}`}
+                      className={`oc-gantt-banda-oc${b.filtrada ? ' filtrada' : ''}`}
+                      style={{ left: `${seg.left}%`, width: `${Math.max(seg.width, 0.3)}%` }}
+                      title={b.label}
+                    />
+                  );
+                })}
+                {!f.ocultarBarra && barra && (
+                  <div className={`oc-gantt-bar${barClass}`} style={{ left: `${barra.left}%`, width: `${Math.max(barra.width, 0.5)}%` }} />
                 )}
-                {f.tramosAlerta.map((t, i) => (
-                  <div
-                    key={`${t.desde}-${i}`}
-                    className="oc-gantt-alerta-tramo"
-                    style={{
-                      left: `${pct(t.desde, min, max)}%`,
-                      width: `${Math.max(0.3, pct(t.hasta, min, max) - pct(t.desde, min, max))}%`,
-                    }}
-                  />
-                ))}
-                {f.alertas.map((a, i) => (
+                {f.tramosAlerta.map((t, i) => {
+                  const seg = clipSegment(t.desde, t.hasta, vistaDesde, vistaHasta);
+                  if (!seg) return null;
+                  return (
+                    <div
+                      key={`${t.desde}-${i}`}
+                      className="oc-gantt-alerta-tramo"
+                      style={{ left: `${seg.left}%`, width: `${Math.max(seg.width, 0.3)}%` }}
+                    />
+                  );
+                })}
+                {f.alertas.filter(a => inVista(a.fecha, vistaDesde, vistaHasta)).map((a, i) => (
                   <span
                     key={`${a.fecha}-${i}`}
                     className="oc-gantt-marker"
-                    style={{ left: `${pct(a.fecha, min, max)}%` }}
+                    style={{ left: `${dayPosition(a.fecha, vistaDesde, vistaHasta)}%` }}
                     title={a.titulo}
                   >
                     ▲

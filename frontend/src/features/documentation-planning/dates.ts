@@ -37,3 +37,22 @@ export function dayPosition(iso: string, from: string, to: string): number {
   const pct = ((point - start) / span) * 100;
   return Math.min(Math.max(pct, 0), 100);
 }
+
+export function inVista(iso: string, vistaDesde: string, vistaHasta: string): boolean {
+  return iso >= vistaDesde && iso <= vistaHasta;
+}
+
+/** Recorta un tramo al rango visible. `null` si no intersecta el gráfico. */
+export function clipSegment(
+  desde: string,
+  hasta: string,
+  vistaDesde: string,
+  vistaHasta: string,
+): { left: number; width: number } | null {
+  if (hasta < vistaDesde || desde > vistaHasta) return null;
+  const start = desde < vistaDesde ? vistaDesde : desde;
+  const end = hasta > vistaHasta ? vistaHasta : hasta;
+  const left = dayPosition(start, vistaDesde, vistaHasta);
+  const right = dayPosition(end, vistaDesde, vistaHasta);
+  return { left, width: Math.max(right - left, 0) };
+}

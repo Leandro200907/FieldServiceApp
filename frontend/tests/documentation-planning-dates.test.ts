@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addDays, dayPosition, todayIso } from '../src/features/documentation-planning/dates';
+import { addDays, clipSegment, dayPosition, todayIso } from '../src/features/documentation-planning/dates';
 
 describe('todayIso — F-03: fecha local, nunca UTC', () => {
   const zonaOriginal = process.env.TZ;
@@ -51,5 +51,20 @@ describe('dayPosition — F-01: posición de una fecha dentro de [from, to], nun
     const hoy = '2026-09-21';
     const hasta = addDays(hoy, 40);
     expect(dayPosition(hoy, hoy, hasta)).toBe(0);
+  });
+});
+
+describe('clipSegment — recorte al rango visible', () => {
+  it('devuelve null si el tramo queda fuera del gráfico', () => {
+    expect(clipSegment('2026-08-01', '2026-08-15', '2026-09-01', '2026-09-30')).toBeNull();
+    expect(clipSegment('2026-10-01', '2026-10-15', '2026-09-01', '2026-09-30')).toBeNull();
+  });
+
+  it('recorta el tramo que se sale por los extremos y no produce overflow', () => {
+    const clipped = clipSegment('2026-08-20', '2026-09-10', '2026-09-01', '2026-09-11');
+    expect(clipped).not.toBeNull();
+    expect(clipped!.left).toBe(0);
+    expect(clipped!.width).toBeLessThanOrEqual(100);
+    expect(clipped!.left + clipped!.width).toBeLessThanOrEqual(100);
   });
 });
