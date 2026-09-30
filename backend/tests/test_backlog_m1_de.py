@@ -87,6 +87,8 @@ def test_impacto_inclusive_siete_dias(cliente_api, tenant_de_prueba, sesion):
     det = cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "OC-IMP"}, headers=t.headers("responsable_legajos")).json()
     persona_imp = next(i for i in det["impacto_por_tipo"] if i["tipo_sujeto"] == "persona")
     assert persona_imp["dias_sin_habilitados"] == 7
+    persona_disp = next(d for d in det["disponibilidad_por_tipo"] if d["tipo_sujeto"] == "persona")
+    assert persona_disp["se_cae_en_ventana"][0]["fecha"] == "2026-11-18"
 
 
 def test_supervisor_fuera_de_alcance(cliente_api, tenant_de_prueba, sesion):

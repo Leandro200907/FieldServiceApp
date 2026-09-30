@@ -14,6 +14,7 @@ from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
 from app.core.estado_documental import (
     EstadoConfirmacionDocumental,
+    EstadoRequisitoDocumental,
     EstadoValidacionArchivo,
     EstadoVersionEvidencia,
     EvaluacionDocumentalEntrada,
@@ -190,9 +191,16 @@ def timeline_recursos(
                         RequisitoAplicable(str(rid), req.get("nombre") or "", "documento", legajo["tipo_sujeto"]),
                         evids,
                     ))
-                    if res.primer_quiebre and oc_desde <= res.primer_quiebre <= oc_hasta:
-                        if res.primer_quiebre < oc_hasta:
-                            quiebres.append({"fecha": res.primer_quiebre.isoformat(), "requisito": req.get("nombre")})
+                    if res.estado == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO:
+                        ev = next((e for e in evids if e.evidencia_id == res.evidencia_id), None)
+                        fecha = ev.vigente_hasta if ev and ev.vigente_hasta else res.primer_quiebre
+                        if fecha and oc_desde <= fecha <= oc_hasta:
+                            quiebres.append({"fecha": fecha.isoformat(), "requisito": req.get("nombre"), "tipo": "vence"})
+                            llega = False
+                    elif res.estado == EstadoRequisitoDocumental.FALTANTE:
+                        ev = next((e for e in evids if e.evidencia_id == res.evidencia_id), None)
+                        if ev and ev.vigente_desde and ev.vigente_desde > oc_desde:
+                            quiebres.append({"fecha": ev.vigente_desde.isoformat(), "requisito": req.get("nombre"), "tipo": "inicia"})
                             llega = False
             except ErrorDeDominio:
                 llega = False

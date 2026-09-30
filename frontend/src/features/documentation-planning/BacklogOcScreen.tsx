@@ -124,7 +124,7 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
         const fecha = typeof raw.fecha === 'string' ? raw.fecha : row.vigencia_hasta;
         return {
           fecha,
-          titulo: `${raw.fecha ? fmtDate(raw.fecha) : ''} vence ${raw.requisito || 'requisito'} — ${d.etiqueta}`,
+          titulo: `${raw.fecha ? fmtDate(raw.fecha) : ''} vence ${raw.requisito || 'requisito'} — ${d.etiqueta}`.trim(),
         };
       }),
     ),

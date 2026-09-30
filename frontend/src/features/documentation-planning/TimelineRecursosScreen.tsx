@@ -85,10 +85,14 @@ export function TimelineRecursosScreen() {
         filtrada: Boolean(ocId && oc.oc_id === ocId),
       }));
       const quiebres = recurso.ocs.flatMap(oc =>
-        oc.quiebres.map(q => ({
-          fecha: q.fecha,
-          titulo: `${q.requisito} vence el ${fmtDate(q.fecha, tz)} — ${oc.clave_origen}`,
-        })),
+        oc.quiebres.map(q => {
+          const raw = q as { fecha: string; requisito: string; tipo?: string };
+          const verbo = raw.tipo === 'inicia' ? 'empieza el' : 'vence el';
+          return {
+            fecha: raw.fecha,
+            titulo: `${raw.requisito} ${verbo} ${fmtDate(raw.fecha, tz)} — ${oc.clave_origen}`,
+          };
+        }),
       );
       out.push({
         id: sid,

@@ -43,6 +43,7 @@ def _eval_legajo_tramo(
                 "estado": res.estado.value,
                 "primer_quiebre": res.primer_quiebre,
                 "motivo": res.motivo,
+                "vigente_hasta": next((e.vigente_hasta for e in evs if e.evidencia_id == res.evidencia_id), None) if res.evidencia_id else None,
             }
         )
         if res.estado in ESTADOS_ALERTA or res.estado in ESTADOS_INCOMPLETOS:
@@ -133,11 +134,18 @@ def evaluar_oc_backlog(
             if cls == "habilitado_toda_ventana":
                 toda.append(item)
             elif cls == "se_cae_en_ventana":
-                _, det = _eval_legajo_tramo(leg, tramos[-1], evidencias) if tramos else (False, [])
-                quiebre = next((d for d in det if d.get("primer_quiebre")), None)
-                if quiebre:
-                    item["fecha"] = quiebre["primer_quiebre"].isoformat() if quiebre.get("primer_quiebre") else None
-                    item["requisito"] = quiebre.get("requisito")
+                vigente_hasta = None
+                req_nombre = None
+                for tramo in tramos:
+                    _, det = _eval_legajo_tramo(leg, tramo, evidencias)
+                    hit = next((d for d in det if d["estado"] == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO.value), None)
+                    if hit:
+                        vigente_hasta = hit.get("vigente_hasta")
+                        req_nombre = hit.get("requisito")
+                        break
+                if vigente_hasta:
+                    item["fecha"] = vigente_hasta.isoformat() if hasattr(vigente_hasta, "isoformat") else str(vigente_hasta)
+                    item["requisito"] = req_nombre
                 cae.append(item)
             else:
                 no.append(item)
