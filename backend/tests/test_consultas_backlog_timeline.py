@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import text
 
-from tests.test_a04_alcance_evaluacion import _asignar, _escenario, _segundo_supervisor
+from tests.test_a04_alcance_evaluacion import _asignar
 from tests.test_orquestacion import (
     clave_de_matriz,
     insertar_definicion,
@@ -23,19 +23,26 @@ AHORA = datetime(2026, 9, 18, 12, 0, tzinfo=timezone.utc)
 
 def test_backlog_oc_cubierta(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
-    _escenario(sesion, t)
+    clave = clave_de_matriz()
+    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
+    insertar_legajo(sesion, t.tenant_id, "persona_0042", "persona")
+    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
+    req_p = insertar_definicion(sesion, t.tenant_id, "Apto médico", "persona")
+    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_p: "bloqueante_duro"})
+    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
+    insertar_documento(sesion, t.tenant_id, "persona_0042", req_p, date(2026, 1, 1), date(2026, 12, 31))
+    insertar_oc(sesion, t.tenant_id, "OC-CUB", clave, date(2026, 10, 1), date(2026, 10, 5))
     sesion.commit()
     antes = sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
     r = cliente_api.get(
         "/v1/consultas/backlog_oc",
-        params={"q": "OC-1"},
+        params={"q": "OC-CUB"},
         headers=t.headers("responsable_legajos"),
     )
     assert r.status_code == 200, r.text
-    item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-1")
+    item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-CUB")
     assert item["estado_cobertura"] == "cubierta"
     assert "ultima_decision" not in item
-    sesion.rollback()
     despues = sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
     assert despues == antes
 
