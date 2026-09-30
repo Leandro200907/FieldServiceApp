@@ -84,10 +84,14 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
       (row.alertas_ciertas || []).filter(a => a.desde && a.hasta).map(a => ({ desde: a.desde!, hasta: a.hasta! })),
     ),
     alertas: (row.disponibilidad_por_tipo || []).flatMap(d =>
-      (d.se_cae_en_ventana || []).map(s => ({
-        fecha: s.fecha || row.vigencia_hasta,
-        titulo: `${s.fecha ? fmtDate(s.fecha) : ''} vence ${s.requisito || 'requisito'} — ${d.etiqueta}`,
-      })),
+      (d.se_cae_en_ventana || []).map(s => {
+        const raw = s as { fecha?: string; requisito?: string };
+        const fecha = typeof raw.fecha === 'string' ? raw.fecha : row.vigencia_hasta;
+        return {
+          fecha,
+          titulo: `${raw.fecha ? fmtDate(raw.fecha) : ''} vence ${raw.requisito || 'requisito'} — ${d.etiqueta}`,
+        };
+      }),
     ),
   }));
 
@@ -169,9 +173,12 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
             <details>
               <summary>Historial de cambios</summary>
               <ul>
-                {detailQuery.data.historial_compromiso!.map((h, i) => (
-                  <li key={i}>{h.fecha} · {h.origen} · {h.motivo || '—'}</li>
-                ))}
+                {detailQuery.data.historial_compromiso!.map((h, i) => {
+                  const row = h as { fecha?: string; origen?: string; motivo?: string };
+                  return (
+                    <li key={i}>{String(row.fecha ?? '')} · {String(row.origen ?? '')} · {row.motivo || '—'}</li>
+                  );
+                })}
               </ul>
             </details>
           )}

@@ -25,15 +25,22 @@ def _rls(tabla: str) -> None:
 
 def upgrade() -> None:
     op.execute("ALTER TABLE modulo1.operadora_documental NO FORCE ROW LEVEL SECURITY")
-    op.execute("DELETE FROM modulo1.operadora_documental WHERE btrim(nombre) = ''")
     op.execute(
-        "ALTER TABLE modulo1.operadora_documental "
-        "ADD CONSTRAINT ck_operadora_documental_nombre CHECK (btrim(nombre) <> '')"
+        """
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'ck_operadora_documental_nombre'
+          ) THEN
+            DELETE FROM modulo1.operadora_documental WHERE btrim(nombre) = '';
+            ALTER TABLE modulo1.operadora_documental
+              ADD CONSTRAINT ck_operadora_documental_nombre CHECK (btrim(nombre) <> '');
+          END IF;
+        END $$;
+        """
     )
-    op.execute("ALTER TABLE modulo1.operadora_documental FORCE ROW LEVEL SECURITY")
 
     op.execute("""
-        CREATE TABLE modulo1.locacion_oc (
+        CREATE TABLE IF NOT EXISTS modulo1.locacion_oc (
             locacion_id UUID PRIMARY KEY,
             tenant_id UUID NOT NULL REFERENCES modulo1.tenant(tenant_id),
             operadora_id UUID NOT NULL,
@@ -46,12 +53,12 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE UNIQUE INDEX uq_locacion_oc_nombre "
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_locacion_oc_nombre "
         "ON modulo1.locacion_oc (tenant_id, operadora_id, lower(nombre))"
     )
 
     op.execute("""
-        CREATE TABLE modulo1.tipo_servicio_oc (
+        CREATE TABLE IF NOT EXISTS modulo1.tipo_servicio_oc (
             tipo_servicio_id UUID PRIMARY KEY,
             tenant_id UUID NOT NULL REFERENCES modulo1.tenant(tenant_id),
             nombre TEXT NOT NULL,
@@ -61,7 +68,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE UNIQUE INDEX uq_tipo_servicio_oc_nombre "
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_tipo_servicio_oc_nombre "
         "ON modulo1.tipo_servicio_oc (tenant_id, lower(nombre))"
     )
 
@@ -69,8 +76,16 @@ def upgrade() -> None:
         "ALTER TABLE modulo1.oc ADD COLUMN IF NOT EXISTS origen_oc TEXT NOT NULL DEFAULT 'planilla'"
     )
     op.execute(
-        "ALTER TABLE modulo1.oc ADD CONSTRAINT ck_oc_origen_oc "
-        "CHECK (origen_oc IN ('planilla', 'manual', 'modulo2'))"
+        """
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'ck_oc_origen_oc'
+          ) THEN
+            ALTER TABLE modulo1.oc ADD CONSTRAINT ck_oc_origen_oc
+              CHECK (origen_oc IN ('planilla', 'manual', 'modulo2'));
+          END IF;
+        END $$;
+        """
     )
 
     op.execute("""
@@ -108,8 +123,23 @@ def upgrade() -> None:
         ON CONFLICT (tipo_servicio_id) DO NOTHING
     """)
 
+    op.execute("ALTER TABLE modulo1.operadora_documental FORCE ROW LEVEL SECURITY")
+
     for tabla in ("locacion_oc", "tipo_servicio_oc"):
-        _rls(tabla)
+        op.execute(f"ALTER TABLE modulo1.{tabla} ENABLE ROW LEVEL SECURITY")
+        op.execute(
+            f"""
+            DO $$ BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_policies WHERE tablename = '{tabla}' AND policyname = '{tabla}_aislamiento'
+              ) THEN
+                CREATE POLICY {tabla}_aislamiento ON modulo1.{tabla} {_POLICY};
+              END IF;
+            END $$;
+            """
+        )
+        op.execute(f"ALTER TABLE modulo1.{tabla} FORCE ROW LEVEL SECURITY")
+        op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON modulo1.{tabla} TO modulo1_app")
 
 
 def downgrade() -> None:
