@@ -131,6 +131,15 @@ def alta_locacion(session: Session, identidad: Identidad, operadora_id: str, nom
     nombre = nombre.strip()
     if not nombre:
         raise ErrorDeDominio("nombre obligatorio")
+    existente = session.execute(
+        text(
+            "SELECT locacion_id FROM modulo1.locacion_oc "
+            "WHERE tenant_id = :t AND operadora_id = CAST(:o AS uuid) AND lower(nombre) = lower(:n)"
+        ),
+        {"t": identidad.tenant_id, "o": operadora_id, "n": nombre},
+    ).scalar()
+    if existente:
+        raise ErrorDeDominio("locación duplicada para esta operadora", {"nombre": nombre})
     lid = str(uuid.uuid4())
     session.execute(
         text(
@@ -147,6 +156,15 @@ def alta_tipo_servicio(session: Session, identidad: Identidad, nombre: str) -> d
     nombre = nombre.strip()
     if not nombre:
         raise ErrorDeDominio("nombre obligatorio")
+    existente = session.execute(
+        text(
+            "SELECT tipo_servicio_id FROM modulo1.tipo_servicio_oc "
+            "WHERE tenant_id = :t AND lower(nombre) = lower(:n)"
+        ),
+        {"t": identidad.tenant_id, "n": nombre},
+    ).scalar()
+    if existente:
+        raise ErrorDeDominio("tipo de servicio duplicado", {"nombre": nombre})
     tid = str(uuid.uuid4())
     session.execute(
         text(
