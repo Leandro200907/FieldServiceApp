@@ -22,7 +22,7 @@ export const pages: Page[] = [
   { id: 'vencimientos', label: 'Vencimientos', description: 'Evidencia vencida o próxima a vencer dentro de tu alcance documental.', roles: ['responsable_legajos', 'supervisor'], gaps: ['H-02'] },
   { id: 'calendario-vigencias', label: 'Calendario documental', description: 'Vigencias documentales de empresas, personas, vehículos y equipos.', roles: ['responsable_legajos', 'supervisor', 'tecnico'], gaps: [] },
   { id: 'radar-documental', label: 'Radar documental', description: 'Señales documentales informativas sobre las OC previstas.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
-  { id: 'backlog-oc', label: 'Backlog de OC', description: 'Órdenes de compra con cobertura documental en vivo.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
+  { id: 'backlog-oc', label: 'Backlog de OC', description: 'Órdenes de compra con disponibilidad documental en vivo.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
   { id: 'acciones-pendientes', label: 'Acciones pendientes', description: 'Renovaciones y regularizaciones que afectan OCs activas.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
   { id: 'timeline-recursos', label: 'Timeline de recursos', description: 'Vigencias por recurso y cruces con ventanas de OC.', roles: ['responsable_legajos', 'supervisor', 'configuracion', 'tecnico'], gaps: [] },
   { id: 'catalogos-oc', label: 'Catálogos OC', description: 'Operadoras, locaciones y tipos de servicio para planillas de OC.', roles: ['responsable_legajos', 'configuracion'], gaps: [] },

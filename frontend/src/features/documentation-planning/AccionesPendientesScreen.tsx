@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
+import { textoEfectoAccion } from './copy';
 import { formatFecha } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
@@ -88,7 +89,7 @@ export function AccionesPendientesScreen() {
             <strong>{a.accion_sugerida}</strong> — {a.legajo_nombre} ({a.tipo_sujeto})
             {a.requisito && <> · {a.requisito}</>}
             {a.fecha_limite && <> · límite {fmtDate(a.fecha_limite)}</>}
-            {a.efecto && <p>{a.efecto}</p>}
+            {a.efecto && <p>{textoEfectoAccion(a.efecto)}</p>}
             {a.genera_alerta_cierta && <em> Genera alerta cierta</em>}
             {a.ocs_afectadas?.length > 0 && (
               <p>OCs: {a.ocs_afectadas.map(o => String((o as { clave_origen?: string }).clave_origen || '')).filter(Boolean).join(', ')}</p>

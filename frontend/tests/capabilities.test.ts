@@ -15,6 +15,11 @@ describe('Módulo 1 navigation', () => {
   it('keeps people, vehicles and equipment as documentary subjects', () => {
     expect(pages.find(page => page.id === 'legajos')?.description).toMatch(/personas, vehículos, equipos/);
   });
+
+  it('describe el backlog como disponibilidad documental, no cobertura', () => {
+    expect(pages.find(page => page.id === 'backlog-oc')?.description).toMatch(/disponibilidad documental/);
+    expect(pages.find(page => page.id === 'backlog-oc')?.description).not.toMatch(/cobertura/);
+  });
 });
 
 
