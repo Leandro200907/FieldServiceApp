@@ -372,11 +372,15 @@ def reprogramar_oc(
         identidad.usuario_id,
     )
     from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+    from app.modules.consultas.comparacion_reprogramacion import comparar_efecto_documental
 
+    oc_anterior = dict(fila)
+    documental_anterior = evaluar_oc_backlog(session, identidad, oc_anterior)
     oc_eval = dict(fila)
     oc_eval["vigencia_desde"] = vigencia_desde
     oc_eval["vigencia_hasta"] = vigencia_hasta
-    efecto = evaluar_oc_backlog(session, identidad, oc_eval)
+    documental_nuevo = evaluar_oc_backlog(session, identidad, oc_eval)
+    comparacion = comparar_efecto_documental(documental_anterior, documental_nuevo)
     return {
         "oc_id": oc_id,
         "clave_origen": fila["clave_origen"],
@@ -385,7 +389,8 @@ def reprogramar_oc(
         "vigencia_nueva": nuevo,
         "motivo": motivo,
         "origen": "manual",
-        "efecto_documental": efecto,
+        "efecto_documental": documental_nuevo,
+        "comparacion_documental": comparacion,
     }
 
 
