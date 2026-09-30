@@ -39,6 +39,7 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
   const mes = params.get('mes') || '';
   const q = params.get('q') || '';
   const soloAlertas = params.get('solo_con_alertas') === '1';
+  const soloReprogramadas = params.get('solo_reprogramadas') === '1';
   const operadoras = params.getAll('operadora_id');
   const selected = params.get('oc') || null;
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -72,13 +73,14 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
           mes: mes || undefined,
           q: q || undefined,
           solo_con_alertas: soloAlertas || undefined,
+          solo_reprogramadas: soloReprogramadas || undefined,
           ...(operadoras.length ? { operadora_id: operadoras } : {}),
         },
       },
     });
     if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
     return data!;
-  }, [offset, mes, q, soloAlertas, operadoras.join(','), reloadKey]);
+  }, [offset, mes, q, soloAlertas, soloReprogramadas, operadoras.join(','), reloadKey]);
 
   const detailQuery = usePrototypeRead(async () => {
     if (!selected) return null;
@@ -184,6 +186,10 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
           <label>
             <input type="checkbox" checked={soloAlertas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_con_alertas', '1'); else p.delete('solo_con_alertas'); p.delete('offset'); return p; })} />
             Solo con alertas
+          </label>
+          <label>
+            <input type="checkbox" checked={soloReprogramadas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_reprogramadas', '1'); else p.delete('solo_reprogramadas'); p.delete('offset'); return p; })} />
+            Solo reprogramadas
           </label>
         </div>
         <fieldset className="form-field">
