@@ -33,11 +33,7 @@ def test_backlog_oc_cubierta(cliente_api, tenant_de_prueba, sesion):
     insertar_documento(sesion, t.tenant_id, "persona_0042", req_p, date(2026, 1, 1), date(2026, 12, 31))
     insertar_oc(sesion, t.tenant_id, "OC-CUB", clave, date(2026, 10, 1), date(2026, 10, 5))
     sesion.commit()
-    r = cliente_api.get(
-        "/v1/consultas/backlog_oc",
-        params={"q": "OC-CUB"},
-        headers=t.headers("responsable_legajos"),
-    )
+    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos"))
     assert r.status_code == 200, r.text
     item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-CUB")
     assert item["estado_cobertura"] == "cubierta"
