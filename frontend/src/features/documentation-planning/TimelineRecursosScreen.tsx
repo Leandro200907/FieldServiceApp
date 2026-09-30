@@ -5,6 +5,7 @@ import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
+import { addDays, formatFecha, todayIso } from './dates';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
@@ -22,15 +23,15 @@ const TONE: Record<string, GanttOcRow['barTone']> = {
 };
 
 function fmtDate(value: string, timeZone?: string) {
-  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone }).format(new Date(`${value}T12:00:00`));
+  return formatFecha(value, timeZone || 'America/Argentina/Buenos_Aires');
 }
 
 export function TimelineRecursosScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const ocId = searchParams.get('oc_id') || undefined;
   const [offset, setOffset] = useState(0);
-  const [desde, setDesde] = useState(searchParams.get('desde') || '2026-10-01');
-  const [hasta, setHasta] = useState(searchParams.get('hasta') || '2026-11-30');
+  const [desde, setDesde] = useState(searchParams.get('desde') || todayIso());
+  const [hasta, setHasta] = useState(searchParams.get('hasta') || addDays(todayIso(), 90));
   const [soloQuiebres, setSoloQuiebres] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';

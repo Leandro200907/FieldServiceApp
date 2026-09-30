@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { clipSegment, dayPosition, inVista } from './dates';
+import { clipSegment, dayPosition, formatTick, inVista } from './dates';
 import './timeline.css';
 
 export type GanttBandaOc = {
@@ -67,7 +67,7 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
           <div className="oc-gantt-axis-track">
             {ticks.map(t => (
               <span key={t} style={{ left: `${dayPosition(t, vistaDesde, vistaHasta)}%` }}>
-                {new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(`${t}T12:00:00`))}
+                {formatTick(t, vistaDesde, vistaHasta)}
               </span>
             ))}
           </div>

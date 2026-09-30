@@ -65,3 +65,9 @@ export function formatFecha(value: string, timeZone: string): string {
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone }).format(date);
 }
+
+export function formatTick(iso: string, vistaDesde: string, vistaHasta: string, timeZone = 'UTC'): string {
+  const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', timeZone };
+  if (vistaDesde.slice(0, 4) !== vistaHasta.slice(0, 4)) opts.year = 'numeric';
+  return new Intl.DateTimeFormat('es-AR', opts).format(new Date(`${iso}T12:00:00`));
+}

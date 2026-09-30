@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addDays, clipSegment, dayPosition, todayIso } from '../src/features/documentation-planning/dates';
+import { addDays, clipSegment, dayPosition, formatTick, todayIso } from '../src/features/documentation-planning/dates';
 
 describe('todayIso — F-03: fecha local, nunca UTC', () => {
   const zonaOriginal = process.env.TZ;
@@ -66,5 +66,12 @@ describe('clipSegment — recorte al rango visible', () => {
     expect(clipped!.left).toBe(0);
     expect(clipped!.width).toBeLessThanOrEqual(100);
     expect(clipped!.left + clipped!.width).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('formatTick', () => {
+  it('incluye el año cuando el rango cruza años', () => {
+    expect(formatTick('2026-12-20', '2026-12-01', '2027-01-15', 'UTC')).toMatch(/2026/);
+    expect(formatTick('2026-11-20', '2026-11-01', '2026-11-30', 'UTC')).not.toMatch(/2026/);
   });
 });
