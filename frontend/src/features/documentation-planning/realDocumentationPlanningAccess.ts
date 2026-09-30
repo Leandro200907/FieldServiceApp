@@ -20,7 +20,7 @@ export async function importarPlanillaOc(file: File, loteId = crypto.randomUUID(
         header: { 'X-Nombre-Archivo': file.name },
       },
       body: file as unknown as string,
-      bodySerializer: body => body as unknown as BodyInit,
+      bodySerializer: (body: unknown) => body as BodyInit,
       headers: { 'Content-Type': XLSX_CONTENT_TYPE },
     } as never),
   );
