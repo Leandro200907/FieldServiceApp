@@ -7,11 +7,15 @@ import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
+import { OcGanttNav } from './OcGanttNav';
+import { useGanttViewport } from './useGanttViewport';
 import './planning.css';
 import './timeline.css';
 
 type BacklogItem = components['schemas']['OcBacklogItem'];
 type Cobertura = components['schemas']['CoberturaOcResponse'];
+type Catalogos = components['schemas']['CatalogosOcResponse'];
+type FilaRechazada = components['schemas']['FilaRechazada'];
 
 function fmtDate(value: string) {
   return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
@@ -23,18 +27,33 @@ function addDays(iso: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+function necesitaCatalogo(motivo: string) {
+  const m = motivo.toLowerCase();
+  return m.includes('desconocida') || m.includes('desconocido');
+}
+
 export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
   const [params, setParams] = useSearchParams();
   const offset = Number(params.get('offset') || 0);
   const mes = params.get('mes') || '';
   const q = params.get('q') || '';
   const soloAlertas = params.get('solo_con_alertas') === '1';
+  const operadoras = params.getAll('operadora_id');
   const selected = params.get('oc') || null;
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [rechazadas, setRechazadas] = useState<FilaRechazada[]>([]);
+  const [comparacion, setComparacion] = useState<Record<string, unknown> | null>(null);
   const puedeImportar = roles.includes('responsable_legajos');
   const puedeReprogramar = roles.includes('responsable_legajos') || roles.includes('configuracion');
+  const hoy = new Date().toISOString().slice(0, 10);
 
   const [reloadKey, setReloadKey] = useState(0);
+  const catalogosQuery = usePrototypeRead(async () => {
+    const { data, error, response } = await session.client.GET('/v1/consultas/catalogos_oc');
+    if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
+    return data as Catalogos;
+  }, [reloadKey]);
+
   const backlogQuery = usePrototypeRead(async () => {
     const { data, error, response } = await session.client.GET('/v1/consultas/backlog_oc', {
       params: {
@@ -45,12 +64,13 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
           mes: mes || undefined,
           q: q || undefined,
           solo_con_alertas: soloAlertas || undefined,
+          ...(operadoras.length ? { operadora_id: operadoras } : {}),
         },
       },
     });
     if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
     return data!;
-  }, [offset, mes, q, soloAlertas, reloadKey]);
+  }, [offset, mes, q, soloAlertas, operadoras.join(','), reloadKey]);
 
   const detailQuery = usePrototypeRead(async () => {
     if (!selected) return null;
@@ -62,16 +82,23 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
   }, [selected]);
 
   const items = backlogQuery.data?.items ?? [];
-  const vistaDesde = mes ? `${mes}-01` : items[0]?.vigencia_desde ?? new Date().toISOString().slice(0, 10);
-  const vistaHasta = useMemo(() => {
+  const autoDesde = useMemo(() => {
+    if (mes) return `${mes}-01`;
+    if (!items.length) return hoy;
+    return items.reduce((acc, i) => (i.vigencia_desde < acc ? i.vigencia_desde : acc), items[0].vigencia_desde);
+  }, [items, mes, hoy]);
+
+  const autoHasta = useMemo(() => {
     if (mes) {
       const [y, m] = mes.split('-').map(Number);
       const last = new Date(y, m, 0).getDate();
       return `${mes}-${String(last).padStart(2, '0')}`;
     }
-    const max = items.reduce((acc, i) => (i.vigencia_hasta > acc ? i.vigencia_hasta : acc), vistaDesde);
-    return max;
-  }, [items, mes, vistaDesde]);
+    if (!items.length) return hoy;
+    return items.reduce((acc, i) => (i.vigencia_hasta > acc ? i.vigencia_hasta : acc), items[0].vigencia_hasta);
+  }, [items, mes, hoy]);
+
+  const gantt = useGanttViewport({ hoy, autoDesde, autoHasta });
 
   const ganttRows: GanttOcRow[] = items.map(row => ({
     id: row.clave_origen,
@@ -95,6 +122,17 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
     ),
   }));
 
+  const toggleOperadora = (id: string) => {
+    setParams(p => {
+      p.delete('offset');
+      const cur = p.getAll('operadora_id');
+      p.delete('operadora_id');
+      if (cur.includes(id)) cur.filter(x => x !== id).forEach(x => p.append('operadora_id', x));
+      else [...cur, id].forEach(x => p.append('operadora_id', x));
+      return p;
+    });
+  };
+
   const onImport = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
       setImportMsg('Solo archivos .xlsx');
@@ -110,13 +148,16 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
         'X-Nombre-Archivo': file.name,
       },
     } as never);
-    const json = await unwrap(res as never) as { filas_aceptadas: number; filas_rechazadas: number };
+    const json = await unwrap(res as never) as { filas_aceptadas: number; filas_rechazadas: number; detalle_filas_rechazadas?: FilaRechazada[] };
     setImportMsg(`Aplicadas: ${json.filas_aceptadas} · Rechazadas: ${json.filas_rechazadas}`);
+    setRechazadas(json.detalle_filas_rechazadas ?? []);
     setReloadKey(k => k + 1);
   };
 
-  if (backlogQuery.loading) return <LoadingState />;
+  if (backlogQuery.loading || catalogosQuery.loading) return <LoadingState />;
   if (backlogQuery.error) return <ErrorState message={backlogQuery.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
+
+  const operadoraOpts = catalogosQuery.data?.operadoras ?? [];
 
   return (
     <div className="planning-layout">
@@ -138,20 +179,52 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
             Solo con alertas
           </label>
         </div>
+        <fieldset className="form-field">
+          <legend>Operadoras</legend>
+          {operadoraOpts.map(o => (
+            <label key={o.operadora_id as string}>
+              <input type="checkbox" checked={operadoras.includes(o.operadora_id as string)} onChange={() => toggleOperadora(o.operadora_id as string)} />
+              {o.nombre as string}
+            </label>
+          ))}
+        </fieldset>
         {puedeImportar && (
           <div className="form-field">
             <label htmlFor="planilla-oc">Importar planilla (Operadora, Locación, Tipo de servicio)</label>
             <input id="planilla-oc" type="file" accept=".xlsx" onChange={e => { const f = e.target.files?.[0]; if (f) void onImport(f); }} />
             {importMsg && <p role="status">{importMsg}</p>}
+            {rechazadas.length > 0 && (
+              <ul>
+                {rechazadas.map(r => (
+                  <li key={r.indice}>
+                    Fila {r.indice}: {r.motivo}
+                    {necesitaCatalogo(r.motivo) && (
+                      <> — <Link to="/catalogos-oc">Dar de alta en catálogos</Link></>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
+        <Link className="button button-secondary" to="/catalogos-oc">Administrar catálogos</Link>
       </header>
+
+      <OcGanttNav
+        zoom={gantt.zoom}
+        onZoomChange={gantt.setZoom}
+        onAnterior={gantt.anterior}
+        onSiguiente={gantt.siguiente}
+        onHoy={gantt.irHoy}
+        modoAuto={gantt.modoAuto}
+        onRestaurarAuto={gantt.usarRangoAutomatico}
+      />
 
       <OcGanttChart
         filas={ganttRows}
-        vistaDesde={vistaDesde}
-        vistaHasta={vistaHasta}
-        hoy={new Date().toISOString().slice(0, 10)}
+        vistaDesde={gantt.vistaDesde}
+        vistaHasta={gantt.vistaHasta}
+        hoy={hoy}
         selectedId={selected}
         onSelect={id => setParams(p => { p.set('oc', id); return p; })}
       />
@@ -169,6 +242,13 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
               <li key={d.tipo_sujeto}>{d.texto}</li>
             ))}
           </ul>
+          {comparacion && (
+            <section className="reprog-comparacion">
+              <h4>Efecto documental (antes → después)</h4>
+              <p>Alertas: {String(comparacion.tiene_alertas_antes)} → {String(comparacion.tiene_alertas_despues)}</p>
+              <ul>{((comparacion.mensajes as string[]) || []).map(m => <li key={m}>{m}</li>)}</ul>
+            </section>
+          )}
           {(detailQuery.data.historial_compromiso || []).length > 0 && (
             <details>
               <summary>Historial de cambios</summary>
@@ -189,7 +269,7 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
               onClick={async () => {
                 const motivo = window.prompt('Motivo de reprogramación');
                 if (!motivo) return;
-                await session.client.POST('/v1/comandos/reprogramar_oc', {
+                const res = await session.client.POST('/v1/comandos/reprogramar_oc', {
                   body: {
                     oc_id: detailQuery.data!.oc.oc_id as string,
                     vigencia_desde: detailQuery.data!.oc.vigencia_desde as string,
@@ -198,6 +278,12 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
                   },
                   headers: { 'Idempotency-Key': crypto.randomUUID() },
                 } as never);
+                if (res.error || !res.response.ok) {
+                  window.alert(parseApiError(res.error, res.response, res.response.headers.get('X-Request-ID') || crypto.randomUUID()).message);
+                  return;
+                }
+                const body = res.data as { comparacion_documental?: Record<string, unknown> };
+                setComparacion(body.comparacion_documental ?? null);
                 setReloadKey(k => k + 1);
               }}
             >

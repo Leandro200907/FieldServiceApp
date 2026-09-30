@@ -1,6 +1,13 @@
 import { useMemo } from 'react';
 import './timeline.css';
 
+export type GanttBandaOc = {
+  desde: string;
+  hasta: string;
+  label?: string;
+  filtrada?: boolean;
+};
+
 export type GanttOcRow = {
   id: string;
   label: string;
@@ -10,6 +17,10 @@ export type GanttOcRow = {
   alertas: { fecha: string; titulo: string }[];
   tramosAlerta: { desde: string; hasta: string }[];
   reprogramada?: boolean;
+  bandasOc?: GanttBandaOc[];
+  barTone?: 'default' | 'vigente' | 'por_vencer' | 'vencido' | 'declarado_sin_verificar';
+  indent?: number;
+  ocultarBarra?: boolean;
 };
 
 type Props = {
@@ -58,12 +69,14 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
       {filas.map(f => {
         const left = pct(f.desde, min, max);
         const width = Math.max(0.5, pct(f.hasta, min, max) - left);
+        const barClass = f.barTone && f.barTone !== 'default' ? ` oc-gantt-bar-${f.barTone}` : '';
         return (
           <button
             type="button"
             key={f.id}
             className={`oc-gantt-row${selectedId === f.id ? ' selected' : ''}`}
             onClick={() => onSelect?.(f.id)}
+            style={f.indent ? { paddingLeft: `${8 + f.indent * 16}px` } : undefined}
           >
             <div className="oc-gantt-label">
               <strong>{f.label}</strong>
@@ -71,7 +84,20 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
               {f.reprogramada && <em className="oc-gantt-reprog">Reprogramada</em>}
             </div>
             <div className="oc-gantt-track">
-              <div className="oc-gantt-bar" style={{ left: `${left}%`, width: `${width}%` }} />
+              {(f.bandasOc || []).map((b, i) => (
+                <div
+                  key={`${b.desde}-${i}`}
+                  className={`oc-gantt-banda-oc${b.filtrada ? ' filtrada' : ''}`}
+                  style={{
+                    left: `${pct(b.desde, min, max)}%`,
+                    width: `${Math.max(0.3, pct(b.hasta, min, max) - pct(b.desde, min, max))}%`,
+                  }}
+                  title={b.label}
+                />
+              ))}
+              {!f.ocultarBarra && (
+                <div className={`oc-gantt-bar${barClass}`} style={{ left: `${left}%`, width: `${width}%` }} />
+              )}
               {f.tramosAlerta.map((t, i) => (
                 <div
                   key={`${t.desde}-${i}`}

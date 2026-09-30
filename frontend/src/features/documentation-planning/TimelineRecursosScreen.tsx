@@ -1,21 +1,24 @@
-import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
+import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
+import { OcGanttNav } from './OcGanttNav';
+import { useGanttViewport } from './useGanttViewport';
 import './planning.css';
 import './timeline.css';
 
 type Timeline = components['schemas']['TimelineRecursosResponse'];
 type Recurso = components['schemas']['RecursoTimeline'];
 
-const VISUAL_LABEL: Record<string, string> = {
-  vigente: 'Vigente',
-  por_vencer: 'Por vencer',
-  vencido: 'Vencido',
-  declarado_sin_verificar: 'Declarado sin verificar',
+const TONE: Record<string, GanttOcRow['barTone']> = {
+  vigente: 'vigente',
+  por_vencer: 'por_vencer',
+  vencido: 'vencido',
+  declarado_sin_verificar: 'declarado_sin_verificar',
 };
 
 function fmtDate(value: string, timeZone?: string) {
@@ -29,6 +32,7 @@ export function TimelineRecursosScreen() {
   const [desde, setDesde] = useState(searchParams.get('desde') || '2026-10-01');
   const [hasta, setHasta] = useState(searchParams.get('hasta') || '2026-11-30');
   const [soloQuiebres, setSoloQuiebres] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
 
   const [reloadKey, setReloadKey] = useState(0);
@@ -46,7 +50,75 @@ export function TimelineRecursosScreen() {
     return data as Timeline;
   }, [desde, hasta, offset, ocId, soloQuiebres, reloadKey]);
 
-  const hoy = query.data?.hoy;
+  const hoy = query.data?.hoy ?? new Date().toISOString().slice(0, 10);
+  const rows = query.data?.items ?? [];
+
+  const autoDesde = useMemo(() => {
+    const fechas = rows.flatMap(r => [
+      ...r.tramos.map(t => t.vigente_desde),
+      ...r.ocs.flatMap(o => [o.vigencia_desde, o.vigencia_hasta]),
+    ]).filter(Boolean) as string[];
+    if (!fechas.length) return desde;
+    return fechas.reduce((a, b) => (a < b ? a : b));
+  }, [rows, desde]);
+
+  const autoHasta = useMemo(() => {
+    const fechas = rows.flatMap(r => [
+      ...r.tramos.map(t => t.vigente_hasta),
+      ...r.ocs.flatMap(o => [o.vigencia_desde, o.vigencia_hasta]),
+    ]).filter(Boolean) as string[];
+    if (!fechas.length) return hasta;
+    return fechas.reduce((a, b) => (a > b ? a : b));
+  }, [rows, hasta]);
+
+  const gantt = useGanttViewport({ hoy, autoDesde, autoHasta });
+
+  const ganttRows: GanttOcRow[] = useMemo(() => {
+    const out: GanttOcRow[] = [];
+    for (const recurso of rows as Recurso[]) {
+      const sid = recurso.sujeto_id;
+      const isOpen = expanded[sid] ?? true;
+      const bandasOc = recurso.ocs.map(oc => ({
+        desde: oc.vigencia_desde,
+        hasta: oc.vigencia_hasta,
+        label: oc.clave_origen,
+        filtrada: Boolean(ocId && oc.oc_id === ocId),
+      }));
+      const quiebres = recurso.ocs.flatMap(oc =>
+        oc.quiebres.map(q => ({
+          fecha: q.fecha,
+          titulo: `${q.requisito} vence el ${fmtDate(q.fecha, tz)} — ${oc.clave_origen}`,
+        })),
+      );
+      out.push({
+        id: sid,
+        label: recurso.identificador,
+        sublabel: recurso.tipo_sujeto,
+        desde: autoDesde,
+        hasta: autoHasta,
+        bandasOc,
+        alertas: quiebres,
+        tramosAlerta: [],
+        ocultarBarra: true,
+      });
+      if (isOpen) {
+        for (const tramo of recurso.tramos) {
+          out.push({
+            id: `${sid}-${tramo.requisito_definicion_id}-${tramo.vigente_desde}`,
+            label: tramo.requisito || 'Requisito',
+            sublabel: tramo.categoria || undefined,
+            desde: tramo.vigente_desde,
+            hasta: tramo.vigente_hasta,
+            alertas: [],
+            tramosAlerta: [],
+            barTone: TONE[tramo.estado_visual] || 'default',
+            indent: 1,
+          });
+        }
+      }
+    }
+    return out;
+  }, [rows, expanded, autoDesde, autoHasta, ocId, tz]);
 
   const applyRange = () => {
     const next = new URLSearchParams(searchParams);
@@ -55,8 +127,6 @@ export function TimelineRecursosScreen() {
     setSearchParams(next);
     setReloadKey(k => k + 1);
   };
-
-  const rows = query.data?.items ?? [];
 
   if (query.loading) return <LoadingState />;
   if (query.error) return <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
@@ -71,32 +141,43 @@ export function TimelineRecursosScreen() {
         <button type="button" className="button button-primary" onClick={applyRange}>Actualizar</button>
       </div>
       {hoy && <p>Hoy ({tz}): {fmtDate(hoy, tz)}</p>}
+      <Link className="button button-secondary" to="/backlog-oc">Ver mapa del backlog</Link>
     </header>
-    <div className="timeline-chart" role="list" aria-label="Recursos y vigencias">
+
+    <OcGanttNav
+      zoom={gantt.zoom}
+      onZoomChange={gantt.setZoom}
+      onAnterior={gantt.anterior}
+      onSiguiente={gantt.siguiente}
+      onHoy={gantt.irHoy}
+      modoAuto={gantt.modoAuto}
+      onRestaurarAuto={gantt.usarRangoAutomatico}
+    />
+
+    <div className="timeline-gantt-list">
       {rows.map((recurso: Recurso) => (
-        <article key={recurso.sujeto_id} className="timeline-row" role="listitem">
-          <div className="timeline-row-head">
-            <strong>{recurso.identificador}</strong>
-            <span>{recurso.tipo_sujeto}</span>
-          </div>
-          {recurso.tramos.map(tramo => (
-            <div
-              key={`${tramo.requisito_definicion_id}-${tramo.vigente_desde}`}
-              className={`timeline-bar timeline-${tramo.estado_visual}`}
-              title={`${tramo.requisito}: ${fmtDate(tramo.vigente_desde, tz)} – ${fmtDate(tramo.vigente_hasta, tz)} (${VISUAL_LABEL[tramo.estado_visual]})`}
-              aria-label={`${tramo.requisito}, ${VISUAL_LABEL[tramo.estado_visual] || tramo.estado_visual}, ${fmtDate(tramo.vigente_desde, tz)} a ${fmtDate(tramo.vigente_hasta, tz)}`}
-            >
-              {tramo.requisito}
-            </div>
-          ))}
-          {recurso.ocs.map(oc => oc.quiebres.map(q => (
-            <p key={`${oc.oc_id}-${q.fecha}`} className="timeline-quiebre" role="note">
-              Vence {q.requisito} el {fmtDate(q.fecha, tz)} — {oc.clave_origen} ({fmtDate(oc.vigencia_desde, tz)}–{fmtDate(oc.vigencia_hasta, tz)})
-            </p>
-          )))}
-        </article>
+        <div key={recurso.sujeto_id} className="timeline-expand-row">
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => setExpanded(e => ({ ...e, [recurso.sujeto_id]: !(e[recurso.sujeto_id] ?? true) }))}
+          >
+            {(expanded[recurso.sujeto_id] ?? true) ? '▾' : '▸'} {recurso.identificador}
+          </button>
+        </div>
       ))}
     </div>
+
+    <OcGanttChart
+      filas={ganttRows}
+      vistaDesde={gantt.vistaDesde}
+      vistaHasta={gantt.vistaHasta}
+      hoy={hoy}
+      onSelect={id => {
+        if (!id.includes('-')) setExpanded(e => ({ ...e, [id]: !(e[id] ?? true) }));
+      }}
+    />
+
     <PaginationControls offset={offset} limit={PAGE_SIZE} total={query.data?.total ?? 0} onOffsetChange={setOffset} />
   </div>;
 }
