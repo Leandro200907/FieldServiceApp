@@ -309,6 +309,21 @@ El frontend debe consumir sólo estas rutas para el cruce OC-legajos. Los contra
 anteriores de proyección fueron retirados: no existe una capa de compatibilidad paralela.
 El calendario de vigencias continúa siendo una consulta documental independiente.
 
+### 4.4 Backlog de OC con cobertura y timeline de recursos (D-A bis)
+
+Consultas de **solo lectura** (no sustituyen al radar ni a Módulo 2):
+
+| Ruta | Roles | Uso |
+|---|---|---|
+| `GET /v1/consultas/backlog_oc` | responsable_legajos, supervisor | OCs con `estado_cobertura` calculado en vivo (`cobertura_de_oc`); filtros `estado`, `estado_cobertura`, rango de fechas, `q`; paginación; `Cache-Control: no-store`. Sin `ultima_decision`. |
+| `GET /v1/consultas/cobertura_oc` | responsable_legajos, supervisor | Detalle de una OC (`oc_id` o `commitment_id`): candidatos por tipo, estado por requisito, primer quiebre en la ventana. |
+| `GET /v1/consultas/timeline_recursos` | responsable_legajos, configuración, supervisor, técnico | Tramos de vigencia por recurso y requisito; OC superpuestas; `llega_cubierto` y quiebres dentro de cada ventana de OC. Paginación por recurso. |
+| `POST /v1/comandos/importar_planilla_oc` | responsable_legajos | XLSX planilla 1.12 → `importar_lote_oc` (mismo patrón que operadoras; `lote_id` UUID del cliente). |
+
+Por tipo exigido, si el supervisor no ve legajos porque están fuera de su universo, la API
+devuelve `fuera_de_alcance` (mensaje: recursos de ese tipo fuera de tu alcance), no
+"falta información". Misma regla en radar documental.
+
 ### 4.6 Catálogos documentales (H-06)
 Todos paginados (`offset/limit`, máx. 500) → `{items[], total, offset, limit}`; el alcance
 del supervisor/técnico se aplica siempre (un filtro nunca amplía lo visible); otro tenant no

@@ -577,20 +577,38 @@ fencing. Dead-letter del job: nunca silencioso, notifica a `configuracion`
 
 ## Auditoría 2026-09-29 — Cierre de tres decisiones pendientes
 
-### D-A. Superficie HTTP operativa (`aa62dbe`) — **no reponer en Módulo 1**
+### D-A. Superficie HTTP operativa (`aa62dbe`) — **parcialmente corregida por D-A bis**
 
-**Decisión:** Mantener retirados de la API pública los comandos/consultas de custodia,
-excepciones, constancias, evaluación de habilitación, backlog/cobertura/decisiones y
+**Decisión original:** Retirar de la API pública los comandos/consultas de custodia,
+excepciones, constancias, evaluación de habilitación, **decisiones** (historial) y
 asignación de supervisores (`test_superficie_modulo1.py::RUTAS_OPERATIVAS_RETIRADAS`).
 
-**Motivo:** Frontera de producto Módulo 1 (documentación habilitante + radar informativo) vs.
-Módulo 2 (operación/asignación). Exponer de nuevo esas rutas duplicaría responsabilidades y
-reintroduciría en el frontend flujos que ya se retiraron (`SupervisionScreen`).
+**Motivo:** Frontera Módulo 1 (documentación habilitante + consultas de solo lectura) vs.
+Módulo 2 (operación/asignación/decisión persistida).
 
-**Qué se conserva:** Toda la lógica de dominio en `app/modules/operacion/servicio.py`,
-`app/core/orquestacion.py::decidir_habilitacion`, tablas `evaluacion_habilitacion`, revaluación
-(A-07) y tests que llaman al **servicio** directamente. `evaluar_habilitacion` queda documentado
-como servicio interno para integración autenticada desde Módulo 2, no como contrato HTTP de M1.
+**Qué se conserva retirado:** `evaluar_habilitacion`, `decisiones_oc`, `decision`,
+excepciones, constancias, custodia, `historial_supervision`, asignación de supervisores.
+Toda la lógica persiste en servicios internos para Módulo 2.
+
+### D-A bis (corrige D-A). Backlog de OC con cobertura y timeline de vigencias — **Módulo 1**
+
+**Decisión:** `GET /v1/consultas/backlog_oc`, `GET /v1/consultas/cobertura_oc` y
+`GET /v1/consultas/timeline_recursos` vuelven a la API pública de Módulo 1 como **modo
+consulta** (modelo-dominio 2.1): no persisten decisiones, no asignan recursos, no crean
+tareas ni emiten eventos.
+
+**Citas.** documentacion-habilitante 1.12 (planilla OC standalone, cobertura en dos pasos,
+formato de motivo); wireframes-api 9.4 (`cobertura-backlog`, `vigencias-por-tecnico`).
+
+**Alcance:** Cobertura en vivo con `cobertura_de_oc` (empresa primero; un legajo por tipo que
+cumpla todos sus requisitos en la ventana; nunca componer entre legajos). El backlog **no**
+expone `ultima_decision` (historial de evaluación = Módulo 2). Supervisor: candidatos de su
+universo vía `alcance_de_sujetos`; empresa siempre evaluada (D-B). Si falta un tipo solo
+porque los legajos están fuera del universo → estado `fuera_de_alcance`, no
+"información incompleta".
+
+**Límite:** Módulo 2 conserva asignar, decidir (`decidir_habilitacion` vía HTTP interno futuro)
+y trabajo planificado/real. La asignación de supervisores sigue pendiente de otra decisión.
 
 ### D-B. Empresa en el radar para supervisor — **siempre visible en radar documental**
 
