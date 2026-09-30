@@ -175,6 +175,61 @@ def test_reprogramar_oc_historial(cliente_api, tenant_de_prueba, sesion):
     assert len(det["historial_compromiso"]) >= 1
 
 
+def test_backlog_alerta_empresa_no_habilitada(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    clave = clave_de_matriz()
+    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
+    insertar_legajo(sesion, t.tenant_id, "persona_0042", "persona")
+    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
+    req_p = insertar_definicion(sesion, t.tenant_id, "Apto médico", "persona")
+    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_p: "bloqueante_duro"})
+    insertar_documento(sesion, t.tenant_id, "persona_0042", req_p, date(2026, 1, 1), date(2026, 12, 31))
+    insertar_oc(sesion, t.tenant_id, "OC-EMP-NH", clave, date(2026, 10, 1), date(2026, 10, 5))
+    sesion.commit()
+    item = cliente_api.get("/v1/consultas/backlog_oc", params={"q": "OC-EMP-NH"}, headers=t.headers("responsable_legajos")).json()["items"][0]
+    assert any(a["codigo"] == "empresa_no_habilitada" for a in item["alertas_ciertas"])
+
+
+def test_backlog_alerta_sin_matriz(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    clave = clave_de_matriz()
+    insertar_catalogos_maestros(sesion, t.tenant_id, clave)
+    insertar_oc(sesion, t.tenant_id, "OC-SIN-MAT", clave, date(2026, 10, 1), date(2026, 10, 5))
+    sesion.commit()
+    item = cliente_api.get("/v1/consultas/backlog_oc", params={"q": "OC-SIN-MAT"}, headers=t.headers("responsable_legajos")).json()["items"][0]
+    assert any(a["codigo"] == "sin_matriz" for a in item["alertas_ciertas"])
+
+
+def test_reprogramar_comparacion_antes_despues(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    clave = clave_de_matriz()
+    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
+    insertar_legajo(sesion, t.tenant_id, "persona_0042", "persona")
+    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
+    req_p = insertar_definicion(sesion, t.tenant_id, "Apto médico", "persona")
+    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_p: "bloqueante_duro"})
+    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
+    insertar_documento(sesion, t.tenant_id, "persona_0042", req_p, date(2026, 1, 1), date(2026, 11, 18))
+    insertar_oc(sesion, t.tenant_id, "OC-CMP", clave, date(2026, 11, 10), date(2026, 11, 12))
+    oc_id = sesion.execute(text("SELECT oc_id::text FROM modulo1.oc WHERE clave_origen = 'OC-CMP'")).scalar()
+    sesion.commit()
+    r = cliente_api.post(
+        "/v1/comandos/reprogramar_oc",
+        json={
+            "oc_id": oc_id,
+            "vigencia_desde": "2026-11-10",
+            "vigencia_hasta": "2026-11-25",
+            "motivo": "extensión de ventana",
+        },
+        headers={**t.headers("responsable_legajos"), "Idempotency-Key": "rep-oc-cmp"},
+    )
+    assert r.status_code == 200, r.text
+    cmp = r.json()["comparacion_documental"]
+    assert cmp["documental_anterior"]["tiene_alertas"] is False
+    assert cmp["documental_nuevo"]["tiene_alertas"] is True
+    assert any("vencimiento" in m for m in cmp["mensajes"])
+
+
 def test_filtro_mes_y_operadora(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     clave = clave_de_matriz()
