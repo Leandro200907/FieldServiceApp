@@ -86,11 +86,14 @@ def evaluar_oc_backlog(
     oc: dict[str, Any],
 ) -> dict[str, Any]:
     inicio, fin = oc["vigencia_desde"], oc["vigencia_hasta"]
-    legajos = radar_mod._legajos_visibles(session, identidad)
+    todos = radar_mod._legajos(session, identidad.tenant_id)
+    visibles = radar_mod._legajos_visibles(session, identidad)
+    ids_visibles = {l["sujeto_id"] for l in visibles}
     evidencias = radar_mod._evidencias(session, identidad.tenant_id)
     tramos, _, huecos = radar_mod._matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
     tipos_req = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
-    fuera = set(radar_mod._tipos_fuera_de_alcance(session, identidad.tenant_id, identidad, tipos_req, legajos))
+    fuera = set(radar_mod._tipos_fuera_de_alcance(session, identidad.tenant_id, identidad, tipos_req, visibles))
+    MSG_FUERA = "hay recursos habilitados fuera de tu alcance"
 
     alertas: list[dict[str, Any]] = []
     if huecos:
@@ -117,20 +120,7 @@ def evaluar_oc_backlog(
     impacto: list[dict[str, Any]] = []
 
     def procesar_tipo(tipo: str) -> None:
-        if tipo in fuera:
-            disponibilidad.append(
-                {
-                    "tipo_sujeto": tipo,
-                    "etiqueta": _ETIQUETA.get(tipo, tipo),
-                    "estado": "fuera_de_alcance",
-                    "texto": f"{_ETIQUETA.get(tipo, tipo)}: fuera de tu alcance",
-                    "habilitados_toda_ventana": [],
-                    "se_cae_en_ventana": [],
-                    "no_habilitados": [],
-                }
-            )
-            return
-        legajos_tipo = [l for l in legajos if l["tipo_sujeto"] == tipo]
+        legajos_tipo = [l for l in todos if l["tipo_sujeto"] == tipo]
         toda: list[dict[str, Any]] = []
         cae: list[dict[str, Any]] = []
         no: list[dict[str, Any]] = []
@@ -152,7 +142,6 @@ def evaluar_oc_backlog(
             else:
                 no.append(item)
 
-        # Tramos sin ningún legajo habilitado
         tramos_sin: list[dict[str, str]] = []
 
         def _ok_en_dia(dia: date) -> bool:
@@ -167,7 +156,6 @@ def evaluar_oc_backlog(
             if legajos_tipo and not _ok_en_dia(cursor):
                 tramos_sin.append({"desde": cursor.isoformat(), "hasta": cursor.isoformat()})
             cursor += timedelta(days=1)
-        # Comprimir tramos consecutivos
         comprimidos: list[dict[str, str]] = []
         for t in tramos_sin:
             if comprimidos and comprimidos[-1]["hasta"] == (date.fromisoformat(t["desde"]) - timedelta(days=1)).isoformat():
@@ -175,7 +163,14 @@ def evaluar_oc_backlog(
             else:
                 comprimidos.append(dict(t))
 
-        if comprimidos and tipo != "empresa":
+        habilitados_fuera = [x for x in toda if x["sujeto_id"] not in ids_visibles]
+        toda_v = [x for x in toda if x["sujeto_id"] in ids_visibles]
+        cae_v = [x for x in cae if x["sujeto_id"] in ids_visibles]
+        no_v = [x for x in no if x["sujeto_id"] in ids_visibles]
+
+        # La alerta cierta es tenant-wide. Si hay habilitados fuera del universo, no es
+        # cierta para el supervisor: se informa el hueco de visibilidad, nunca el rojo.
+        if comprimidos and tipo != "empresa" and not habilitados_fuera:
             alertas.append(
                 {
                     "codigo": "tipo_sin_habilitados",
@@ -194,27 +189,30 @@ def evaluar_oc_backlog(
             )
 
         partes = [
-            f"{len(toda)} habilitados toda la ventana" if toda else None,
-            f"{len(cae)} se caen en la ventana" if cae else None,
-            f"{len(no)} no habilitados" if no else None,
+            f"{len(toda_v)} habilitados toda la ventana" if toda_v else None,
+            f"{len(cae_v)} se caen en la ventana" if cae_v else None,
+            f"{len(no_v)} no habilitados" if no_v else None,
+            MSG_FUERA if habilitados_fuera else None,
         ]
         texto = f"{_ETIQUETA.get(tipo, tipo)}: " + " · ".join(p for p in partes if p)
+        if not any(partes) and tipo in fuera:
+            texto = f"{_ETIQUETA.get(tipo, tipo)}: fuera de tu alcance"
         disponibilidad.append(
             {
                 "tipo_sujeto": tipo,
                 "etiqueta": _ETIQUETA.get(tipo, tipo),
-                "estado": "ok",
+                "estado": "fuera_de_alcance" if (tipo in fuera and not comprimidos) else "ok",
                 "texto": texto,
-                "habilitados_toda_ventana": toda,
-                "se_cae_en_ventana": cae,
-                "no_habilitados": no,
+                "habilitados_toda_ventana": toda_v,
+                "se_cae_en_ventana": cae_v,
+                "no_habilitados": no_v,
             }
         )
-        if comprimidos:
+        if comprimidos and not habilitados_fuera:
             dias = sum(_dias_inclusive(date.fromisoformat(a["desde"]), date.fromisoformat(a["hasta"])) for a in comprimidos)
             impacto.append({"tipo_sujeto": tipo, "dias_sin_habilitados": dias, "tramos": comprimidos})
 
-    if "empresa" in tipos_req or any(l["tipo_sujeto"] == "empresa" for l in legajos):
+    if "empresa" in tipos_req or any(l["tipo_sujeto"] == "empresa" for l in todos):
         procesar_tipo("empresa")
     for tipo in sorted(t for t in tipos_req if t != "empresa"):
         procesar_tipo(tipo)

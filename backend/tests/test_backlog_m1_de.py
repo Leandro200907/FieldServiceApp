@@ -106,7 +106,33 @@ def test_supervisor_fuera_de_alcance(cliente_api, tenant_de_prueba, sesion):
     sesion.commit()
     item = cliente_api.get("/v1/consultas/backlog_oc", params={"q": "OC-ALC"}, headers=t.headers("supervisor")).json()["items"][0]
     assert "vehiculo" in item["tipos_fuera_de_alcance"]
-    assert not any(a["codigo"] == "tipo_sin_habilitados" and a.get("tipo_sujeto") == "vehiculo" for a in item["alertas_ciertas"])
+    veh = next(d for d in item["disponibilidad_por_tipo"] if d["tipo_sujeto"] == "vehiculo")
+    assert all("nat-vehiculo_Z" not in x.get("nombre", "") for grupo in (
+        veh["habilitados_toda_ventana"], veh["se_cae_en_ventana"], veh["no_habilitados"],
+    ) for x in grupo)
+
+
+def test_supervisor_sin_alerta_si_unico_habilitado_fuera_de_universo(cliente_api, tenant_de_prueba, sesion):
+    """El único habilitado está fuera del universo: no hay alerta cierta de tipo (no es cierto)."""
+    t = tenant_de_prueba
+    clave = clave_de_matriz()
+    insertar_legajo(sesion, t.tenant_id, "empresa_0001", "empresa")
+    insertar_legajo(sesion, t.tenant_id, "persona_fuera", "persona")
+    insertar_legajo(sesion, t.tenant_id, "persona_propia", "persona")
+    req_e = insertar_definicion(sesion, t.tenant_id, "ART", "empresa")
+    req_p = insertar_definicion(sesion, t.tenant_id, "Apto médico", "persona")
+    insertar_matriz(sesion, t.tenant_id, clave, {req_e: "bloqueante_duro", req_p: "bloqueante_duro"})
+    insertar_documento(sesion, t.tenant_id, "empresa_0001", req_e, date(2026, 1, 1), date(2026, 12, 31))
+    insertar_documento(sesion, t.tenant_id, "persona_fuera", req_p, date(2026, 1, 1), date(2026, 12, 31))
+    insertar_oc(sesion, t.tenant_id, "OC-FUERA", clave, date(2026, 10, 1), date(2026, 10, 5))
+    _asignar(sesion, t.tenant_id, "persona_propia", t.usuarios["supervisor"])
+    sesion.commit()
+    item = cliente_api.get("/v1/consultas/backlog_oc", params={"q": "OC-FUERA"}, headers=t.headers("supervisor")).json()["items"][0]
+    assert not any(a["codigo"] == "tipo_sin_habilitados" and a.get("tipo_sujeto") == "persona" for a in item["alertas_ciertas"])
+    persona = next(d for d in item["disponibilidad_por_tipo"] if d["tipo_sujeto"] == "persona")
+    nombres = {x["nombre"] for x in persona["habilitados_toda_ventana"]}
+    assert "nat-persona_fuera" not in nombres
+    assert "hay recursos habilitados fuera de tu alcance" in persona["texto"].lower()
 
 
 def test_planilla_por_nombres_y_error_fila(cliente_api, tenant_de_prueba, sesion):
