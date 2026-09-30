@@ -33,7 +33,6 @@ def test_backlog_oc_cubierta(cliente_api, tenant_de_prueba, sesion):
     insertar_documento(sesion, t.tenant_id, "persona_0042", req_p, date(2026, 1, 1), date(2026, 12, 31))
     insertar_oc(sesion, t.tenant_id, "OC-CUB", clave, date(2026, 10, 1), date(2026, 10, 5))
     sesion.commit()
-    antes = sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
     r = cliente_api.get(
         "/v1/consultas/backlog_oc",
         params={"q": "OC-CUB"},
@@ -43,8 +42,7 @@ def test_backlog_oc_cubierta(cliente_api, tenant_de_prueba, sesion):
     item = next(i for i in r.json()["items"] if i["clave_origen"] == "OC-CUB")
     assert item["estado_cobertura"] == "cubierta"
     assert "ultima_decision" not in item
-    despues = sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar()
-    assert despues == antes
+    assert sesion.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 0
 
 
 def test_backlog_oc_motivo_112(cliente_api, tenant_de_prueba, sesion):
