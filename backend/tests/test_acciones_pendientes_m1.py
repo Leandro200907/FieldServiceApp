@@ -44,9 +44,15 @@ def test_acciones_pendientes_orden_y_efecto(cliente_api, tenant_de_prueba, sesio
     items = r.json()["items"]
     assert len(items) >= 2
     assert all(i.get("efecto") for i in items)
+    assert any(i["genera_alerta_cierta"] for i in items)
+
+    def rank(a: dict) -> tuple:
+        return (
+            0 if a.get("genera_alerta_cierta") else 1,
+            a.get("fecha_limite") or "",
+            -len(a.get("ocs_afectadas") or []),
+        )
+
+    ranks = [rank(i) for i in items]
+    assert ranks == sorted(ranks)
     assert items[0]["genera_alerta_cierta"] is True
-    sin_alerta = [i for i in items if not i["genera_alerta_cierta"]]
-    assert sin_alerta == sorted(sin_alerta, key=lambda a: a["fecha_limite"])
-    idx_alerta = next(i for i, it in enumerate(items) if it["genera_alerta_cierta"])
-    idx_sin = next(i for i, it in enumerate(items) if not it["genera_alerta_cierta"])
-    assert idx_alerta < idx_sin
