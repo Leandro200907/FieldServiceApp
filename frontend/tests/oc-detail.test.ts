@@ -49,5 +49,7 @@ describe('detalle de OC', () => {
     expect(textoHistorial({ fecha: '2026-11-19T15:30:00+00:00', origen: 'reprogramacion', motivo: 'pedido del cliente' }, TZ))
       .toMatch(/19\/11\/2026 · reprogramacion · pedido del cliente/);
     expect(formatFecha('2026-11-19', TZ)).toBe('19/11/2026');
+    expect(formatFecha('2026-11-19T15:30:00Z', TZ)).not.toMatch(/T/);
+    expect(formatFecha('2026-11-19T15:30:00Z', TZ)).not.toMatch(/2026-11-19/);
   });
 });

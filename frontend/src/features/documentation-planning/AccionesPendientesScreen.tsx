@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
+import { formatFecha } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
@@ -12,7 +13,8 @@ type Accion = components['schemas']['AccionPendienteItem'];
 type Catalogos = components['schemas']['CatalogosOcResponse'];
 
 function fmtDate(value: string) {
-  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+  const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  return formatFecha(value, tz);
 }
 
 export function AccionesPendientesScreen() {

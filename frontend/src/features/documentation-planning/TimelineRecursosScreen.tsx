@@ -51,7 +51,7 @@ export function TimelineRecursosScreen() {
     return data as Timeline;
   }, [desde, hasta, offset, ocId, soloQuiebres, reloadKey]);
 
-  const hoy = query.data?.hoy ?? new Date().toISOString().slice(0, 10);
+  const hoy = query.data?.hoy ?? todayIso();
   const rows = query.data?.items ?? [];
 
   const autoDesde = useMemo(() => {

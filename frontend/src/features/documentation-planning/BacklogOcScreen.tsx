@@ -9,7 +9,7 @@ import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
-import { formatFecha } from './dates';
+import { formatFecha, todayIso } from './dates';
 import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial } from './ocDetail';
 import './planning.css';
 import './timeline.css';
@@ -54,7 +54,7 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
   const [reproError, setReproError] = useState<string | null>(null);
   const puedeImportar = roles.includes('responsable_legajos');
   const puedeReprogramar = roles.includes('responsable_legajos') || roles.includes('configuracion');
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = todayIso();
 
   const [reloadKey, setReloadKey] = useState(0);
   const catalogosQuery = usePrototypeRead(async () => {

@@ -3,6 +3,7 @@ import { ApiFailure, session } from '../../api';
 import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import type { DetalleOcRadarResponse, ItemRadar, RadarState } from './contracts';
 import { backlogAccess, isBacklogIntegrated } from './access';
+import { formatFecha } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
@@ -18,12 +19,13 @@ const stateLabels: Record<string, string> = {
 };
 
 function displayDate(value: string | null | undefined) {
-  return value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)) : 'Sin fecha';
+  const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  return value ? formatFecha(value, timeZone) : 'Sin fecha';
 }
 
 function displayInstant(value: string) {
   const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone }).format(new Date(value));
+  return formatFecha(value, timeZone);
 }
 
 function summaryLabel(row: ItemRadar) {
