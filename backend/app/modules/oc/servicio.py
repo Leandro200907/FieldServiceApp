@@ -22,6 +22,7 @@ from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
 from app.core.revaluacion import ultima_decision
+from app.modules.oc import catalogos_maestros
 
 ORIGENES = ("planilla", "drive")
 CAMPOS_OBLIGATORIOS = ("clave_origen", "cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta")
@@ -127,7 +128,14 @@ def importar_lote_oc(
     aceptadas: list[dict[str, Any]] = []
     rechazadas: list[dict[str, Any]] = []
     for indice, fila in enumerate(filas):
-        normalizada, motivo = validar_fila(fila if isinstance(fila, dict) else {})
+        cruda = fila if isinstance(fila, dict) else {}
+        if cruda.get("operadora"):
+            resuelta, motivo_nombre = catalogos_maestros.resolver_fila_por_nombres(session, tenant_id, cruda)
+            if resuelta is None:
+                rechazadas.append({"indice": indice, "clave_origen": cruda.get("clave_origen"), "motivo": motivo_nombre})
+                continue
+            cruda = resuelta
+        normalizada, motivo = validar_fila(cruda)
         if normalizada is None:
             rechazadas.append({"indice": indice, "clave_origen": (fila or {}).get("clave_origen"), "motivo": motivo})
             continue
@@ -216,6 +224,8 @@ def importar_lote_oc(
                     "campos_modificados": sorted(cambios),
                     "anterior": {k: v[0] for k, v in cambios.items()},
                     "nuevo": {k: v[1] for k, v in cambios.items()},
+                    "motivo": "reimportación por planilla",
+                    "origen": "planilla",
                 },
                 identidad.usuario_id,
             )
@@ -304,6 +314,79 @@ def cancelar_oc(session: Session, identidad: Identidad, oc_id: str | None, clave
     )
     eventos.append("CompromisoCancelado")
     return {"oc_id": str(fila[0]), "clave_origen": fila[1], "estado": "cancelado", "eventos": eventos}
+
+
+def reprogramar_oc(
+    session: Session,
+    identidad: Identidad,
+    oc_id: str,
+    vigencia_desde: date,
+    vigencia_hasta: date,
+    motivo: str,
+) -> dict[str, Any]:
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
+    motivo = motivo.strip()
+    if not motivo:
+        raise ErrorDeDominio("motivo obligatorio")
+    if vigencia_desde > vigencia_hasta:
+        raise ErrorDeDominio("vigencia invertida")
+    oc_id = str(uuid.UUID(str(oc_id)))
+    fila = session.execute(
+        text(
+            "SELECT oc_id, clave_origen, origen_oc, vigencia_desde, vigencia_hasta, "
+            "cliente_id, locacion_id, tipo_servicio_id FROM modulo1.oc WHERE oc_id = :id FOR UPDATE"
+        ),
+        {"id": oc_id},
+    ).mappings().first()
+    if fila is None:
+        raise NoEncontrado("OC inexistente", {"oc_id": oc_id})
+    if fila["origen_oc"] == "modulo2":
+        raise ErrorDeDominio("Las OC de Módulo 2 no se reprograman desde Módulo 1", codigo="origen_modulo2")
+    anterior = {
+        "vigencia_desde": fila["vigencia_desde"].isoformat(),
+        "vigencia_hasta": fila["vigencia_hasta"].isoformat(),
+    }
+    session.execute(
+        text(
+            "UPDATE modulo1.oc SET vigencia_desde = :d, vigencia_hasta = :h, origen_oc = 'manual', actualizado_en = now() "
+            "WHERE oc_id = :id"
+        ),
+        {"d": vigencia_desde, "h": vigencia_hasta, "id": oc_id},
+    )
+    nuevo = {"vigencia_desde": vigencia_desde.isoformat(), "vigencia_hasta": vigencia_hasta.isoformat()}
+    referencia = ultima_decision(session, identidad.tenant_id, fila["clave_origen"])
+    evento_id = registrar_evento(
+        session,
+        identidad.tenant_id,
+        "CompromisoModificado",
+        {
+            "commitment_id": fila["clave_origen"],
+            "oc_id": oc_id,
+            "referencias_afectadas": [str(referencia)] if referencia else [],
+            "campos_modificados": ["vigencia_desde", "vigencia_hasta"],
+            "anterior": anterior,
+            "nuevo": nuevo,
+            "motivo": motivo,
+            "origen": "manual",
+        },
+        identidad.usuario_id,
+    )
+    from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+
+    oc_eval = dict(fila)
+    oc_eval["vigencia_desde"] = vigencia_desde
+    oc_eval["vigencia_hasta"] = vigencia_hasta
+    efecto = evaluar_oc_backlog(session, identidad, oc_eval)
+    return {
+        "oc_id": oc_id,
+        "clave_origen": fila["clave_origen"],
+        "evento_id": evento_id,
+        "vigencia_anterior": anterior,
+        "vigencia_nueva": nuevo,
+        "motivo": motivo,
+        "origen": "manual",
+        "efecto_documental": efecto,
+    }
 
 
 def _json(valor: Any) -> str:

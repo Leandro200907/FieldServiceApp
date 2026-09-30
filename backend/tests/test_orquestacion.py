@@ -47,6 +47,38 @@ def insertar_definicion(s, tenant_id: str, nombre: str, tipo_sujeto: str, catego
     )
 
 
+def insertar_catalogos_maestros(
+    s,
+    tenant_id: str,
+    clave: dict,
+    *,
+    operadora: str = "Operadora prueba",
+    locacion: str = "Planta norte",
+    tipo_servicio: str = "Mantenimiento",
+) -> None:
+    s.execute(
+        text(
+            "INSERT INTO modulo1.operadora_documental (operadora_id, tenant_id, nombre) "
+            "VALUES (CAST(:id AS uuid), :t, :n) ON CONFLICT (operadora_id) DO NOTHING"
+        ),
+        {"id": clave["c"], "t": tenant_id, "n": operadora},
+    )
+    s.execute(
+        text(
+            "INSERT INTO modulo1.locacion_oc (locacion_id, tenant_id, operadora_id, nombre) "
+            "VALUES (CAST(:id AS uuid), :t, CAST(:o AS uuid), :n) ON CONFLICT (locacion_id) DO NOTHING"
+        ),
+        {"id": clave["l"], "t": tenant_id, "o": clave["c"], "n": locacion},
+    )
+    s.execute(
+        text(
+            "INSERT INTO modulo1.tipo_servicio_oc (tipo_servicio_id, tenant_id, nombre) "
+            "VALUES (CAST(:id AS uuid), :t, :n) ON CONFLICT (tipo_servicio_id) DO NOTHING"
+        ),
+        {"id": clave["ts"], "t": tenant_id, "n": tipo_servicio},
+    )
+
+
 def insertar_matriz(
     s,
     tenant_id: str,
@@ -57,6 +89,7 @@ def insertar_matriz(
     vigente_hasta: date | None = None,
 ) -> str:
     """`lineas` = {requisito_definicion_id: clasificacion}."""
+    insertar_catalogos_maestros(s, tenant_id, clave)
     matriz_id = str(
         s.execute(
             text(
