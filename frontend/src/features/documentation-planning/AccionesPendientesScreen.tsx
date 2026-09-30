@@ -88,6 +88,9 @@ export function AccionesPendientesScreen() {
             {a.fecha_limite && <> · límite {fmtDate(a.fecha_limite)}</>}
             {a.efecto && <p>{a.efecto}</p>}
             {a.genera_alerta_cierta && <em> Genera alerta cierta</em>}
+            {a.ocs_afectadas?.length > 0 && (
+              <p>OCs: {a.ocs_afectadas.map(o => String((o as { clave_origen?: string }).clave_origen || '')).filter(Boolean).join(', ')}</p>
+            )}
           </li>
         ))}
       </ul>

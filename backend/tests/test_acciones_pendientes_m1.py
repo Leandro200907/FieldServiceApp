@@ -56,3 +56,6 @@ def test_acciones_pendientes_orden_y_efecto(cliente_api, tenant_de_prueba, sesio
     ranks = [rank(i) for i in items]
     assert ranks == sorted(ranks)
     assert items[0]["genera_alerta_cierta"] is True
+    lenta = [i for i in items if i["legajo_id"] == "persona_lenta"]
+    assert lenta
+    assert any(len(i["ocs_afectadas"]) >= 2 for i in lenta)

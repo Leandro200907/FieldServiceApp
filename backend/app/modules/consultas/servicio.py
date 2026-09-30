@@ -441,6 +441,7 @@ def acciones_pendientes(
         permitidos = set(operadora_id)
         ocs = [o for o in ocs if str(o["cliente_id"]) in permitidos]
     acciones: list[dict[str, Any]] = []
+    agrupadas: dict[tuple[str, str, str], dict[str, Any]] = {}
     for oc in ocs:
         inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
         calc = radar_mod._evaluar_oc(session, identidad.tenant_id, oc, legajos, evidencias, inicio, fin)
@@ -452,20 +453,29 @@ def acciones_pendientes(
             for req in leg.get("requisitos") or []:
                 if not req.get("accion_sugerida"):
                     continue
-                fecha_limite = req.get("primer_quiebre") or inicio
-                acciones.append(
-                    {
-                        "requisito": req.get("nombre"),
-                        "legajo_id": leg["sujeto_id"],
-                        "legajo_nombre": leg.get("identificador_natural") or leg["sujeto_id"],
-                        "tipo_sujeto": leg["tipo_sujeto"],
-                        "fecha_limite": str(fecha_limite),
-                        "accion_sugerida": req["accion_sugerida"],
-                        "ocs_afectadas": [{"clave_origen": oc["clave_origen"], "oc_id": str(oc["oc_id"])}],
-                        "efecto": req.get("motivo"),
-                        "genera_alerta_cierta": genera_alerta,
-                    }
-                )
+                fecha_limite = str(req.get("primer_quiebre") or inicio)
+                clave = (leg["sujeto_id"], str(req.get("nombre") or ""), str(req["accion_sugerida"]))
+                oc_ref = {"clave_origen": oc["clave_origen"], "oc_id": str(oc["oc_id"])}
+                if clave in agrupadas:
+                    item = agrupadas[clave]
+                    if oc_ref not in item["ocs_afectadas"]:
+                        item["ocs_afectadas"].append(oc_ref)
+                    item["genera_alerta_cierta"] = bool(item["genera_alerta_cierta"] or genera_alerta)
+                    if fecha_limite < item["fecha_limite"]:
+                        item["fecha_limite"] = fecha_limite
+                    continue
+                agrupadas[clave] = {
+                    "requisito": req.get("nombre"),
+                    "legajo_id": leg["sujeto_id"],
+                    "legajo_nombre": leg.get("identificador_natural") or leg["sujeto_id"],
+                    "tipo_sujeto": leg["tipo_sujeto"],
+                    "fecha_limite": fecha_limite,
+                    "accion_sugerida": req["accion_sugerida"],
+                    "ocs_afectadas": [oc_ref],
+                    "efecto": req.get("motivo"),
+                    "genera_alerta_cierta": genera_alerta,
+                }
+    acciones = list(agrupadas.values())
     acciones.sort(
         key=lambda a: (
             0 if a.get("genera_alerta_cierta") else 1,
