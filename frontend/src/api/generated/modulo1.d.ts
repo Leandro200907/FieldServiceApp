@@ -94,6 +94,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/comandos/alta_locacion_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Alta Locacion Oc */
+        post: operations["alta_locacion_oc_v1_comandos_alta_locacion_oc_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/comandos/alta_operadora_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Alta Operadora Oc */
+        post: operations["alta_operadora_oc_v1_comandos_alta_operadora_oc_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/comandos/alta_tipo_servicio_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Alta Tipo Servicio Oc */
+        post: operations["alta_tipo_servicio_oc_v1_comandos_alta_tipo_servicio_oc_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comandos/baja_de_sujeto": {
         parameters: {
             query?: never;
@@ -587,6 +638,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/comandos/reprogramar_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reprogramar Oc */
+        post: operations["reprogramar_oc_v1_comandos_reprogramar_oc_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comandos/resolver_archivo_drive": {
         parameters: {
             query?: never;
@@ -649,6 +717,23 @@ export interface paths {
         put?: never;
         /** Vincular Telegram */
         post: operations["vincular_telegram_v1_comandos_vincular_telegram_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/consultas/acciones_pendientes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Acciones Pendientes */
+        get: operations["acciones_pendientes_v1_consultas_acciones_pendientes_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -749,6 +834,23 @@ export interface paths {
         };
         /** Calendario Vigencias */
         get: operations["calendario_vigencias_v1_consultas_calendario_vigencias_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/consultas/catalogos_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalogos Oc */
+        get: operations["catalogos_oc_v1_consultas_catalogos_oc_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1343,6 +1445,60 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccionPendienteItem */
+        AccionPendienteItem: {
+            /** Accion Sugerida */
+            accion_sugerida: string;
+            /** Efecto */
+            efecto?: string | null;
+            /** Fecha Limite */
+            fecha_limite: string;
+            /**
+             * Genera Alerta Cierta
+             * @default false
+             */
+            genera_alerta_cierta: boolean;
+            /** Legajo Id */
+            legajo_id: string;
+            /** Legajo Nombre */
+            legajo_nombre: string;
+            /** Ocs Afectadas */
+            ocs_afectadas: {
+                [key: string]: unknown;
+            }[];
+            /** Requisito */
+            requisito?: string | null;
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+        };
+        /** AccionesPendientesResponse */
+        AccionesPendientesResponse: {
+            /** Items */
+            items: components["schemas"]["AccionPendienteItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** AlertaCiertaOc */
+        AlertaCiertaOc: {
+            /** Codigo */
+            codigo: string;
+            /** Desde */
+            desde?: string | null;
+            /** Hasta */
+            hasta?: string | null;
+            /** Mensaje */
+            mensaje: string;
+            /** Tipo Sujeto */
+            tipo_sujeto?: string | null;
+            /** Tramos */
+            tramos?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
         /** AlertaHistorialItem */
         AlertaHistorialItem: {
             /**
@@ -1526,6 +1682,26 @@ export interface components {
              */
             tipo_sujeto: "empresa" | "persona" | "vehiculo" | "equipo";
         };
+        /** AltaLocacionBody */
+        AltaLocacionBody: {
+            /** Nombre */
+            nombre: string;
+            /**
+             * Operadora Id
+             * Format: uuid
+             */
+            operadora_id: string;
+        };
+        /** AltaOperadoraBody */
+        AltaOperadoraBody: {
+            /** Nombre */
+            nombre: string;
+        };
+        /** AltaTipoServicioBody */
+        AltaTipoServicioBody: {
+            /** Nombre */
+            nombre: string;
+        };
         /** ArchivoEnBandejaDrive */
         ArchivoEnBandejaDrive: {
             /** Archivo Drive Id */
@@ -1661,23 +1837,6 @@ export interface components {
             /** Oc Id */
             oc_id: string;
         };
-        /** CandidatoCobertura */
-        CandidatoCobertura: {
-            /** Asignable */
-            asignable: boolean;
-            /** Primer Quiebre */
-            primer_quiebre: string | null;
-            /** Requisitos */
-            requisitos: {
-                [key: string]: unknown;
-            }[];
-            /** Sujeto Id */
-            sujeto_id: string;
-            /** Tipo Sujeto */
-            tipo_sujeto: string;
-            /** Veredicto */
-            veredicto: string;
-        };
         /** CargarDocumento */
         CargarDocumento: {
             /** Confianza Extraccion */
@@ -1738,6 +1897,21 @@ export interface components {
             /** Requisito Particular Id */
             requisito_particular_id: string;
         };
+        /** CatalogosOcResponse */
+        CatalogosOcResponse: {
+            /** Locaciones */
+            locaciones: {
+                [key: string]: unknown;
+            }[];
+            /** Operadoras */
+            operadoras: {
+                [key: string]: unknown;
+            }[];
+            /** Tipos Servicio */
+            tipos_servicio: {
+                [key: string]: unknown;
+            }[];
+        };
         /** CausaIncumplimiento */
         CausaIncumplimiento: {
             /** Causa Id */
@@ -1763,26 +1937,35 @@ export interface components {
         };
         /** CoberturaOcResponse */
         CoberturaOcResponse: {
+            /** Alertas Ciertas */
+            alertas_ciertas: components["schemas"]["AlertaCiertaOc"][];
             /** Commitment Id */
             commitment_id: string;
-            /** Estado Cobertura */
-            estado_cobertura: string;
-            /** Grupos Candidatos */
-            grupos_candidatos: components["schemas"]["GrupoCandidatosCobertura"][];
+            /** Disponibilidad Por Tipo */
+            disponibilidad_por_tipo: components["schemas"]["DisponibilidadTipoOc"][];
+            /** Historial Compromiso */
+            historial_compromiso?: {
+                [key: string]: unknown;
+            }[];
+            /** Impacto Por Tipo */
+            impacto_por_tipo: {
+                [key: string]: unknown;
+            }[];
             /** Modo */
             modo: string;
-            oc: components["schemas"]["OcResumenCobertura"];
-            /** Por Tipo */
-            por_tipo: components["schemas"]["ResumenCoberturaTipo"][];
-            /** Requisitos Faltantes */
-            requisitos_faltantes: components["schemas"]["RequisitoFaltante"][];
-            /** Resultado De Decision */
-            resultado_de_decision?: string | null;
+            /** Oc */
+            oc: {
+                [key: string]: unknown;
+            };
+            /**
+             * Reprogramada
+             * @default false
+             */
+            reprogramada: boolean;
+            /** Tiene Alertas */
+            tiene_alertas: boolean;
             /** Tipos Fuera De Alcance */
             tipos_fuera_de_alcance: string[];
-            /** Veredicto De Cumplimiento */
-            veredicto_de_cumplimiento?: string | null;
-            version_matriz?: components["schemas"]["VersionMatrizEvaluada"] | null;
         };
         /** ConfiguracionAlertasResponse */
         ConfiguracionAlertasResponse: {
@@ -2279,6 +2462,29 @@ export interface components {
             /** Total Legajos */
             total_legajos: number;
         };
+        /** DisponibilidadTipoOc */
+        DisponibilidadTipoOc: {
+            /** Estado */
+            estado: string;
+            /** Etiqueta */
+            etiqueta: string;
+            /** Habilitados Toda Ventana */
+            habilitados_toda_ventana: {
+                [key: string]: unknown;
+            }[];
+            /** No Habilitados */
+            no_habilitados: {
+                [key: string]: unknown;
+            }[];
+            /** Se Cae En Ventana */
+            se_cae_en_ventana: {
+                [key: string]: unknown;
+            }[];
+            /** Texto */
+            texto: string;
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+        };
         /**
          * DocumentoCargadoResponse
          * @description cargar_documento / proponer_documento (comparten el núcleo `_insertar_version_documento`).
@@ -2614,13 +2820,6 @@ export interface components {
             url: string;
             /** Url Qr */
             url_qr: string;
-        };
-        /** GrupoCandidatosCobertura */
-        GrupoCandidatosCobertura: {
-            /** Candidatos */
-            candidatos: components["schemas"]["CandidatoCobertura"][];
-            /** Tipo Sujeto */
-            tipo_sujeto: string;
         };
         /** HistorialAlertasResponse */
         HistorialAlertasResponse: {
@@ -3140,30 +3339,51 @@ export interface components {
         OcBacklogItem: {
             /** Actualizado En */
             actualizado_en: string;
+            /** Alertas Ciertas */
+            alertas_ciertas: components["schemas"]["AlertaCiertaOc"][];
             /** Clave Origen */
             clave_origen: string;
             /** Cliente Id */
             cliente_id: string;
             /** Creado En */
             creado_en: string;
+            /** Disponibilidad Por Tipo */
+            disponibilidad_por_tipo: components["schemas"]["DisponibilidadTipoOc"][];
             /** Estado */
             estado: string;
-            /** Estado Cobertura */
-            estado_cobertura: string;
+            /** Impacto Por Tipo */
+            impacto_por_tipo: {
+                [key: string]: unknown;
+            }[];
             /** Locacion Id */
             locacion_id: string;
+            /** Locacion Nombre */
+            locacion_nombre?: string | null;
             /** Lote Id */
             lote_id: string | null;
             /** Modo */
             modo: string;
             /** Oc Id */
             oc_id: string;
-            /** Por Tipo */
-            por_tipo: components["schemas"]["ResumenCoberturaTipo"][];
+            /** Operadora Nombre */
+            operadora_nombre?: string | null;
+            /** Origen Oc */
+            origen_oc?: string | null;
             /** Referencia */
             referencia: string | null;
+            /**
+             * Reprogramada
+             * @default false
+             */
+            reprogramada: boolean;
+            /** Tiene Alertas */
+            tiene_alertas: boolean;
             /** Tipo Servicio Id */
             tipo_servicio_id: string;
+            /** Tipo Servicio Nombre */
+            tipo_servicio_nombre?: string | null;
+            /** Tipos Fuera De Alcance */
+            tipos_fuera_de_alcance: string[];
             /** Vigencia Desde */
             vigencia_desde: string;
             /** Vigencia Hasta */
@@ -3177,19 +3397,6 @@ export interface components {
             commitment_id: string;
             /** Evento Id */
             evento_id: string;
-        };
-        /** OcResumenCobertura */
-        OcResumenCobertura: {
-            /** Clave Origen */
-            clave_origen: string;
-            /** Estado */
-            estado: string;
-            /** Oc Id */
-            oc_id: string;
-            /** Vigencia Desde */
-            vigencia_desde: string;
-            /** Vigencia Hasta */
-            vigencia_hasta: string;
         };
         /** PaqueteEntrega */
         PaqueteEntrega: {
@@ -3619,22 +3826,25 @@ export interface components {
             /** Induccion Id */
             induccion_id: string;
         };
-        /** RequisitoFaltante */
-        RequisitoFaltante: {
-            /** Bajo Excepcion */
-            bajo_excepcion: boolean;
+        /** ReprogramarOcBody */
+        ReprogramarOcBody: {
             /** Motivo */
             motivo: string;
-            /** Nombre */
-            nombre?: string | null;
-            /** Requisito Definicion Id */
-            requisito_definicion_id: string | null;
-            /** Sujeto Id */
-            sujeto_id: string | null;
-            /** Tipo Sujeto */
-            tipo_sujeto: string;
-            /** Veredicto */
-            veredicto: string;
+            /**
+             * Oc Id
+             * Format: uuid
+             */
+            oc_id: string;
+            /**
+             * Vigencia Desde
+             * Format: date
+             */
+            vigencia_desde: string;
+            /**
+             * Vigencia Hasta
+             * Format: date
+             */
+            vigencia_hasta: string;
         };
         /** RequisitoPaquete */
         RequisitoPaquete: {
@@ -3685,17 +3895,6 @@ export interface components {
             fila: number;
             /** Operadora Id */
             operadora_id: string;
-        };
-        /** ResumenCoberturaTipo */
-        ResumenCoberturaTipo: {
-            /** Candidatos Cumplen */
-            candidatos_cumplen: number;
-            /** Estado */
-            estado: string;
-            /** Motivo */
-            motivo?: string | null;
-            /** Tipo Sujeto */
-            tipo_sujeto: string;
         };
         /** ResumenLegajo */
         ResumenLegajo: {
@@ -3916,13 +4115,6 @@ export interface components {
             version: number;
             /** Vigente Hasta */
             vigente_hasta: string | null;
-        };
-        /** VersionMatrizEvaluada */
-        VersionMatrizEvaluada: {
-            /** Matriz Version Id */
-            matriz_version_id: string;
-            /** Version */
-            version: number;
         };
         /** VincularTelegramBody */
         VincularTelegramBody: {
@@ -4324,6 +4516,246 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["app__modules__legajos__router__LegajoResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    alta_locacion_oc_v1_comandos_alta_locacion_oc_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AltaLocacionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    alta_operadora_oc_v1_comandos_alta_operadora_oc_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AltaOperadoraBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    alta_tipo_servicio_oc_v1_comandos_alta_tipo_servicio_oc_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AltaTipoServicioBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
@@ -6702,6 +7134,88 @@ export interface operations {
             };
         };
     };
+    reprogramar_oc_v1_comandos_reprogramar_oc_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReprogramarOcBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     resolver_archivo_drive_v1_comandos_resolver_archivo_drive_post: {
         parameters: {
             query?: never;
@@ -7022,6 +7536,90 @@ export interface operations {
             };
         };
     };
+    acciones_pendientes_v1_consultas_acciones_pendientes_get: {
+        parameters: {
+            query?: {
+                vigencia_desde?: string | null;
+                vigencia_hasta?: string | null;
+                mes?: string | null;
+                q?: string | null;
+                operadora_id?: string[] | null;
+                locacion_id?: string | null;
+                tipo_recurso?: string | null;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccionesPendientesResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     alertas_abiertas_v1_consultas_alertas_abiertas_get: {
         parameters: {
             query?: {
@@ -7184,10 +7782,15 @@ export interface operations {
         parameters: {
             query?: {
                 estado?: string | null;
-                estado_cobertura?: string | null;
                 vigencia_desde?: string | null;
                 vigencia_hasta?: string | null;
+                mes?: string | null;
                 q?: string | null;
+                operadora_id?: string[] | null;
+                locacion_id?: string | null;
+                tipo_recurso?: string | null;
+                solo_con_alertas?: boolean | null;
+                solo_reprogramadas?: boolean | null;
                 offset?: number;
                 limit?: number;
             };
@@ -7443,6 +8046,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CalendarioVigenciasResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    catalogos_oc_v1_consultas_catalogos_oc_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogosOcResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */

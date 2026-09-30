@@ -1,60 +1,56 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import { unwrap } from './realDocumentationPlanningAccess';
 import type { components } from '../../api/generated/modulo1';
-import { Badge, ErrorState, LoadingState } from '../../ui/States';
+import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
+import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import './planning.css';
+import './timeline.css';
 
 type BacklogItem = components['schemas']['OcBacklogItem'];
 type Cobertura = components['schemas']['CoberturaOcResponse'];
-
-const COBERTURA_LABEL: Record<string, string> = {
-  cubierta: 'Cubierta',
-  no_cubierta: 'No cubierta',
-  sin_matriz: 'Sin matriz',
-  empresa_bloquea: 'Empresa bloquea',
-};
-
-const TIPO_LABEL: Record<string, string> = {
-  persona: 'Personas',
-  vehiculo: 'Vehículos',
-  equipo: 'Equipos',
-};
 
 function fmtDate(value: string) {
   return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
-function idsLegibles(cliente: string, locacion: string) {
-  return <>Cliente: {cliente} · Locación: {locacion}</>;
-}
-
-function resumenTipos(porTipo: BacklogItem['por_tipo']) {
-  return porTipo.map(t => {
-    const label = TIPO_LABEL[t.tipo_sujeto] || t.tipo_sujeto;
-    if (t.estado === 'fuera_de_alcance') return `${label}: fuera de tu alcance`;
-    if (t.candidatos_cumplen > 0) return `${label}: ${t.candidatos_cumplen} cumplen`;
-    return `${label}: 0 — ${t.motivo || 'sin candidatos'}`;
-  }).join(' · ');
+function addDays(iso: string, days: number) {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
-  const [offset, setOffset] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const offset = Number(params.get('offset') || 0);
+  const mes = params.get('mes') || '';
+  const q = params.get('q') || '';
+  const soloAlertas = params.get('solo_con_alertas') === '1';
+  const selected = params.get('oc') || null;
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const puedeImportar = roles.includes('responsable_legajos');
+  const puedeReprogramar = roles.includes('responsable_legajos') || roles.includes('configuracion');
 
   const [reloadKey, setReloadKey] = useState(0);
   const backlogQuery = usePrototypeRead(async () => {
     const { data, error, response } = await session.client.GET('/v1/consultas/backlog_oc', {
-      params: { query: { offset, limit: PAGE_SIZE, estado: 'activo' } },
+      params: {
+        query: {
+          offset,
+          limit: PAGE_SIZE,
+          estado: 'activo',
+          mes: mes || undefined,
+          q: q || undefined,
+          solo_con_alertas: soloAlertas || undefined,
+        },
+      },
     });
     if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
     return data!;
-  }, [offset, reloadKey]);
+  }, [offset, mes, q, soloAlertas, reloadKey]);
 
   const detailQuery = usePrototypeRead(async () => {
     if (!selected) return null;
@@ -65,13 +61,39 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
     return data as Cobertura;
   }, [selected]);
 
+  const items = backlogQuery.data?.items ?? [];
+  const vistaDesde = mes ? `${mes}-01` : items[0]?.vigencia_desde ?? new Date().toISOString().slice(0, 10);
+  const vistaHasta = useMemo(() => {
+    if (mes) {
+      const [y, m] = mes.split('-').map(Number);
+      const last = new Date(y, m, 0).getDate();
+      return `${mes}-${String(last).padStart(2, '0')}`;
+    }
+    const max = items.reduce((acc, i) => (i.vigencia_hasta > acc ? i.vigencia_hasta : acc), vistaDesde);
+    return max;
+  }, [items, mes, vistaDesde]);
+
+  const ganttRows: GanttOcRow[] = items.map(row => ({
+    id: row.clave_origen,
+    label: row.clave_origen,
+    sublabel: [row.operadora_nombre, row.locacion_nombre].filter(Boolean).join(' · '),
+    desde: row.vigencia_desde,
+    hasta: row.vigencia_hasta,
+    reprogramada: row.reprogramada,
+    tramosAlerta: (row.alertas_ciertas || []).flatMap(a => (a.tramos as { desde: string; hasta: string }[] | undefined) || []).concat(
+      (row.alertas_ciertas || []).filter(a => a.desde && a.hasta).map(a => ({ desde: a.desde!, hasta: a.hasta! })),
+    ),
+    alertas: (row.disponibilidad_por_tipo || []).flatMap(d =>
+      (d.se_cae_en_ventana || []).map(s => ({
+        fecha: s.fecha || row.vigencia_hasta,
+        titulo: `${s.fecha ? fmtDate(s.fecha) : ''} vence ${s.requisito || 'requisito'} — ${d.etiqueta}`,
+      })),
+    ),
+  }));
+
   const onImport = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
       setImportMsg('Solo archivos .xlsx');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setImportMsg('Archivo demasiado grande (máx. 5 MiB)');
       return;
     }
     const loteId = crypto.randomUUID();
@@ -89,52 +111,95 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
     setReloadKey(k => k + 1);
   };
 
-  const items = backlogQuery.data?.items ?? [];
-  const badgeTone = useMemo(() => ({
-    cubierta: 'accent',
-    no_cubierta: 'warning',
-    sin_matriz: 'warning',
-    empresa_bloquea: 'warning',
-  } as const), []);
-
   if (backlogQuery.loading) return <LoadingState />;
   if (backlogQuery.error) return <ErrorState message={backlogQuery.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
 
-  return <div className="planning-layout">
-    <header className="panel">
-      <p className="eyebrow">Modo consulta</p>
-      <h2>Backlog de OC con cobertura</h2>
-      <p>Cobertura calculada en vivo. No persiste decisiones ni asigna recursos.</p>
-      {puedeImportar && <div className="form-field">
-        <label htmlFor="planilla-oc">Importar planilla de OC</label>
-        <input id="planilla-oc" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e => { const f = e.target.files?.[0]; if (f) void onImport(f); }} />
-        {importMsg && <p role="status">{importMsg}</p>}
-      </div>}
-    </header>
-    <table className="data-table">
-      <thead><tr><th>OC</th><th>Referencia</th><th>Cliente / locación</th><th>Ventana</th><th>Cobertura</th><th>Resumen</th></tr></thead>
-      <tbody>
-        {items.map(row => (
-          <tr key={row.oc_id} className={selected === row.clave_origen ? 'row-selected' : ''}>
-            <td><button type="button" className="text-button" onClick={() => setSelected(row.clave_origen)}>{row.clave_origen}</button></td>
-            <td>{row.referencia || '—'}</td>
-            <td>{idsLegibles(row.cliente_id, row.locacion_id)}</td>
-            <td>{fmtDate(row.vigencia_desde)} – {fmtDate(row.vigencia_hasta)}</td>
-            <td><Badge tone={badgeTone[row.estado_cobertura as keyof typeof badgeTone] || 'warning'}>{COBERTURA_LABEL[row.estado_cobertura] || row.estado_cobertura}</Badge></td>
-            <td>{resumenTipos(row.por_tipo)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-    <PaginationControls offset={offset} limit={PAGE_SIZE} total={backlogQuery.data?.total ?? 0} onOffsetChange={setOffset} />
-    {selected && detailQuery.loading && <LoadingState />}
-    {selected && detailQuery.data && <section className="panel backlog-detail" aria-live="polite">
-      <h3>{detailQuery.data.oc.clave_origen}</h3>
-      <p>{COBERTURA_LABEL[detailQuery.data.estado_cobertura] || detailQuery.data.estado_cobertura}</p>
-      <ul>{detailQuery.data.grupos_candidatos.flatMap(g => g.candidatos.map(c => (
-        <li key={c.sujeto_id}>{c.sujeto_id} · {c.asignable ? 'Asignable' : 'No asignable'}{c.primer_quiebre ? ` · quiebre ${c.primer_quiebre}` : ''}</li>
-      )))}</ul>
-      <Link className="button button-secondary" to={`/timeline-recursos?oc_id=${detailQuery.data.oc.oc_id}`}>Ver en timeline</Link>
-    </section>}
-  </div>;
+  return (
+    <div className="planning-layout">
+      <header className="panel">
+        <p className="eyebrow">Modo consulta</p>
+        <h2>Mapa del backlog de OC</h2>
+        <p>Alertas ciertas y disponibilidad documental. No asigna recursos ni afirma cobertura.</p>
+        <div className="form-row">
+          <label>
+            Mes
+            <input type="month" value={mes} onChange={e => setParams(p => { p.set('mes', e.target.value); p.delete('offset'); return p; })} />
+          </label>
+          <label>
+            Buscar OC
+            <input value={q} onChange={e => setParams(p => { p.set('q', e.target.value); p.delete('offset'); return p; })} />
+          </label>
+          <label>
+            <input type="checkbox" checked={soloAlertas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_con_alertas', '1'); else p.delete('solo_con_alertas'); p.delete('offset'); return p; })} />
+            Solo con alertas
+          </label>
+        </div>
+        {puedeImportar && (
+          <div className="form-field">
+            <label htmlFor="planilla-oc">Importar planilla (Operadora, Locación, Tipo de servicio)</label>
+            <input id="planilla-oc" type="file" accept=".xlsx" onChange={e => { const f = e.target.files?.[0]; if (f) void onImport(f); }} />
+            {importMsg && <p role="status">{importMsg}</p>}
+          </div>
+        )}
+      </header>
+
+      <OcGanttChart
+        filas={ganttRows}
+        vistaDesde={vistaDesde}
+        vistaHasta={vistaHasta}
+        hoy={new Date().toISOString().slice(0, 10)}
+        selectedId={selected}
+        onSelect={id => setParams(p => { p.set('oc', id); return p; })}
+      />
+
+      <PaginationControls offset={offset} limit={PAGE_SIZE} total={backlogQuery.data?.total ?? 0} onOffsetChange={n => setParams(p => { p.set('offset', String(n)); return p; })} />
+
+      {selected && detailQuery.loading && <LoadingState />}
+      {selected && detailQuery.data && (
+        <section className="panel backlog-detail" aria-live="polite">
+          <h3>{detailQuery.data.oc.clave_origen as string}</h3>
+          <p>{fmtDate(detailQuery.data.oc.vigencia_desde as string)} – {fmtDate(detailQuery.data.oc.vigencia_hasta as string)}</p>
+          <p>{detailQuery.data.tiene_alertas ? 'Con alertas ciertas' : 'Sin alertas'}</p>
+          <ul>
+            {(detailQuery.data.disponibilidad_por_tipo || []).map(d => (
+              <li key={d.tipo_sujeto}>{d.texto}</li>
+            ))}
+          </ul>
+          {(detailQuery.data.historial_compromiso || []).length > 0 && (
+            <details>
+              <summary>Historial de cambios</summary>
+              <ul>
+                {detailQuery.data.historial_compromiso!.map((h, i) => (
+                  <li key={i}>{h.fecha} · {h.origen} · {h.motivo || '—'}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {puedeReprogramar && (
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={async () => {
+                const motivo = window.prompt('Motivo de reprogramación');
+                if (!motivo) return;
+                await session.client.POST('/v1/comandos/reprogramar_oc', {
+                  body: {
+                    oc_id: detailQuery.data!.oc.oc_id as string,
+                    vigencia_desde: detailQuery.data!.oc.vigencia_desde as string,
+                    vigencia_hasta: addDays(detailQuery.data!.oc.vigencia_hasta as string, 7),
+                    motivo,
+                  },
+                  headers: { 'Idempotency-Key': crypto.randomUUID() },
+                } as never);
+                setReloadKey(k => k + 1);
+              }}
+            >
+              Reprogramar
+            </button>
+          )}
+          <Link className="button button-secondary" to={`/timeline-recursos?oc_id=${detailQuery.data.oc.oc_id as string}`}>Ver recursos en el tiempo</Link>
+        </section>
+      )}
+    </div>
+  );
 }
