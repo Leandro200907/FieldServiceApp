@@ -1,0 +1,10 @@
+.timeline-shell{display:flex;flex-direction:column;gap:16px}
+.timeline-chart{display:flex;flex-direction:column;gap:12px}
+.timeline-row{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface)}
+.timeline-row-head{display:flex;justify-content:space-between;margin-bottom:8px}
+.timeline-bar{display:inline-block;margin:4px 6px 4px 0;padding:6px 10px;border-radius:6px;font-size:13px}
+.timeline-vigente{background:#d7f0e4;color:#145c56}
+.timeline-por_vencer{background:#fdeacc;color:#8a4b00}
+.timeline-vencido{background:#f8d7da;color:#842029}
+.timeline-declarado_sin_verificar{background:repeating-linear-gradient(45deg,#eceff1,#eceff1 6px,#f5f7f8 6px,#f5f7f8 12px);color:#536b7b}
+.timeline-quiebre{color:#842029;font-size:13px;margin:4px 0}

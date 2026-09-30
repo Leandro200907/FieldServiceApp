@@ -4081,6 +4081,111 @@
         "title": "ImportarLoteResponse",
         "type": "object"
       },
+      "ImportarPlanillaOcResponse": {
+        "properties": {
+          "detalle_filas_rechazadas": {
+            "items": {
+              "$ref": "#/components/schemas/FilaRechazada"
+            },
+            "title": "Detalle Filas Rechazadas",
+            "type": "array"
+          },
+          "errores_lectura": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errores Lectura",
+            "type": "array"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "filas_aceptadas": {
+            "title": "Filas Aceptadas",
+            "type": "integer"
+          },
+          "filas_rechazadas": {
+            "title": "Filas Rechazadas",
+            "type": "integer"
+          },
+          "filas_totales": {
+            "title": "Filas Totales",
+            "type": "integer"
+          },
+          "lote_id": {
+            "title": "Lote Id",
+            "type": "string"
+          },
+          "oc_actualizadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Actualizadas"
+          },
+          "oc_creadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Creadas"
+          },
+          "oc_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Oc Ids",
+            "type": "array"
+          },
+          "oc_modificadas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OcModificada"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Modificadas"
+          },
+          "ya_aplicado": {
+            "title": "Ya Aplicado",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lote_id",
+          "estado",
+          "filas_totales",
+          "filas_aceptadas",
+          "filas_rechazadas",
+          "detalle_filas_rechazadas",
+          "oc_ids",
+          "ya_aplicado",
+          "eventos"
+        ],
+        "title": "ImportarPlanillaOcResponse",
+        "type": "object"
+      },
       "ImportarPlanillaOperadorasResponse": {
         "properties": {
           "archivo": {
@@ -9987,6 +10092,123 @@
           }
         ],
         "summary": "Importar Lote Oc"
+      }
+    },
+    "/v1/comandos/importar_planilla_oc": {
+      "post": {
+        "operationId": "importar_planilla_oc_v1_comandos_importar_planilla_oc_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lote_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lote Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hoja",
+            "required": false,
+            "schema": {
+              "default": "OC",
+              "maxLength": 80,
+              "title": "Hoja",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Nombre-Archivo",
+            "required": false,
+            "schema": {
+              "default": "planilla_oc.xlsx",
+              "maxLength": 500,
+              "title": "X-Nombre-Archivo",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportarPlanillaOcResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Importar Planilla Oc"
       }
     },
     "/v1/comandos/importar_planilla_operadoras": {

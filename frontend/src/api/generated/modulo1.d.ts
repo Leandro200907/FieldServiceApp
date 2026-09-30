@@ -400,6 +400,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/comandos/importar_planilla_oc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Importar Planilla Oc */
+        post: operations["importar_planilla_oc_v1_comandos_importar_planilla_oc_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comandos/importar_planilla_operadoras": {
         parameters: {
             query?: never;
@@ -2730,6 +2747,35 @@ export interface components {
              * Ya Aplicado
              * @default false
              */
+            ya_aplicado: boolean;
+        };
+        /** ImportarPlanillaOcResponse */
+        ImportarPlanillaOcResponse: {
+            /** Detalle Filas Rechazadas */
+            detalle_filas_rechazadas: components["schemas"]["FilaRechazada"][];
+            /** Errores Lectura */
+            errores_lectura?: string[];
+            /** Estado */
+            estado: string;
+            /** Eventos */
+            eventos: string[];
+            /** Filas Aceptadas */
+            filas_aceptadas: number;
+            /** Filas Rechazadas */
+            filas_rechazadas: number;
+            /** Filas Totales */
+            filas_totales: number;
+            /** Lote Id */
+            lote_id: string;
+            /** Oc Actualizadas */
+            oc_actualizadas?: number | null;
+            /** Oc Creadas */
+            oc_creadas?: number | null;
+            /** Oc Ids */
+            oc_ids: string[];
+            /** Oc Modificadas */
+            oc_modificadas?: components["schemas"]["OcModificada"][] | null;
+            /** Ya Aplicado */
             ya_aplicado: boolean;
         };
         /** ImportarPlanillaOperadorasResponse */
@@ -5716,6 +5762,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportarLoteOCResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    importar_planilla_oc_v1_comandos_importar_planilla_oc_post: {
+        parameters: {
+            query: {
+                lote_id: string;
+                hoja?: string;
+            };
+            header?: {
+                "X-Nombre-Archivo"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportarPlanillaOcResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
