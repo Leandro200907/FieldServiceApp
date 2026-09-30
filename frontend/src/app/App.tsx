@@ -28,6 +28,8 @@ function IntegrationBadge({ page }: { page: Page | undefined }) {
   const integrated = (page.id === 'calendario-vigencias' && isCalendarIntegrated())
     || (page.id === 'radar-documental' && isBacklogIntegrated())
     || (page.id === 'backlog-oc' && isOcBacklogIntegrated())
+    || (page.id === 'acciones-pendientes' && isOcBacklogIntegrated())
+    || (page.id === 'catalogos-oc' && isOcBacklogIntegrated())
     || (page.id === 'timeline-recursos' && isTimelineIntegrated())
     || (page.id === 'mi-legajo' && isMiLegajoIntegrated())
     || (page.id === 'vencimientos' && isVencimientosIntegrated())
