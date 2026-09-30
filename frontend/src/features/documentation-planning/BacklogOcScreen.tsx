@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
-import { unwrap } from './realDocumentationPlanningAccess';
+import { importarPlanillaOc } from './realDocumentationPlanningAccess';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
@@ -41,6 +41,7 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
   const operadoras = params.getAll('operadora_id');
   const selected = params.get('oc') || null;
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [rechazadas, setRechazadas] = useState<FilaRechazada[]>([]);
   const [comparacion, setComparacion] = useState<Record<string, unknown> | null>(null);
   const puedeImportar = roles.includes('responsable_legajos');
@@ -135,23 +136,22 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
 
   const onImport = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
-      setImportMsg('Solo archivos .xlsx');
+      setImportError('Solo archivos .xlsx');
+      setImportMsg(null);
       return;
     }
-    const loteId = crypto.randomUUID();
-    const body = new Uint8Array(await file.arrayBuffer());
-    const res = await session.client.POST('/v1/comandos/importar_planilla_oc', {
-      params: { query: { lote_id: loteId } },
-      body,
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'X-Nombre-Archivo': file.name,
-      },
-    } as never);
-    const json = await unwrap(res as never) as { filas_aceptadas: number; filas_rechazadas: number; detalle_filas_rechazadas?: FilaRechazada[] };
-    setImportMsg(`Aplicadas: ${json.filas_aceptadas} · Rechazadas: ${json.filas_rechazadas}`);
-    setRechazadas(json.detalle_filas_rechazadas ?? []);
-    setReloadKey(k => k + 1);
+    setImportError(null);
+    setImportMsg(null);
+    try {
+      const json = await importarPlanillaOc(file);
+      const lectura = (json.errores_lectura || []).length;
+      setImportMsg(`Aplicadas: ${json.filas_aceptadas} · Rechazadas: ${json.filas_rechazadas}${lectura ? ` · Lectura: ${lectura}` : ''}`);
+      setRechazadas(json.detalle_filas_rechazadas ?? []);
+      setReloadKey(k => k + 1);
+    } catch (err) {
+      setRechazadas([]);
+      setImportError(err instanceof Error ? err.message : 'No se pudo importar la planilla');
+    }
   };
 
   if (backlogQuery.loading || catalogosQuery.loading) return <LoadingState />;
@@ -192,14 +192,15 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
           <div className="form-field">
             <label htmlFor="planilla-oc">Importar planilla (Operadora, Locación, Tipo de servicio)</label>
             <input id="planilla-oc" type="file" accept=".xlsx" onChange={e => { const f = e.target.files?.[0]; if (f) void onImport(f); }} />
+            {importError && <p className="field-error" role="alert">{importError}</p>}
             {importMsg && <p role="status">{importMsg}</p>}
             {rechazadas.length > 0 && (
               <ul>
                 {rechazadas.map(r => (
-                  <li key={r.indice}>
+                  <li key={`${r.indice}-${r.clave_origen}`}>
                     Fila {r.indice}: {r.motivo}
                     {necesitaCatalogo(r.motivo) && (
-                      <> — <Link to="/catalogos-oc">Dar de alta en catálogos</Link></>
+                      <> — <Link to="/catalogos-oc">Dar de alta en Catálogos</Link></>
                     )}
                   </li>
                 ))}

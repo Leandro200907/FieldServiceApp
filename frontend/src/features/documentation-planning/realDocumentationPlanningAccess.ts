@@ -1,4 +1,5 @@
 import { ApiFailure, parseApiError, session } from '../../api';
+import type { components } from '../../api/generated/modulo1';
 import type {
   BacklogQuery,
   CalendarQuery,
@@ -6,6 +7,24 @@ import type {
   RadarLegajoQuery,
   RadarOcQuery,
 } from './contracts';
+
+export type ImportarPlanillaOcResultado = components['schemas']['ImportarPlanillaOcResponse'];
+
+const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+export async function importarPlanillaOc(file: File, loteId = crypto.randomUUID()): Promise<ImportarPlanillaOcResultado> {
+  return unwrap(
+    session.client.POST('/v1/comandos/importar_planilla_oc', {
+      params: {
+        query: { lote_id: loteId },
+        header: { 'X-Nombre-Archivo': file.name },
+      },
+      body: file as unknown as string,
+      bodySerializer: body => body as unknown as BodyInit,
+      headers: { 'Content-Type': XLSX_CONTENT_TYPE },
+    } as never),
+  );
+}
 
 // Adaptador real contra el backend — reemplaza a `temporaryMockAccess` cuando
 // `featureFlags.documentationCalendarIntegration`/`radarDocumentationIntegration` están
