@@ -127,8 +127,9 @@ def importar_lote_oc(
     vistas: set[str] = set()
     aceptadas: list[dict[str, Any]] = []
     rechazadas: list[dict[str, Any]] = []
-    for indice, fila in enumerate(filas):
+    for i, fila in enumerate(filas):
         cruda = fila if isinstance(fila, dict) else {}
+        indice = cruda["fila"] if isinstance(cruda.get("fila"), int) else i
         if cruda.get("operadora"):
             resuelta, motivo_nombre = catalogos_maestros.resolver_fila_por_nombres(session, tenant_id, cruda)
             if resuelta is None:
