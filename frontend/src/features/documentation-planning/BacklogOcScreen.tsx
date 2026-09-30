@@ -5,7 +5,7 @@ import { importarPlanillaOc } from './realDocumentationPlanningAccess';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
-import { usePrototypeRead } from '../../hooks/usePrototypeRead';
+import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
@@ -163,8 +163,9 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
     }
   };
 
-  if (backlogQuery.loading || catalogosQuery.loading) return <LoadingState />;
-  if (backlogQuery.error) return <ErrorState message={backlogQuery.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
+  const cargaInicial = esCargaInicial(backlogQuery) || esCargaInicial(catalogosQuery);
+  if (cargaInicial) return <LoadingState />;
+  if (backlogQuery.error && !backlogQuery.data) return <ErrorState message={backlogQuery.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
 
   const operadoraOpts = catalogosQuery.data?.operadoras ?? [];
 
@@ -224,26 +225,34 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
         <Link className="button button-secondary" to="/catalogos-oc">Administrar catálogos</Link>
       </header>
 
-      <OcGanttNav
-        zoom={gantt.zoom}
-        onZoomChange={gantt.setZoom}
-        onAnterior={gantt.anterior}
-        onSiguiente={gantt.siguiente}
-        onHoy={gantt.irHoy}
-        modoAuto={gantt.modoAuto}
-        onRestaurarAuto={gantt.usarRangoAutomatico}
-      />
+      {backlogQuery.loading ? (
+        <LoadingState />
+      ) : backlogQuery.error ? (
+        <ErrorState message={backlogQuery.error.message} onRetry={() => setReloadKey(k => k + 1)} />
+      ) : (
+        <>
+          <OcGanttNav
+            zoom={gantt.zoom}
+            onZoomChange={gantt.setZoom}
+            onAnterior={gantt.anterior}
+            onSiguiente={gantt.siguiente}
+            onHoy={gantt.irHoy}
+            modoAuto={gantt.modoAuto}
+            onRestaurarAuto={gantt.usarRangoAutomatico}
+          />
 
-      <OcGanttChart
-        filas={ganttRows}
-        vistaDesde={gantt.vistaDesde}
-        vistaHasta={gantt.vistaHasta}
-        hoy={hoy}
-        selectedId={selected}
-        onSelect={id => setParams(p => { p.set('oc', id); return p; })}
-      />
+          <OcGanttChart
+            filas={ganttRows}
+            vistaDesde={gantt.vistaDesde}
+            vistaHasta={gantt.vistaHasta}
+            hoy={hoy}
+            selectedId={selected}
+            onSelect={id => setParams(p => { p.set('oc', id); return p; })}
+          />
 
-      <PaginationControls offset={offset} limit={PAGE_SIZE} total={backlogQuery.data?.total ?? 0} onOffsetChange={n => setParams(p => { p.set('offset', String(n)); return p; })} />
+          <PaginationControls offset={offset} limit={PAGE_SIZE} total={backlogQuery.data?.total ?? 0} onOffsetChange={n => setParams(p => { p.set('offset', String(n)); return p; })} />
+        </>
+      )}
 
       {selected && detailQuery.loading && <LoadingState />}
       {selected && detailQuery.data && (

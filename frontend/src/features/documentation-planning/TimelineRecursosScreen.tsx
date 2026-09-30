@@ -4,7 +4,7 @@ import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
-import { usePrototypeRead } from '../../hooks/usePrototypeRead';
+import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { addDays, formatFecha, todayIso } from './dates';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
@@ -133,8 +133,8 @@ export function TimelineRecursosScreen() {
     setReloadKey(k => k + 1);
   };
 
-  if (query.loading) return <LoadingState />;
-  if (query.error) return <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
+  if (esCargaInicial(query)) return <LoadingState />;
+  if (query.error && !query.data) return <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
 
   return <div className="timeline-shell">
     <header className="panel">
@@ -149,6 +149,12 @@ export function TimelineRecursosScreen() {
       <Link className="button button-secondary" to="/backlog-oc">Ver mapa del backlog</Link>
     </header>
 
+    {query.loading ? (
+      <LoadingState />
+    ) : query.error ? (
+      <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />
+    ) : (
+      <>
     <OcGanttNav
       zoom={gantt.zoom}
       onZoomChange={gantt.setZoom}
@@ -184,5 +190,7 @@ export function TimelineRecursosScreen() {
     />
 
     <PaginationControls offset={offset} limit={PAGE_SIZE} total={query.data?.total ?? 0} onOffsetChange={setOffset} />
+      </>
+    )}
   </div>;
 }

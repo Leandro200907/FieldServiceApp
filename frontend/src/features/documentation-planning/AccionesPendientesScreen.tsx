@@ -6,7 +6,7 @@ import { ErrorState, LoadingState } from '../../ui/States';
 import { textoEfectoAccion } from './copy';
 import { formatFecha } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
-import { usePrototypeRead } from '../../hooks/usePrototypeRead';
+import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
 
 type Acciones = components['schemas']['AccionesPendientesResponse'];
@@ -61,9 +61,9 @@ export function AccionesPendientesScreen() {
   };
 
   const items = query.data?.items ?? [];
-
-  if (query.loading || catalogosQuery.loading) return <LoadingState />;
-  if (query.error) return <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
+  const cargaInicial = esCargaInicial(query) || esCargaInicial(catalogosQuery);
+  if (cargaInicial) return <LoadingState />;
+  if (query.error && !query.data) return <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
 
   return (
     <div className="planning-layout">
@@ -83,21 +83,29 @@ export function AccionesPendientesScreen() {
           ))}
         </fieldset>
       </header>
-      <ul className="panel">
-        {items.map((a: Accion, i) => (
-          <li key={`${a.legajo_id}-${a.requisito}-${i}`}>
-            <strong>{a.accion_sugerida}</strong> — {a.legajo_nombre} ({a.tipo_sujeto})
-            {a.requisito && <> · {a.requisito}</>}
-            {a.fecha_limite && <> · límite {fmtDate(a.fecha_limite)}</>}
-            {a.efecto && <p>{textoEfectoAccion(a.efecto)}</p>}
-            {a.genera_alerta_cierta && <em> Genera alerta cierta</em>}
-            {a.ocs_afectadas?.length > 0 && (
-              <p>OCs: {a.ocs_afectadas.map(o => String((o as { clave_origen?: string }).clave_origen || '')).filter(Boolean).join(', ')}</p>
-            )}
-          </li>
-        ))}
-      </ul>
-      <PaginationControls offset={offset} limit={PAGE_SIZE} total={query.data?.total ?? 0} onOffsetChange={n => setParams(p => { p.set('offset', String(n)); return p; })} />
+      {query.loading ? (
+        <LoadingState />
+      ) : query.error ? (
+        <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />
+      ) : (
+        <>
+          <ul className="panel">
+            {items.map((a: Accion, i) => (
+              <li key={`${a.legajo_id}-${a.requisito}-${i}`}>
+                <strong>{a.accion_sugerida}</strong> — {a.legajo_nombre} ({a.tipo_sujeto})
+                {a.requisito && <> · {a.requisito}</>}
+                {a.fecha_limite && <> · límite {fmtDate(a.fecha_limite)}</>}
+                {a.efecto && <p>{textoEfectoAccion(a.efecto)}</p>}
+                {a.genera_alerta_cierta && <em> Genera alerta cierta</em>}
+                {a.ocs_afectadas?.length > 0 && (
+                  <p>OCs: {a.ocs_afectadas.map(o => String((o as { clave_origen?: string }).clave_origen || '')).filter(Boolean).join(', ')}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+          <PaginationControls offset={offset} limit={PAGE_SIZE} total={query.data?.total ?? 0} onOffsetChange={n => setParams(p => { p.set('offset', String(n)); return p; })} />
+        </>
+      )}
     </div>
   );
 }
