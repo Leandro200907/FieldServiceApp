@@ -21,15 +21,15 @@ def _nombre_base() -> str | None:
     return url.rsplit("/", 1)[-1].split("?")[0]
 
 
-def _requiere_demo():
+def _exigir_base_demo_tests():
     nb = _nombre_base()
     if not nb or not nb.endswith("_demo"):
-        pytest.skip("DATABASE_URL debe apuntar a una base que termine en _demo")
+        pytest.fail("DATABASE_URL debe apuntar a una base que termine en _demo (job Pytest sembrado demo en CI)")
 
 
 @pytest.fixture(scope="module")
 def demo_sembrado():
-    _requiere_demo()
+    _exigir_base_demo_tests()
     env = os.environ.copy()
     env.setdefault("DEMO_PASSWORD", "demo-secreto-12")
     r = subprocess.run(
@@ -62,7 +62,7 @@ def test_aborta_si_urls_distintas(monkeypatch):
 
 
 def test_cantidades_demo(demo_sembrado):
-    _requiere_demo()
+    _exigir_base_demo_tests()
     from app.db import platform_session
 
     slugs = ("patagonia-demo", "anelo-demo", "neuquen-demo")
@@ -100,25 +100,28 @@ def test_cantidades_demo(demo_sembrado):
 
 
 def test_aislamiento_entre_tenants(demo_sembrado):
-    _requiere_demo()
+    _exigir_base_demo_tests()
     from app.db import platform_session
 
+    slugs = ("patagonia-demo", "anelo-demo")
+    ids: list[tuple[str, str]] = []
     with platform_session() as ps:
-        filas = ps.execute(
-            text("SELECT slug, tenant_id::text FROM modulo1.tenant WHERE slug LIKE '%-demo' ORDER BY slug")
-        ).all()
-    assert len(filas) >= 2
-    tid_a, tid_b = filas[0][1], filas[1][1]
+        for slug in slugs:
+            tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+            assert tid is not None
+            ids.append((slug, str(tid)))
+    tid_a = ids[0][1]
+    slug_b = ids[1][0]
     with tenant_session(tid_a) as s:
         n_b = s.execute(
             text("SELECT count(*) FROM modulo1.usuario WHERE tenant_id = :t AND email LIKE :p"),
-            {"t": tid_a, "p": f"%@{filas[1][0]}.demo.test"},
+            {"t": tid_a, "p": f"%@{slug_b}.demo.test"},
         ).scalar()
         assert n_b == 0
 
 
 def test_reset_idempotente_en_cantidades(demo_sembrado):
-    _requiere_demo()
+    _exigir_base_demo_tests()
     env = os.environ.copy()
     env.setdefault("DEMO_PASSWORD", "demo-secreto-12")
     r2 = subprocess.run(

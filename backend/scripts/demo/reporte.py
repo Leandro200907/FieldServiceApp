@@ -14,14 +14,16 @@ PANTALLA_INICIO = {
 
 def imprimir_tabla_usuarios(estados: list[EstadoTenant]) -> None:
     print("\n=== Usuarios demo (contraseña no se imprime) ===")
-    print(f"{'Empresa':<22} {'Email':<42} {'Rol':<22} {'Inicio'}")
+    print(f"{'Empresa':<22} {'Email':<42} {'Rol':<22} {'Inicio / notas'}")
     print("-" * 110)
     for est in estados:
         for u in sorted(est.usuarios, key=lambda x: (x.rol, x.email)):
             if not u.activo:
                 continue
             inicio = PANTALLA_INICIO.get(u.rol, "perfil")
-            print(f"{est.spec.slug:<22} {u.email:<42} {u.rol:<22} /{inicio}")
+            extra = est.notas_supervisor.get(u.email, "")
+            col = f"/{inicio}" + (f" — {extra}" if extra else "")
+            print(f"{est.spec.slug:<22} {u.email:<42} {u.rol:<22} {col}")
 
 
 def imprimir_paquetes(estados: list[EstadoTenant]) -> None:

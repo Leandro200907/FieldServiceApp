@@ -526,19 +526,33 @@ def asignar_supervisores(est: EstadoTenant, ctx: SemillaContext) -> None:
         ctx.saltados.append("asignar_supervisor: función no disponible")
         return
     idn = est.idn("responsable_legajos", 1)
-    sup = est.uid("supervisor", 1).usuario_id
+    sup1 = est.uid("supervisor", 1)
+    sup2 = est.uid("supervisor", 2)
+    sup3 = est.uid("supervisor", 3)
     hoy = hoy_tenant(est.tenant_id)
     with tenant_session(est.tenant_id) as s:
-        for n in (1, 2, 3):
+        for n in (1, 2):
             legajos.asignar_supervisor(
                 s,
                 idn,
                 leg_esq.AsignarSupervisor(
                     sujeto_id=est.sujetos[f"tecnico{n}"],
-                    supervisor_usuario_id=uuid.UUID(sup),
+                    supervisor_usuario_id=uuid.UUID(sup1.usuario_id),
                     desde=hoy,
                 ),
             )
+        legajos.asignar_supervisor(
+            s,
+            idn,
+            leg_esq.AsignarSupervisor(
+                sujeto_id=est.sujetos["tecnico3"],
+                supervisor_usuario_id=uuid.UUID(sup2.usuario_id),
+                desde=hoy,
+            ),
+        )
+    est.notas_supervisor[sup1.email] = "supervisión: técnico1, técnico2"
+    est.notas_supervisor[sup2.email] = "supervisión: técnico3"
+    est.notas_supervisor[sup3.email] = "sin asignaciones (vacío a propósito)"
 
 
 def configurar_alertas_y_paquetes(est: EstadoTenant, ctx: SemillaContext) -> None:

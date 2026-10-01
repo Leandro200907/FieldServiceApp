@@ -2,7 +2,7 @@
 
 Uso (desde backend/, con ENV_FILE apuntando a .env de fsm_demo):
 
-    python scripts/sembrar_demo.py [--reset] [--importar-planillas] [--con-drive]
+    python scripts/sembrar_demo.py [--reset] [--importar-planillas]
 
 La contraseña de usuarios demo: variable DEMO_PASSWORD o prompt getpass (nunca argv).
 """
@@ -80,11 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Sembrado de datos demo (_demo)")
     parser.add_argument("--reset", action="store_true", help="Recrea la base _demo y storage de tenants demo")
     parser.add_argument("--importar-planillas", action="store_true", help="Importa presentaciones_1/2 y oc.xlsx")
-    parser.add_argument("--con-drive", action="store_true", help="Proveedor Drive local (commit aparte; no-op si falta)")
     args = parser.parse_args(argv)
-
-    if args.con_drive:
-        print("Aviso: --con-drive pendiente de commit del proveedor local_demo", file=sys.stderr)
 
     dsn_app, dsn_owner, nombre_base = exigir_base_demo()
     slugs = [t.slug for t in TENANTS]

@@ -40,6 +40,7 @@ class EstadoTenant:
     ocs: dict[str, str] = field(default_factory=dict)  # escenario → oc_id
     paquete_vigente_url: str | None = None
     alerta_id: str | None = None
+    notas_supervisor: dict[str, str] = field(default_factory=dict)  # email supervisor → nota en tabla final
 
     def uid(self, rol: str, n: int) -> UsuarioDemo:
         for u in self.usuarios:

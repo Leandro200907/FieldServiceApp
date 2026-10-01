@@ -54,10 +54,29 @@ jobs:
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 \
             -v db=modulo1_ci \
             -f scripts/crear_base.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 \
+            -v db=modulo1_ci_demo \
+            -f scripts/crear_base.sql
       - name: Alembic upgrade head
         run: python -m alembic upgrade head
-      - name: Pytest (suite completa)
-        run: python -m pytest -q
+      - name: Alembic upgrade head (base demo CI)
+        env:
+          DATABASE_URL_MIGRATIONS: postgresql+psycopg://modulo1_owner:modulo1_owner_ci_secret_12@localhost:5432/modulo1_ci_demo
+        run: python -m alembic upgrade head
+      - name: Pytest (suite completa, sin sembrado demo)
+        run: python -m pytest -q --ignore=tests/test_sembrar_demo.py
+      - name: Sembrado demo (corrida completa, logs)
+        env:
+          DATABASE_URL: postgresql+psycopg://modulo1_app:modulo1_app_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DATABASE_URL_MIGRATIONS: postgresql+psycopg://modulo1_owner:modulo1_owner_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DEMO_PASSWORD: demo-secreto-12
+        run: python scripts/sembrar_demo.py --reset --importar-planillas
+      - name: Pytest (sembrado demo en modulo1_ci_demo)
+        env:
+          DATABASE_URL: postgresql+psycopg://modulo1_app:modulo1_app_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DATABASE_URL_MIGRATIONS: postgresql+psycopg://modulo1_owner:modulo1_owner_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DEMO_PASSWORD: demo-secreto-12
+        run: python -m pytest tests/test_sembrar_demo.py -q
 
   frontend:
     runs-on: ubuntu-latest
