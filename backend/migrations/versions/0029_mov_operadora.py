@@ -50,7 +50,14 @@ def upgrade() -> None:
         "(tenant_id, documento_id, paso_en DESC)"
     )
 
-    op.execute("ALTER TABLE modulo1.movimiento_entrega_operadora NO FORCE ROW LEVEL SECURITY")
+    _tablas_fk = (
+        "documento",
+        "legajo",
+        "operadora_documental",
+        "definicion_requisito",
+    )
+    for tabla in _tablas_fk:
+        op.execute(f"ALTER TABLE modulo1.{tabla} NO FORCE ROW LEVEL SECURITY")
 
     op.execute("""
         INSERT INTO modulo1.movimiento_entrega_operadora (
@@ -106,6 +113,9 @@ def upgrade() -> None:
               AND m.operadora_id = ent.operadora_id
         )
     """)
+
+    for tabla in _tablas_fk:
+        op.execute(f"ALTER TABLE modulo1.{tabla} FORCE ROW LEVEL SECURITY")
 
     op.execute("ALTER TABLE modulo1.movimiento_entrega_operadora ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE modulo1.movimiento_entrega_operadora FORCE ROW LEVEL SECURITY")
