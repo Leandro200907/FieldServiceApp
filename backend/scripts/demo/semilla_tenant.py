@@ -375,8 +375,8 @@ def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
 # Un solo flujo preparar → PUT → confirmar por documento (sin re-subir el mismo doc).
 _EVIDENCIAS_RESERVADAS = frozenset(
     {
-        "t1_vigente_Apto médico",
-        "t2_vigente_Apto médico",
+        "t1_por_vencer_Licencia de conducir",
+        "t2_por_vencer_Licencia de conducir",
         "t1_vencido_Constancia ART",
         "t2_vencido_Constancia ART",
     }
@@ -443,7 +443,7 @@ def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
     """Dos evidencias confirmadas con validación pendiente (después del worker en sembrar_demo)."""
     idn = est.idn("responsable_legajos", 1)
     with tenant_session(est.tenant_id) as s:
-        for key in ("t1_vigente_Apto médico", "t2_vigente_Apto médico"):
+        for key in ("t1_por_vencer_Licencia de conducir", "t2_por_vencer_Licencia de conducir"):
             if key not in est.documentos:
                 continue
             doc = est.documentos[key]
@@ -470,7 +470,7 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     "sujeto_id": suj,
                     "requisito_definicion_id": req,
                     "vigente_desde": v1.isoformat(),
-                    "vigente_hasta": (v2 + timedelta(days=i)).isoformat(),
+                    "vigente_hasta": (v2 + timedelta(days=i + 1)).isoformat(),
                 }
             )
         legajos.importar_lote(s, idn, leg_esq.ImportarLote(lote_id=lote_ok, filas=filas))
