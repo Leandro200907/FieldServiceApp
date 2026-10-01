@@ -984,6 +984,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/consultas/espejo_operadora": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Espejo Operadora */
+        get: operations["espejo_operadora_v1_consultas_espejo_operadora_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/consultas/exportar_legajo": {
         parameters: {
             query?: never;
@@ -1010,6 +1027,23 @@ export interface paths {
         };
         /** Historial Alertas */
         get: operations["historial_alertas_v1_consultas_historial_alertas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/consultas/historial_operadora": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historial Operadora */
+        get: operations["historial_operadora_v1_consultas_historial_operadora_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2705,6 +2739,49 @@ export interface components {
             /** Ya Vistos */
             ya_vistos: number;
         };
+        /** EspejoOperadoraItem */
+        EspejoOperadoraItem: {
+            /** Alerta Id */
+            alerta_id: string | null;
+            /** Documento Vigente Id */
+            documento_vigente_id: string;
+            /** Estado Operadora */
+            estado_operadora: string;
+            /** Identificador Natural */
+            identificador_natural: string;
+            /** Motivo */
+            motivo: string;
+            /** Operadora */
+            operadora: string;
+            /** Operadora Id */
+            operadora_id: string;
+            /** Requisito */
+            requisito: string;
+            /** Requisito Definicion Id */
+            requisito_definicion_id: string;
+            /** Sujeto Id */
+            sujeto_id: string;
+            /** Tipo Sujeto */
+            tipo_sujeto: string;
+            /** Ultimo Documento Operadora Id */
+            ultimo_documento_operadora_id: string | null;
+            /**
+             * Ultimo Movimiento En
+             * Format: date-time
+             */
+            ultimo_movimiento_en: string;
+        };
+        /** EspejoOperadoraResponse */
+        EspejoOperadoraResponse: {
+            /** Items */
+            items: components["schemas"]["EspejoOperadoraItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** EventoAlerta */
         EventoAlerta: {
             /**
@@ -2833,6 +2910,17 @@ export interface components {
             offset: number;
             /** Total */
             total: number;
+        };
+        /** HistorialOperadoraResponse */
+        HistorialOperadoraResponse: {
+            /** Operadora Id */
+            operadora_id: string;
+            /** Requisito Definicion Id */
+            requisito_definicion_id: string;
+            /** Sujeto Id */
+            sujeto_id: string;
+            /** Versiones */
+            versiones: components["schemas"]["VersionHistorialOperadora"][];
         };
         /** HistorialScore */
         HistorialScore: {
@@ -3445,6 +3533,27 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /** PasoHistorialOperadora */
+        PasoHistorialOperadora: {
+            /** Estado */
+            estado: string;
+            /** Fuente Archivo */
+            fuente_archivo: string | null;
+            /** Fuente Fila */
+            fuente_fila: number | null;
+            /** Fuente Hoja */
+            fuente_hoja: string | null;
+            /** Observacion */
+            observacion: string | null;
+            /** Origen */
+            origen: string;
+            /** Paso En */
+            paso_en: string;
+            /** Registrado Nombre */
+            registrado_nombre: string;
+            /** Registrado Por */
+            registrado_por: string;
         };
         /** PeorSujetoScore */
         PeorSujetoScore: {
@@ -4119,6 +4228,17 @@ export interface components {
             version: number;
             /** Vigente Hasta */
             vigente_hasta: string | null;
+        };
+        /** VersionHistorialOperadora */
+        VersionHistorialOperadora: {
+            /** Documento Id */
+            documento_id: string;
+            /** Pasos */
+            pasos: components["schemas"]["PasoHistorialOperadora"][];
+            /** Vigente Desde */
+            vigente_desde: string;
+            /** Vigente Hasta */
+            vigente_hasta: string;
         };
         /** VincularTelegramBody */
         VincularTelegramBody: {
@@ -8723,6 +8843,91 @@ export interface operations {
             };
         };
     };
+    espejo_operadora_v1_consultas_espejo_operadora_get: {
+        parameters: {
+            query?: {
+                operadora_id?: string[] | null;
+                requisito_definicion_id?: string[] | null;
+                tipo_sujeto?: ("persona" | "vehiculo" | "equipo" | "empresa") | null;
+                q?: string | null;
+                estado_operadora?: ("pendiente_envio" | "pendiente_aceptacion" | "rechazado" | "al_dia")[] | null;
+                movimiento_desde?: string | null;
+                movimiento_hasta?: string | null;
+                mes?: string | null;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EspejoOperadoraResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     exportar_legajo_v1_consultas_exportar_legajo_post: {
         parameters: {
             query: {
@@ -8820,6 +9025,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistorialAlertasResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    historial_operadora_v1_consultas_historial_operadora_get: {
+        parameters: {
+            query: {
+                operadora_id: string;
+                sujeto_id: string;
+                requisito_definicion_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistorialOperadoraResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */

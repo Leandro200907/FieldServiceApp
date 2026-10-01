@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ApiFailure, safeFailure, session } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
@@ -8,24 +9,65 @@ import { PAGE_SIZE, PaginationControls } from '../documentation-planning/Paginat
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isVencimientosIntegrated, vencimientosAccess } from './access';
 import type { ImportarPlanillaOperadorasResponse } from './contracts';
+import { HistorialOperadoraPanel } from './HistorialOperadoraPanel';
 import '../documentation-planning/planning.css';
 import './importacion.css';
 
 const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };
 const DIAS_OPTIONS = [7, 15, 30, 60, 90];
+const ESTADO_ESPEJO_LABELS: Record<string, string> = {
+  pendiente_envio: 'Pendiente de envío',
+  pendiente_aceptacion: 'Pendiente de aceptación',
+  rechazado: 'Rechazado',
+  al_dia: 'Al día',
+};
+
+type HistorialTarget = { operadoraId: string; sujetoId: string; requisitoDefinicionId: string };
 
 export function VencimientosScreen() {
+  const [params, setParams] = useSearchParams();
   const [dias, setDias] = useState(30);
   const [offset, setOffset] = useState(0);
+  const [espejoOffset, setEspejoOffset] = useState(Number(params.get('espejo_offset') || 0));
   const [importRevision, setImportRevision] = useState(0);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [importando, setImportando] = useState(false);
   const [resultadoImportacion, setResultadoImportacion] = useState<ImportarPlanillaOperadorasResponse | null>(null);
   const [errorImportacion, setErrorImportacion] = useState<ReturnType<typeof safeFailure> | null>(null);
+  const [historial, setHistorial] = useState<HistorialTarget | null>(null);
+
+  const espejoQuery = useMemo(() => ({
+    offset: espejoOffset,
+    limit: PAGE_SIZE,
+    operadora_id: params.getAll('operadora_id'),
+    requisito_definicion_id: params.getAll('requisito_definicion_id'),
+    tipo_sujeto: (params.get('tipo_sujeto') || undefined) as 'persona' | 'vehiculo' | 'equipo' | 'empresa' | undefined,
+    q: params.get('q') || undefined,
+    estado_operadora: params.getAll('estado_operadora') as ('pendiente_envio' | 'pendiente_aceptacion' | 'rechazado' | 'al_dia')[],
+    movimiento_desde: params.get('movimiento_desde') || undefined,
+    movimiento_hasta: params.get('movimiento_hasta') || undefined,
+    mes: params.get('mes') || undefined,
+  }), [params, espejoOffset]);
+
   const tablero = usePrototypeRead(() => vencimientosAccess().readTableroVencimientos({ dias, offset, limit: PAGE_SIZE }), [dias, offset]);
-  const alertasOperadora = usePrototypeRead(() => vencimientosAccess().readAlertasOperadora({ offset: 0, limit: PAGE_SIZE }), [importRevision]);
+  const espejo = usePrototypeRead(() => vencimientosAccess().readEspejoOperadora(espejoQuery), [espejoQuery, importRevision]);
   const integrated = isVencimientosIntegrated();
   const puedeImportar = session.getSnapshot().identity?.roles.includes('responsable_legajos') ?? false;
+
+  const operadoraOpts = useMemo(() => {
+    const map = new Map<string, string>();
+    espejo.data?.items.forEach(item => map.set(item.operadora_id, item.operadora));
+    return [...map.entries()].map(([operadora_id, nombre]) => ({ operadora_id, nombre }));
+  }, [espejo.data?.items]);
+
+  function patchParams(update: (p: URLSearchParams) => void) {
+    const next = new URLSearchParams(params);
+    update(next);
+    next.delete('espejo_offset');
+    setEspejoOffset(0);
+    setParams(next);
+  }
+
   async function importar() {
     if (!archivo || importando) return;
     setImportando(true); setResultadoImportacion(null); setErrorImportacion(null);
@@ -35,6 +77,7 @@ export function VencimientosScreen() {
     } catch (error) { setErrorImportacion(safeFailure(error)); }
     finally { setImportando(false); }
   }
+
   return <>
     {integrated
       ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Tablero de vencimientos</strong><p>Evidencia vigente que vence dentro de la ventana elegida, o ya vencida.</p></div></div>
@@ -48,17 +91,54 @@ export function VencimientosScreen() {
       {errorImportacion && <ErrorState message={errorImportacion.message} requestId={errorImportacion.referenceSource === 'server' ? errorImportacion.requestId : undefined} />}
     </section>}
     <section className="panel">
-      <div className="panel-top"><div><p className="eyebrow">Espejo por operadora</p><h3>Actualizaciones documentales pendientes</h3></div>{alertasOperadora.data && <Badge tone={alertasOperadora.data.total > 0 ? 'warning' : 'accent'}>{alertasOperadora.data.total} pendiente{alertasOperadora.data.total === 1 ? '' : 's'}</Badge>}</div>
+      <div className="panel-top"><div><p className="eyebrow">Espejo por operadora</p><h3>Actualizaciones documentales pendientes</h3></div>{espejo.data && <Badge tone={espejo.data.total > 0 ? 'warning' : 'accent'}>{espejo.data.total} fila{espejo.data.total === 1 ? '' : 's'}</Badge>}</div>
       <p className="muted">Compara la versión vigente del legajo con la última versión registrada ante cada operadora.</p>
-      {alertasOperadora.loading ? <LoadingState /> : alertasOperadora.error ? <ErrorState message={alertasOperadora.error.message} requestId={alertasOperadora.error instanceof ApiFailure && alertasOperadora.error.detail.referenceSource === 'server' ? alertasOperadora.error.detail.requestId : undefined} /> : alertasOperadora.data?.items.length ?
-        <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Legajo</th><th>Documento</th><th>Operadora</th><th>Estado</th><th>Acción requerida</th></tr></thead><tbody>
-          {alertasOperadora.data.items.map(item => <tr key={item.alerta_id}>
-            <td><strong>{item.identificador_natural}</strong></td><td>{item.requisito}</td><td>{item.operadora}</td>
-            <td><Badge tone="warning">{{ pendiente_envio: 'Pendiente de envío', pendiente_aceptacion: 'Pendiente de aceptación', rechazado: 'Rechazado' }[item.estado] || item.estado}</Badge></td>
+      <div className="planning-toolbar espejo-filters">
+        <label>Recurso<input value={params.get('q') || ''} placeholder="Nombre o identificador" onChange={e => patchParams(p => { if (e.target.value) p.set('q', e.target.value); else p.delete('q'); })} /></label>
+        <label>Tipo<select value={params.get('tipo_sujeto') || ''} onChange={e => patchParams(p => { if (e.target.value) p.set('tipo_sujeto', e.target.value); else p.delete('tipo_sujeto'); })}>
+          <option value="">Todos</option>
+          <option value="persona">Persona</option>
+          <option value="vehiculo">Vehículo</option>
+          <option value="equipo">Equipo</option>
+          <option value="empresa">Empresa</option>
+        </select></label>
+        <label>Desde<input type="date" value={params.get('movimiento_desde') || ''} onChange={e => patchParams(p => { if (e.target.value) p.set('movimiento_desde', e.target.value); else p.delete('movimiento_desde'); p.delete('mes'); })} /></label>
+        <label>Hasta<input type="date" value={params.get('movimiento_hasta') || ''} onChange={e => patchParams(p => { if (e.target.value) p.set('movimiento_hasta', e.target.value); else p.delete('movimiento_hasta'); p.delete('mes'); })} /></label>
+        <label>Mes<input type="month" value={params.get('mes') || ''} onChange={e => patchParams(p => { if (e.target.value) { p.set('mes', e.target.value); p.delete('movimiento_desde'); p.delete('movimiento_hasta'); } else p.delete('mes'); })} /></label>
+      </div>
+      <div className="espejo-filter-chips">
+        {(['pendiente_envio', 'pendiente_aceptacion', 'rechazado', 'al_dia'] as const).map(estado => (
+          <label key={estado}><input type="checkbox" checked={params.getAll('estado_operadora').includes(estado)} onChange={() => patchParams(p => {
+            const cur = p.getAll('estado_operadora');
+            p.delete('estado_operadora');
+            if (cur.includes(estado)) cur.filter(x => x !== estado).forEach(x => p.append('estado_operadora', x));
+            else [...cur, estado].forEach(x => p.append('estado_operadora', x));
+          })} /> {ESTADO_ESPEJO_LABELS[estado]}</label>
+        ))}
+      </div>
+      {operadoraOpts.length > 0 && <div className="espejo-filter-chips">
+        {operadoraOpts.map(o => (
+          <label key={o.operadora_id}><input type="checkbox" checked={params.getAll('operadora_id').includes(o.operadora_id)} onChange={() => patchParams(p => {
+            const cur = p.getAll('operadora_id');
+            p.delete('operadora_id');
+            if (cur.includes(o.operadora_id)) cur.filter(x => x !== o.operadora_id).forEach(x => p.append('operadora_id', x));
+            else [...cur, o.operadora_id].forEach(x => p.append('operadora_id', x));
+          })} /> {o.nombre}</label>
+        ))}
+      </div>}
+      {espejo.loading ? <LoadingState /> : espejo.error ? <ErrorState message={espejo.error.message} requestId={espejo.error instanceof ApiFailure && espejo.error.detail.referenceSource === 'server' ? espejo.error.detail.requestId : undefined} /> : espejo.data?.items.length ?
+        <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Legajo</th><th>Documento</th><th>Operadora</th><th>Estado</th><th>Acción requerida</th><th></th></tr></thead><tbody>
+          {espejo.data.items.map(item => <tr key={`${item.sujeto_id}-${item.requisito_definicion_id}-${item.operadora_id}`}>
+            <td><strong>{item.identificador_natural}</strong><span className="muted"> · {item.tipo_sujeto}</span></td>
+            <td>{item.requisito}</td><td>{item.operadora}</td>
+            <td><Badge tone={item.estado_operadora === 'al_dia' ? 'accent' : 'warning'}>{ESTADO_ESPEJO_LABELS[item.estado_operadora] || item.estado_operadora}</Badge></td>
             <td>{item.motivo}</td>
+            <td><button type="button" className="button button-secondary" onClick={() => setHistorial({ operadoraId: item.operadora_id, sujetoId: item.sujeto_id, requisitoDefinicionId: item.requisito_definicion_id })}>Ver historial</button></td>
           </tr>)}
-        </tbody></table></div> : <p className="empty-inline">Todas las operadoras registradas tienen la versión documental vigente.</p>}
+        </tbody></table></div> : <p className="empty-inline">Sin filas para los filtros actuales.</p>}
+      {espejo.data && <PaginationControls offset={espejo.data.offset} limit={espejo.data.limit} total={espejo.data.total} onOffsetChange={setEspejoOffset} />}
     </section>
+    {historial && <HistorialOperadoraPanel {...historial} onClose={() => setHistorial(null)} />}
     <div className="planning-toolbar">
       <div><p className="eyebrow">Ventana</p><div className="orientation-tabs">{DIAS_OPTIONS.map(option => <button key={option} type="button" className={option === dias ? 'active' : ''} onClick={() => { setDias(option); setOffset(0); }}>{option} días</button>)}</div></div>
       {tablero.data && <div><p className="eyebrow">Hoy</p><strong>{tablero.data.hoy}</strong></div>}
@@ -82,5 +162,3 @@ export function VencimientosScreen() {
     </>}
   </>;
 }
-
-
