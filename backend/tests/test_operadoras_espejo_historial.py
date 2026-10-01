@@ -15,16 +15,21 @@ def test_historial_dos_versiones_cinco_pasos_en_orden(cliente_api, tenant_de_pru
     sujeto = _alta_persona(cliente_api, t, "historial espejo")
     v1 = _cargar(cliente_api, t, sujeto, req, desde="2026-01-01", hasta="2026-06-30")
     _registrar(cliente_api, t, sujeto_id=sujeto, documento_id=v1["documento_id"], estado="enviado",
-               exportado_en="2026-01-02T08:00:00Z", enviado_en="2026-01-02T09:00:00Z")
+               exportado_en="2026-01-02T08:00:00Z", enviado_en="2026-01-02T09:00:00Z", fuente_fila=10)
     _registrar(cliente_api, t, sujeto_id=sujeto, documento_id=v1["documento_id"], estado="rechazado",
-               rechazado_en="2026-01-03T10:00:00Z")
+               rechazado_en="2026-01-03T10:00:00Z", fuente_fila=11)
     _registrar(cliente_api, t, sujeto_id=sujeto, documento_id=v1["documento_id"], estado="enviado",
-               enviado_en="2026-01-04T09:00:00Z")
+               exportado_en="2026-01-04T08:00:00Z", enviado_en="2026-01-04T09:00:00Z", fuente_fila=12)
     v2 = _cargar(cliente_api, t, sujeto, req, desde="2026-07-01", hasta="2027-06-30")
-    _registrar(cliente_api, t, sujeto_id=sujeto, documento_id=v2["documento_id"], estado="enviado",
-               enviado_en="2026-07-02T09:00:00Z")
-    _registrar(cliente_api, t, sujeto_id=sujeto, documento_id=v2["documento_id"], estado="aceptado",
-               aceptado_en="2026-07-03T11:00:00Z")
+    assert v2["documento_id"] != v1["documento_id"]
+    _registrar(
+        cliente_api, t, sujeto_id=sujeto, documento_id=v2["documento_id"], estado="enviado",
+        exportado_en="2026-07-02T08:00:00Z", enviado_en="2026-07-02T09:00:00Z", fuente_fila=20,
+    )
+    _registrar(
+        cliente_api, t, sujeto_id=sujeto, documento_id=v2["documento_id"], estado="aceptado",
+        enviado_en="2026-07-02T09:00:00Z", aceptado_en="2026-07-03T11:00:00Z", fuente_fila=21,
+    )
 
     with tenant_session(t.tenant_id) as session:
         operadora_id = session.execute(text(
@@ -42,8 +47,16 @@ def test_historial_dos_versiones_cinco_pasos_en_orden(cliente_api, tenant_de_pru
     assert resp.status_code == 200
     versiones = resp.json()["versiones"]
     assert len(versiones) == 2
-    pasos = [p["estado"] for v in versiones for p in v["pasos"]]
-    assert pasos == ["enviado", "rechazado", "enviado", "enviado", "aceptado"]
+    por_doc = {v["documento_id"]: [p["estado"] for p in v["pasos"]] for v in versiones}
+    assert por_doc[v2["documento_id"]] == ["enviado", "aceptado"]
+    assert por_doc[v1["documento_id"]] == ["enviado", "rechazado", "enviado"]
+    assert versiones[0]["documento_id"] == v2["documento_id"]
+    with tenant_session(t.tenant_id) as session:
+        total = session.execute(
+            text("SELECT count(*) FROM modulo1.movimiento_entrega_operadora WHERE sujeto_id = :s"),
+            {"s": sujeto},
+        ).scalar_one()
+    assert total == 5
 
 
 def test_filtros_espejo_operadora_y_supervisor(cliente_api, tenant_de_prueba):
