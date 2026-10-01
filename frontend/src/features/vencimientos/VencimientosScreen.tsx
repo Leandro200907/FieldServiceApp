@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiFailure, safeFailure, session } from '../../api';
+import { formatFecha } from '../documentation-planning/dates';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import { deriveVisualState } from '../documentation-planning/contracts';
@@ -11,6 +12,7 @@ import { isVencimientosIntegrated, vencimientosAccess } from './access';
 import type { ImportarPlanillaOperadorasResponse } from './contracts';
 import { HistorialOperadoraPanel } from './HistorialOperadoraPanel';
 import '../documentation-planning/planning.css';
+import { buildOperadoraFilterOpts, erroresDesdeImportacion, etiquetaFilaImportacion, toggleSearchListParam } from './importacionUi';
 import './importacion.css';
 
 const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };
@@ -49,16 +51,43 @@ export function VencimientosScreen() {
     mes: params.get('mes') || undefined,
   }), [params, espejoOffset]);
 
+  const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const tablero = usePrototypeRead(() => vencimientosAccess().readTableroVencimientos({ dias, offset, limit: PAGE_SIZE }), [dias, offset]);
   const espejo = usePrototypeRead(() => vencimientosAccess().readEspejoOperadora(espejoQuery), [espejoQuery, importRevision]);
+  const catalogos = usePrototypeRead(async () => {
+    if (!isVencimientosIntegrated()) return { operadoras: [] as { operadora_id: string; nombre: string }[], definiciones: [] as { requisito_definicion_id: string; nombre: string }[] };
+    const [ops, defs] = await Promise.all([
+      session.client.GET('/v1/consultas/catalogos_oc'),
+      session.client.GET('/v1/consultas/definiciones_requisito', { params: { query: { offset: 0, limit: 500 } } }),
+    ]);
+    if (ops.error || !ops.response.ok) throw new Error('No se pudo cargar el catálogo de operadoras');
+    if (defs.error || !defs.response.ok) throw new Error('No se pudo cargar el catálogo de documentos');
+    return {
+      operadoras: (ops.data?.operadoras ?? []).map(o => ({ operadora_id: String(o.operadora_id), nombre: String(o.nombre) })),
+      definiciones: (defs.data?.items ?? []).map(item => ({ requisito_definicion_id: item.requisito_definicion_id, nombre: item.nombre })),
+    };
+  }, [importRevision]);
   const integrated = isVencimientosIntegrated();
   const puedeImportar = session.getSnapshot().identity?.roles.includes('responsable_legajos') ?? false;
+  const erroresPlanilla = errorImportacion ? erroresDesdeImportacion(errorImportacion) : [];
 
   const operadoraOpts = useMemo(() => {
-    const map = new Map<string, string>();
-    espejo.data?.items.forEach(item => map.set(item.operadora_id, item.operadora));
-    return [...map.entries()].map(([operadora_id, nombre]) => ({ operadora_id, nombre }));
-  }, [espejo.data?.items]);
+    const respaldo = new Map<string, string>();
+    espejo.data?.items.forEach(item => respaldo.set(item.operadora_id, item.operadora));
+    return buildOperadoraFilterOpts(catalogos.data?.operadoras ?? [], params.getAll('operadora_id'), respaldo);
+  }, [catalogos.data?.operadoras, espejo.data?.items, params]);
+
+  const requisitoOpts = useMemo(() => {
+    const map = new Map((catalogos.data?.definiciones ?? []).map(d => [d.requisito_definicion_id, d.nombre]));
+    params.getAll('requisito_definicion_id').forEach(id => {
+      if (!map.has(id)) {
+        const hit = espejo.data?.items.find(item => item.requisito_definicion_id === id);
+        if (hit) map.set(id, hit.requisito);
+      }
+    });
+    return [...map.entries()].map(([requisito_definicion_id, nombre]) => ({ requisito_definicion_id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  }, [catalogos.data?.definiciones, espejo.data?.items, params]);
 
   function patchParams(update: (p: URLSearchParams) => void) {
     const next = new URLSearchParams(params);
@@ -87,8 +116,11 @@ export function VencimientosScreen() {
       <div className="panel-top"><div><p className="eyebrow">Fuente controlada</p><h3>Importar presentaciones de operadoras</h3></div><Badge>Excel estándar</Badge></div>
       <p className="muted">Carga la hoja <strong>Presentaciones</strong>. Cada fila actualiza sólo el espejo de una operadora; no crea ni reemplaza documentos del legajo.</p>
       <div className="import-actions"><a className="button button-secondary" href="/Plantilla_presentaciones_operadoras.xlsx" download>Descargar plantilla</a><input aria-label="Planilla de presentaciones" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event => { setArchivo(event.target.files?.[0] ?? null); setResultadoImportacion(null); setErrorImportacion(null); }} /><button className="button button-primary" type="button" disabled={!archivo || importando} onClick={() => { void importar(); }}>{importando ? 'Importando…' : 'Importar planilla'}</button></div>
-      {resultadoImportacion && <div className="import-result" role="status"><strong>{resultadoImportacion.filas_aceptadas} fila{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'} aplicada{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'}</strong><span>{resultadoImportacion.filas_rechazadas} rechazada{resultadoImportacion.filas_rechazadas === 1 ? '' : 's'}.</span>{resultadoImportacion.errores.length > 0 && <ul>{resultadoImportacion.errores.map(error => <li key={error.fila}>Fila {error.fila}: {error.mensaje}</li>)}</ul>}</div>}
-      {errorImportacion && <ErrorState message={errorImportacion.message} requestId={errorImportacion.referenceSource === 'server' ? errorImportacion.requestId : undefined} />}
+      {resultadoImportacion && <div className="import-result" role="status"><strong>{resultadoImportacion.filas_aceptadas} fila{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'} aplicada{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'}</strong><span>{resultadoImportacion.filas_rechazadas} rechazada{resultadoImportacion.filas_rechazadas === 1 ? '' : 's'}.</span>{resultadoImportacion.errores.length > 0 && <ul>{resultadoImportacion.errores.map((error, index) => <li key={`${error.fila ?? 'n'}-${index}`}>{etiquetaFilaImportacion(error.fila)}: {error.mensaje}</li>)}</ul>}</div>}
+      {errorImportacion && <>
+        <ErrorState message={errorImportacion.message} requestId={errorImportacion.referenceSource === 'server' ? errorImportacion.requestId : undefined} />
+        {erroresPlanilla.length > 0 && <ul className="import-result">{erroresPlanilla.map((error, index) => <li key={`${error.fila ?? 'n'}-${index}`}>{etiquetaFilaImportacion(error.fila)}: {error.mensaje}</li>)}</ul>}
+      </>}
     </section>}
     <section className="panel">
       <div className="panel-top"><div><p className="eyebrow">Espejo por operadora</p><h3>Actualizaciones documentales pendientes</h3></div>{espejo.data && <Badge tone={espejo.data.total > 0 ? 'warning' : 'accent'}>{espejo.data.total} fila{espejo.data.total === 1 ? '' : 's'}</Badge>}</div>
@@ -105,6 +137,13 @@ export function VencimientosScreen() {
         <label>Desde<input type="date" value={params.get('movimiento_desde') || ''} onChange={e => patchParams(p => { if (e.target.value) p.set('movimiento_desde', e.target.value); else p.delete('movimiento_desde'); p.delete('mes'); })} /></label>
         <label>Hasta<input type="date" value={params.get('movimiento_hasta') || ''} onChange={e => patchParams(p => { if (e.target.value) p.set('movimiento_hasta', e.target.value); else p.delete('movimiento_hasta'); p.delete('mes'); })} /></label>
         <label>Mes<input type="month" value={params.get('mes') || ''} onChange={e => patchParams(p => { if (e.target.value) { p.set('mes', e.target.value); p.delete('movimiento_desde'); p.delete('movimiento_hasta'); } else p.delete('mes'); })} /></label>
+        <label>Documento<select value={params.get('requisito_definicion_id') || ''} onChange={e => patchParams(p => {
+          p.delete('requisito_definicion_id');
+          if (e.target.value) p.append('requisito_definicion_id', e.target.value);
+        })}>
+          <option value="">Todos</option>
+          {requisitoOpts.map(r => <option key={r.requisito_definicion_id} value={r.requisito_definicion_id}>{r.nombre}</option>)}
+        </select></label>
       </div>
       <div className="espejo-filter-chips">
         {(['pendiente_envio', 'pendiente_aceptacion', 'rechazado', 'al_dia'] as const).map(estado => (
@@ -116,13 +155,12 @@ export function VencimientosScreen() {
           })} /> {ESTADO_ESPEJO_LABELS[estado]}</label>
         ))}
       </div>
-      {operadoraOpts.length > 0 && <div className="espejo-filter-chips">
+      {(operadoraOpts.length > 0 || integrated) && <div className="espejo-filter-chips">
         {operadoraOpts.map(o => (
           <label key={o.operadora_id}><input type="checkbox" checked={params.getAll('operadora_id').includes(o.operadora_id)} onChange={() => patchParams(p => {
-            const cur = p.getAll('operadora_id');
+            const next = toggleSearchListParam(p, 'operadora_id', o.operadora_id);
             p.delete('operadora_id');
-            if (cur.includes(o.operadora_id)) cur.filter(x => x !== o.operadora_id).forEach(x => p.append('operadora_id', x));
-            else [...cur, o.operadora_id].forEach(x => p.append('operadora_id', x));
+            next.getAll('operadora_id').forEach(x => p.append('operadora_id', x));
           })} /> {o.nombre}</label>
         ))}
       </div>}
@@ -148,10 +186,10 @@ export function VencimientosScreen() {
         {tablero.data?.items.map(item => {
           const state = deriveVisualState(item);
           return <tr key={item.id}>
-            <td><strong>{item.sujeto_id}</strong></td>
+            <td><strong>{item.identificador_natural || item.sujeto_id}</strong></td>
             <td>{item.requisito || 'Requisito sin nombre'}</td>
             <td>{item.categoria || 'Sin categoría'}</td>
-            <td>{item.vigente_hasta}</td>
+            <td>{formatFecha(item.vigente_hasta, timeZone)}</td>
             <td><Badge tone={state === 'vencida' ? 'warning' : 'accent'}>{visualStateLabels[state]}</Badge></td>
             <td>{formatDaysToExpiry(item.dias_para_vencer)}</td>
           </tr>;

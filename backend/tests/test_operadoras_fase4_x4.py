@@ -8,19 +8,20 @@ from sqlalchemy import text
 
 from app.db import tenant_session
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar
-from tests.test_operadoras_documentales import _ENCABEZADOS, _xlsx
+from tests.test_operadoras_documentales import _ENCABEZADOS, _alta_operadora, _xlsx
 
 _TZ = "America/Argentina/Buenos_Aires"
 
 
 def test_fecha_exportacion_sin_zona_usa_medianoche_local(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
+    _alta_operadora(cliente_api, t, "Op TZ")
     req = _alta_def(cliente_api, t, "Apto tz")
     p = _alta_persona(cliente_api, t, "persona_tz_x4")
     doc = _cargar(cliente_api, t, p, req, desde="2026-09-27", hasta="2027-09-25")
     filas = [
         _ENCABEZADOS,
-        ["Op TZ", "persona", "persona_tz_x4", p, "Apto tz", req,
+        ["Op TZ", "persona", "persona_tz_x4", p, "Apto tz", req, "",
          "2026-09-27", "2027-09-25", "exportado", "2026-09-27", "", "", ""],
     ]
     headers = {

@@ -43,6 +43,7 @@ _COLUMNAS = {
     "observacion": "observacion",
 }
 _REQUERIDAS = {"operadora", "tipo_sujeto", "identificador_sujeto", "tipo_documento", "estado"}
+_RE_FECHA_AR = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 _MAX_PARTE_DESCOMPRIMIDA = 2 * 1024 * 1024
 
 
@@ -101,6 +102,14 @@ def _fecha(valor: object, *, con_hora: bool) -> date | datetime | None:
             raise
         return resultado if con_hora else resultado.date()
     texto = str(valor).strip().replace("Z", "+00:00")
+    match = _RE_FECHA_AR.match(texto)
+    if match:
+        dia, mes, anio = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        try:
+            resultado_fecha = date(anio, mes, dia)
+        except ValueError as exc:
+            raise ErrorDeDominio("Fecha inválida en la planilla", {"valor": str(valor)}) from exc
+        return datetime.combine(resultado_fecha, datetime.min.time()) if con_hora else resultado_fecha
     try:
         resultado = datetime.fromisoformat(texto)
         return resultado if con_hora else resultado.date()
@@ -116,12 +125,19 @@ def _error_fila(numero: int | None, codigo: str, mensaje: str, **detalles: objec
     return {"fila": numero, "codigo": codigo, "mensaje": mensaje, "detalles": detalles or None}
 
 
-def _parsear_fila_xml(fila: ET.Element, compartidos: list[str], errores: list[dict]) -> tuple[int, dict[int, object]] | None:
+def _parsear_fila_xml(
+    fila: ET.Element,
+    compartidos: list[str],
+    errores: list[dict],
+    *,
+    ultimo_numero: int,
+) -> tuple[int, dict[int, object]] | None:
     r_attr = fila.attrib.get("r", "0")
     try:
         numero = int(r_attr)
     except ValueError:
-        errores.append(_error_fila(None, "fila_invalida", f"Número de fila inválido: {r_attr!r}", r=r_attr))
+        numero = ultimo_numero + 1 if ultimo_numero else 1
+        errores.append(_error_fila(numero, "fila_invalida", f"Número de fila inválido: {r_attr!r}", r=r_attr))
         return None
     try:
         valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
@@ -163,15 +179,22 @@ def _leer_filas_hoja(xml_bytes: bytes, compartidos: list[str], *, hoja: str) -> 
     encabezado: tuple[int, dict[int, str]] | None = None
     resultado: list[dict] = []
     errores: list[dict] = []
+    ultimo_numero = 0
     source = BytesIO(xml_bytes)
     for _, elem in ET.iterparse(source, events=("end",)):
         if elem.tag != f"{_NS}row":
             continue
-        parseada = _parsear_fila_xml(elem, compartidos, errores)
+        errores_antes = len(errores)
+        parseada = _parsear_fila_xml(elem, compartidos, errores, ultimo_numero=ultimo_numero)
         elem.clear()
         if parseada is None:
+            if len(errores) > errores_antes and errores[-1].get("codigo") == "fila_invalida":
+                fila_rechazada = errores[-1].get("fila")
+                if isinstance(fila_rechazada, int):
+                    ultimo_numero = fila_rechazada
             continue
         numero, valores = parseada
+        ultimo_numero = numero
         if encabezado is None and numero <= 20:
             mapeo = {col: _COLUMNAS[n] for col, valor in valores.items() if (n := _normalizar(valor)) in _COLUMNAS}
             if _REQUERIDAS <= set(mapeo.values()):

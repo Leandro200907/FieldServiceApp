@@ -2715,7 +2715,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /** Fila */
-            fila: number;
+            fila: number | null;
             /** Mensaje */
             mensaje: string;
         };
@@ -2827,6 +2827,8 @@ export interface components {
             requisito: string | null;
             /** Requisito Definicion Id */
             requisito_definicion_id: string;
+            /** Identificador Natural */
+            identificador_natural?: string | null;
             /** Sujeto Id */
             sujeto_id: string;
             /** Tipo */

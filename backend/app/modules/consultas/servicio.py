@@ -61,10 +61,12 @@ _SQL_EVIDENCIA = """
                                 ELSE 'documento' END AS tipo,
                d.documento_id AS id, d.sujeto_id, d.requisito_definicion_id,
                r.nombre AS requisito, r.categoria, d.vigente_desde, d.vigente_hasta,
-               d.estado_confirmacion, d.origen_propuesta, d.locacion_id
+               d.estado_confirmacion, d.origen_propuesta, d.locacion_id,
+               l.identificador_natural
         FROM modulo1.documento d
         LEFT JOIN modulo1.definicion_requisito r
           ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
+        LEFT JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id
         WHERE d.estado_version = 'vigente'
     )
 """

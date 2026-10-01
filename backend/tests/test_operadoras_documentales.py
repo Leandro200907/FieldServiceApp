@@ -62,9 +62,18 @@ def _xlsx(filas: list[list[object]]) -> bytes:
 
 _ENCABEZADOS = [
     "Operadora", "Tipo de sujeto", "Identificador del sujeto", "Sujeto ID",
-    "Tipo de documento", "Requisito ID", "Fecha de emisión", "Fecha de vencimiento",
+    "Tipo de documento", "Requisito ID", "Documento ID", "Fecha de emisión", "Fecha de vencimiento",
     "Estado", "Fecha de exportación", "Fecha de presentación", "Fecha de respuesta", "Observación",
 ]
+
+
+def _alta_operadora(cliente_api, tenant, nombre: str) -> None:
+    r = cliente_api.post(
+        "/v1/comandos/alta_operadora_oc",
+        json={"nombre": nombre},
+        headers=tenant.headers("responsable_legajos"),
+    )
+    assert r.status_code == 200, r.text
 
 
 def test_nueva_version_abre_alerta_por_operadora_y_aceptacion_la_cierra(cliente_api, tenant_de_prueba):
@@ -141,15 +150,17 @@ def test_supervisor_solo_ve_alertas_de_su_alcance(cliente_api, tenant_de_prueba)
 
 def test_importa_planilla_por_filas_y_conserva_trazabilidad(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
+    _alta_operadora(cliente_api, t, "Operadora Norte")
+    _alta_operadora(cliente_api, t, "Operadora Sur")
     req = _alta_def(cliente_api, t, "Apto médico")
     sujeto = _alta_persona(cliente_api, t, "persona_e2e_vencido")
     doc = _cargar(cliente_api, t, sujeto, req, desde="2026-09-27", hasta="2027-09-25")
     filas = [
         _ENCABEZADOS,
-        ["Operadora Norte", "persona", "persona_e2e_vencido", sujeto, "Apto médico", req,
+        ["Operadora Norte", "persona", "persona_e2e_vencido", sujeto, "Apto médico", req, "",
          "2026-09-27", "2027-09-25", "aceptado", "2026-09-27T10:00:00+00:00",
          "2026-09-27T11:00:00+00:00", "2026-09-28T09:00:00+00:00", "Aceptado por portal"],
-        ["Operadora Sur", "persona", "persona_e2e_vencido", sujeto, "Apto médico", req,
+        ["Operadora Sur", "persona", "persona_e2e_vencido", sujeto, "Apto médico", req, "",
          "2026-09-27", "2027-09-25", "aceptado", "2026-09-27T10:00:00+00:00",
          "", "", "Faltan fechas"],
     ]
@@ -173,11 +184,12 @@ def test_importa_planilla_por_filas_y_conserva_trazabilidad(cliente_api, tenant_
 
 def test_importador_no_puede_resolver_documentos_de_otro_tenant(cliente_api, dos_tenants):
     propio, ajeno = dos_tenants
+    _alta_operadora(cliente_api, propio, "Operadora Norte")
     req_ajeno = _alta_def(cliente_api, ajeno, "Apto médico")
     sujeto_ajeno = _alta_persona(cliente_api, ajeno, "persona_externa")
     doc_ajeno = _cargar(cliente_api, ajeno, sujeto_ajeno, req_ajeno, desde="2026-09-27", hasta="2027-09-25")
     filas = [_ENCABEZADOS, [
-        "Operadora Norte", "persona", "persona_externa", sujeto_ajeno, "Apto médico", req_ajeno,
+        "Operadora Norte", "persona", "persona_externa", sujeto_ajeno, "Apto médico", req_ajeno, "",
         "2026-09-27", "2027-09-25", "enviado", "", "2026-09-27T11:00:00+00:00", "", "",
     ]]
     headers = {**propio.headers("responsable_legajos"),
@@ -218,12 +230,13 @@ def test_importar_planilla_operadoras_exige_responsable_legajos(cliente_api, ten
 
 def test_importar_planilla_operadoras_idempotente_por_clave(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
+    _alta_operadora(cliente_api, t, "Operadora Norte")
     req = _alta_def(cliente_api, t, "Apto idem")
     sujeto = _alta_persona(cliente_api, t, "persona_idem")
     doc = _cargar(cliente_api, t, sujeto, req, desde="2026-09-27", hasta="2027-09-25")
     filas = [
         _ENCABEZADOS,
-        ["Operadora Norte", "persona", "persona_idem", sujeto, "Apto idem", req,
+        ["Operadora Norte", "persona", "persona_idem", sujeto, "Apto idem", req, "",
          "2026-09-27", "2027-09-25", "enviado", "", "2026-09-27T11:00:00+00:00", "", ""],
     ]
     xlsx = _xlsx(filas)

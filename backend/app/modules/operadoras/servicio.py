@@ -1,6 +1,7 @@
 """Estado interno versus la última versión conocida por cada operadora."""
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any
@@ -18,8 +19,27 @@ from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
+from app.modules.oc.catalogos_maestros import resolver_operadora
 from app.modules.operadoras.esquemas import validar_campos_planilla
 from app.worker.cola import encolar
+
+
+def _operadora_desde_catalogo(session: Session, tenant_id: str, nombre: str) -> str:
+    nombre = nombre.strip()
+    if not nombre:
+        raise ErrorDeDominio("La operadora es obligatoria", codigo="fila_invalida")
+    operadora_id, err = resolver_operadora(session, tenant_id, nombre)
+    if operadora_id:
+        return operadora_id
+    mensaje = f"La operadora '{nombre}' no está en el catálogo"
+    sugerencia = None
+    if err:
+        coincidencia = re.search(r"¿quisiste decir ([^?]+)\?", err)
+        if coincidencia:
+            sugerencia = coincidencia.group(1).strip().rstrip("?")
+            primer = sugerencia.split(",")[0].strip()
+            mensaje = f"{mensaje}. ¿Quisiste decir {primer}?"
+    raise ErrorDeDominio(mensaje, {"operadora": nombre, "sugerencia": sugerencia}, codigo="operadora_inexistente")
 
 
 def _notificar(session: Session, tenant_id: str, alerta: dict[str, Any]) -> None:
@@ -204,7 +224,7 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
                      enviado_en: datetime | None = None, aceptado_en: datetime | None = None,
                      rechazado_en: datetime | None = None, fuente_archivo: str | None = None,
                      fuente_hoja: str | None = None, fuente_fila: int | None = None,
-                     observacion: str | None = None) -> dict[str, Any]:
+                     observacion: str | None = None, operadora_id: str | None = None) -> dict[str, Any]:
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
     t = identidad.tenant_id
     doc = session.execute(text("""
@@ -215,11 +235,17 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
         raise NoEncontrado("Documento inexistente", {"documento_id": documento_id})
     if doc["sujeto_id"] != sujeto_id:
         raise Prohibido("El documento no pertenece al legajo indicado")
-    operadora_id = session.execute(text("""
-        INSERT INTO modulo1.operadora_documental (tenant_id, nombre) VALUES (:t, :n)
-        ON CONFLICT (tenant_id, lower(nombre)) DO UPDATE SET nombre = EXCLUDED.nombre, activa = true
-        RETURNING operadora_id
-    """), {"t": t, "n": operadora.strip()}).scalar_one()
+    if operadora_id is None:
+        operadora_id = session.execute(text("""
+            INSERT INTO modulo1.operadora_documental (tenant_id, nombre) VALUES (:t, :n)
+            ON CONFLICT (tenant_id, lower(nombre)) DO UPDATE SET nombre = EXCLUDED.nombre, activa = true
+            RETURNING operadora_id
+        """), {"t": t, "n": operadora.strip()}).scalar_one()
+    elif session.execute(
+        text("SELECT 1 FROM modulo1.operadora_documental WHERE tenant_id = :t AND operadora_id = CAST(:o AS uuid)"),
+        {"t": t, "o": operadora_id},
+    ).scalar() is None:
+        raise NoEncontrado("Operadora inexistente en el catálogo", {"operadora_id": operadora_id})
     session.execute(text("""
         INSERT INTO modulo1.operadora_legajo (tenant_id, operadora_id, sujeto_id, fuente)
         VALUES (:t, :o, :s, 'planilla') ON CONFLICT DO NOTHING
@@ -372,8 +398,10 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
                 if estado in {"aceptado", "rechazado"} and fila.get("fecha_respuesta") is None:
                     raise ErrorDeDominio("El estado requiere Fecha de respuesta")
                 sujeto_id, documento_id = _resolver_documento_planilla(session, identidad, fila)
+                operadora_nombre = str(fila.get("operadora") or "").strip()
+                operadora_id = _operadora_desde_catalogo(session, t, operadora_nombre)
                 respuesta = registrar_estado(
-                    session, identidad, operadora=str(fila.get("operadora") or "").strip(),
+                    session, identidad, operadora=operadora_nombre, operadora_id=operadora_id,
                     sujeto_id=sujeto_id, documento_id=documento_id, estado=estado,
                     exportado_en=_instante_en_zona_tenant(session, t, fila.get("fecha_exportacion")),
                     enviado_en=_instante_en_zona_tenant(session, t, fila.get("fecha_presentacion")),
@@ -395,10 +423,14 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
         "archivo": archivo, "hoja": hoja, "filas_totales": total_filas,
         "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
     }, identidad.usuario_id)
-    return {"archivo": archivo, "hoja": hoja, "filas_totales": total_filas,
-            "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
-            "resultados": resultados, "errores": errores,
-            "eventos": ["PlanillaOperadorasImportada"]}
+    from app.modules.operadoras.router import ImportarPlanillaOperadorasResponse
+
+    payload = {"archivo": archivo, "hoja": hoja, "filas_totales": total_filas,
+               "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
+               "resultados": resultados, "errores": errores,
+               "eventos": ["PlanillaOperadorasImportada"]}
+    ImportarPlanillaOperadorasResponse.model_validate(payload)
+    return payload
 
 
 def _exigir_sujeto_en_alcance(session: Session, identidad: Identidad, sujeto_id: str) -> None:

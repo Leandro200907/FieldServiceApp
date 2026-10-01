@@ -3573,8 +3573,15 @@
             "title": "Detalles"
           },
           "fila": {
-            "title": "Fila",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fila"
           },
           "mensaje": {
             "title": "Mensaje",
@@ -3875,6 +3882,17 @@
           "requisito_definicion_id": {
             "title": "Requisito Definicion Id",
             "type": "string"
+          },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
           },
           "sujeto_id": {
             "title": "Sujeto Id",

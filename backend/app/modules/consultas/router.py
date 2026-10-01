@@ -23,6 +23,7 @@ class EvidenciaVigente(BaseModel):
     tipo: str
     id: str
     sujeto_id: str
+    identificador_natural: str | None = None
     requisito_definicion_id: str
     requisito: str | None
     categoria: str | None

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ApiFailure, safeFailure } from '../../api';
 import { ErrorState, LoadingState } from '../../ui/States';
+import { session } from '../../api';
+import { formatFecha } from '../documentation-planning/dates';
 import { vencimientosAccess } from './access';
 import type { HistorialOperadoraResponse } from './contracts';
+import { ESTADO_HISTORIAL_LABELS } from './importacionUi';
 
 type Props = {
   operadoraId: string;
@@ -15,6 +18,17 @@ export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefini
   const [data, setData] = useState<HistorialOperadoraResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ReturnType<typeof safeFailure> | null>(null);
+  const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  const fmt = (value: string) => formatFecha(value, timeZone);
+  const fmtPaso = (value: string) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return fmt(value);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone,
+    }).format(date);
+  };
+  const estadoLabel = (estado: string) => ESTADO_HISTORIAL_LABELS[estado] || estado;
 
   useEffect(() => {
     let cancelled = false;
@@ -42,13 +56,13 @@ export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefini
           {data.versiones.map(version => (
             <section key={version.documento_id} className="historial-version">
               <header>
-                <strong>Versión {version.vigente_desde}</strong>
-                <span className="muted"> → {version.vigente_hasta}</span>
+                <strong>Versión {fmt(version.vigente_desde)}</strong>
+                <span className="muted"> → {fmt(version.vigente_hasta)}</span>
               </header>
               <ol className="historial-pasos">
                 {version.pasos.map((paso, index) => (
                   <li key={`${paso.paso_en}-${index}`}>
-                    <strong>{paso.estado}</strong> · {paso.paso_en}
+                    <strong>{estadoLabel(paso.estado)}</strong> · {fmtPaso(paso.paso_en)}
                     {paso.observacion ? <p>{paso.observacion}</p> : null}
                     <p className="muted">
                       {paso.registrado_nombre}

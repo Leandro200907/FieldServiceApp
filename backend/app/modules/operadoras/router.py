@@ -132,7 +132,7 @@ class ResultadoFilaImportada(BaseModel):
 
 
 class ErrorFilaImportada(BaseModel):
-    fila: int
+    fila: int | None
     codigo: str
     mensaje: str
     detalles: dict[str, Any] | None
@@ -194,7 +194,7 @@ def importar_planilla_operadoras(
         ruta="/comandos/importar_planilla_operadoras",
         body={"archivo": nombre_archivo, "hoja": hoja, "sha256": huella},
     )
-    return ImportarPlanillaOperadorasResponse(**resultado)
+    return ImportarPlanillaOperadorasResponse.model_validate(resultado)
 
 
 @router.get("/consultas/alertas_actualizacion_operadora", response_model=AlertasOperadoraResponse)
