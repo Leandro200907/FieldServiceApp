@@ -72,7 +72,7 @@ def reconocer_una_alerta(est: EstadoTenant) -> None:
         ).scalar()
         if not fila:
             return
-        idn = est.idn("supervisor", 1)
+        idn = est.idn("responsable_legajos", 1)
         alertas_svc.reconocer(s, idn, alerta_id=fila, comentario="Visto en demo")
         est.alerta_id = fila
 

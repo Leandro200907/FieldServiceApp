@@ -360,27 +360,61 @@ def _subir(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = Fal
     confirmar_subida(s, idn, doc_id, storage=storage)
 
 
+def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
+    if key.startswith("vehiculo"):
+        return est.sujetos["vehiculo1"]
+    if key.startswith("t1_"):
+        return est.sujetos["tecnico1"]
+    if key.startswith("t2_"):
+        return est.sujetos["tecnico2"]
+    if key.startswith("t3_"):
+        return est.sujetos["tecnico3"]
+    return est.sujetos["tecnico1"]
+
+
+# Un solo flujo preparar → PUT → confirmar por documento (sin re-subir el mismo doc).
+_EVIDENCIAS_RESERVADAS = frozenset(
+    {
+        "t1_vigente_Apto médico",
+        "t2_vigente_Apto médico",
+        "t1_vencido_Constancia ART",
+        "t2_vencido_Constancia ART",
+    }
+)
+
+
 def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
+    from app.modules.evidencia import servicio as ev_svc
+
     idn = est.idn("responsable_legajos", 1)
     with tenant_session(est.tenant_id) as s:
-        for key, doc_id in list(est.documentos.items())[:6]:
-            if "old" in key:
+        subidos = 0
+        for key, doc_id in est.documentos.items():
+            if "old" in key or key in _EVIDENCIAS_RESERVADAS:
                 continue
-            _subir(storage, s, idn, doc_id, est.sujetos["tecnico1"], key, jpeg="vehiculo" in key)
-        # pendientes validación (no correr worker aún)
+            if subidos >= 6:
+                break
+            suj = _sujeto_para_clave_doc(est, key)
+            _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key)
+            subidos += 1
+        # pendientes validación (bandeja; worker corre después en sembrar_demo)
         for key in ("t1_vigente_Apto médico", "t2_vigente_Apto médico"):
             if key in est.documentos:
                 doc = est.documentos[key]
+                suj = _sujeto_para_clave_doc(est, key)
                 preparar_subida(s, idn, doc, "pendiente.pdf", "application/pdf", storage=storage)
                 fila = s.execute(text("SELECT clave_storage FROM modulo1.documento WHERE documento_id = :d"), {"d": doc}).scalar()
-                storage.escribir(str(fila), pdf_demo("pendiente", key))
+                storage.escribir(str(fila), pdf_demo(suj, key))
                 confirmar_subida(s, idn, doc, storage=storage)
         inv = est.documentos.get("t1_vencido_Constancia ART")
         if inv:
             _subir(storage, s, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
-            from app.modules.evidencia import servicio as ev_svc
-
             ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv, motivo="Evidencia demo invalidada")
+        inv_rep = est.documentos.get("t2_vencido_Constancia ART")
+        if inv_rep:
+            _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART")
+            ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv_rep, motivo="Invalidada demo — reemplazo")
+            _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART reemplazo")
         # propuesta desde lote (declarado)
         lote_prop = uuid.uuid5(uuid.NAMESPACE_DNS, f"prop-lote-{est.spec.slug}")
         legajos.importar_lote(
@@ -451,8 +485,10 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
             ),
         )
         legajos.revertir_lote(s, idn, leg_esq.RevertirLote(lote_id=lote_rev))
-        doc_comp = est.documentos.get("t1_vigente_Apto médico")
-        if doc_comp:
+        doc_t1 = est.documentos.get("t1_vigente_Apto médico")
+        doc_t2 = est.documentos.get("t2_vigente_Apto médico")
+        doc_t3 = est.documentos.get("t3_vigente_Apto médico")
+        if doc_t1:
             legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
@@ -461,9 +497,10 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
                     vigente_desde=v1,
                     vigente_hasta=v2,
-                    evidencias=[uuid.UUID(doc_comp)],
+                    evidencias=[uuid.UUID(doc_t1)],
                 ),
             )
+        if doc_t2:
             legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
@@ -472,37 +509,35 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
                     vigente_desde=ve1,
                     vigente_hasta=ve2,
-                    evidencias=[uuid.UUID(doc_comp)],
+                    evidencias=[uuid.UUID(doc_t2)],
                 ),
             )
         loc_ind = est.catalogos.get("loc_YPF_1")
-        if loc_ind and doc_comp:
+        req_ind = est.requisitos.get("Inducción operadora", est.requisitos["Apto médico"])
+        if loc_ind and doc_t1:
             legajos.registrar_induccion(
                 s,
                 idn,
                 leg_esq.RegistrarInduccion(
                     persona_id=est.sujetos["tecnico1"],
                     locacion_id=uuid.UUID(loc_ind),
-                    requisito_definicion_id=uuid.UUID(
-                        est.requisitos.get("Inducción operadora", est.requisitos["Apto médico"])
-                    ),
+                    requisito_definicion_id=uuid.UUID(req_ind),
                     vigente_desde=v1,
                     vigente_hasta=v2,
-                    evidencia=uuid.UUID(doc_comp),
+                    evidencia=uuid.UUID(doc_t1),
                 ),
             )
+        if loc_ind and doc_t3:
             legajos.registrar_induccion(
                 s,
                 idn,
                 leg_esq.RegistrarInduccion(
                     persona_id=est.sujetos["tecnico3"],
                     locacion_id=uuid.UUID(loc_ind),
-                    requisito_definicion_id=uuid.UUID(
-                        est.requisitos.get("Inducción operadora", est.requisitos["Apto médico"])
-                    ),
+                    requisito_definicion_id=uuid.UUID(req_ind),
                     vigente_desde=ve1,
                     vigente_hasta=ve2,
-                    evidencia=uuid.UUID(doc_comp),
+                    evidencia=uuid.UUID(doc_t3),
                 ),
             )
         oc_id = est.ocs.get("en_curso")
