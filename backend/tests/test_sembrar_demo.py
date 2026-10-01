@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,39 @@ from sqlalchemy import text
 from app.db import tenant_session
 
 RAIZ = Path(__file__).resolve().parents[1]
+
+TENANTS_DEMO = ("patagonia-demo", "anelo-demo", "neuquen-demo")
+
+# Fallas del reporte final que el sembrado admite a propósito (cualquier otra falla el CI).
+FALLAS_ESPERADAS_SEMBRADO: frozenset[str] = frozenset()
+
+# Objetivo del guion de demo (por tenant), una vez el sembrador esté corregido.
+EVIDENCIAS_PENDIENTES_BANDEJA_POR_TENANT = 2
+EVIDENCIAS_INVALIDADAS_POR_TENANT = 1
+DOCUMENTOS_LOTE_IMPORTADO_POR_TENANT = 5
+DOCUMENTOS_LOTE_REVERTIDO_POR_TENANT = 1
+
+
+def _seccion_pasos_saltados_o_fallas(stdout: str) -> tuple[list[str], list[str]]:
+    marcador = "=== Pasos saltados o con fallas ==="
+    if marcador not in stdout:
+        pytest.fail(f"La salida del sembrado no incluye {marcador!r}")
+    bloque = stdout.split(marcador, 1)[1].split("=== Hallazgos sobre la app ===", 1)[0]
+    saltados: list[str] = []
+    fallas: list[str] = []
+    for linea in bloque.splitlines():
+        t = linea.strip()
+        if t == "(ninguno)":
+            continue
+        if t.startswith("[saltado]"):
+            saltados.append(t[len("[saltado]") :].strip())
+        elif t.startswith("[falla]"):
+            fallas.append(t[len("[falla]") :].strip())
+    return saltados, fallas
+
+
+def _lote_id_demo(slug: str, sufijo: str) -> uuid.UUID:
+    return uuid.uuid5(uuid.NAMESPACE_DNS, f"{sufijo}-{slug}")
 
 
 def _nombre_base() -> str | None:
@@ -41,6 +75,14 @@ def demo_sembrado():
     )
     assert r.returncode == 0, r.stderr or r.stdout
     return r.stdout
+
+
+def test_sembrado_sin_fallas_imprevistas(demo_sembrado):
+    """El reporte final del sembrado no debe listar fallas fuera de FALLAS_ESPERADAS_SEMBRADO."""
+    _exigir_base_demo_tests()
+    _, fallas = _seccion_pasos_saltados_o_fallas(demo_sembrado)
+    inesperadas = [f for f in fallas if f not in FALLAS_ESPERADAS_SEMBRADO]
+    assert not inesperadas, "Fallas imprevistas en sembrado:\n" + "\n".join(f"  - {x}" for x in inesperadas)
 
 
 def test_aborta_si_base_no_es_demo(monkeypatch):
@@ -97,6 +139,61 @@ def test_cantidades_demo(demo_sembrado):
             ).scalar()
             assert tecnicos == 3
             assert docs_tec >= 15
+
+
+def test_evidencias_y_lotes_demo(demo_sembrado):
+    _exigir_base_demo_tests()
+    from app.db import platform_session
+
+    with platform_session() as ps:
+        for slug in TENANTS_DEMO:
+            tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+            assert tid is not None, slug
+            tid = str(tid)
+            lote_ok = _lote_id_demo(slug, "lote-doc")
+            lote_rev = _lote_id_demo(slug, "lote-rev")
+            with tenant_session(tid) as s:
+                n_pend = s.execute(
+                    text(
+                        "SELECT count(*) FROM modulo1.documento "
+                        "WHERE tenant_id = :t AND archivo_estado = 'confirmado' AND archivo_validacion = 'pendiente'"
+                    ),
+                    {"t": tid},
+                ).scalar()
+                n_inv = s.execute(
+                    text(
+                        "SELECT count(*) FROM modulo1.documento "
+                        "WHERE tenant_id = :t AND archivo_estado = 'confirmado' AND archivo_validacion = 'invalido'"
+                    ),
+                    {"t": tid},
+                ).scalar()
+                assert n_pend == EVIDENCIAS_PENDIENTES_BANDEJA_POR_TENANT, (
+                    f"{slug}: pendientes bandeja={n_pend}, esperado {EVIDENCIAS_PENDIENTES_BANDEJA_POR_TENANT}"
+                )
+                assert n_inv == EVIDENCIAS_INVALIDADAS_POR_TENANT, (
+                    f"{slug}: invalidadas={n_inv}, esperado {EVIDENCIAS_INVALIDADAS_POR_TENANT}"
+                )
+                n_lote_ok = s.execute(
+                    text("SELECT count(*) FROM modulo1.documento WHERE tenant_id = :t AND lote_id = :l"),
+                    {"t": tid, "l": str(lote_ok)},
+                ).scalar()
+                assert n_lote_ok == DOCUMENTOS_LOTE_IMPORTADO_POR_TENANT, slug
+                estado_rev = s.execute(
+                    text(
+                        "SELECT estado FROM modulo1.lote_importacion "
+                        "WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos'"
+                    ),
+                    {"t": tid, "l": str(lote_rev)},
+                ).scalar()
+                assert estado_rev == "revertido", slug
+                n_rev_docs = s.execute(
+                    text(
+                        "SELECT count(*) FROM modulo1.documento "
+                        "WHERE tenant_id = :t AND lote_id = :l AND estado_version = 'revertida_por_lote'"
+                    ),
+                    {"t": tid, "l": str(lote_rev)},
+                ).scalar()
+                assert n_rev_docs == DOCUMENTOS_LOTE_REVERTIDO_POR_TENANT, slug
 
 
 def test_aislamiento_entre_tenants(demo_sembrado):
