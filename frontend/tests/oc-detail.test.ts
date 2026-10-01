@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { formatFecha } from '../src/features/documentation-planning/dates';
-import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial } from '../src/features/documentation-planning/ocDetail';
+import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, vigenciaReprogramacion } from '../src/features/documentation-planning/ocDetail';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
 describe('detalle de OC', () => {
+  it('reprograma con las fechas de la OC si el usuario no las toca, o solo la que cambió', () => {
+    const oc = { vigencia_desde: '2026-10-01', vigencia_hasta: '2026-11-30' };
+    expect(vigenciaReprogramacion({ desde: '', hasta: '' }, oc)).toEqual({
+      vigencia_desde: '2026-10-01',
+      vigencia_hasta: '2026-11-30',
+    });
+    expect(vigenciaReprogramacion({ desde: '', hasta: '2026-12-15' }, oc)).toEqual({
+      vigencia_desde: '2026-10-01',
+      vigencia_hasta: '2026-12-15',
+    });
+  });
+
   it('lista nombres de habilitados, caídas y no habilitados', () => {
     const lineas = lineasDisponibilidad({
       tipo_sujeto: 'persona',

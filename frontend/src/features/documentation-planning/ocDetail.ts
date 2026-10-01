@@ -11,6 +11,19 @@ function nombres(items: { nombre?: unknown }[]): string {
   return items.map(i => String(i.nombre || '')).filter(Boolean).join(', ');
 }
 
+/** Fechas del formulario de reprogramar: las de la OC, salvo las que el usuario ya editó. */
+export function vigenciaReprogramacion(
+  formulario: { desde: string; hasta: string },
+  oc: { vigencia_desde?: unknown; vigencia_hasta?: unknown },
+): { vigencia_desde: string; vigencia_hasta: string } {
+  const ocDesde = typeof oc.vigencia_desde === 'string' ? oc.vigencia_desde : '';
+  const ocHasta = typeof oc.vigencia_hasta === 'string' ? oc.vigencia_hasta : '';
+  return {
+    vigencia_desde: formulario.desde || ocDesde,
+    vigencia_hasta: formulario.hasta || ocHasta,
+  };
+}
+
 export function lineasDisponibilidad(d: Disponibilidad, timeZone: string): string[] {
   const lineas: string[] = [];
   const hab = d.habilitados_toda_ventana as Persona[];

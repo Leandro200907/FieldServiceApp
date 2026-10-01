@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import { importarPlanillaOc } from './realDocumentationPlanningAccess';
@@ -10,7 +10,7 @@ import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
 import { formatFecha, todayIso } from './dates';
-import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial } from './ocDetail';
+import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, vigenciaReprogramacion } from './ocDetail';
 import './planning.css';
 import './timeline.css';
 
@@ -90,6 +90,17 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
     if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
     return data as Cobertura;
   }, [selected, reloadKey]);
+
+  const ocVigenciaDesde = detailQuery.data?.oc?.vigencia_desde as string | undefined;
+  const ocVigenciaHasta = detailQuery.data?.oc?.vigencia_hasta as string | undefined;
+  const ocIdDetalle = detailQuery.data?.oc?.oc_id as string | undefined;
+
+  useEffect(() => {
+    if (!selected || !ocVigenciaDesde || !ocVigenciaHasta) return;
+    setReproDesde(ocVigenciaDesde);
+    setReproHasta(ocVigenciaHasta);
+    setReproError(null);
+  }, [selected, ocIdDetalle, ocVigenciaDesde, ocVigenciaHasta]);
 
   const items = backlogQuery.data?.items ?? [];
   const autoDesde = useMemo(() => {
@@ -329,7 +340,11 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
               onSubmit={async e => {
                 e.preventDefault();
                 setReproError(null);
-                if (!reproDesde || !reproHasta || !reproMotivo.trim()) {
+                const vigencia = vigenciaReprogramacion(
+                  { desde: reproDesde, hasta: reproHasta },
+                  detailQuery.data!.oc,
+                );
+                if (!vigencia.vigencia_desde || !vigencia.vigencia_hasta || !reproMotivo.trim()) {
                   setReproError('Completá fecha desde, fecha hasta y motivo');
                   return;
                 }
@@ -340,8 +355,8 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
                 const res = await session.client.POST('/v1/comandos/reprogramar_oc', {
                   body: {
                     oc_id: detailQuery.data!.oc.oc_id as string,
-                    vigencia_desde: reproDesde,
-                    vigencia_hasta: reproHasta,
+                    vigencia_desde: vigencia.vigencia_desde,
+                    vigencia_hasta: vigencia.vigencia_hasta,
                     motivo: reproMotivo.trim(),
                   },
                   headers: { 'Idempotency-Key': crypto.randomUUID() },
@@ -352,14 +367,14 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
                 }
                 const body = res.data as { comparacion_documental?: Record<string, unknown> };
                 setVentanaAntes(anterior);
-                setVentanaNueva({ desde: reproDesde, hasta: reproHasta });
+                setVentanaNueva({ desde: vigencia.vigencia_desde, hasta: vigencia.vigencia_hasta });
                 setComparacion(body.comparacion_documental ?? null);
                 setReproMotivo('');
                 setReloadKey(k => k + 1);
               }}
             >
-              <label>Fecha desde<input type="date" value={reproDesde || (detailQuery.data.oc.vigencia_desde as string)} onChange={e => setReproDesde(e.target.value)} /></label>
-              <label>Fecha hasta<input type="date" value={reproHasta || (detailQuery.data.oc.vigencia_hasta as string)} onChange={e => setReproHasta(e.target.value)} /></label>
+              <label>Fecha desde<input type="date" value={reproDesde} onChange={e => setReproDesde(e.target.value)} /></label>
+              <label>Fecha hasta<input type="date" value={reproHasta} onChange={e => setReproHasta(e.target.value)} /></label>
               <label>Motivo<input value={reproMotivo} onChange={e => setReproMotivo(e.target.value)} /></label>
               <button type="submit" className="button button-secondary">Reprogramar</button>
               {reproError && <p className="field-error" role="alert">{reproError}</p>}
