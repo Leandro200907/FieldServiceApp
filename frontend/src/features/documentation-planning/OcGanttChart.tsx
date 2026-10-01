@@ -47,8 +47,13 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
           {filas.map(f => (
             <div key={f.id} className={`oc-gantt-label${selectedId === f.id ? ' selected' : ''}`} style={f.indent ? { paddingLeft: `${8 + f.indent * 16}px` } : undefined}>
               <strong>{f.label}</strong>
-              {f.sublabel && <span>{f.sublabel}</span>}
-              {f.reprogramada && <em className="oc-gantt-reprog">Reprogramada</em>}
+              {(f.sublabel || f.reprogramada) && (
+                <span>
+                  {f.sublabel}
+                  {f.sublabel && f.reprogramada ? ' · ' : ''}
+                  {f.reprogramada && <em className="oc-gantt-reprog">Reprogramada</em>}
+                </span>
+              )}
             </div>
           ))}
         </div>
