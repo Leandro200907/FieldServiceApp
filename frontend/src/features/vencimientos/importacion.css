@@ -31,3 +31,14 @@
   padding-left: 20px;
 }
 
+.import-result--errors {
+  border-left-color: #b42318;
+  background: #fef3f2;
+  color: #7a271a;
+}
+
+.import-result--errors li {
+  display: list-item;
+  width: 100%;
+}
+

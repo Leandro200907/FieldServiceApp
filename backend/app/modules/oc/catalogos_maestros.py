@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from difflib import get_close_matches
 from typing import Any
 
 from sqlalchemy import text
@@ -14,12 +15,33 @@ from app.comun.paginacion import Pagina, envolver
 
 
 def _sugerencias(session: Session, tenant_id: str, tabla: str, clave: str, limite: int = 3) -> list[str]:
-    filas = session.execute(
-        text(f"SELECT nombre FROM modulo1.{tabla} WHERE tenant_id = :t ORDER BY nombre LIMIT 50"),
-        {"t": tenant_id},
-    ).scalars().all()
-    ordenadas = sorted(filas, key=lambda n: (normalizar_clave(n) != clave, n))
-    return [str(n) for n in ordenadas[:limite]]
+    nombres = [
+        str(n)
+        for n in session.execute(
+            text(f"SELECT nombre FROM modulo1.{tabla} WHERE tenant_id = :t ORDER BY nombre LIMIT 50"),
+            {"t": tenant_id},
+        ).scalars().all()
+    ]
+    if not clave.strip() or not nombres:
+        return []
+    por_clave = {normalizar_clave(n): n for n in nombres}
+    claves = list(por_clave)
+    resultado: list[str] = []
+    vistos: set[str] = set()
+    primer_token = clave.split()[0] if clave.split() else clave
+
+    def agregar(nombre: str) -> None:
+        if nombre in vistos or len(resultado) >= limite:
+            return
+        vistos.add(nombre)
+        resultado.append(nombre)
+
+    for norm, nombre in por_clave.items():
+        if clave in norm or norm.startswith(primer_token) or norm.split()[0:1] == [primer_token]:
+            agregar(nombre)
+    for match in get_close_matches(clave, claves, n=limite, cutoff=0.55):
+        agregar(por_clave[match])
+    return resultado[:limite]
 
 
 def resolver_operadora(session: Session, tenant_id: str, nombre: str) -> tuple[str | None, str | None]:

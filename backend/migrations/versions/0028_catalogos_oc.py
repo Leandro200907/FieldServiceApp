@@ -1,12 +1,12 @@
 """Catálogos con nombre para OC (operadora = cliente, locación, tipo de servicio).
 
 Revision ID: 0028_catalogos_oc
-Revises: 0026_lote_por_entidad
+Revises: 0027_operadora_nombre
 """
 from alembic import op
 
 revision = "0028_catalogos_oc"
-down_revision = "0026_lote_por_entidad"
+down_revision = "0027_operadora_nombre"
 branch_labels = None
 depends_on = None
 

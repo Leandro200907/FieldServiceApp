@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useQueryClient } from '@tanstack/react-query';
 import { session } from '../api';
@@ -16,6 +16,7 @@ import { isPropuestasIntegrated } from '../features/propuestas/access';
 import { isAuditoriaIntegrated } from '../features/auditoria/access';
 import { isMatricesIntegrated } from '../features/matrices/access';
 import { Badge, ErrorState, LoadingState, Pending } from '../ui/States';
+import { isInternalReturn, loginPathWithReturn } from './returnTo';
 
 // F-09 (auditoría externa 2026-09-22): antes este badge era incondicional para toda
 // página que no fuera 'perfil' — ignoraba que calendario-vigencias/radar-documental
@@ -44,9 +45,16 @@ type LoginValues = components['schemas']['LoginRequest'];
 function useSession() { return useSyncExternalStore(session.subscribe, session.getSnapshot); }
 function Login() {
   const snapshot = useSession();
+  const [searchParams] = useSearchParams();
   const { register, handleSubmit, formState: { errors } } = useForm<LoginValues>();
   const roles = knownRoles(snapshot.identity?.roles || []);
-  if (snapshot.identity) return <Navigate to={roles.length === 1 ? `/${entryFor(roles[0])}` : '/perfil'} replace />;
+  const returnTo = searchParams.get('return');
+  if (snapshot.identity) {
+    const dest = returnTo && isInternalReturn(returnTo)
+      ? returnTo
+      : roles.length === 1 ? `/${entryFor(roles[0])}` : '/perfil';
+    return <Navigate to={dest} replace />;
+  }
   return <main id="main-content" className="login-layout"><section className="login-intro"><Link to="/" className="brand"><span className="brand-mark">F</span>FieldServiceApp</Link><div><p className="eyebrow">Documentación habilitante · Módulo 1</p><h1>Cada documento.<br />Cada recurso.<br />Una vista clara.</h1><p>Una base para gestionar la documentación de personas, vehículos y equipos.</p></div><p className="login-caption">Foundation en desarrollo · backend en corrección</p></section><section className="login-form-section"><div className="login-form"><Badge>Acceso a tu empresa</Badge><h2>Ingresá a tu espacio de trabajo</h2><p>Usá la empresa y las credenciales que te asignó el administrador.</p>{import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCKS === 'true' && <p className="mock-notice">MODO DE PRUEBA · sesión y perfil sintéticos. No hay conexión de negocio.</p>}<form onSubmit={handleSubmit(values => session.login(values))} aria-busy={snapshot.status === 'authenticating'}>
     <div className="form-field"><label htmlFor="tenant">Empresa</label><input id="tenant" autoComplete="organization" {...register('tenant_slug', { required: 'Ingresá el identificador de tu empresa.', maxLength: { value: 200, message: 'Máximo 200 caracteres.' } })} aria-invalid={Boolean(errors.tenant_slug)} aria-describedby="tenant-error" /><small id="tenant-error" className="field-error">{errors.tenant_slug?.message}</small></div>
     <div className="form-field"><label htmlFor="email">Correo electrónico</label><input id="email" type="email" autoComplete="username" {...register('email', { required: 'Ingresá tu correo.', maxLength: { value: 320, message: 'Máximo 320 caracteres.' } })} aria-invalid={Boolean(errors.email)} aria-describedby="email-error" /><small id="email-error" className="field-error">{errors.email?.message}</small></div>
@@ -76,7 +84,7 @@ function Workspace() {
     if (menuOpen) dialog?.showModal(); else if (dialog?.open) { dialog.close(); menuButton.current?.focus(); }
   }, [menuOpen]);
   useEffect(() => { const listener = () => { if (window.innerWidth >= 900) setMenuOpen(false); }; window.addEventListener('resize', listener); return () => window.removeEventListener('resize', listener); }, []);
-  if (!snapshot.identity) return <Navigate to="/login" replace />;
+  if (!snapshot.identity) return <Navigate to={loginPathWithReturn(location.pathname, location.search)} replace />;
   const context = preferredContext && roles.includes(preferredContext) ? preferredContext : roles.length === 1 ? roles[0] : '';
   const page = pages.find(item => `/${item.id}` === location.pathname);
   const nav = context ? navigationFor(context) : pages.filter(item => canOpen(item, roles));

@@ -1,5 +1,5 @@
 import { ApiFailure, parseApiError, session } from '../../api';
-import type { VencimientosAccess, VencimientosQuery } from './contracts';
+import type { EspejoOperadoraQuery, HistorialOperadoraQuery, VencimientosAccess, VencimientosQuery } from './contracts';
 
 // Adaptador real — mismo patrón que mi-legajo/realMiLegajoAccess.ts. `GET
 // /v1/consultas/tablero_vencimientos` resuelve el alcance (empresa completa para
@@ -26,6 +26,35 @@ export const realVencimientosAccess: VencimientosAccess = {
   async readAlertasOperadora(query) {
     return unwrap(session.client.GET('/v1/consultas/alertas_actualizacion_operadora', {
       params: { query: { offset: query.offset, limit: query.limit } },
+    }));
+  },
+  async readEspejoOperadora(query: EspejoOperadoraQuery) {
+    return unwrap(session.client.GET('/v1/consultas/espejo_operadora', {
+      params: {
+        query: {
+          offset: query.offset,
+          limit: query.limit,
+          operadora_id: query.operadora_id,
+          requisito_definicion_id: query.requisito_definicion_id,
+          tipo_sujeto: query.tipo_sujeto,
+          q: query.q,
+          estado_operadora: query.estado_operadora,
+          movimiento_desde: query.movimiento_desde,
+          movimiento_hasta: query.movimiento_hasta,
+          mes: query.mes,
+        },
+      },
+    }));
+  },
+  async readHistorialOperadora(query: HistorialOperadoraQuery) {
+    return unwrap(session.client.GET('/v1/consultas/historial_operadora', {
+      params: {
+        query: {
+          operadora_id: query.operadoraId,
+          sujeto_id: query.sujetoId,
+          requisito_definicion_id: query.requisitoDefinicionId,
+        },
+      },
     }));
   },
   async importarPlanilla(file) {

@@ -3573,8 +3573,15 @@
             "title": "Detalles"
           },
           "fila": {
-            "title": "Fila",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fila"
           },
           "mensaje": {
             "title": "Mensaje",
@@ -3646,6 +3653,125 @@
           "eventos"
         ],
         "title": "EscanearDriveResponse",
+        "type": "object"
+      },
+      "EspejoOperadoraItem": {
+        "properties": {
+          "alerta_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alerta Id"
+          },
+          "documento_vigente_id": {
+            "title": "Documento Vigente Id",
+            "type": "string"
+          },
+          "estado_operadora": {
+            "title": "Estado Operadora",
+            "type": "string"
+          },
+          "identificador_natural": {
+            "title": "Identificador Natural",
+            "type": "string"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "operadora": {
+            "title": "Operadora",
+            "type": "string"
+          },
+          "operadora_id": {
+            "title": "Operadora Id",
+            "type": "string"
+          },
+          "requisito": {
+            "title": "Requisito",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "ultimo_documento_operadora_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Documento Operadora Id"
+          },
+          "ultimo_movimiento_en": {
+            "format": "date-time",
+            "title": "Ultimo Movimiento En",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alerta_id",
+          "sujeto_id",
+          "identificador_natural",
+          "tipo_sujeto",
+          "requisito_definicion_id",
+          "requisito",
+          "operadora_id",
+          "operadora",
+          "documento_vigente_id",
+          "ultimo_documento_operadora_id",
+          "estado_operadora",
+          "motivo",
+          "ultimo_movimiento_en"
+        ],
+        "title": "EspejoOperadoraItem",
+        "type": "object"
+      },
+      "EspejoOperadoraResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EspejoOperadoraItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "EspejoOperadoraResponse",
         "type": "object"
       },
       "EventoAlerta": {
@@ -3726,6 +3852,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
           },
           "locacion_id": {
             "anyOf": [
@@ -4000,6 +4137,37 @@
           "limit"
         ],
         "title": "HistorialAlertasResponse",
+        "type": "object"
+      },
+      "HistorialOperadoraResponse": {
+        "properties": {
+          "operadora_id": {
+            "title": "Operadora Id",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "title": "Requisito Definicion Id",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "versiones": {
+            "items": {
+              "$ref": "#/components/schemas/VersionHistorialOperadora"
+            },
+            "title": "Versiones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operadora_id",
+          "sujeto_id",
+          "requisito_definicion_id",
+          "versiones"
+        ],
+        "title": "HistorialOperadoraResponse",
         "type": "object"
       },
       "HistorialScore": {
@@ -5793,6 +5961,87 @@
         "title": "ParDeTokens",
         "type": "object"
       },
+      "PasoHistorialOperadora": {
+        "properties": {
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fuente_archivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente Archivo"
+          },
+          "fuente_fila": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente Fila"
+          },
+          "fuente_hoja": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente Hoja"
+          },
+          "observacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion"
+          },
+          "origen": {
+            "title": "Origen",
+            "type": "string"
+          },
+          "paso_en": {
+            "title": "Paso En",
+            "type": "string"
+          },
+          "registrado_nombre": {
+            "title": "Registrado Nombre",
+            "type": "string"
+          },
+          "registrado_por": {
+            "title": "Registrado Por",
+            "type": "string"
+          }
+        },
+        "required": [
+          "estado",
+          "paso_en",
+          "observacion",
+          "registrado_por",
+          "registrado_nombre",
+          "origen",
+          "fuente_archivo",
+          "fuente_hoja",
+          "fuente_fila"
+        ],
+        "title": "PasoHistorialOperadora",
+        "type": "object"
+      },
       "PeorSujetoScore": {
         "properties": {
           "cubiertos": {
@@ -7579,6 +7828,37 @@
         "title": "VersionAnteriorDeMatriz",
         "type": "object"
       },
+      "VersionHistorialOperadora": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "pasos": {
+            "items": {
+              "$ref": "#/components/schemas/PasoHistorialOperadora"
+            },
+            "title": "Pasos",
+            "type": "array"
+          },
+          "vigente_desde": {
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "title": "Vigente Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documento_id",
+          "vigente_desde",
+          "vigente_hasta",
+          "pasos"
+        ],
+        "title": "VersionHistorialOperadora",
+        "type": "object"
+      },
       "VincularTelegramBody": {
         "properties": {
           "chat_id": {
@@ -7783,7 +8063,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0028_catalogos_oc"
+    "x-migracion-head": "0029_mov_operadora"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10722,6 +11002,16 @@
               "default": "presentaciones_operadoras.xlsx",
               "maxLength": 500,
               "title": "X-Nombre-Archivo",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "required": false,
+            "schema": {
+              "default": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "title": "Content-Type",
               "type": "string"
             }
           },
@@ -14692,6 +14982,271 @@
         ]
       }
     },
+    "/v1/consultas/espejo_operadora": {
+      "get": {
+        "operationId": "espejo_operadora_v1_consultas_espejo_operadora_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "operadora_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Operadora Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requisito_definicion_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Requisito Definicion Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tipo_sujeto",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "persona",
+                    "vehiculo",
+                    "equipo",
+                    "empresa"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Sujeto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "estado_operadora",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pendiente_envio",
+                      "pendiente_aceptacion",
+                      "rechazado",
+                      "al_dia"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado Operadora"
+            }
+          },
+          {
+            "in": "query",
+            "name": "movimiento_desde",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Movimiento Desde"
+            }
+          },
+          {
+            "in": "query",
+            "name": "movimiento_hasta",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Movimiento Hasta"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EspejoOperadoraResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Espejo Operadora",
+        "tags": [
+          "operadoras-documentales"
+        ]
+      }
+    },
     "/v1/consultas/exportar_legajo": {
       "post": {
         "operationId": "exportar_legajo_v1_consultas_exportar_legajo_post",
@@ -14925,6 +15480,121 @@
         "summary": "Historial Alertas",
         "tags": [
           "alertas"
+        ]
+      }
+    },
+    "/v1/consultas/historial_operadora": {
+      "get": {
+        "operationId": "historial_operadora_v1_consultas_historial_operadora_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "operadora_id",
+            "required": true,
+            "schema": {
+              "title": "Operadora Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sujeto_id",
+            "required": true,
+            "schema": {
+              "title": "Sujeto Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requisito_definicion_id",
+            "required": true,
+            "schema": {
+              "title": "Requisito Definicion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistorialOperadoraResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Historial Operadora",
+        "tags": [
+          "operadoras-documentales"
         ]
       }
     },

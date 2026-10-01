@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0028_catalogos_oc`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0029_mov_operadora`.
 
 Internamente existe una sola entidad `documento` para certificados, competencias e
 inducciones. La categoría la define el tipo de requisito. Las rutas históricas de
@@ -25,6 +25,11 @@ Prefijo de todas las rutas: `/v1`.
   revierte las correctas.
 - `GET /v1/consultas/alertas_actualizacion_operadora` devuelve las diferencias abiertas
   entre la versión vigente del legajo y la versión conocida por cada operadora.
+- `GET /v1/consultas/espejo_operadora` lista el espejo con filtros combinables
+  (`operadora_id`, `requisito_definicion_id`, `tipo_sujeto`, `q`, `estado_operadora`,
+  rango o mes del último movimiento) y paginación; `Cache-Control: no-store`.
+- `GET /v1/consultas/historial_operadora` devuelve la línea de tiempo de movimientos
+  (`operadora_id`, `sujeto_id`, `requisito_definicion_id`); `Cache-Control: no-store`.
 - Una renovación no modifica automáticamente el estado externo: abre una alerta por
   operadora. El envío la cambia a pendiente de aceptación; la aceptación de la versión
   vigente la cierra.

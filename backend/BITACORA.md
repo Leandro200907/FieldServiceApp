@@ -256,3 +256,19 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 - **X-5**: hoja inexistente → error explícito.
 - **X-6**: encabezados obligatorios ausentes → error explícito.
 - **X-7**: tope de 1000 filas de datos en el lector.
+
+## 2026-10-01 — Merge PR #6 (backlog + timeline M1) en `feature/frontend-radar-documental-v2`
+
+- Verificación E2E en `8c01f78`: 7 puntos OK, suite **587/587**, frontend **75/75**.
+- Merge commit en feature: **`44ab962`** (`gh pr merge 6 --merge`, rama del PR conservada).
+- `fix/auditoria-fase4-xlsx` actualizada con merge de feature; conflictos resueltos en
+  README, `version.py`, HANDOFF, OpenAPI, `lector_xlsx.py` (Fase 4 + `leer_celdas_hoja`).
+
+### Deuda registrada (sin corregir en este paso)
+
+- **UI backlog:** etiqueta de OC reprogramada truncada en el listado.
+- **UI timeline:** primer tick del eje temporal cortado / no visible.
+- **UI timeline:** un marcador ▲ cuya ventana “empieza” fuera del rango visible se asocia
+  visualmente a esa OC (ambigüedad de lectura).
+- **Contrato vs implementación:** `POST /v1/comandos/asignar_supervisor` documentado en
+  HANDOFF §4.2 pero **no expuesto** en el backend — pendiente decisión del dueño del producto.

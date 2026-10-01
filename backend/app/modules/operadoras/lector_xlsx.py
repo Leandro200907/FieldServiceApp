@@ -28,6 +28,7 @@ _COLUMNAS = {
     "tipo documento": "tipo_documento",
     "tipo de documento": "tipo_documento",
     "requisito id": "requisito_id",
+    "documento id": "documento_id",
     "fecha emision": "fecha_emision",
     "fecha de emision": "fecha_emision",
     "fecha vencimiento": "fecha_vencimiento",
@@ -42,6 +43,16 @@ _COLUMNAS = {
     "observacion": "observacion",
 }
 _REQUERIDAS = {"operadora", "tipo_sujeto", "identificador_sujeto", "tipo_documento", "estado"}
+_IGNORAR_ENCABEZADOS = {"control"}
+_MENSAJES_COLUMNA_CONTROL = frozenset({
+    "Faltan campos obligatorios",
+    "Falta fecha de exportación",
+    "Falta fecha de presentación",
+    "Falta fecha de respuesta",
+    "Vencimiento anterior a emisión",
+    "Lista para importar",
+})
+_RE_FECHA_AR = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 _MAX_PARTE_DESCOMPRIMIDA = 2 * 1024 * 1024
 
 
@@ -80,25 +91,34 @@ def _valor(celda: ET.Element, compartidos: list[str]) -> object:
         return None
     bruto = nodo.text
     if tipo == "s":
-        return compartidos[int(bruto)]
+        indice = int(bruto)
+        return compartidos[indice]
     if tipo in {"str", "e"}:
         return bruto
     if tipo == "b":
         return bruto == "1"
-    try:
-        numero = float(bruto)
-        return int(numero) if numero.is_integer() else numero
-    except ValueError:
-        return bruto
+    numero = float(bruto)
+    return int(numero) if numero.is_integer() else numero
 
 
 def _fecha(valor: object, *, con_hora: bool) -> date | datetime | None:
     if valor in (None, ""):
         return None
     if isinstance(valor, (int, float)):
-        resultado = datetime(1899, 12, 30) + timedelta(days=float(valor))
+        try:
+            resultado = datetime(1899, 12, 30) + timedelta(days=float(valor))
+        except OverflowError:
+            raise
         return resultado if con_hora else resultado.date()
     texto = str(valor).strip().replace("Z", "+00:00")
+    match = _RE_FECHA_AR.match(texto)
+    if match:
+        dia, mes, anio = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        try:
+            resultado_fecha = date(anio, mes, dia)
+        except ValueError as exc:
+            raise ErrorDeDominio("Fecha inválida en la planilla", {"valor": str(valor)}) from exc
+        return datetime.combine(resultado_fecha, datetime.min.time()) if con_hora else resultado_fecha
     try:
         resultado = datetime.fromisoformat(texto)
         return resultado if con_hora else resultado.date()
@@ -110,11 +130,119 @@ def _fecha(valor: object, *, con_hora: bool) -> date | datetime | None:
             raise ErrorDeDominio("Fecha inválida en la planilla", {"valor": str(valor)}) from exc
 
 
-def leer_celdas_hoja(contenido: bytes, *, hoja: str) -> list[tuple[int, dict[int, object]]]:
-    """Extrae celdas de una hoja XLSX (ZIP/XML) sin interpretar columnas de negocio.
+def _error_fila(numero: int | None, codigo: str, mensaje: str, **detalles: object) -> dict:
+    return {"fila": numero, "codigo": codigo, "mensaje": mensaje, "detalles": detalles or None}
 
-    Cada tupla es (número de fila de Excel, {índice de columna 1-based: valor}).
-    """
+
+def _parsear_fila_xml(
+    fila: ET.Element,
+    compartidos: list[str],
+    errores: list[dict],
+    *,
+    ultimo_numero: int,
+) -> tuple[int, dict[int, object]] | None:
+    r_attr = fila.attrib.get("r", "0")
+    try:
+        numero = int(r_attr)
+    except ValueError:
+        numero = ultimo_numero + 1 if ultimo_numero else 1
+        errores.append(_error_fila(numero, "fila_invalida", f"Número de fila inválido: {r_attr!r}", r=r_attr))
+        return None
+    try:
+        valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
+    except (IndexError, ValueError) as exc:
+        errores.append(_error_fila(numero, "celda_invalida", "Valor de celda inválido", causa=type(exc).__name__))
+        return None
+    except OverflowError:
+        errores.append(_error_fila(numero, "celda_invalida", "Valor numérico fuera de rango"))
+        return None
+    return numero, valores
+
+
+def _observacion_desde_planilla(valor: object) -> object:
+    if valor in (None, ""):
+        return None
+    texto = str(valor).strip()
+    if texto in _MENSAJES_COLUMNA_CONTROL:
+        return None
+    return valor
+
+
+def _registro_desde_valores(
+    numero: int,
+    valores: dict[int, object],
+    columnas: dict[int, str],
+    errores: list[dict],
+) -> dict | None:
+    registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
+    if "observacion" in registro:
+        registro["observacion"] = _observacion_desde_planilla(registro.get("observacion"))
+    if not any(registro.get(c) not in (None, "") for c in _REQUERIDAS):
+        return None
+    registro["fila"] = numero
+    for campo in ("fecha_emision", "fecha_vencimiento"):
+        try:
+            registro[campo] = _fecha(registro.get(campo), con_hora=False)
+        except (ErrorDeDominio, OverflowError, ValueError):
+            errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+            return None
+    for campo in ("fecha_exportacion", "fecha_presentacion", "fecha_respuesta"):
+        try:
+            registro[campo] = _fecha(registro.get(campo), con_hora=True)
+        except (ErrorDeDominio, OverflowError, ValueError):
+            errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+            return None
+    return registro
+
+
+def _leer_filas_hoja(xml_bytes: bytes, compartidos: list[str], *, hoja: str) -> tuple[list[dict], list[dict]]:
+    encabezado: tuple[int, dict[int, str]] | None = None
+    resultado: list[dict] = []
+    errores: list[dict] = []
+    ultimo_numero = 0
+    source = BytesIO(xml_bytes)
+    for _, elem in ET.iterparse(source, events=("end",)):
+        if elem.tag != f"{_NS}row":
+            continue
+        errores_antes = len(errores)
+        parseada = _parsear_fila_xml(elem, compartidos, errores, ultimo_numero=ultimo_numero)
+        elem.clear()
+        if parseada is None:
+            if len(errores) > errores_antes and errores[-1].get("codigo") in ("fila_invalida", "celda_invalida"):
+                fila_rechazada = errores[-1].get("fila")
+                if isinstance(fila_rechazada, int):
+                    ultimo_numero = fila_rechazada
+            continue
+        numero, valores = parseada
+        ultimo_numero = numero
+        if encabezado is None and numero <= 20:
+            mapeo = {
+                col: _COLUMNAS[n]
+                for col, valor in valores.items()
+                if (n := _normalizar(valor)) in _COLUMNAS and n not in _IGNORAR_ENCABEZADOS
+            }
+            if _REQUERIDAS <= set(mapeo.values()):
+                encabezado = numero, mapeo
+            continue
+        if encabezado is None:
+            continue
+        fila_encabezado, columnas = encabezado
+        if numero <= fila_encabezado:
+            continue
+        registro = _registro_desde_valores(numero, valores, columnas, errores)
+        if registro is None:
+            continue
+        if len(resultado) >= 1000:
+            raise ErrorDeDominio("La planilla supera el máximo de 1000 filas")
+        resultado.append(registro)
+    if encabezado is None:
+        raise ErrorDeDominio("No se encontraron las columnas obligatorias de la plantilla")
+    if not resultado and not errores:
+        raise ErrorDeDominio("La hoja no contiene filas para importar", {"hoja": hoja})
+    return resultado, errores
+
+
+def _hoja_xml_y_compartidos(contenido: bytes, *, hoja: str) -> tuple[bytes, list[str]]:
     if not contenido:
         raise ErrorDeDominio("La planilla está vacía")
     if len(contenido) > 5 * 1024 * 1024:
@@ -136,10 +264,19 @@ def leer_celdas_hoja(contenido: bytes, *, hoja: str) -> list[tuple[int, dict[int
                 raise ErrorDeDominio("No existe la hoja requerida", {"hoja": hoja})
             destino = destinos[hoja_nodo.attrib[f"{_REL_NS}id"]].lstrip("/")
             ruta = destino if destino.startswith("xl/") else f"xl/{destino}"
-            raiz = ET.fromstring(_leer_parte_zip(libro, ruta))
+            hoja_xml = _leer_parte_zip(libro, ruta)
     except (BadZipFile, KeyError, ET.ParseError) as exc:
         raise ErrorDeDominio("El archivo no es una planilla XLSX válida") from exc
+    return hoja_xml, compartidos
 
+
+def leer_celdas_hoja(contenido: bytes, *, hoja: str) -> list[tuple[int, dict[int, object]]]:
+    """Extrae celdas de una hoja XLSX (ZIP/XML) sin interpretar columnas de negocio.
+
+    Cada tupla es (número de fila de Excel, {índice de columna 1-based: valor}).
+    """
+    hoja_xml, compartidos = _hoja_xml_y_compartidos(contenido, hoja=hoja)
+    raiz = ET.fromstring(hoja_xml)
     filas: list[tuple[int, dict[int, object]]] = []
     for fila in raiz.iter(f"{_NS}row"):
         numero = int(fila.attrib.get("r", "0"))
@@ -148,35 +285,7 @@ def leer_celdas_hoja(contenido: bytes, *, hoja: str) -> list[tuple[int, dict[int
     return filas
 
 
-def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dict]:
-    filas = leer_celdas_hoja(contenido, hoja=hoja)
-
-    encabezado: tuple[int, dict[int, str]] | None = None
-    for numero, valores in filas[:20]:
-        mapeo = {col: _COLUMNAS[n] for col, valor in valores.items() if (n := _normalizar(valor)) in _COLUMNAS}
-        if _REQUERIDAS <= set(mapeo.values()):
-            encabezado = numero, mapeo
-            break
-    if encabezado is None:
-        raise ErrorDeDominio("No se encontraron las columnas obligatorias de la plantilla")
-
-    fila_encabezado, columnas = encabezado
-    resultado: list[dict] = []
-    for numero, valores in filas:
-        if numero <= fila_encabezado:
-            continue
-        registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
-        if not any(registro.get(c) not in (None, "") for c in _REQUERIDAS):
-            continue
-        registro["fila"] = numero
-        for campo in ("fecha_emision", "fecha_vencimiento"):
-            registro[campo] = _fecha(registro.get(campo), con_hora=False)
-        for campo in ("fecha_exportacion", "fecha_presentacion", "fecha_respuesta"):
-            registro[campo] = _fecha(registro.get(campo), con_hora=True)
-        resultado.append(registro)
-    if not resultado:
-        raise ErrorDeDominio("La hoja no contiene filas para importar", {"hoja": hoja})
-    if len(resultado) > 1000:
-        raise ErrorDeDominio("La planilla supera el máximo de 1000 filas")
-    return resultado
+def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> tuple[list[dict], list[dict]]:
+    hoja_xml, compartidos = _hoja_xml_y_compartidos(contenido, hoja=hoja)
+    return _leer_filas_hoja(hoja_xml, compartidos, hoja=hoja)
 
