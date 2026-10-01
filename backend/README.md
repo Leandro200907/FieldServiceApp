@@ -135,6 +135,25 @@ Pendiente expresamente para después de v1: cambio y restablecimiento de contras
 reactivación (exigirá `tokens_validos_desde` o una versión de seguridad en el claim para
 que no revivan tokens emitidos antes de la desactivación) y gestión de usuarios por API.
 
+## Base de demo
+
+Base dedicada **`fsm_demo`** (el nombre debe terminar en `_demo`). El script aborta si
+`DATABASE_URL` y `DATABASE_URL_MIGRATIONS` no apuntan a la misma base con ese sufijo.
+
+1. Crear la base (owner `modulo1_owner`), por ejemplo: `psql … -v db=fsm_demo -f scripts/crear_base.sql`
+2. En `.env`, apuntar `DATABASE_URL` y `DATABASE_URL_MIGRATIONS` a `fsm_demo`; definir
+   **`DEMO_PASSWORD`** (o usar prompt al correr el script).
+3. Sembrado completo:
+
+```bash
+ENV_FILE=.env .venv/Scripts/python scripts/sembrar_demo.py --reset --importar-planillas
+```
+
+4. Levantar API, frontend y storage local; ingresar con un mail `*@<slug>.demo.test` del
+   listado que imprime el script (contraseña: la de `DEMO_PASSWORD`).
+
+Las planillas generadas viven en `scripts/demo_planillas/<slug>/` (gitignored).
+
 ## Correr
 
 ```bash
