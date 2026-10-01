@@ -12,6 +12,7 @@ import argparse
 import getpass
 import os
 import sys
+from itertools import cycle
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -97,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     password = obtener_demo_password()
     ctx = SemillaContext()
     estados: list[EstadoTenant] = []
-    nombres = iter(NOMBRES_PERSONA)
+    nombres = cycle(NOMBRES_PERSONA)
     storage = obtener_storage()
 
     for spec in TENANTS:

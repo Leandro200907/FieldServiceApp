@@ -56,11 +56,9 @@ class EstadoTenant:
 def crear_usuarios_demo(est: EstadoTenant, password: str, nombres_iter) -> None:
     est.tenant_id = crear_tenant(est.spec.slug, est.spec.nombre, "America/Argentina/Buenos_Aires")
 
-    idx_nombre = 0
     for rol in ROLES:
         for n in (1, 2, 3):
-            nom, ape = nombres_iter[idx_nombre]
-            idx_nombre += 1
+            nom, ape = next(nombres_iter)
             email = f"{rol}{n}@{est.spec.slug}.demo.test"
             sujeto = None
             if rol == "tecnico":
