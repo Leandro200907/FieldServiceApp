@@ -32,7 +32,7 @@ from scripts.demo.db_util import (  # noqa: E402
 )
 from scripts.demo.planillas import generar_planillas, importar_planillas  # noqa: E402
 from scripts.demo.reporte import imprimir_paquetes, imprimir_resumen, imprimir_tabla_usuarios  # noqa: E402
-from scripts.demo.semilla_tenant import SemillaContext, sembrar_tenant  # noqa: E402
+from scripts.demo.semilla_tenant import SemillaContext, sembrar_bandeja_pendiente_post_worker, sembrar_tenant  # noqa: E402
 
 
 def obtener_demo_password() -> str:
@@ -117,6 +117,12 @@ def main(argv: list[str] | None = None) -> int:
         correr_worker_una_vuelta()
     except Exception as e:  # noqa: BLE001
         ctx.fallas.append(f"worker --una-vuelta: {e}")
+
+    for est in estados:
+        try:
+            sembrar_bandeja_pendiente_post_worker(est, storage)
+        except Exception as e:  # noqa: BLE001
+            ctx.fallas.append(f"bandeja_pendiente {est.spec.slug}: {e}")
 
     for est in estados:
         try:

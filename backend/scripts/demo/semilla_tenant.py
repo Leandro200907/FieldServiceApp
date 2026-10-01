@@ -397,15 +397,6 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             suj = _sujeto_para_clave_doc(est, key)
             _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key)
             subidos += 1
-        # pendientes validación (bandeja; worker corre después en sembrar_demo)
-        for key in ("t1_vigente_Apto médico", "t2_vigente_Apto médico"):
-            if key in est.documentos:
-                doc = est.documentos[key]
-                suj = _sujeto_para_clave_doc(est, key)
-                preparar_subida(s, idn, doc, "pendiente.pdf", "application/pdf", storage=storage)
-                fila = s.execute(text("SELECT clave_storage FROM modulo1.documento WHERE documento_id = :d"), {"d": doc}).scalar()
-                storage.escribir(str(fila), pdf_demo(suj, key))
-                confirmar_subida(s, idn, doc, storage=storage)
         inv = est.documentos.get("t1_vencido_Constancia ART")
         if inv:
             _subir(storage, s, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
@@ -446,6 +437,21 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 ),
             )
             legajos.rechazar_propuesta(s, idn, leg_esq.RechazarPropuesta(documento_id=uuid.UUID(pr["documento_id"]), motivo="Rechazo demo"))
+
+
+def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
+    """Dos evidencias confirmadas con validación pendiente (después del worker en sembrar_demo)."""
+    idn = est.idn("responsable_legajos", 1)
+    with tenant_session(est.tenant_id) as s:
+        for key in ("t1_vigente_Apto médico", "t2_vigente_Apto médico"):
+            if key not in est.documentos:
+                continue
+            doc = est.documentos[key]
+            suj = _sujeto_para_clave_doc(est, key)
+            preparar_subida(s, idn, doc, "pendiente.pdf", "application/pdf", storage=storage)
+            fila = s.execute(text("SELECT clave_storage FROM modulo1.documento WHERE documento_id = :d"), {"d": doc}).scalar()
+            storage.escribir(str(fila), pdf_demo(suj, key))
+            confirmar_subida(s, idn, doc, storage=storage)
 
 
 def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
