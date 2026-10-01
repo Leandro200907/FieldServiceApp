@@ -6342,6 +6342,7 @@ export interface operations {
             };
             header?: {
                 "X-Nombre-Archivo"?: string;
+                "Content-Type"?: string;
                 "Idempotency-Key"?: string | null;
             };
             path?: never;
