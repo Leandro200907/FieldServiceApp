@@ -92,6 +92,8 @@ def cargar_requisitos(est: EstadoTenant, ctx: SemillaContext) -> None:
                 est.requisitos[demo_n] = r["requisito_definicion_id"]
         else:
             for spec in REQUISITOS_LOCALES:
+                if spec["nombre"] == "Inducción operadora":
+                    continue  # requiere locacion_id; se crea tras catálogos
                 r = req_svc.dar_de_alta_definicion_de_requisito(
                     s,
                     idn,
@@ -155,8 +157,7 @@ def cargar_documentos_tecnicos(est: EstadoTenant, ctx: SemillaContext) -> None:
         ("Apto médico", "vigente", v1, v2),
         ("Licencia de conducir", "por_vencer", pv1, pv2),
         ("Constancia ART", "vencido", ve1, ve2),
-        ("Curso de manejo defensivo", "propuesta", v1, v2),
-        ("Inducción operadora", "suceder", v1, v2),
+        ("Apto médico", "suceder", v1, v2),
     ]
     with tenant_session(est.tenant_id) as s:
         for n in (1, 2, 3):
@@ -507,7 +508,7 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
         oc_id = est.ocs.get("en_curso")
         if oc_id:
             fila_oc = s.execute(
-                text("SELECT commitment_id FROM modulo1.oc WHERE oc_id = :o"), {"o": oc_id}
+                text("SELECT clave_origen FROM modulo1.oc WHERE oc_id = :o"), {"o": oc_id}
             ).scalar()
             req_svc.cargar_requisito_particular(
                 s,
