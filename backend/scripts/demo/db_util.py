@@ -89,10 +89,11 @@ def reset_base(dsn_owner: str, nombre_base: str) -> None:
         raise ErrorDemo(f"alembic upgrade head falló:\n{r.stderr or r.stdout}")
 
 
-def tenant_ids_por_slugs(dsn_app: str, slugs: list[str]) -> dict[str, str]:
+def tenant_ids_por_slugs(dsn_owner: str, slugs: list[str]) -> dict[str, str]:
+    """Consulta cross-tenant previa al reset; usa rol owner (RLS no aplica)."""
     if not slugs:
         return {}
-    with psycopg.connect(dsn_app) as conn:
+    with psycopg.connect(dsn_owner) as conn:
         filas = conn.execute(
             "SELECT slug, tenant_id::text FROM modulo1.tenant WHERE slug = ANY(%s)",
             (slugs,),

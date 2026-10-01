@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     slugs = [t.slug for t in TENANTS]
 
     if args.reset:
-        ids_viejos = list(tenant_ids_por_slugs(dsn_app, slugs).values())
+        ids_viejos = list(tenant_ids_por_slugs(dsn_owner, slugs).values())
         n = borrar_storage_tenants(ids_viejos)
         print(f"Storage: {n} objetos borrados (tenants demo previos)")
         reset_base(dsn_owner, nombre_base)
