@@ -577,20 +577,38 @@ fencing. Dead-letter del job: nunca silencioso, notifica a `configuracion`
 
 ## Auditoría 2026-09-29 — Cierre de tres decisiones pendientes
 
-### D-A. Superficie HTTP operativa (`aa62dbe`) — **no reponer en Módulo 1**
+### D-A. Superficie HTTP operativa (`aa62dbe`) — **parcialmente corregida por D-A bis**
 
-**Decisión:** Mantener retirados de la API pública los comandos/consultas de custodia,
-excepciones, constancias, evaluación de habilitación, backlog/cobertura/decisiones y
+**Decisión original:** Retirar de la API pública los comandos/consultas de custodia,
+excepciones, constancias, evaluación de habilitación, **decisiones** (historial) y
 asignación de supervisores (`test_superficie_modulo1.py::RUTAS_OPERATIVAS_RETIRADAS`).
 
-**Motivo:** Frontera de producto Módulo 1 (documentación habilitante + radar informativo) vs.
-Módulo 2 (operación/asignación). Exponer de nuevo esas rutas duplicaría responsabilidades y
-reintroduciría en el frontend flujos que ya se retiraron (`SupervisionScreen`).
+**Motivo:** Frontera Módulo 1 (documentación habilitante + consultas de solo lectura) vs.
+Módulo 2 (operación/asignación/decisión persistida).
 
-**Qué se conserva:** Toda la lógica de dominio en `app/modules/operacion/servicio.py`,
-`app/core/orquestacion.py::decidir_habilitacion`, tablas `evaluacion_habilitacion`, revaluación
-(A-07) y tests que llaman al **servicio** directamente. `evaluar_habilitacion` queda documentado
-como servicio interno para integración autenticada desde Módulo 2, no como contrato HTTP de M1.
+**Qué se conserva retirado:** `evaluar_habilitacion`, `decisiones_oc`, `decision`,
+excepciones, constancias, custodia, `historial_supervision`, asignación de supervisores.
+Toda la lógica persiste en servicios internos para Módulo 2.
+
+### D-A bis (corrige D-A). Backlog de OC con cobertura y timeline de vigencias — **Módulo 1**
+
+**Decisión:** `GET /v1/consultas/backlog_oc`, `GET /v1/consultas/cobertura_oc` y
+`GET /v1/consultas/timeline_recursos` vuelven a la API pública de Módulo 1 como **modo
+consulta** (modelo-dominio 2.1): no persisten decisiones, no asignan recursos, no crean
+tareas ni emiten eventos.
+
+**Citas.** documentacion-habilitante 1.12 (planilla OC standalone, cobertura en dos pasos,
+formato de motivo); wireframes-api 9.4 (`cobertura-backlog`, `vigencias-por-tecnico`).
+
+**Alcance:** Cobertura en vivo con `cobertura_de_oc` (empresa primero; un legajo por tipo que
+cumpla todos sus requisitos en la ventana; nunca componer entre legajos). El backlog **no**
+expone `ultima_decision` (historial de evaluación = Módulo 2). Supervisor: candidatos de su
+universo vía `alcance_de_sujetos`; empresa siempre evaluada (D-B). Si falta un tipo solo
+porque los legajos están fuera del universo → estado `fuera_de_alcance`, no
+"información incompleta".
+
+**Límite:** Módulo 2 conserva asignar, decidir (`decidir_habilitacion` vía HTTP interno futuro)
+y trabajo planificado/real. La asignación de supervisores sigue pendiente de otra decisión.
 
 ### D-B. Empresa en el radar para supervisor — **siempre visible en radar documental**
 
@@ -621,4 +639,50 @@ sigue vigente.
 
 Los obligatorios comparten commit con el INSERT/UPDATE de `documento`. Los secundarios se
 envuelven en savepoint en la fase B-5 (fallo → rollback parcial, la versión documental queda).
+
+### D-E. Backlog sin veredicto de cobertura — **Módulo 1 (2026-09-30)**
+
+**Principio:** El Módulo 1 **no afirma “OC cubierta”**. No conoce la dotación que necesita
+cada OC: eso lo define la planificación del supervisor (Módulo 2). El Módulo 1 solo marca en
+rojo **certezas** (verdaderas para cualquier dotación) y muestra la **disponibilidad
+documental** como información. Nunca asigna personas, vehículos ni equipos.
+
+**Vocabulario:** *habilitado / no habilitado* (estado documental en la ventana de la OC).
+Prohibido en UI y contratos de backlog: *asignable*, *cubierta*, *no cubierta*.
+
+**Alertas ciertas por OC** (modo consulta, sin persistir):
+
+| Código | Significado |
+|---|---|
+| `empresa_no_habilitada` | La empresa no cumple en algún tramo de la ventana (con fechas). |
+| `tipo_sin_habilitados` | Un tipo de recurso exigido por la matriz tiene **cero** legajos habilitados en algún tramo de la ventana (con fechas). |
+| `sin_matriz` | La OC no tiene matriz aplicable en algún tramo de su ventana. |
+
+**Disponibilidad por tipo exigido** (informativo, sin veredicto): conteos de legajos
+habilitados toda la ventana; habilitados que se caen dentro de la ventana (cada uno con fecha
+y requisito); no habilitados. Ejemplo: «Técnicos: 4 habilitados toda la ventana · 2 se caen
+el 18/11 (apto médico) · 3 no habilitados».
+
+**Impacto cierto:** por tipo exigido, cantidad de días de la ventana **sin ningún** legajo
+habilitado, más los tramos exactos. `vigente_hasta` es **inclusivo**: si el único habilitado
+vence el 18/11 y la ventana termina el 25/11, el impacto es 19/11–25/11 = 7 días.
+
+**Supervisor (D-B):** universo propio + empresa. Si un tipo tiene cero habilitados **solo**
+porque los legajos están fuera de su universo → `fuera_de_alcance`; **nunca**
+`tipo_sin_habilitados` ni “falta información”.
+
+**Reprogramación de OC:** comando auditado con motivo; historial desde `event_log`
+(`CompromisoModificado`); efecto documental antes/después de la ventana.
+
+**Catálogo único de operadoras:** la operadora de la OC es la misma entidad que
+`operadora_documental` (`cliente_id` = `operadora_id`). Locaciones y tipos de servicio tienen
+catálogo con nombre; planilla de OC y pantallas usan nombres, no UUIDs crudos.
+
+**Evolución futura (Módulo 2):** cuando informe la dotación requerida por OC (evento con
+versión), el Módulo 1 podrá mostrar «X de N» recursos; **hoy no** — no hay N conocido en M1.
+
+**Modo consulta:** `GET backlog_oc`, `cobertura_oc`, `timeline_recursos`, `acciones_pendientes`
+no persisten evaluaciones ni emiten eventos.
+
+**Código / tests:** `app/modules/consultas/backlog_documental.py`, `tests/test_backlog_m1_de.py`.
 

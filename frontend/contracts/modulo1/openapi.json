@@ -1,6 +1,183 @@
 {
   "components": {
     "schemas": {
+      "AccionPendienteItem": {
+        "properties": {
+          "accion_sugerida": {
+            "title": "Accion Sugerida",
+            "type": "string"
+          },
+          "accion_sugerida_fecha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accion Sugerida Fecha"
+          },
+          "efecto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Efecto"
+          },
+          "fecha_limite": {
+            "title": "Fecha Limite",
+            "type": "string"
+          },
+          "genera_alerta_cierta": {
+            "default": false,
+            "title": "Genera Alerta Cierta",
+            "type": "boolean"
+          },
+          "legajo_id": {
+            "title": "Legajo Id",
+            "type": "string"
+          },
+          "legajo_nombre": {
+            "title": "Legajo Nombre",
+            "type": "string"
+          },
+          "ocs_afectadas": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Ocs Afectadas",
+            "type": "array"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legajo_id",
+          "legajo_nombre",
+          "tipo_sujeto",
+          "fecha_limite",
+          "accion_sugerida",
+          "ocs_afectadas"
+        ],
+        "title": "AccionPendienteItem",
+        "type": "object"
+      },
+      "AccionesPendientesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AccionPendienteItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "AccionesPendientesResponse",
+        "type": "object"
+      },
+      "AlertaCiertaOc": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "desde": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desde"
+          },
+          "hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hasta"
+          },
+          "mensaje": {
+            "title": "Mensaje",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Sujeto"
+          },
+          "tramos": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tramos"
+          }
+        },
+        "required": [
+          "codigo",
+          "mensaje"
+        ],
+        "title": "AlertaCiertaOc",
+        "type": "object"
+      },
       "AlertaHistorialItem": {
         "properties": {
           "abierta_en": {
@@ -599,6 +776,57 @@
         "title": "AltaDeSujeto",
         "type": "object"
       },
+      "AltaLocacionBody": {
+        "properties": {
+          "nombre": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre",
+            "type": "string"
+          },
+          "operadora_id": {
+            "format": "uuid",
+            "title": "Operadora Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operadora_id",
+          "nombre"
+        ],
+        "title": "AltaLocacionBody",
+        "type": "object"
+      },
+      "AltaOperadoraBody": {
+        "properties": {
+          "nombre": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "title": "AltaOperadoraBody",
+        "type": "object"
+      },
+      "AltaTipoServicioBody": {
+        "properties": {
+          "nombre": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "title": "AltaTipoServicioBody",
+        "type": "object"
+      },
       "ArchivoEnBandejaDrive": {
         "properties": {
           "archivo_drive_id": {
@@ -772,6 +1000,37 @@
           "causas_activas"
         ],
         "title": "AvisoIncumplimiento",
+        "type": "object"
+      },
+      "BacklogOcResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OcBacklogItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "BacklogOcResponse",
         "type": "object"
       },
       "BajaDeSujeto": {
@@ -1098,6 +1357,41 @@
         "title": "CargarRequisitoParticularResponse",
         "type": "object"
       },
+      "CatalogosOcResponse": {
+        "properties": {
+          "locaciones": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Locaciones",
+            "type": "array"
+          },
+          "operadoras": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Operadoras",
+            "type": "array"
+          },
+          "tipos_servicio": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tipos Servicio",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operadoras",
+          "locaciones",
+          "tipos_servicio"
+        ],
+        "title": "CatalogosOcResponse",
+        "type": "object"
+      },
       "CausaIncumplimiento": {
         "properties": {
           "causa_id": {
@@ -1156,6 +1450,81 @@
           "regularizada_en"
         ],
         "title": "CausaIncumplimiento",
+        "type": "object"
+      },
+      "CoberturaOcResponse": {
+        "properties": {
+          "alertas_ciertas": {
+            "items": {
+              "$ref": "#/components/schemas/AlertaCiertaOc"
+            },
+            "title": "Alertas Ciertas",
+            "type": "array"
+          },
+          "commitment_id": {
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "disponibilidad_por_tipo": {
+            "items": {
+              "$ref": "#/components/schemas/DisponibilidadTipoOc"
+            },
+            "title": "Disponibilidad Por Tipo",
+            "type": "array"
+          },
+          "historial_compromiso": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Historial Compromiso",
+            "type": "array"
+          },
+          "impacto_por_tipo": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Impacto Por Tipo",
+            "type": "array"
+          },
+          "modo": {
+            "title": "Modo",
+            "type": "string"
+          },
+          "oc": {
+            "additionalProperties": true,
+            "title": "Oc",
+            "type": "object"
+          },
+          "reprogramada": {
+            "default": false,
+            "title": "Reprogramada",
+            "type": "boolean"
+          },
+          "tiene_alertas": {
+            "title": "Tiene Alertas",
+            "type": "boolean"
+          },
+          "tipos_fuera_de_alcance": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tipos Fuera De Alcance",
+            "type": "array"
+          }
+        },
+        "required": [
+          "commitment_id",
+          "oc",
+          "modo",
+          "tiene_alertas",
+          "alertas_ciertas",
+          "disponibilidad_por_tipo",
+          "impacto_por_tipo",
+          "tipos_fuera_de_alcance"
+        ],
+        "title": "CoberturaOcResponse",
         "type": "object"
       },
       "ConfiguracionAlertasResponse": {
@@ -2049,6 +2418,59 @@
         "title": "CopiarMatrizGlobalResponse",
         "type": "object"
       },
+      "CruceOcTimeline": {
+        "properties": {
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "llega_cubierto": {
+            "title": "Llega Cubierto",
+            "type": "boolean"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "quiebres": {
+            "items": {
+              "$ref": "#/components/schemas/QuiebreOcTimeline"
+            },
+            "title": "Quiebres",
+            "type": "array"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "referencia",
+          "vigencia_desde",
+          "vigencia_hasta",
+          "llega_cubierto",
+          "quiebres"
+        ],
+        "title": "CruceOcTimeline",
+        "type": "object"
+      },
       "DarDeAltaDefinicionDeRequisito": {
         "properties": {
           "categoria": {
@@ -2509,6 +2931,61 @@
           "advertencia"
         ],
         "title": "DetalleOcRadarResponse",
+        "type": "object"
+      },
+      "DisponibilidadTipoOc": {
+        "properties": {
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "etiqueta": {
+            "title": "Etiqueta",
+            "type": "string"
+          },
+          "habilitados_toda_ventana": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Habilitados Toda Ventana",
+            "type": "array"
+          },
+          "no_habilitados": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "No Habilitados",
+            "type": "array"
+          },
+          "se_cae_en_ventana": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Se Cae En Ventana",
+            "type": "array"
+          },
+          "texto": {
+            "title": "Texto",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_sujeto",
+          "etiqueta",
+          "estado",
+          "texto",
+          "habilitados_toda_ventana",
+          "se_cae_en_ventana",
+          "no_habilitados"
+        ],
+        "title": "DisponibilidadTipoOc",
         "type": "object"
       },
       "DocumentoCargadoResponse": {
@@ -3836,6 +4313,111 @@
         "title": "ImportarLoteResponse",
         "type": "object"
       },
+      "ImportarPlanillaOcResponse": {
+        "properties": {
+          "detalle_filas_rechazadas": {
+            "items": {
+              "$ref": "#/components/schemas/FilaRechazada"
+            },
+            "title": "Detalle Filas Rechazadas",
+            "type": "array"
+          },
+          "errores_lectura": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errores Lectura",
+            "type": "array"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "filas_aceptadas": {
+            "title": "Filas Aceptadas",
+            "type": "integer"
+          },
+          "filas_rechazadas": {
+            "title": "Filas Rechazadas",
+            "type": "integer"
+          },
+          "filas_totales": {
+            "title": "Filas Totales",
+            "type": "integer"
+          },
+          "lote_id": {
+            "title": "Lote Id",
+            "type": "string"
+          },
+          "oc_actualizadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Actualizadas"
+          },
+          "oc_creadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Creadas"
+          },
+          "oc_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Oc Ids",
+            "type": "array"
+          },
+          "oc_modificadas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OcModificada"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oc Modificadas"
+          },
+          "ya_aplicado": {
+            "title": "Ya Aplicado",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lote_id",
+          "estado",
+          "filas_totales",
+          "filas_aceptadas",
+          "filas_rechazadas",
+          "detalle_filas_rechazadas",
+          "oc_ids",
+          "ya_aplicado",
+          "eventos"
+        ],
+        "title": "ImportarPlanillaOcResponse",
+        "type": "object"
+      },
       "ImportarPlanillaOperadorasResponse": {
         "properties": {
           "archivo": {
@@ -4071,7 +4653,8 @@
               "sin_alertas_documentales",
               "con_alertas_documentales",
               "informacion_incompleta",
-              "sin_matriz"
+              "sin_matriz",
+              "fuera_de_alcance"
             ],
             "title": "Estado Documental",
             "type": "string"
@@ -4888,6 +5471,180 @@
         "title": "MiLegajoResponse",
         "type": "object"
       },
+      "OcBacklogItem": {
+        "properties": {
+          "actualizado_en": {
+            "title": "Actualizado En",
+            "type": "string"
+          },
+          "alertas_ciertas": {
+            "items": {
+              "$ref": "#/components/schemas/AlertaCiertaOc"
+            },
+            "title": "Alertas Ciertas",
+            "type": "array"
+          },
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "cliente_id": {
+            "title": "Cliente Id",
+            "type": "string"
+          },
+          "creado_en": {
+            "title": "Creado En",
+            "type": "string"
+          },
+          "disponibilidad_por_tipo": {
+            "items": {
+              "$ref": "#/components/schemas/DisponibilidadTipoOc"
+            },
+            "title": "Disponibilidad Por Tipo",
+            "type": "array"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "impacto_por_tipo": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Impacto Por Tipo",
+            "type": "array"
+          },
+          "locacion_id": {
+            "title": "Locacion Id",
+            "type": "string"
+          },
+          "locacion_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Nombre"
+          },
+          "lote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lote Id"
+          },
+          "modo": {
+            "title": "Modo",
+            "type": "string"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "operadora_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operadora Nombre"
+          },
+          "origen_oc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origen Oc"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "reprogramada": {
+            "default": false,
+            "title": "Reprogramada",
+            "type": "boolean"
+          },
+          "tiene_alertas": {
+            "title": "Tiene Alertas",
+            "type": "boolean"
+          },
+          "tipo_servicio_id": {
+            "title": "Tipo Servicio Id",
+            "type": "string"
+          },
+          "tipo_servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Servicio Nombre"
+          },
+          "tipos_fuera_de_alcance": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tipos Fuera De Alcance",
+            "type": "array"
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "clave_origen",
+          "referencia",
+          "cliente_id",
+          "locacion_id",
+          "tipo_servicio_id",
+          "vigencia_desde",
+          "vigencia_hasta",
+          "estado",
+          "lote_id",
+          "creado_en",
+          "actualizado_en",
+          "modo",
+          "tiene_alertas",
+          "alertas_ciertas",
+          "disponibilidad_por_tipo",
+          "impacto_por_tipo",
+          "tipos_fuera_de_alcance"
+        ],
+        "title": "OcBacklogItem",
+        "type": "object"
+      },
       "OcModificada": {
         "properties": {
           "campos_modificados": {
@@ -5416,6 +6173,42 @@
         "title": "PublicarVersionDeMatrizResponse",
         "type": "object"
       },
+      "QuiebreOcTimeline": {
+        "properties": {
+          "fecha": {
+            "title": "Fecha",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "tipo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo"
+          }
+        },
+        "required": [
+          "fecha",
+          "requisito"
+        ],
+        "title": "QuiebreOcTimeline",
+        "type": "object"
+      },
       "RadarBacklogResponse": {
         "properties": {
           "advertencia": {
@@ -5637,6 +6430,45 @@
           "resumen"
         ],
         "title": "RecursoCustodiado",
+        "type": "object"
+      },
+      "RecursoTimeline": {
+        "properties": {
+          "identificador": {
+            "title": "Identificador",
+            "type": "string"
+          },
+          "ocs": {
+            "items": {
+              "$ref": "#/components/schemas/CruceOcTimeline"
+            },
+            "title": "Ocs",
+            "type": "array"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "title": "Tipo Sujeto",
+            "type": "string"
+          },
+          "tramos": {
+            "items": {
+              "$ref": "#/components/schemas/TramoTimeline"
+            },
+            "title": "Tramos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "tipo_sujeto",
+          "identificador",
+          "tramos",
+          "ocs"
+        ],
+        "title": "RecursoTimeline",
         "type": "object"
       },
       "RefreshRequest": {
@@ -5976,6 +6808,39 @@
           "eventos"
         ],
         "title": "RegistrarInduccionResponse",
+        "type": "object"
+      },
+      "ReprogramarOcBody": {
+        "properties": {
+          "motivo": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
+          },
+          "oc_id": {
+            "format": "uuid",
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "vigencia_desde": {
+            "format": "date",
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "format": "date",
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "oc_id",
+          "vigencia_desde",
+          "vigencia_hasta",
+          "motivo"
+        ],
+        "title": "ReprogramarOcBody",
         "type": "object"
       },
       "RequisitoPaquete": {
@@ -6462,6 +7327,116 @@
         "title": "TableroVencimientosResponse",
         "type": "object"
       },
+      "TimelineRecursosResponse": {
+        "properties": {
+          "desde": {
+            "title": "Desde",
+            "type": "string"
+          },
+          "hasta": {
+            "title": "Hasta",
+            "type": "string"
+          },
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecursoTimeline"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hoy",
+          "desde",
+          "hasta",
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "TimelineRecursosResponse",
+        "type": "object"
+      },
+      "TramoTimeline": {
+        "properties": {
+          "categoria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria"
+          },
+          "estado_confirmacion": {
+            "title": "Estado Confirmacion",
+            "type": "string"
+          },
+          "estado_visual": {
+            "title": "Estado Visual",
+            "type": "string"
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "vigente_desde": {
+            "title": "Vigente Desde",
+            "type": "string"
+          },
+          "vigente_hasta": {
+            "title": "Vigente Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requisito_definicion_id",
+          "requisito",
+          "categoria",
+          "vigente_desde",
+          "vigente_hasta",
+          "estado_confirmacion",
+          "estado_visual"
+        ],
+        "title": "TramoTimeline",
+        "type": "object"
+      },
       "UrlDeDescargaResponse": {
         "properties": {
           "documento_id": {
@@ -6808,7 +7783,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0026_lote_por_entidad"
+    "x-migracion-head": "0028_catalogos_oc"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7291,6 +8266,291 @@
         "tags": [
           "legajos"
         ]
+      }
+    },
+    "/v1/comandos/alta_locacion_oc": {
+      "post": {
+        "operationId": "alta_locacion_oc_v1_comandos_alta_locacion_oc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AltaLocacionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Alta Locacion Oc V1 Comandos Alta Locacion Oc Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Alta Locacion Oc"
+      }
+    },
+    "/v1/comandos/alta_operadora_oc": {
+      "post": {
+        "operationId": "alta_operadora_oc_v1_comandos_alta_operadora_oc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AltaOperadoraBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Alta Operadora Oc V1 Comandos Alta Operadora Oc Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Alta Operadora Oc"
+      }
+    },
+    "/v1/comandos/alta_tipo_servicio_oc": {
+      "post": {
+        "operationId": "alta_tipo_servicio_oc_v1_comandos_alta_tipo_servicio_oc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AltaTipoServicioBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Alta Tipo Servicio Oc V1 Comandos Alta Tipo Servicio Oc Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Alta Tipo Servicio Oc"
       }
     },
     "/v1/comandos/baja_de_sujeto": {
@@ -9321,6 +10581,123 @@
         "summary": "Importar Lote Oc"
       }
     },
+    "/v1/comandos/importar_planilla_oc": {
+      "post": {
+        "operationId": "importar_planilla_oc_v1_comandos_importar_planilla_oc_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lote_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lote Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hoja",
+            "required": false,
+            "schema": {
+              "default": "OC",
+              "maxLength": 80,
+              "title": "Hoja",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Nombre-Archivo",
+            "required": false,
+            "schema": {
+              "default": "planilla_oc.xlsx",
+              "maxLength": 500,
+              "title": "X-Nombre-Archivo",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportarPlanillaOcResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Importar Planilla Oc"
+      }
+    },
     "/v1/comandos/importar_planilla_operadoras": {
       "post": {
         "operationId": "importar_planilla_operadoras_v1_comandos_importar_planilla_operadoras_post",
@@ -10487,6 +11864,119 @@
         ]
       }
     },
+    "/v1/comandos/reprogramar_oc": {
+      "post": {
+        "operationId": "reprogramar_oc_v1_comandos_reprogramar_oc_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReprogramarOcBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reprogramar Oc V1 Comandos Reprogramar Oc Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reprogramar Oc"
+      }
+    },
     "/v1/comandos/resolver_archivo_drive": {
       "post": {
         "operationId": "resolver_archivo_drive_v1_comandos_resolver_archivo_drive_post",
@@ -10943,6 +12433,235 @@
         ]
       }
     },
+    "/v1/consultas/acciones_pendientes": {
+      "get": {
+        "operationId": "acciones_pendientes_v1_consultas_acciones_pendientes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "vigencia_desde",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vigencia Desde"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vigencia_hasta",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vigencia Hasta"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "operadora_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Operadora Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "locacion_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Locacion Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tipo_recurso",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Recurso"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccionesPendientesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Acciones Pendientes"
+      }
+    },
     "/v1/consultas/alertas_abiertas": {
       "get": {
         "operationId": "alertas_abiertas_v1_consultas_alertas_abiertas_get",
@@ -11238,6 +12957,284 @@
         "tags": [
           "operadoras-documentales"
         ]
+      }
+    },
+    "/v1/consultas/backlog_oc": {
+      "get": {
+        "operationId": "backlog_oc_v1_consultas_backlog_oc_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "activo",
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vigencia_desde",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vigencia Desde"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vigencia_hasta",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vigencia Hasta"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "operadora_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Operadora Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "locacion_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Locacion Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tipo_recurso",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Recurso"
+            }
+          },
+          {
+            "in": "query",
+            "name": "solo_con_alertas",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Solo Con Alertas"
+            }
+          },
+          {
+            "in": "query",
+            "name": "solo_reprogramadas",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Solo Reprogramadas"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacklogOcResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Backlog Oc"
       }
     },
     "/v1/consultas/bandeja_drive": {
@@ -11718,6 +13715,207 @@
         "tags": [
           "proyeccion"
         ]
+      }
+    },
+    "/v1/consultas/catalogos_oc": {
+      "get": {
+        "operationId": "catalogos_oc_v1_consultas_catalogos_oc_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogosOcResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Catalogos Oc"
+      }
+    },
+    "/v1/consultas/cobertura_oc": {
+      "get": {
+        "operationId": "cobertura_oc_v1_consultas_cobertura_oc_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "oc_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Oc Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "commitment_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Commitment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoberturaOcResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Cobertura Oc"
       }
     },
     "/v1/consultas/configuracion_alertas": {
@@ -14687,6 +16885,200 @@
           }
         ],
         "summary": "Tablero Vencimientos"
+      }
+    },
+    "/v1/consultas/timeline_recursos": {
+      "get": {
+        "operationId": "timeline_recursos_v1_consultas_timeline_recursos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "desde",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Desde",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasta",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Hasta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tipo_sujeto",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "persona",
+                    "vehiculo",
+                    "equipo",
+                    "empresa"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Sujeto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "oc_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Oc Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "solo_quiebres",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Solo Quiebres",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineRecursosResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Timeline Recursos"
       }
     },
     "/v1/consultas/usuarios": {

@@ -110,7 +110,11 @@ def _fecha(valor: object, *, con_hora: bool) -> date | datetime | None:
             raise ErrorDeDominio("Fecha inválida en la planilla", {"valor": str(valor)}) from exc
 
 
-def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dict]:
+def leer_celdas_hoja(contenido: bytes, *, hoja: str) -> list[tuple[int, dict[int, object]]]:
+    """Extrae celdas de una hoja XLSX (ZIP/XML) sin interpretar columnas de negocio.
+
+    Cada tupla es (número de fila de Excel, {índice de columna 1-based: valor}).
+    """
     if not contenido:
         raise ErrorDeDominio("La planilla está vacía")
     if len(contenido) > 5 * 1024 * 1024:
@@ -141,6 +145,11 @@ def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dic
         numero = int(fila.attrib.get("r", "0"))
         valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
         filas.append((numero, valores))
+    return filas
+
+
+def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> list[dict]:
+    filas = leer_celdas_hoja(contenido, hoja=hoja)
 
     encabezado: tuple[int, dict[int, str]] | None = None
     for numero, valores in filas[:20]:

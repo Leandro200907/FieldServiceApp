@@ -545,6 +545,8 @@ def _evaluar(
             permitidos = set(candidatos)
             sujetos = [x for x in sujetos if str(x["sujeto_id"]) in permitidos]
     tipo_sin_sujetos: list[str] = []
+    tipos_fuera_de_alcance: list[str] = []
+    permitidos = set(candidatos) if candidatos is not None else None
     for tipo in tipos_recurso:
         evaluados = [
             _evaluar_sujeto(ctx, str(x["sujeto_id"]), tipo, requisitos_por_tipo[tipo])
@@ -552,14 +554,28 @@ def _evaluar(
             if x["tipo_sujeto"] == tipo
         ]
         if not evaluados:
-            tipo_sin_sujetos.append(tipo)
+            todos_tipo = _sujetos_activos(session, tenant_id, [tipo])
+            fuera = (
+                modo == MODO_CONSULTA
+                and permitidos is not None
+                and bool(todos_tipo)
+                and all(str(x["sujeto_id"]) not in permitidos for x in todos_tipo)
+            )
+            if fuera:
+                tipos_fuera_de_alcance.append(tipo)
+            else:
+                tipo_sin_sujetos.append(tipo)
             cobertura_por_tipo[tipo] = None
             requisitos_faltantes.append(
                 {"tipo_sujeto": tipo, "sujeto_id": None, "requisito_definicion_id": None,
                  "veredicto": Veredicto.NO_HABILITADO.value,
-                 "motivo": (f"ningún sujeto propuesto de tipo {tipo}" if modo == MODO_DECISION
-                            else f"sin candidatos de tipo {tipo}"),
-                 "bajo_excepcion": False}
+                 "motivo": (
+                     f"recursos de tipo {tipo} fuera del alcance del consultante"
+                     if fuera
+                     else (f"ningún sujeto propuesto de tipo {tipo}" if modo == MODO_DECISION
+                           else f"sin candidatos de tipo {tipo}")
+                 ),
+                 "bajo_excepcion": False, "fuera_de_alcance": fuera}
             )
             continue
         if modo == MODO_DECISION:
@@ -587,7 +603,7 @@ def _evaluar(
 
     # Agregación: peor entre empresa y el mejor sujeto de cada tipo exigido.
     veredictos_globales = [Veredicto(r["veredicto"]) for r in representantes]
-    if tipo_sin_sujetos or empresa_sin_evaluar:
+    if tipo_sin_sujetos or tipos_fuera_de_alcance or empresa_sin_evaluar:
         veredictos_globales.append(Veredicto.NO_HABILITADO)
     veredicto_global = peor(veredictos_globales)
 
@@ -611,7 +627,10 @@ def _evaluar(
     # el veredicto global nunca es `habilitado` (ck_excepcion_nunca_verde). El veredicto
     # global es siempre el peor de los representantes: nunca más favorable que ellos.
     todos_asignables = (
-        not tipo_sin_sujetos and not empresa_sin_evaluar and all(r["asignable"] for r in representantes)
+        not tipo_sin_sujetos
+        and not tipos_fuera_de_alcance
+        and not empresa_sin_evaluar
+        and all(r["asignable"] for r in representantes)
     )
     if not todos_asignables:
         resultado = ResultadoDecision.NO_PUEDE_ASIGNARSE
@@ -642,11 +661,13 @@ def _evaluar(
             "empresa_sin_evaluar": empresa_sin_evaluar,
             "cobertura_por_tipo": cobertura_por_tipo,
             "sujetos_evaluados": len(por_sujeto),
+            "tipos_fuera_de_alcance": tipos_fuera_de_alcance,
         }
     )
     return {
         "commitment_id": commitment_id,
         "modo": modo,
+        "tipos_fuera_de_alcance": tipos_fuera_de_alcance,
         "veredicto_de_cumplimiento": veredicto_global.value,
         "resultado_de_decision": resultado.value,
         "por_sujeto": _jsonable(por_sujeto),

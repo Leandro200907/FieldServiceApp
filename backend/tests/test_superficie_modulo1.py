@@ -13,8 +13,6 @@ RUTAS_OPERATIVAS_RETIRADAS = {
     "/v1/comandos/evaluar_habilitacion",
     "/v1/comandos/asignar_supervisor",
     "/v1/comandos/reasignar_supervisor",
-    "/v1/consultas/backlog_oc",
-    "/v1/consultas/cobertura_oc",
     "/v1/consultas/decisiones_oc",
     "/v1/consultas/decision",
     "/v1/consultas/historial_supervision",
@@ -40,4 +38,7 @@ def test_openapi_conserva_lectura_documental_y_radar_informativo():
         "/v1/consultas/radar_documental_backlog",
         "/v1/consultas/radar_documental_oc",
         "/v1/consultas/radar_documental_oc/{oc_id}/legajos/{sujeto_id}",
+        "/v1/consultas/backlog_oc",
+        "/v1/consultas/cobertura_oc",
+        "/v1/consultas/timeline_recursos",
     } <= rutas

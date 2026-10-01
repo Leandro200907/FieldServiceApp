@@ -3,26 +3,29 @@ import { ApiFailure, session } from '../../api';
 import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import type { DetalleOcRadarResponse, ItemRadar, RadarState } from './contracts';
 import { backlogAccess, isBacklogIntegrated } from './access';
+import { formatFecha } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
 import './radar.css';
 
-const stateLabels: Record<RadarState, string> = {
+const stateLabels: Record<string, string> = {
   sin_alertas_documentales: 'Sin alertas documentales',
   con_alertas_documentales: 'Con alertas documentales',
   informacion_incompleta: 'Información incompleta',
   sin_matriz: 'Sin matriz aplicable',
+  fuera_de_alcance: 'Recursos fuera de tu alcance',
 };
 
 function displayDate(value: string | null | undefined) {
-  return value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)) : 'Sin fecha';
+  const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  return value ? formatFecha(value, timeZone) : 'Sin fecha';
 }
 
 function displayInstant(value: string) {
   const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone }).format(new Date(value));
+  return formatFecha(value, timeZone);
 }
 
 function summaryLabel(row: ItemRadar) {
@@ -58,7 +61,7 @@ function DetailPanel({ detail, onLegajo, onOffsetChange }: { detail: DetalleOcRa
           const legajos = asArray(group?.legajos);
           return <li key={`${asText(group?.tipo_sujeto)}-${groupIndex}`}>
             {asText(group?.tipo_sujeto)}: {legajos.length} en esta página / {typeof group?.total === 'number' ? group.total : legajos.length} en total
-            {group?.sin_legajos_requeridos === true && <strong> · Falta información: no hay legajos activos de este tipo requerido</strong>}
+            {group?.sin_legajos_requeridos === true && <strong> · Hay recursos de este tipo fuera de tu alcance o sin legajos visibles</strong>}
             {legajos.length > 0 && <ul>{legajos.map((rawLegajo, index) => {
               const legajo = asRecord(rawLegajo);
               const sujetoId = asText(legajo?.sujeto_id, '');
