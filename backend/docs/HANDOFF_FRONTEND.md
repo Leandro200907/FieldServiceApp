@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0027_operadora_nombre`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0028_catalogos_oc`.
 
 Internamente existe una sola entidad `documento` para certificados, competencias e
 inducciones. La categoría la define el tipo de requisito. Las rutas históricas de
@@ -308,6 +308,27 @@ incluyen la advertencia de que el resultado no representa planificación ni asig
 El frontend debe consumir sólo estas rutas para el cruce OC-legajos. Los contratos
 anteriores de proyección fueron retirados: no existe una capa de compatibilidad paralela.
 El calendario de vigencias continúa siendo una consulta documental independiente.
+
+### 4.4 Backlog de OC sin veredicto de cobertura (D-E)
+
+Consultas de **solo lectura** (no sustituyen al radar ni a Módulo 2):
+
+| Ruta | Roles | Uso |
+|---|---|---|
+| `GET /v1/consultas/backlog_oc` | responsable_legajos, supervisor | OCs con **alertas ciertas** y disponibilidad documental (sin `estado_cobertura`); filtros `mes`, `operadora_id`, `solo_con_alertas`, `solo_reprogramadas`, `q`; paginación; `Cache-Control: no-store`. |
+| `GET /v1/consultas/cobertura_oc` | responsable_legajos, supervisor | Detalle de una OC: alertas, impacto en días, disponibilidad por tipo, historial `CompromisoModificado`. |
+| `GET /v1/consultas/acciones_pendientes` | responsable_legajos, supervisor | Renovaciones/regularizaciones con `accion_sugerida` y OCs afectadas; mismos filtros temporales. |
+| `GET /v1/consultas/timeline_recursos` | responsable_legajos, configuración, supervisor, técnico | Tramos de vigencia por recurso y requisito; OC superpuestas; quiebres dentro de cada ventana de OC. Paginación por recurso. |
+| `GET /v1/consultas/catalogos_oc` | responsable_legajos, configuración, supervisor | Operadoras, locaciones y tipos de servicio con nombre. |
+| `POST /v1/comandos/alta_operadora_oc` | responsable_legajos, configuración | Alta de operadora (cliente OC). |
+| `POST /v1/comandos/alta_locacion_oc` | responsable_legajos, configuración | Alta de locación asociada a operadora. |
+| `POST /v1/comandos/alta_tipo_servicio_oc` | responsable_legajos, configuración | Alta de tipo de servicio. |
+| `POST /v1/comandos/reprogramar_oc` | responsable_legajos, configuración | Cambio de ventana con motivo e idempotencia; bloqueado si `origen_oc=modulo2`. |
+| `POST /v1/comandos/importar_planilla_oc` | responsable_legajos | XLSX con columnas **Operadora, Locación, Tipo de servicio** (o UUIDs legacy); `lote_id` UUID del cliente. |
+
+Por tipo exigido, si el supervisor no ve legajos porque están fuera de su universo, la API
+devuelve `fuera_de_alcance` (mensaje: recursos de ese tipo fuera de tu alcance), no
+"falta información". Misma regla en radar documental.
 
 ### 4.6 Catálogos documentales (H-06)
 Todos paginados (`offset/limit`, máx. 500) → `{items[], total, offset, limit}`; el alcance

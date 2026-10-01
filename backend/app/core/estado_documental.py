@@ -78,6 +78,7 @@ class ResultadoRequisitoDocumental:
     evidencia_id: str | None
     motivo: str
     accion_sugerida: str | None = None
+    accion_sugerida_fecha: date | None = None
 
 
 def _resultado(
@@ -87,6 +88,7 @@ def _resultado(
     evidencia: EvidenciaDocumental | None = None,
     primer_quiebre: date | None = None,
     accion: str | None = None,
+    accion_fecha: date | None = None,
 ) -> ResultadoRequisitoDocumental:
     return ResultadoRequisitoDocumental(
         estado=estado,
@@ -94,6 +96,7 @@ def _resultado(
         evidencia_id=evidencia.evidencia_id if evidencia else None,
         motivo=motivo,
         accion_sugerida=accion,
+        accion_sugerida_fecha=accion_fecha,
     )
 
 
@@ -208,7 +211,8 @@ def evaluar_requisito_documental(
                 f"{requisito.nombre} deja un período sin cobertura documental",
                 evidencia=elegida,
                 primer_quiebre=quiebre,
-                accion=f"Renovar antes del {quiebre.isoformat()}",
+                accion="Renovar antes del",
+                accion_fecha=quiebre,
             )
 
         futuras = [e for e in ordenadas if e.vigente_desde > desde]
@@ -219,7 +223,8 @@ def evaluar_requisito_documental(
                 f"{requisito.nombre} no tiene cobertura documental al inicio del período",
                 evidencia=elegida,
                 primer_quiebre=desde,
-                accion=f"Incorporar evidencia vigente desde el {desde.isoformat()}",
+                accion="Incorporar evidencia vigente desde el",
+                accion_fecha=desde,
             )
 
         elegida = max(validas_probada, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))

@@ -6,6 +6,7 @@ export const featureFlags = Object.freeze({
   documentBatchImport: false, typedBusinessViews: false, signedEvidence: false,
   technicianCompositeView: true,
   documentationCalendarIntegration: true, radarDocumentationIntegration: true,
+  ocBacklogIntegration: true, resourceTimelineIntegration: true,
   expirationsBoardIntegration: true, legajoLookupIntegration: true,
   pendingProposalsIntegration: true, auditLogIntegration: true, matricesIntegration: true,
 });

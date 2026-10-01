@@ -24,6 +24,8 @@ TABLAS_TENANT = [
     "alerta_actualizacion_operadora",
     "entrega_documento_operadora",
     "operadora_legajo",
+    "locacion_oc",
+    "tipo_servicio_oc",
     "operadora_documental",
     "notificacion_envio",
     "configuracion_canales",

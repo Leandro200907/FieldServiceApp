@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0027_operadora_nombre
+-- head: 0028_catalogos_oc
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -650,9 +650,11 @@ CREATE TABLE modulo1.oc (
     lote_entidad text,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    origen_oc text DEFAULT 'planilla'::text NOT NULL,
     CONSTRAINT ck_vigencia_oc CHECK ((vigencia_desde <= vigencia_hasta)),
     CONSTRAINT oc_lote_entidad_check CHECK (((lote_entidad IS NULL) OR (lote_entidad = 'oc'::text))),
-    CONSTRAINT oc_estado_check CHECK ((estado = ANY (ARRAY['activo'::text, 'cancelado'::text])))
+    CONSTRAINT oc_estado_check CHECK ((estado = ANY (ARRAY['activo'::text, 'cancelado'::text))),
+    CONSTRAINT ck_oc_origen_oc CHECK ((origen_oc = ANY (ARRAY['planilla'::text, 'manual'::text, 'modulo2'::text])))
 );
 ALTER TABLE ONLY modulo1.oc FORCE ROW LEVEL SECURITY;
 -- Name: operadora_documental; Type: TABLE; Schema: modulo1; Owner: -
@@ -661,9 +663,29 @@ CREATE TABLE modulo1.operadora_documental (
     tenant_id uuid NOT NULL,
     nombre text NOT NULL,
     activa boolean DEFAULT true NOT NULL,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_operadora_documental_nombre CHECK ((btrim(nombre) <> ''::text))
 );
 ALTER TABLE ONLY modulo1.operadora_documental FORCE ROW LEVEL SECURITY;
+-- Name: locacion_oc; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.locacion_oc (
+    locacion_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    operadora_id uuid NOT NULL,
+    nombre text NOT NULL,
+    activa boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE ONLY modulo1.locacion_oc FORCE ROW LEVEL SECURITY;
+-- Name: tipo_servicio_oc; Type: TABLE; Schema: modulo1; Owner: -
+CREATE TABLE modulo1.tipo_servicio_oc (
+    tipo_servicio_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    nombre text NOT NULL,
+    activa boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE ONLY modulo1.tipo_servicio_oc FORCE ROW LEVEL SECURITY;
 -- Name: operadora_legajo; Type: TABLE; Schema: modulo1; Owner: -
 CREATE TABLE modulo1.operadora_legajo (
     tenant_id uuid NOT NULL,
@@ -972,6 +994,18 @@ ALTER TABLE ONLY modulo1.operadora_documental
 -- Name: operadora_documental operadora_documental_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.operadora_documental
     ADD CONSTRAINT operadora_documental_pkey PRIMARY KEY (operadora_id);
+-- Name: locacion_oc locacion_oc_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.locacion_oc
+    ADD CONSTRAINT locacion_oc_pkey PRIMARY KEY (locacion_id);
+-- Name: locacion_oc uq_locacion_oc_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.locacion_oc
+    ADD CONSTRAINT uq_locacion_oc_tenant_id UNIQUE (tenant_id, locacion_id);
+-- Name: tipo_servicio_oc tipo_servicio_oc_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.tipo_servicio_oc
+    ADD CONSTRAINT tipo_servicio_oc_pkey PRIMARY KEY (tipo_servicio_id);
+-- Name: tipo_servicio_oc uq_tipo_servicio_oc_tenant_id; Type: CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.tipo_servicio_oc
+    ADD CONSTRAINT uq_tipo_servicio_oc_tenant_id UNIQUE (tenant_id, tipo_servicio_id);
 -- Name: operadora_legajo operadora_legajo_pkey; Type: CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.operadora_legajo
     ADD CONSTRAINT operadora_legajo_pkey PRIMARY KEY (tenant_id, operadora_id, sujeto_id);
@@ -1223,6 +1257,10 @@ CREATE UNIQUE INDEX uq_latido_proceso ON modulo1.latido_proceso USING btree (nom
 CREATE UNIQUE INDEX uq_legajo_identificador_activo ON modulo1.legajo USING btree (tenant_id, tipo_sujeto, lower(btrim(identificador_natural))) WHERE (dado_de_baja_en IS NULL);
 -- Name: uq_operadora_documental_nombre; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_operadora_documental_nombre ON modulo1.operadora_documental USING btree (tenant_id, lower(nombre));
+-- Name: uq_locacion_oc_nombre; Type: INDEX; Schema: modulo1; Owner: -
+CREATE UNIQUE INDEX uq_locacion_oc_nombre ON modulo1.locacion_oc USING btree (tenant_id, operadora_id, lower(nombre));
+-- Name: uq_tipo_servicio_oc_nombre; Type: INDEX; Schema: modulo1; Owner: -
+CREATE UNIQUE INDEX uq_tipo_servicio_oc_nombre ON modulo1.tipo_servicio_oc USING btree (tenant_id, lower(nombre));
 -- Name: uq_periodo_custodia_vigente; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_periodo_custodia_vigente ON modulo1.periodo_custodia USING btree (custodia_id) WHERE (estado = 'vigente'::text);
 -- Name: uq_tenant_slug; Type: INDEX; Schema: modulo1; Owner: -
@@ -1473,6 +1511,15 @@ ALTER TABLE ONLY modulo1.oc
 -- Name: operadora_documental operadora_documental_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.operadora_documental
     ADD CONSTRAINT operadora_documental_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: locacion_oc locacion_oc_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.locacion_oc
+    ADD CONSTRAINT locacion_oc_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
+-- Name: locacion_oc locacion_oc_tenant_id_operadora_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.locacion_oc
+    ADD CONSTRAINT locacion_oc_tenant_id_operadora_id_fkey FOREIGN KEY (tenant_id, operadora_id) REFERENCES modulo1.operadora_documental(tenant_id, operadora_id);
+-- Name: tipo_servicio_oc tipo_servicio_oc_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+ALTER TABLE ONLY modulo1.tipo_servicio_oc
+    ADD CONSTRAINT tipo_servicio_oc_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
 -- Name: operadora_legajo operadora_legajo_tenant_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.operadora_legajo
     ADD CONSTRAINT operadora_legajo_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES modulo1.tenant(tenant_id);
@@ -1644,6 +1691,10 @@ CREATE POLICY oc_aislamiento ON modulo1.oc USING ((tenant_id = (current_setting(
 ALTER TABLE modulo1.operadora_documental ENABLE ROW LEVEL SECURITY;
 -- Name: operadora_documental operadora_documental_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
 CREATE POLICY operadora_documental_aislamiento ON modulo1.operadora_documental USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: locacion_oc locacion_oc_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY locacion_oc_aislamiento ON modulo1.locacion_oc USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
+-- Name: tipo_servicio_oc tipo_servicio_oc_aislamiento; Type: POLICY; Schema: modulo1; Owner: -
+CREATE POLICY tipo_servicio_oc_aislamiento ON modulo1.tipo_servicio_oc USING ((tenant_id = (current_setting('app.current_tenant'::text))::uuid)) WITH CHECK ((tenant_id = (current_setting('app.current_tenant'::text))::uuid));
 -- Name: operadora_legajo; Type: ROW SECURITY; Schema: modulo1; Owner: -
 ALTER TABLE modulo1.operadora_legajo ENABLE ROW LEVEL SECURITY;
 -- Name: operadora_legajo operadora_legajo_aislamiento; Type: POLICY; Schema: modulo1; Owner: -

@@ -82,7 +82,13 @@ class ItemRadar(BaseModel):
     tipo_servicio_id: str
     vigencia_desde: date
     vigencia_hasta: date
-    estado_documental: Literal["sin_alertas_documentales", "con_alertas_documentales", "informacion_incompleta", "sin_matriz"]
+    estado_documental: Literal[
+        "sin_alertas_documentales",
+        "con_alertas_documentales",
+        "informacion_incompleta",
+        "sin_matriz",
+        "fuera_de_alcance",
+    ]
     primer_quiebre: date | None
     resumen: dict[str, ConteoTipo]
     motivos_resumidos: list[str]

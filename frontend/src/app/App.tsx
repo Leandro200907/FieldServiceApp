@@ -8,7 +8,7 @@ import { canOpen, entryFor, knownRoles, navigationFor, pages, roleLabels } from 
 import type { Page, Role } from './capabilities';
 import { BusinessDesign } from './BusinessDesign';
 import { DesignCatalog } from './DesignCatalog';
-import { isBacklogIntegrated, isCalendarIntegrated } from '../features/documentation-planning/access';
+import { isBacklogIntegrated, isCalendarIntegrated, isOcBacklogIntegrated, isTimelineIntegrated } from '../features/documentation-planning/access';
 import { isMiLegajoIntegrated } from '../features/mi-legajo/access';
 import { isVencimientosIntegrated } from '../features/vencimientos/access';
 import { isLegajosIntegrated } from '../features/legajos/access';
@@ -27,6 +27,10 @@ function IntegrationBadge({ page }: { page: Page | undefined }) {
   if (!page || page.id === 'perfil') return null;
   const integrated = (page.id === 'calendario-vigencias' && isCalendarIntegrated())
     || (page.id === 'radar-documental' && isBacklogIntegrated())
+    || (page.id === 'backlog-oc' && isOcBacklogIntegrated())
+    || (page.id === 'acciones-pendientes' && isOcBacklogIntegrated())
+    || (page.id === 'catalogos-oc' && isOcBacklogIntegrated())
+    || (page.id === 'timeline-recursos' && isTimelineIntegrated())
     || (page.id === 'mi-legajo' && isMiLegajoIntegrated())
     || (page.id === 'vencimientos' && isVencimientosIntegrated())
     || (page.id === 'legajos' && isLegajosIntegrated())

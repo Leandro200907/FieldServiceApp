@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addDays, dayPosition, todayIso } from '../src/features/documentation-planning/dates';
+import { addDays, axisTicks, clipSegment, dayPosition, formatTick, todayIso } from '../src/features/documentation-planning/dates';
 
 describe('todayIso — F-03: fecha local, nunca UTC', () => {
   const zonaOriginal = process.env.TZ;
@@ -51,5 +51,46 @@ describe('dayPosition — F-01: posición de una fecha dentro de [from, to], nun
     const hoy = '2026-09-21';
     const hasta = addDays(hoy, 40);
     expect(dayPosition(hoy, hoy, hasta)).toBe(0);
+  });
+});
+
+describe('clipSegment — recorte al rango visible', () => {
+  it('devuelve null si el tramo queda fuera del gráfico', () => {
+    expect(clipSegment('2026-08-01', '2026-08-15', '2026-09-01', '2026-09-30')).toBeNull();
+    expect(clipSegment('2026-10-01', '2026-10-15', '2026-09-01', '2026-09-30')).toBeNull();
+  });
+
+  it('recorta el tramo que se sale por los extremos y no produce overflow', () => {
+    const clipped = clipSegment('2026-08-20', '2026-09-10', '2026-09-01', '2026-09-11');
+    expect(clipped).not.toBeNull();
+    expect(clipped!.left).toBe(0);
+    expect(clipped!.width).toBeLessThanOrEqual(100);
+    expect(clipped!.left + clipped!.width).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('formatTick', () => {
+  it('pone el año solo cuando cambia respecto del tick anterior', () => {
+    expect(formatTick('2026-12-20', null, 'UTC')).not.toMatch(/2026/);
+    expect(formatTick('2027-01-15', '2026-12-20', 'UTC')).toMatch(/2027/);
+    expect(formatTick('2027-02-01', '2027-01-15', 'UTC')).not.toMatch(/2027/);
+  });
+});
+
+describe('axisTicks', () => {
+  it('queda dentro del rango elegido y no genera ticks demasiado juntos', () => {
+    const ticks = axisTicks('2026-10-01', '2026-12-30');
+    expect(ticks[0]).toBe('2026-10-01');
+    expect(ticks.every(t => t >= '2026-10-01' && t <= '2026-12-30')).toBe(true);
+    for (let i = 1; i < ticks.length; i++) {
+      expect(dayPosition(ticks[i], '2026-10-01', '2026-12-30') - dayPosition(ticks[i - 1], '2026-10-01', '2026-12-30')).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it('en un rango de 90 días no se estira a años de vigencia ajenos', () => {
+    const ticks = axisTicks('2026-10-01', addDays('2026-10-01', 90));
+    expect(ticks[0] >= '2026-10-01').toBe(true);
+    expect(ticks[ticks.length - 1] <= addDays('2026-10-01', 90)).toBe(true);
+    expect(ticks.some(t => t.startsWith('2021') || t.startsWith('2031'))).toBe(false);
   });
 });

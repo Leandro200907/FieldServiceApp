@@ -37,3 +37,73 @@ export function dayPosition(iso: string, from: string, to: string): number {
   const pct = ((point - start) / span) * 100;
   return Math.min(Math.max(pct, 0), 100);
 }
+
+export function inVista(iso: string, vistaDesde: string, vistaHasta: string): boolean {
+  return iso >= vistaDesde && iso <= vistaHasta;
+}
+
+/** Recorta un tramo al rango visible. `null` si no intersecta el gráfico. */
+export function clipSegment(
+  desde: string,
+  hasta: string,
+  vistaDesde: string,
+  vistaHasta: string,
+): { left: number; width: number } | null {
+  if (hasta < vistaDesde || desde > vistaHasta) return null;
+  const start = desde < vistaDesde ? vistaDesde : desde;
+  const end = hasta > vistaHasta ? vistaHasta : hasta;
+  const left = dayPosition(start, vistaDesde, vistaHasta);
+  const right = dayPosition(end, vistaDesde, vistaHasta);
+  return { left, width: Math.max(right - left, 0) };
+}
+
+const FECHA_SOLA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Fecha de calendario en la zona del tenant, sin ISO ni hora. */
+export function formatFecha(value: string, timeZone: string): string {
+  const date = FECHA_SOLA.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone }).format(date);
+}
+
+export function formatTick(iso: string, previousIso?: string | null, timeZone = 'UTC'): string {
+  const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', timeZone };
+  if (previousIso && previousIso.slice(0, 4) !== iso.slice(0, 4)) opts.year = 'numeric';
+  return new Intl.DateTimeFormat('es-AR', opts).format(new Date(`${iso}T12:00:00`));
+}
+
+function tickStepDays(spanDays: number): number {
+  if (spanDays <= 10) return 1;
+  if (spanDays <= 21) return 2;
+  if (spanDays <= 45) return 7;
+  if (spanDays <= 100) return 14;
+  if (spanDays <= 200) return 30;
+  return Math.max(30, Math.round(spanDays / 8));
+}
+
+/** Ticks del eje temporal con separación mínima para que las etiquetas no se pisen. */
+export function axisTicks(vistaDesde: string, vistaHasta: string, minGapPct = 12): string[] {
+  const start = new Date(`${vistaDesde}T12:00:00Z`);
+  const end = new Date(`${vistaHasta}T12:00:00Z`);
+  const spanDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+  const step = tickStepDays(spanDays);
+  const candidates: string[] = [];
+  const cursor = new Date(start);
+  while (cursor.getTime() <= end.getTime()) {
+    candidates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + step);
+  }
+  const filtered: string[] = [];
+  for (const t of candidates) {
+    if (!inVista(t, vistaDesde, vistaHasta)) continue;
+    if (!filtered.length) {
+      filtered.push(t);
+      continue;
+    }
+    const prev = filtered[filtered.length - 1];
+    if (dayPosition(t, vistaDesde, vistaHasta) - dayPosition(prev, vistaDesde, vistaHasta) >= minGapPct) {
+      filtered.push(t);
+    }
+  }
+  return filtered;
+}

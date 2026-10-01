@@ -195,7 +195,7 @@ def _leer_filas_hoja(xml_bytes: bytes, compartidos: list[str], *, hoja: str) -> 
     return resultado, errores
 
 
-def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> tuple[list[dict], list[dict]]:
+def _hoja_xml_y_compartidos(contenido: bytes, *, hoja: str) -> tuple[bytes, list[str]]:
     if not contenido:
         raise ErrorDeDominio("La planilla está vacía")
     if len(contenido) > 5 * 1024 * 1024:
@@ -220,6 +220,25 @@ def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> tuple[li
             hoja_xml = _leer_parte_zip(libro, ruta)
     except (BadZipFile, KeyError, ET.ParseError) as exc:
         raise ErrorDeDominio("El archivo no es una planilla XLSX válida") from exc
+    return hoja_xml, compartidos
 
+
+def leer_celdas_hoja(contenido: bytes, *, hoja: str) -> list[tuple[int, dict[int, object]]]:
+    """Extrae celdas de una hoja XLSX (ZIP/XML) sin interpretar columnas de negocio.
+
+    Cada tupla es (número de fila de Excel, {índice de columna 1-based: valor}).
+    """
+    hoja_xml, compartidos = _hoja_xml_y_compartidos(contenido, hoja=hoja)
+    raiz = ET.fromstring(hoja_xml)
+    filas: list[tuple[int, dict[int, object]]] = []
+    for fila in raiz.iter(f"{_NS}row"):
+        numero = int(fila.attrib.get("r", "0"))
+        valores = {_columna(c.attrib.get("r", "")): _valor(c, compartidos) for c in fila.findall(f"{_NS}c")}
+        filas.append((numero, valores))
+    return filas
+
+
+def leer_planilla(contenido: bytes, *, hoja: str = "Presentaciones") -> tuple[list[dict], list[dict]]:
+    hoja_xml, compartidos = _hoja_xml_y_compartidos(contenido, hoja=hoja)
     return _leer_filas_hoja(hoja_xml, compartidos, hoja=hoja)
 
