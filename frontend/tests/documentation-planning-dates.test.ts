@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addDays, clipSegment, dayPosition, formatTick, todayIso } from '../src/features/documentation-planning/dates';
+import { addDays, axisTicks, clipSegment, dayPosition, formatTick, todayIso } from '../src/features/documentation-planning/dates';
 
 describe('todayIso — F-03: fecha local, nunca UTC', () => {
   const zonaOriginal = process.env.TZ;
@@ -70,8 +70,27 @@ describe('clipSegment — recorte al rango visible', () => {
 });
 
 describe('formatTick', () => {
-  it('incluye el año cuando el rango cruza años', () => {
-    expect(formatTick('2026-12-20', '2026-12-01', '2027-01-15', 'UTC')).toMatch(/2026/);
-    expect(formatTick('2026-11-20', '2026-11-01', '2026-11-30', 'UTC')).not.toMatch(/2026/);
+  it('pone el año solo cuando cambia respecto del tick anterior', () => {
+    expect(formatTick('2026-12-20', null, 'UTC')).not.toMatch(/2026/);
+    expect(formatTick('2027-01-15', '2026-12-20', 'UTC')).toMatch(/2027/);
+    expect(formatTick('2027-02-01', '2027-01-15', 'UTC')).not.toMatch(/2027/);
+  });
+});
+
+describe('axisTicks', () => {
+  it('queda dentro del rango elegido y no genera ticks demasiado juntos', () => {
+    const ticks = axisTicks('2026-10-01', '2026-12-30');
+    expect(ticks[0]).toBe('2026-10-01');
+    expect(ticks.every(t => t >= '2026-10-01' && t <= '2026-12-30')).toBe(true);
+    for (let i = 1; i < ticks.length; i++) {
+      expect(dayPosition(ticks[i], '2026-10-01', '2026-12-30') - dayPosition(ticks[i - 1], '2026-10-01', '2026-12-30')).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it('en un rango de 90 días no se estira a años de vigencia ajenos', () => {
+    const ticks = axisTicks('2026-10-01', addDays('2026-10-01', 90));
+    expect(ticks[0] >= '2026-10-01').toBe(true);
+    expect(ticks[ticks.length - 1] <= addDays('2026-10-01', 90)).toBe(true);
+    expect(ticks.some(t => t.startsWith('2021') || t.startsWith('2031'))).toBe(false);
   });
 });

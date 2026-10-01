@@ -54,25 +54,7 @@ export function TimelineRecursosScreen() {
   const hoy = query.data?.hoy ?? todayIso();
   const rows = query.data?.items ?? [];
 
-  const autoDesde = useMemo(() => {
-    const fechas = rows.flatMap(r => [
-      ...r.tramos.map(t => t.vigente_desde),
-      ...r.ocs.flatMap(o => [o.vigencia_desde, o.vigencia_hasta]),
-    ]).filter(Boolean) as string[];
-    if (!fechas.length) return desde;
-    return fechas.reduce((a, b) => (a < b ? a : b));
-  }, [rows, desde]);
-
-  const autoHasta = useMemo(() => {
-    const fechas = rows.flatMap(r => [
-      ...r.tramos.map(t => t.vigente_hasta),
-      ...r.ocs.flatMap(o => [o.vigencia_desde, o.vigencia_hasta]),
-    ]).filter(Boolean) as string[];
-    if (!fechas.length) return hasta;
-    return fechas.reduce((a, b) => (a > b ? a : b));
-  }, [rows, hasta]);
-
-  const gantt = useGanttViewport({ hoy, autoDesde, autoHasta });
+  const gantt = useGanttViewport({ hoy, autoDesde: desde, autoHasta: hasta });
 
   const ganttRows: GanttOcRow[] = useMemo(() => {
     const out: GanttOcRow[] = [];
@@ -98,8 +80,8 @@ export function TimelineRecursosScreen() {
         id: sid,
         label: recurso.identificador,
         sublabel: recurso.tipo_sujeto,
-        desde: autoDesde,
-        hasta: autoHasta,
+        desde,
+        hasta,
         bandasOc,
         alertas: quiebres,
         tramosAlerta: [],
@@ -122,7 +104,7 @@ export function TimelineRecursosScreen() {
       }
     }
     return out;
-  }, [rows, expanded, autoDesde, autoHasta, ocId, tz]);
+  }, [rows, expanded, desde, hasta, ocId, tz]);
 
   const applyRange = () => {
     const next = new URLSearchParams(searchParams);

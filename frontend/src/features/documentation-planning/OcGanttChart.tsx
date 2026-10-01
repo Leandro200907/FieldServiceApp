@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { clipSegment, dayPosition, formatTick, inVista } from './dates';
+import { axisTicks, clipSegment, dayPosition, formatTick, inVista } from './dates';
 import './timeline.css';
 
 export type GanttBandaOc = {
@@ -37,18 +37,7 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
   const hoyEnVista = Boolean(hoy && inVista(hoy, vistaDesde, vistaHasta));
   const hoyPct = hoyEnVista && hoy ? dayPosition(hoy, vistaDesde, vistaHasta) : null;
 
-  const ticks = useMemo(() => {
-    const out: string[] = [];
-    const d = new Date(`${vistaDesde}T12:00:00`);
-    const end = new Date(`${vistaHasta}T12:00:00`);
-    const spanDays = Math.max(1, Math.round((end.getTime() - d.getTime()) / 86400000));
-    const step = Math.max(1, Math.round(spanDays / 8));
-    while (d <= end) {
-      out.push(d.toISOString().slice(0, 10));
-      d.setDate(d.getDate() + step);
-    }
-    return out.filter(t => inVista(t, vistaDesde, vistaHasta));
-  }, [vistaDesde, vistaHasta]);
+  const ticks = useMemo(() => axisTicks(vistaDesde, vistaHasta), [vistaDesde, vistaHasta]);
 
   return (
     <div className="oc-gantt">
@@ -65,9 +54,9 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
         </div>
         <div className="oc-gantt-plots">
           <div className="oc-gantt-axis-track">
-            {ticks.map(t => (
+            {ticks.map((t, i) => (
               <span key={t} style={{ left: `${dayPosition(t, vistaDesde, vistaHasta)}%` }}>
-                {formatTick(t, vistaDesde, vistaHasta)}
+                {formatTick(t, i > 0 ? ticks[i - 1] : null)}
               </span>
             ))}
           </div>
