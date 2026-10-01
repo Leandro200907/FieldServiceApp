@@ -50,13 +50,15 @@ def upgrade() -> None:
         "(tenant_id, documento_id, paso_en DESC)"
     )
 
-    _tablas_fk = (
+    _tablas_backfill = (
         "documento",
         "legajo",
         "operadora_documental",
         "definicion_requisito",
+        "event_log",
+        "entrega_documento_operadora",
     )
-    for tabla in _tablas_fk:
+    for tabla in _tablas_backfill:
         op.execute(f"ALTER TABLE modulo1.{tabla} NO FORCE ROW LEVEL SECURITY")
 
     op.execute("""
@@ -114,7 +116,7 @@ def upgrade() -> None:
         )
     """)
 
-    for tabla in _tablas_fk:
+    for tabla in _tablas_backfill:
         op.execute(f"ALTER TABLE modulo1.{tabla} FORCE ROW LEVEL SECURITY")
 
     op.execute("ALTER TABLE modulo1.movimiento_entrega_operadora ENABLE ROW LEVEL SECURITY")
