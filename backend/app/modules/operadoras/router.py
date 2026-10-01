@@ -5,7 +5,9 @@ from typing import Any, Literal
 
 import hashlib
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from datetime import date
+
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from app.api.errores import ErrorDeDominio
@@ -68,6 +70,55 @@ class AlertaOperadora(BaseModel):
 
 class AlertasOperadoraResponse(BaseModel):
     items: list[AlertaOperadora]
+    total: int
+    offset: int
+    limit: int
+
+
+class PasoHistorialOperadora(BaseModel):
+    estado: str
+    paso_en: str
+    observacion: str | None
+    registrado_por: str
+    registrado_nombre: str
+    origen: str
+    fuente_archivo: str | None
+    fuente_hoja: str | None
+    fuente_fila: int | None
+
+
+class VersionHistorialOperadora(BaseModel):
+    documento_id: str
+    vigente_desde: str
+    vigente_hasta: str
+    pasos: list[PasoHistorialOperadora]
+
+
+class HistorialOperadoraResponse(BaseModel):
+    operadora_id: str
+    sujeto_id: str
+    requisito_definicion_id: str
+    versiones: list[VersionHistorialOperadora]
+
+
+class EspejoOperadoraItem(BaseModel):
+    alerta_id: str | None
+    sujeto_id: str
+    identificador_natural: str
+    tipo_sujeto: str
+    requisito_definicion_id: str
+    requisito: str
+    operadora_id: str
+    operadora: str
+    documento_vigente_id: str
+    ultimo_documento_operadora_id: str | None
+    estado_operadora: str
+    motivo: str
+    ultimo_movimiento_en: datetime
+
+
+class EspejoOperadoraResponse(BaseModel):
+    items: list[EspejoOperadoraItem]
     total: int
     offset: int
     limit: int
@@ -155,4 +206,55 @@ def alertas_actualizacion_operadora(
 ) -> AlertasOperadoraResponse:
     with tenant_session(identidad.tenant_id) as session:
         return AlertasOperadoraResponse(**servicio.alertas(session, identidad, p, sujeto_id=sujeto_id, estado=estado))
+
+
+def _no_store(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+
+
+@router.get("/consultas/historial_operadora", response_model=HistorialOperadoraResponse)
+def historial_operadora(
+    response: Response,
+    operadora_id: str = Query(...),
+    sujeto_id: str = Query(...),
+    requisito_definicion_id: str = Query(...),
+    identidad: Identidad = Depends(identidad_actual),
+) -> HistorialOperadoraResponse:
+    _no_store(response)
+    with tenant_session(identidad.tenant_id) as session:
+        return HistorialOperadoraResponse(**servicio.historial_operadora(
+            session, identidad,
+            operadora_id=operadora_id,
+            sujeto_id=sujeto_id,
+            requisito_definicion_id=requisito_definicion_id,
+        ))
+
+
+@router.get("/consultas/espejo_operadora", response_model=EspejoOperadoraResponse)
+def espejo_operadora(
+    response: Response,
+    operadora_id: list[str] | None = Query(None),
+    requisito_definicion_id: list[str] | None = Query(None),
+    tipo_sujeto: Literal["persona", "vehiculo", "equipo", "empresa"] | None = Query(None),
+    q: str | None = Query(None, min_length=1, max_length=200),
+    estado_operadora: list[Literal["pendiente_envio", "pendiente_aceptacion", "rechazado", "al_dia"]] | None = Query(None),
+    movimiento_desde: date | None = Query(None),
+    movimiento_hasta: date | None = Query(None),
+    mes: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> EspejoOperadoraResponse:
+    _no_store(response)
+    with tenant_session(identidad.tenant_id) as session:
+        return EspejoOperadoraResponse(**servicio.listar_espejo_operadora(
+            session, identidad, p,
+            operadora_id=operadora_id,
+            requisito_definicion_id=requisito_definicion_id,
+            tipo_sujeto=tipo_sujeto,
+            q=q,
+            estado_operadora=estado_operadora,
+            movimiento_desde=movimiento_desde,
+            movimiento_hasta=movimiento_hasta,
+            mes=mes,
+        ))
 

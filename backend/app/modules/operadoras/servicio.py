@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -399,6 +399,219 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
             "filas_aceptadas": len(resultados), "filas_rechazadas": len(errores),
             "resultados": resultados, "errores": errores,
             "eventos": ["PlanillaOperadorasImportada"]}
+
+
+def _exigir_sujeto_en_alcance(session: Session, identidad: Identidad, sujeto_id: str) -> None:
+    alcance = alcance_de_sujetos(session, identidad, hoy_del_tenant(session, identidad.tenant_id))
+    if alcance is not None and sujeto_id not in alcance:
+        raise Prohibido("Recurso fuera del alcance del supervisor")
+
+
+def historial_operadora(
+    session: Session,
+    identidad: Identidad,
+    *,
+    operadora_id: str,
+    sujeto_id: str,
+    requisito_definicion_id: str,
+) -> dict[str, Any]:
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    _exigir_sujeto_en_alcance(session, identidad, sujeto_id)
+    t = identidad.tenant_id
+    tz = ZoneInfo(zona_horaria_del_tenant(session, t))
+    filas = session.execute(
+        text("""
+            SELECT m.documento_id, m.estado, m.paso_en, m.observacion, m.registrado_por, m.origen,
+                   m.fuente_archivo, m.fuente_hoja, m.fuente_fila,
+                   d.vigente_desde, d.vigente_hasta,
+                   COALESCE(u.nombre, m.registrado_por) AS registrado_nombre
+            FROM modulo1.movimiento_entrega_operadora m
+            JOIN modulo1.documento d
+              ON d.tenant_id = m.tenant_id AND d.documento_id = m.documento_id
+            LEFT JOIN modulo1.usuario u
+              ON u.tenant_id = m.tenant_id AND u.usuario_id::text = m.registrado_por
+            WHERE m.tenant_id = :t AND m.operadora_id = :o AND m.sujeto_id = :s
+              AND m.requisito_definicion_id = :r
+            ORDER BY d.vigente_desde DESC, m.paso_en ASC, m.creado_en ASC
+        """),
+        {"t": t, "o": operadora_id, "s": sujeto_id, "r": requisito_definicion_id},
+    ).mappings().all()
+    versiones: dict[str, dict[str, Any]] = {}
+    orden: list[str] = []
+    for fila in filas:
+        doc_id = str(fila["documento_id"])
+        if doc_id not in versiones:
+            versiones[doc_id] = {
+                "documento_id": doc_id,
+                "vigente_desde": str(fila["vigente_desde"]),
+                "vigente_hasta": str(fila["vigente_hasta"]),
+                "pasos": [],
+            }
+            orden.append(doc_id)
+        paso_en = fila["paso_en"]
+        if isinstance(paso_en, datetime):
+            paso_en = paso_en.astimezone(tz).isoformat()
+        versiones[doc_id]["pasos"].append({
+            "estado": fila["estado"],
+            "paso_en": paso_en,
+            "observacion": fila["observacion"],
+            "registrado_por": fila["registrado_por"],
+            "registrado_nombre": fila["registrado_nombre"],
+            "origen": fila["origen"],
+            "fuente_archivo": fila["fuente_archivo"],
+            "fuente_hoja": fila["fuente_hoja"],
+            "fuente_fila": fila["fuente_fila"],
+        })
+    return {
+        "operadora_id": operadora_id,
+        "sujeto_id": sujeto_id,
+        "requisito_definicion_id": requisito_definicion_id,
+        "versiones": [versiones[doc_id] for doc_id in orden],
+    }
+
+
+def listar_espejo_operadora(
+    session: Session,
+    identidad: Identidad,
+    p: Pagina,
+    *,
+    operadora_id: list[str] | None = None,
+    requisito_definicion_id: list[str] | None = None,
+    tipo_sujeto: str | None = None,
+    q: str | None = None,
+    estado_operadora: list[str] | None = None,
+    movimiento_desde: date | None = None,
+    movimiento_hasta: date | None = None,
+    mes: str | None = None,
+) -> dict[str, Any]:
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    t = identidad.tenant_id
+    alcance = alcance_de_sujetos(session, identidad, hoy_del_tenant(session, t))
+    params: dict[str, Any] = {"t": t}
+    cond_alertas = ["a.tenant_id = :t", "a.estado <> 'resuelta'"]
+    cond_al_dia = ["e.tenant_id = :t", "e.estado = 'aceptado'"]
+    if alcance is not None:
+        params["alcance"] = list(alcance)
+        cond_alertas.append("a.sujeto_id = ANY(CAST(:alcance AS text[]))")
+        cond_al_dia.append("e.sujeto_id = ANY(CAST(:alcance AS text[]))")
+    if operadora_id:
+        params["operadoras"] = operadora_id
+        cond_alertas.append("a.operadora_id = ANY(CAST(:operadoras AS uuid[]))")
+        cond_al_dia.append("e.operadora_id = ANY(CAST(:operadoras AS uuid[]))")
+    if requisito_definicion_id:
+        params["requisitos"] = requisito_definicion_id
+        cond_alertas.append("a.requisito_definicion_id = ANY(CAST(:requisitos AS uuid[]))")
+        cond_al_dia.append("e.requisito_definicion_id = ANY(CAST(:requisitos AS uuid[]))")
+    if tipo_sujeto:
+        params["tipo_sujeto"] = tipo_sujeto
+        cond_alertas.append("l.tipo_sujeto = :tipo_sujeto")
+        cond_al_dia.append("l.tipo_sujeto = :tipo_sujeto")
+    if q:
+        params["q"] = f"%{q.strip()}%"
+        cond_alertas.append("(l.identificador_natural ILIKE :q OR l.sujeto_id ILIKE :q)")
+        cond_al_dia.append("(l.identificador_natural ILIKE :q OR l.sujeto_id ILIKE :q)")
+    if estado_operadora:
+        alerta_est = [e for e in estado_operadora if e != "al_dia"]
+        if alerta_est:
+            params["estados_espejo"] = alerta_est
+    cond_al_dia.extend([
+        "EXISTS (SELECT 1 FROM modulo1.documento d WHERE d.tenant_id = e.tenant_id "
+        "AND d.sujeto_id = e.sujeto_id AND d.requisito_definicion_id = e.requisito_definicion_id "
+        "AND d.estado_version = 'vigente' AND d.documento_id = e.documento_id)",
+        "NOT EXISTS (SELECT 1 FROM modulo1.alerta_actualizacion_operadora ax "
+        "WHERE ax.tenant_id = e.tenant_id AND ax.operadora_id = e.operadora_id "
+        "AND ax.sujeto_id = e.sujeto_id AND ax.requisito_definicion_id = e.requisito_definicion_id "
+        "AND ax.estado <> 'resuelta')",
+    ])
+
+    if mes:
+        params["mes"] = mes
+        filtro_fecha = "date_trunc('month', ultimo_movimiento_en) = CAST(:mes || '-01' AS date)"
+    elif movimiento_desde or movimiento_hasta:
+        filtros_f: list[str] = []
+        if movimiento_desde:
+            params["mov_desde"] = movimiento_desde
+            filtros_f.append("ultimo_movimiento_en::date >= :mov_desde")
+        if movimiento_hasta:
+            params["mov_hasta"] = movimiento_hasta
+            filtros_f.append("ultimo_movimiento_en::date <= :mov_hasta")
+        filtro_fecha = " AND ".join(filtros_f)
+    else:
+        filtro_fecha = "TRUE"
+
+    sql = _construir_espejo_sql(cond_alertas, cond_al_dia, estado_operadora, filtro_fecha)
+    total = session.execute(text(f"SELECT count(*) FROM ({sql}) sub"), params).scalar()
+    filas = session.execute(
+        text(f"{sql} ORDER BY ultimo_movimiento_en DESC OFFSET :off LIMIT :lim"),
+        {**params, "off": p.offset, "lim": p.limit},
+    ).mappings().all()
+    items = []
+    for fila in filas:
+        item = {k: str(v) if k.endswith("_id") and v is not None else v for k, v in dict(fila).items()}
+        items.append(item)
+    return envolver(items, int(total or 0), p)
+
+
+def _construir_espejo_sql(
+    cond_alertas: list[str],
+    cond_al_dia: list[str],
+    estado_operadora: list[str] | None,
+    filtro_fecha: str,
+) -> str:
+    alertas_where = " AND ".join(cond_alertas)
+    base_alertas = f"""
+        SELECT a.alerta_id, a.sujeto_id, l.identificador_natural, l.tipo_sujeto,
+               a.requisito_definicion_id, COALESCE(r.nombre, a.requisito_definicion_id::text) AS requisito,
+               o.operadora_id, o.nombre AS operadora, a.documento_vigente_id,
+               a.ultimo_documento_operadora_id, a.estado AS estado_operadora, a.motivo,
+               COALESCE(
+                   (SELECT max(m.paso_en) FROM modulo1.movimiento_entrega_operadora m
+                    WHERE m.tenant_id = a.tenant_id AND m.operadora_id = a.operadora_id
+                      AND m.sujeto_id = a.sujeto_id AND m.requisito_definicion_id = a.requisito_definicion_id),
+                   a.actualizada_en
+               ) AS ultimo_movimiento_en
+        FROM modulo1.alerta_actualizacion_operadora a
+        JOIN modulo1.operadora_documental o ON o.tenant_id = a.tenant_id AND o.operadora_id = a.operadora_id
+        JOIN modulo1.legajo l ON l.tenant_id = a.tenant_id AND l.sujeto_id = a.sujeto_id
+        LEFT JOIN modulo1.definicion_requisito r
+          ON r.tenant_id = a.tenant_id AND r.requisito_definicion_id = a.requisito_definicion_id
+        WHERE {alertas_where}
+    """
+    partes: list[str] = []
+    incluir_alertas = not estado_operadora or any(e != "al_dia" for e in estado_operadora)
+    if incluir_alertas:
+        fila = base_alertas
+        if estado_operadora and any(e != "al_dia" for e in estado_operadora):
+            fila = f"{base_alertas} AND a.estado = ANY(CAST(:estados_espejo AS text[]))"
+        elif estado_operadora == ["al_dia"]:
+            fila = ""
+        if fila:
+            partes.append(fila)
+    if estado_operadora and "al_dia" in estado_operadora:
+        al_dia_where = " AND ".join(cond_al_dia)
+        partes.append(f"""
+            SELECT NULL::uuid AS alerta_id, e.sujeto_id, l.identificador_natural, l.tipo_sujeto,
+                   e.requisito_definicion_id, COALESCE(r.nombre, e.requisito_definicion_id::text) AS requisito,
+                   o.operadora_id, o.nombre AS operadora, d.documento_id AS documento_vigente_id,
+                   e.documento_id AS ultimo_documento_operadora_id, 'al_dia' AS estado_operadora,
+                   'La operadora aceptó la versión vigente.' AS motivo,
+                   COALESCE(
+                       (SELECT max(m.paso_en) FROM modulo1.movimiento_entrega_operadora m
+                        WHERE m.tenant_id = e.tenant_id AND m.documento_id = e.documento_id),
+                       e.actualizado_en
+                   ) AS ultimo_movimiento_en
+            FROM modulo1.entrega_documento_operadora e
+            JOIN modulo1.operadora_documental o ON o.tenant_id = e.tenant_id AND o.operadora_id = e.operadora_id
+            JOIN modulo1.legajo l ON l.tenant_id = e.tenant_id AND l.sujeto_id = e.sujeto_id
+            JOIN modulo1.documento d ON d.tenant_id = e.tenant_id AND d.documento_id = e.documento_id
+              AND d.sujeto_id = e.sujeto_id AND d.requisito_definicion_id = e.requisito_definicion_id
+              AND d.estado_version = 'vigente' AND d.documento_id = e.documento_id
+            LEFT JOIN modulo1.definicion_requisito r
+              ON r.tenant_id = e.tenant_id AND r.requisito_definicion_id = e.requisito_definicion_id
+            WHERE {al_dia_where}
+        """)
+    union = partes[0] if len(partes) == 1 else " UNION ALL ".join(partes)
+    return f"SELECT * FROM ({union}) espejo WHERE {filtro_fecha}"
 
 
 def alertas(session: Session, identidad: Identidad, p: Pagina, *, sujeto_id: str | None = None,
