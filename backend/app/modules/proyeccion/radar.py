@@ -273,6 +273,7 @@ def _evaluar_oc(
                     "estado": resultado.estado.value, "primer_quiebre": resultado.primer_quiebre,
                     "evidencia_id": resultado.evidencia_id, "motivo": resultado.motivo,
                     "accion_sugerida": resultado.accion_sugerida,
+                    "accion_sugerida_fecha": resultado.accion_sugerida_fecha,
                     "vigente_hasta": evidencia.vigente_hasta if evidencia else None,
                     "estado_confirmacion": evidencia.estado_confirmacion.value if evidencia else None,
                     "archivo_validacion": evidencia.archivo_validacion.value if evidencia else None,
@@ -302,8 +303,14 @@ def _evaluar_oc(
 
 def _resultado_desde_dict(d: dict[str, Any]):
     from app.core.estado_documental import EstadoRequisitoDocumental, ResultadoRequisitoDocumental
-    return ResultadoRequisitoDocumental(EstadoRequisitoDocumental(d["estado"]), d["primer_quiebre"],
-                                         d["evidencia_id"], d["motivo"], d["accion_sugerida"])
+    return ResultadoRequisitoDocumental(
+        EstadoRequisitoDocumental(d["estado"]),
+        d["primer_quiebre"],
+        d["evidencia_id"],
+        d["motivo"],
+        d["accion_sugerida"],
+        d.get("accion_sugerida_fecha"),
+    )
 
 
 def _resumen_por_tipo(legajos: Iterable[dict[str, Any]]) -> dict[str, dict[str, int]]:

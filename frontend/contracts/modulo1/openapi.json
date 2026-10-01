@@ -7,6 +7,17 @@
             "title": "Accion Sugerida",
             "type": "string"
           },
+          "accion_sugerida_fecha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accion Sugerida Fecha"
+          },
           "efecto": {
             "anyOf": [
               {

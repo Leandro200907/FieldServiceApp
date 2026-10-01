@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
-import { textoEfectoAccion } from './copy';
+import { textoAccionSugerida, textoEfectoAccion } from './copy';
 import { formatFecha } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
@@ -92,7 +92,7 @@ export function AccionesPendientesScreen() {
           <ul className="panel">
             {items.map((a: Accion, i) => (
               <li key={`${a.legajo_id}-${a.requisito}-${i}`}>
-                <strong>{a.accion_sugerida}</strong> — {a.legajo_nombre} ({a.tipo_sujeto})
+                <strong>{textoAccionSugerida(a.accion_sugerida, a.accion_sugerida_fecha, session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires')}</strong> — {a.legajo_nombre} ({a.tipo_sujeto})
                 {a.requisito && <> · {a.requisito}</>}
                 {a.fecha_limite && <> · límite {fmtDate(a.fecha_limite)}</>}
                 {a.efecto && <p>{textoEfectoAccion(a.efecto)}</p>}

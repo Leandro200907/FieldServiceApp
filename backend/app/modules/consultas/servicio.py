@@ -454,6 +454,11 @@ def acciones_pendientes(
                 if not req.get("accion_sugerida"):
                     continue
                 fecha_limite = str(req.get("primer_quiebre") or inicio)
+                fecha_accion = req.get("accion_sugerida_fecha")
+                if hasattr(fecha_accion, "isoformat"):
+                    fecha_accion = fecha_accion.isoformat()
+                elif fecha_accion is not None:
+                    fecha_accion = str(fecha_accion)
                 clave = (leg["sujeto_id"], str(req.get("nombre") or ""), str(req["accion_sugerida"]))
                 oc_ref = {"clave_origen": oc["clave_origen"], "oc_id": str(oc["oc_id"])}
                 if clave in agrupadas:
@@ -463,6 +468,8 @@ def acciones_pendientes(
                     item["genera_alerta_cierta"] = bool(item["genera_alerta_cierta"] or genera_alerta)
                     if fecha_limite < item["fecha_limite"]:
                         item["fecha_limite"] = fecha_limite
+                    if fecha_accion and (not item["accion_sugerida_fecha"] or fecha_accion < item["accion_sugerida_fecha"]):
+                        item["accion_sugerida_fecha"] = fecha_accion
                     continue
                 agrupadas[clave] = {
                     "requisito": req.get("nombre"),
@@ -471,6 +478,7 @@ def acciones_pendientes(
                     "tipo_sujeto": leg["tipo_sujeto"],
                     "fecha_limite": fecha_limite,
                     "accion_sugerida": req["accion_sugerida"],
+                    "accion_sugerida_fecha": fecha_accion,
                     "ocs_afectadas": [oc_ref],
                     "efecto": req.get("motivo"),
                     "genera_alerta_cierta": genera_alerta,

@@ -1449,6 +1449,8 @@ export interface components {
         AccionPendienteItem: {
             /** Accion Sugerida */
             accion_sugerida: string;
+            /** Accion Sugerida Fecha */
+            accion_sugerida_fecha?: string | null;
             /** Efecto */
             efecto?: string | null;
             /** Fecha Limite */

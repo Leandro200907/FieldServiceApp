@@ -58,6 +58,9 @@ def test_vencimiento_durante_periodo_informa_primer_dia_sin_cobertura():
     resultado = evaluar(evidencia(hasta=date(2026, 10, 20)))
     assert resultado.estado == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO
     assert resultado.primer_quiebre == date(2026, 10, 21)
+    assert resultado.accion_sugerida == "Renovar antes del"
+    assert resultado.accion_sugerida_fecha == date(2026, 10, 21)
+    assert "2026-" not in (resultado.accion_sugerida or "")
 
 
 def test_vencido_antes_del_inicio():
@@ -129,6 +132,9 @@ def test_evidencia_que_comienza_despues_del_inicio_no_cubre_el_periodo():
     resultado = evaluar(evidencia(desde=date(2026, 10, 19)))
     assert resultado.estado == EstadoRequisitoDocumental.FALTANTE
     assert resultado.primer_quiebre == DESDE
+    assert resultado.accion_sugerida == "Incorporar evidencia vigente desde el"
+    assert resultado.accion_sugerida_fecha == DESDE
+    assert "2026-" not in (resultado.accion_sugerida or "")
 
 
 def test_sucedida_no_cubre_despues_del_inicio_de_la_vigente():

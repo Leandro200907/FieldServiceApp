@@ -379,6 +379,7 @@ class AccionPendienteItem(BaseModel):
     tipo_sujeto: str
     fecha_limite: str
     accion_sugerida: str
+    accion_sugerida_fecha: str | None = None
     ocs_afectadas: list[dict[str, Any]]
     efecto: str | None = None
     genera_alerta_cierta: bool = False

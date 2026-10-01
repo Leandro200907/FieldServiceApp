@@ -3,6 +3,7 @@ from __future__ import annotations
 
 pytest_plugins = ("tests.test_orquestacion",)
 
+import re
 from datetime import date
 
 from tests.test_orquestacion import (
@@ -59,3 +60,8 @@ def test_acciones_pendientes_orden_y_efecto(cliente_api, tenant_de_prueba, sesio
     lenta = [i for i in items if i["legajo_id"] == "persona_lenta"]
     assert lenta
     assert any(len(i["ocs_afectadas"]) >= 2 for i in lenta)
+    iso = re.compile(r"\d{4}-\d{2}-\d{2}")
+    for i in items:
+        assert not iso.search(i["accion_sugerida"] or "")
+        if i.get("accion_sugerida_fecha"):
+            assert iso.fullmatch(i["accion_sugerida_fecha"])
