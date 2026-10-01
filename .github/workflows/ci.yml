@@ -69,12 +69,14 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://modulo1_app:modulo1_app_ci_secret_12@localhost:5432/modulo1_ci_demo
           DATABASE_URL_MIGRATIONS: postgresql+psycopg://modulo1_owner:modulo1_owner_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DATABASE_URL_ADMIN: postgresql://postgres:postgres@localhost:5432/postgres
           DEMO_PASSWORD: demo-secreto-12
         run: python scripts/sembrar_demo.py --reset --importar-planillas
       - name: Pytest (sembrado demo en modulo1_ci_demo)
         env:
           DATABASE_URL: postgresql+psycopg://modulo1_app:modulo1_app_ci_secret_12@localhost:5432/modulo1_ci_demo
           DATABASE_URL_MIGRATIONS: postgresql+psycopg://modulo1_owner:modulo1_owner_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DATABASE_URL_ADMIN: postgresql://postgres:postgres@localhost:5432/postgres
           DEMO_PASSWORD: demo-secreto-12
         run: python -m pytest tests/test_sembrar_demo.py -q
 

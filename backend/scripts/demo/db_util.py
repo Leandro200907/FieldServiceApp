@@ -64,9 +64,17 @@ def exigir_base_demo() -> tuple[str, str, str]:
     return _normalizar_dsn(app), _normalizar_dsn(owner), app_n
 
 
+def _dsn_admin_para_reset(dsn_owner: str) -> str:
+    """Superusuario o rol con CREATEDB para DROP/CREATE (p. ej. postgres en CI)."""
+    url = os.environ.get("DATABASE_URL_ADMIN")
+    if url:
+        return _normalizar_dsn(url)
+    return re.sub(r"/[^/]+$", "/postgres", dsn_owner)
+
+
 def reset_base(dsn_owner: str, nombre_base: str) -> None:
     """DROP/CREATE DATABASE y alembic upgrade head."""
-    admin = re.sub(r"/[^/]+$", "/postgres", dsn_owner)
+    admin = _dsn_admin_para_reset(dsn_owner)
     with psycopg.connect(admin, autocommit=True) as conn:
         conn.execute(
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
