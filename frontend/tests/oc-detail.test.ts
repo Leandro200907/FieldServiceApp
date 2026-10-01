@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatFecha } from '../src/features/documentation-planning/dates';
-import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, vigenciaReprogramacion } from '../src/features/documentation-planning/ocDetail';
+import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, tituloQuiebreMapa, vigenciaReprogramacion } from '../src/features/documentation-planning/ocDetail';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
@@ -30,6 +30,14 @@ describe('detalle de OC', () => {
     expect(lineas[0]).toContain('Ana');
     expect(lineas[1]).toMatch(/se cae el 18\/11\/2026 por Apto médico \(Luis\)/);
     expect(lineas[2]).toContain('Marta');
+  });
+
+  it('arma el tooltip del mapa con fecha, requisito, nombre y tipo', () => {
+    expect(tituloQuiebreMapa(
+      { nombre: 'Juan Pérez', fecha: '2026-11-18', requisito: 'Apto médico' },
+      'Técnicos',
+      TZ,
+    )).toBe('18/11/2026 vence Apto médico — Juan Pérez (Técnicos)');
   });
 
   it('arma la alerta cierta con tramo e impacto en días', () => {

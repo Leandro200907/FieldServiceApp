@@ -11,6 +11,17 @@ function nombres(items: { nombre?: unknown }[]): string {
   return items.map(i => String(i.nombre || '')).filter(Boolean).join(', ');
 }
 
+export function tituloQuiebreMapa(
+  raw: { fecha?: string; requisito?: string; nombre?: string },
+  etiqueta: string,
+  timeZone: string,
+): string {
+  const fecha = raw.fecha ? formatFecha(raw.fecha, timeZone) : '';
+  const req = raw.requisito || 'requisito';
+  const quien = raw.nombre ? `${raw.nombre} (${etiqueta})` : etiqueta;
+  return `${fecha} vence ${req} — ${quien}`.replace(/^\s+/, '');
+}
+
 /** Fechas del formulario de reprogramar: las de la OC, salvo las que el usuario ya editó. */
 export function vigenciaReprogramacion(
   formulario: { desde: string; hasta: string },

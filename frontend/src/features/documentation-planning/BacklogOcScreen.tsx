@@ -10,7 +10,7 @@ import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
 import { formatFecha, todayIso } from './dates';
-import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, vigenciaReprogramacion } from './ocDetail';
+import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, tituloQuiebreMapa, vigenciaReprogramacion } from './ocDetail';
 import './planning.css';
 import './timeline.css';
 
@@ -133,11 +133,11 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
     ),
     alertas: (row.disponibilidad_por_tipo || []).flatMap(d =>
       (d.se_cae_en_ventana || []).map(s => {
-        const raw = s as { fecha?: string; requisito?: string };
+        const raw = s as { fecha?: string; requisito?: string; nombre?: string };
         const fecha = typeof raw.fecha === 'string' ? raw.fecha : row.vigencia_hasta;
         return {
           fecha,
-          titulo: `${raw.fecha ? fmtDate(raw.fecha) : ''} vence ${raw.requisito || 'requisito'} — ${d.etiqueta}`.trim(),
+          titulo: tituloQuiebreMapa({ ...raw, fecha }, d.etiqueta, tenantTz()),
         };
       }),
     ),
