@@ -271,29 +271,33 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
           <h3>{detailQuery.data.oc.clave_origen as string}</h3>
           <p>{fmtDate(detailQuery.data.oc.vigencia_desde as string)} – {fmtDate(detailQuery.data.oc.vigencia_hasta as string)}</p>
           <p>{detailQuery.data.tiene_alertas ? 'Con alertas ciertas' : 'Sin alertas'}</p>
-          <h4>Disponibilidad por tipo</h4>
-          <ul>
-            {(detailQuery.data.disponibilidad_por_tipo || []).map(d => (
-              <li key={d.tipo_sujeto}>
-                <strong>{d.etiqueta}</strong>
-                <ul>
-                  {lineasDisponibilidad(d, session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires').map(linea => (
-                    <li key={linea}>{linea}</li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-          {(detailQuery.data.alertas_ciertas || []).length > 0 && (
-            <>
-              <h4>Alertas ciertas</h4>
+          <div className="backlog-detail-columns">
+            <section>
+              <h4>Disponibilidad por tipo</h4>
               <ul>
-                {(detailQuery.data.alertas_ciertas || []).map((a, i) => (
-                  <li key={`${a.codigo}-${i}`}>{textoAlertaCierta(a, (detailQuery.data!.impacto_por_tipo || []) as { tipo_sujeto?: string; dias_sin_habilitados?: number }[], session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires')}</li>
+                {(detailQuery.data.disponibilidad_por_tipo || []).map(d => (
+                  <li key={d.tipo_sujeto}>
+                    <strong>{d.etiqueta}</strong>
+                    <ul>
+                      {lineasDisponibilidad(d, session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires').map(linea => (
+                        <li key={linea}>{linea}</li>
+                      ))}
+                    </ul>
+                  </li>
                 ))}
               </ul>
-            </>
-          )}
+            </section>
+            {(detailQuery.data.alertas_ciertas || []).length > 0 && (
+              <section>
+                <h4>Alertas ciertas</h4>
+                <ul>
+                  {(detailQuery.data.alertas_ciertas || []).map((a, i) => (
+                    <li key={`${a.codigo}-${i}`}>{textoAlertaCierta(a, (detailQuery.data!.impacto_por_tipo || []) as { tipo_sujeto?: string; dias_sin_habilitados?: number }[], session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires')}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
           {comparacion && ventanaAntes && ventanaNueva && (
             <section className="reprog-comparacion">
               <h4>Efecto documental (antes → después)</h4>
