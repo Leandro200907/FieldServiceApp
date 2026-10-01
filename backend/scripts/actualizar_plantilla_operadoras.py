@@ -15,6 +15,10 @@ ENCABEZADOS = [
     "Tipo de documento", "Requisito ID", "Documento ID", "Fecha de emisión", "Fecha de vencimiento",
     "Estado", "Fecha de exportación", "Fecha de presentación", "Fecha de respuesta", "Observación",
 ]
+COLUMNA_CONTROL = "Control"
+FILA_ENCABEZADO = 5
+FILA_DATOS_DESDE = 6
+FILA_DATOS_HASTA = 50
 
 INSTRUCCIONES = [
     "Complete la hoja Presentaciones. Cada fila actualiza el espejo de una operadora; no crea documentos del legajo.",
@@ -22,7 +26,21 @@ INSTRUCCIONES = [
     "Documento ID es opcional: use el UUID de la versión documental cuando haya ambigüedad.",
     "Fechas: celda de fecha Excel, ISO (aaaa-mm-dd) o texto dd/mm/aaaa.",
     "Estados válidos: exportado, enviado, aceptado, rechazado (con sus fechas asociadas).",
+    "La columna Control es solo ayuda en Excel; no se importa al sistema.",
 ]
+
+_FORMULA_CONTROL = (
+    '=IF(COUNTA(A{row}:M{row})=0,"",'
+    'IF(OR(A{row}="",B{row}="",C{row}="",E{row}="",J{row}=""),"Faltan campos obligatorios",'
+    'IF(AND(J{row}="exportado",K{row}=""),"Falta fecha de exportación",'
+    'IF(AND(OR(J{row}="enviado",J{row}="aceptado",J{row}="rechazado"),L{row}=""),"Falta fecha de presentación",'
+    'IF(AND(OR(J{row}="aceptado",J{row}="rechazado"),M{row}=""),"Falta fecha de respuesta",'
+    'IF(AND(I{row}<>"",H{row}<>"",I{row}<H{row}),"Vencimiento anterior a emisión","Lista para importar")))))'
+)
+
+
+def _formula_control(fila: int) -> str:
+    return _FORMULA_CONTROL.format(row=fila)
 
 
 def actualizar(ruta: Path) -> None:
@@ -31,7 +49,13 @@ def actualizar(ruta: Path) -> None:
         raise SystemExit(f"Falta hoja Presentaciones en {ruta}")
     hoja = wb["Presentaciones"]
     for col, titulo in enumerate(ENCABEZADOS, start=1):
-        hoja.cell(row=5, column=col, value=titulo)
+        hoja.cell(row=FILA_ENCABEZADO, column=col, value=titulo)
+    hoja.cell(row=FILA_ENCABEZADO, column=len(ENCABEZADOS) + 1, value=COLUMNA_CONTROL)
+    for fila in range(FILA_DATOS_DESDE, FILA_DATOS_HASTA + 1):
+        obs = hoja.cell(row=fila, column=14)
+        obs.value = None
+        control = hoja.cell(row=fila, column=15)
+        control.value = _formula_control(fila)
     if "Instrucciones" not in wb.sheetnames:
         hoja_inst = wb.create_sheet("Instrucciones")
     else:

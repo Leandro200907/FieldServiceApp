@@ -119,7 +119,7 @@ export function VencimientosScreen() {
       {resultadoImportacion && <div className="import-result" role="status"><strong>{resultadoImportacion.filas_aceptadas} fila{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'} aplicada{resultadoImportacion.filas_aceptadas === 1 ? '' : 's'}</strong><span>{resultadoImportacion.filas_rechazadas} rechazada{resultadoImportacion.filas_rechazadas === 1 ? '' : 's'}.</span>{resultadoImportacion.errores.length > 0 && <ul>{resultadoImportacion.errores.map((error, index) => <li key={`${error.fila ?? 'n'}-${index}`}>{etiquetaFilaImportacion(error.fila)}: {error.mensaje}</li>)}</ul>}</div>}
       {errorImportacion && <>
         <ErrorState message={errorImportacion.message} requestId={errorImportacion.referenceSource === 'server' ? errorImportacion.requestId : undefined} />
-        {erroresPlanilla.length > 0 && <ul className="import-result">{erroresPlanilla.map((error, index) => <li key={`${error.fila ?? 'n'}-${index}`}>{etiquetaFilaImportacion(error.fila)}: {error.mensaje}</li>)}</ul>}
+        {erroresPlanilla.length > 0 && <ul className="import-result import-result--errors">{erroresPlanilla.map((error, index) => <li key={`${error.fila ?? 'n'}-${index}`}>{etiquetaFilaImportacion(error.fila)}: {error.mensaje}</li>)}</ul>}
       </>}
     </section>}
     <section className="panel">

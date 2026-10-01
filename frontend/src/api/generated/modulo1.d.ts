@@ -2819,6 +2819,8 @@ export interface components {
             estado_confirmacion: string;
             /** Id */
             id: string;
+            /** Identificador Natural */
+            identificador_natural?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
             /** Origen Propuesta */
@@ -2827,8 +2829,6 @@ export interface components {
             requisito: string | null;
             /** Requisito Definicion Id */
             requisito_definicion_id: string;
-            /** Identificador Natural */
-            identificador_natural?: string | null;
             /** Sujeto Id */
             sujeto_id: string;
             /** Tipo */

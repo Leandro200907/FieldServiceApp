@@ -43,6 +43,15 @@ _COLUMNAS = {
     "observacion": "observacion",
 }
 _REQUERIDAS = {"operadora", "tipo_sujeto", "identificador_sujeto", "tipo_documento", "estado"}
+_IGNORAR_ENCABEZADOS = {"control"}
+_MENSAJES_COLUMNA_CONTROL = frozenset({
+    "Faltan campos obligatorios",
+    "Falta fecha de exportación",
+    "Falta fecha de presentación",
+    "Falta fecha de respuesta",
+    "Vencimiento anterior a emisión",
+    "Lista para importar",
+})
 _RE_FECHA_AR = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 _MAX_PARTE_DESCOMPRIMIDA = 2 * 1024 * 1024
 
@@ -150,6 +159,15 @@ def _parsear_fila_xml(
     return numero, valores
 
 
+def _observacion_desde_planilla(valor: object) -> object:
+    if valor in (None, ""):
+        return None
+    texto = str(valor).strip()
+    if texto in _MENSAJES_COLUMNA_CONTROL:
+        return None
+    return valor
+
+
 def _registro_desde_valores(
     numero: int,
     valores: dict[int, object],
@@ -157,6 +175,8 @@ def _registro_desde_valores(
     errores: list[dict],
 ) -> dict | None:
     registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
+    if "observacion" in registro:
+        registro["observacion"] = _observacion_desde_planilla(registro.get("observacion"))
     if not any(registro.get(c) not in (None, "") for c in _REQUERIDAS):
         return None
     registro["fila"] = numero
@@ -188,7 +208,7 @@ def _leer_filas_hoja(xml_bytes: bytes, compartidos: list[str], *, hoja: str) -> 
         parseada = _parsear_fila_xml(elem, compartidos, errores, ultimo_numero=ultimo_numero)
         elem.clear()
         if parseada is None:
-            if len(errores) > errores_antes and errores[-1].get("codigo") == "fila_invalida":
+            if len(errores) > errores_antes and errores[-1].get("codigo") in ("fila_invalida", "celda_invalida"):
                 fila_rechazada = errores[-1].get("fila")
                 if isinstance(fila_rechazada, int):
                     ultimo_numero = fila_rechazada
@@ -196,7 +216,11 @@ def _leer_filas_hoja(xml_bytes: bytes, compartidos: list[str], *, hoja: str) -> 
         numero, valores = parseada
         ultimo_numero = numero
         if encabezado is None and numero <= 20:
-            mapeo = {col: _COLUMNAS[n] for col, valor in valores.items() if (n := _normalizar(valor)) in _COLUMNAS}
+            mapeo = {
+                col: _COLUMNAS[n]
+                for col, valor in valores.items()
+                if (n := _normalizar(valor)) in _COLUMNAS and n not in _IGNORAR_ENCABEZADOS
+            }
             if _REQUERIDAS <= set(mapeo.values()):
                 encabezado = numero, mapeo
             continue

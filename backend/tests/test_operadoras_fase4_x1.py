@@ -133,7 +133,7 @@ def test_fila_r_invalida_mas_valida_no_devuelve_500(cliente_api, tenant_de_prueb
          "2026-09-27", "2027-09-25", "exportado", "2026-09-27T10:00:00+00:00", "", "", ""],
     ]
     xlsx_valida = _xlsx(filas)
-    # Planilla combinada: encabezado + fila r=x2 (rechazada) + fila válida r=7
+
     def celda(col: int, fila: int, valor: object) -> str:
         letras = ""
         n = col
@@ -150,19 +150,20 @@ def test_fila_r_invalida_mas_valida_no_devuelve_500(cliente_api, tenant_de_prueb
     valida_vals = filas[1]
     fila_x2 = "".join(celda(i, 6, v) for i, v in enumerate(invalida_vals, 1))
     fila_ok = "".join(celda(i, 7, v) for i, v in enumerate(valida_vals, 1))
-    contenido = BytesIO()
-    with ZipFile(contenido, "w", ZIP_DEFLATED) as z:
-        z.writestr("[Content_Types].xml", xlsx_valida[xlsx_valida.find(b"[Content_Types]"):xlsx_valida.find(b"xl/workbook")])
-        z.writestr("xl/workbook.xml", xlsx_valida[xlsx_valida.find(b"<workbook"):xlsx_valida.find(b"xl/_rels")])
-        z.writestr("xl/_rels/workbook.xml.rels", xlsx_valida[xlsx_valida.find(b"<Relationships"):xlsx_valida.find(b"xl/worksheets")])
-        z.writestr(
-            "xl/worksheets/sheet1.xml",
-            '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            f'<sheetData><row r="5">{enc}</row><row r="x2">{fila_x2}</row><row r="7">{fila_ok}</row></sheetData></worksheet>',
-        )
+    hoja_xml = (
+        '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<sheetData><row r="5">{enc}</row><row r="x2">{fila_x2}</row><row r="7">{fila_ok}</row></sheetData></worksheet>'
+    )
+    combinada = BytesIO()
+    with ZipFile(BytesIO(xlsx_valida), "r") as origen, ZipFile(combinada, "w", ZIP_DEFLATED) as destino:
+        for info in origen.infolist():
+            payload = origen.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                payload = hoja_xml.encode("utf-8")
+            destino.writestr(info, payload)
     r = cliente_api.post(
         "/v1/comandos/importar_planilla_operadoras",
-        content=contenido.getvalue(),
+        content=combinada.getvalue(),
         headers=_headers(t),
     )
     assert r.status_code == 200, r.text
@@ -190,10 +191,11 @@ def test_fallo_al_validar_respuesta_hace_rollback(cliente_api, tenant_de_prueba,
     intentos = {"n": 0}
 
     def _falla_validacion(payload):
-        original(payload)
+        resultado = original(payload)
         intentos["n"] += 1
         if intentos["n"] == 1:
             raise ValueError("validación forzada en test")
+        return resultado
 
     monkeypatch.setattr(router_operadoras.ImportarPlanillaOperadorasResponse, "model_validate", _falla_validacion)
     r = cliente_api.post(

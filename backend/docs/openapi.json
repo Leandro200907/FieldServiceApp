@@ -3853,6 +3853,17 @@
             "title": "Id",
             "type": "string"
           },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
+          },
           "locacion_id": {
             "anyOf": [
               {
@@ -3882,17 +3893,6 @@
           "requisito_definicion_id": {
             "title": "Requisito Definicion Id",
             "type": "string"
-          },
-          "identificador_natural": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Identificador Natural"
           },
           "sujeto_id": {
             "title": "Sujeto Id",
