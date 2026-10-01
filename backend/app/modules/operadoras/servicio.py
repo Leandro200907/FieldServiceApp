@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -124,6 +124,71 @@ def reconciliar(session: Session, identidad: Identidad, *, operadora_id: str, su
     return _datos_alerta(session, t, str(fila))
 
 
+def _instante_paso(
+    estado: str,
+    *,
+    exportado_en: datetime | None,
+    enviado_en: datetime | None,
+    aceptado_en: datetime | None,
+    rechazado_en: datetime | None,
+) -> datetime:
+    por_estado = {
+        "exportado": exportado_en,
+        "enviado": enviado_en,
+        "aceptado": aceptado_en,
+        "rechazado": rechazado_en,
+    }
+    valor = por_estado.get(estado)
+    if valor is not None:
+        return valor
+    return datetime.now(timezone.utc)
+
+
+def _registrar_movimiento(
+    session: Session,
+    tenant_id: str,
+    *,
+    operadora_id: str,
+    sujeto_id: str,
+    requisito_definicion_id: str,
+    documento_id: str,
+    estado: str,
+    paso_en: datetime,
+    observacion: str | None,
+    registrado_por: str,
+    fuente_archivo: str | None,
+    fuente_hoja: str | None,
+    fuente_fila: int | None,
+) -> None:
+    origen = "planilla" if fuente_archivo else "manual"
+    session.execute(
+        text("""
+            INSERT INTO modulo1.movimiento_entrega_operadora (
+                tenant_id, operadora_id, sujeto_id, requisito_definicion_id, documento_id,
+                estado, paso_en, observacion, registrado_por, origen,
+                fuente_archivo, fuente_hoja, fuente_fila
+            ) VALUES (
+                :t, :o, :s, :r, :d, :e, :p, :obs, :u, :origen, :fa, :fh, :ff
+            )
+        """),
+        {
+            "t": tenant_id,
+            "o": operadora_id,
+            "s": sujeto_id,
+            "r": requisito_definicion_id,
+            "d": documento_id,
+            "e": estado,
+            "p": paso_en,
+            "obs": observacion,
+            "u": registrado_por,
+            "origen": origen,
+            "fa": fuente_archivo,
+            "fh": fuente_hoja,
+            "ff": fuente_fila,
+        },
+    )
+
+
 def al_registrar_nueva_version(session: Session, identidad: Identidad, *, sujeto_id: str,
                                requisito_definicion_id: str) -> None:
     operadoras = session.execute(text(
@@ -178,6 +243,27 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
              "d": documento_id, "e": estado, "ex": exportado_en, "en": enviado_en,
              "ac": aceptado_en, "re": rechazado_en, "fa": fuente_archivo, "fh": fuente_hoja,
              "ff": fuente_fila, "obs": observacion, "u": identidad.usuario_id})
+    _registrar_movimiento(
+        session,
+        t,
+        operadora_id=str(operadora_id),
+        sujeto_id=sujeto_id,
+        requisito_definicion_id=str(doc["requisito_definicion_id"]),
+        documento_id=documento_id,
+        estado=estado,
+        paso_en=_instante_paso(
+            estado,
+            exportado_en=exportado_en,
+            enviado_en=enviado_en,
+            aceptado_en=aceptado_en,
+            rechazado_en=rechazado_en,
+        ),
+        observacion=observacion,
+        registrado_por=identidad.usuario_id,
+        fuente_archivo=fuente_archivo,
+        fuente_hoja=fuente_hoja,
+        fuente_fila=fuente_fila,
+    )
     registrar_evento_interno(session, t, "EstadoDocumentoOperadoraRegistrado", {
         "operadora_id": str(operadora_id), "operadora": operadora, "sujeto_id": sujeto_id,
         "documento_id": documento_id, "estado": estado, "fuente_archivo": fuente_archivo,
