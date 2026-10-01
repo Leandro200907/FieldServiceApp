@@ -1378,9 +1378,9 @@ ALTER TABLE ONLY modulo1.movimiento_entrega_operadora
 -- Name: movimiento_entrega_operadora movimiento_entrega_operadora_tenant_id_operadora_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.movimiento_entrega_operadora
     ADD CONSTRAINT movimiento_entrega_operadora_tenant_id_operadora_id_fkey FOREIGN KEY (tenant_id, operadora_id) REFERENCES modulo1.operadora_documental(tenant_id, operadora_id);
--- Name: movimiento_entrega_operadora movimiento_entrega_operadora_tenant_id_requisito_definicion_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
+-- Name: movimiento_entrega_operadora movimiento_entrega_operadora_tenant_id_requisito_definicio_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.movimiento_entrega_operadora
-    ADD CONSTRAINT movimiento_entrega_operadora_tenant_id_requisito_definicion_fkey FOREIGN KEY (tenant_id, requisito_definicion_id) REFERENCES modulo1.definicion_requisito(tenant_id, requisito_definicion_id);
+    ADD CONSTRAINT movimiento_entrega_operadora_tenant_id_requisito_definicio_fkey FOREIGN KEY (tenant_id, requisito_definicion_id) REFERENCES modulo1.definicion_requisito(tenant_id, requisito_definicion_id);
 -- Name: movimiento_entrega_operadora movimiento_entrega_operadora_tenant_id_sujeto_id_fkey; Type: FK CONSTRAINT; Schema: modulo1; Owner: -
 ALTER TABLE ONLY modulo1.movimiento_entrega_operadora
     ADD CONSTRAINT movimiento_entrega_operadora_tenant_id_sujeto_id_fkey FOREIGN KEY (tenant_id, sujeto_id) REFERENCES modulo1.legajo(tenant_id, sujeto_id);

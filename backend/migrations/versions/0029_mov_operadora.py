@@ -125,7 +125,7 @@ def upgrade() -> None:
         f"CREATE POLICY movimiento_entrega_operadora_aislamiento "
         f"ON modulo1.movimiento_entrega_operadora {_POLICY}"
     )
-    op.execute("GRANT SELECT, INSERT ON modulo1.movimiento_entrega_operadora TO modulo1_app")
+    op.execute("GRANT SELECT, INSERT, DELETE ON modulo1.movimiento_entrega_operadora TO modulo1_app")
 
 
 def downgrade() -> None:
