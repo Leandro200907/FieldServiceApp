@@ -591,7 +591,8 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
         lote_ok = uuid.uuid5(uuid.NAMESPACE_DNS, f"lote-doc-{est.spec.slug}")
         filas = []
         for i in range(5):
-            suj = est.sujetos[f"tecnico{(i % 3) + 1}"]
+            # Solo t1/t2: un apto de lote sobre t3 dejaba el radar en pendiente_revision.
+            suj = est.sujetos[f"tecnico{(i % 2) + 1}"]
             req = est.requisitos["Apto médico"]
             filas.append(
                 {
