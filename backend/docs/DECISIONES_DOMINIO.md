@@ -686,3 +686,182 @@ no persisten evaluaciones ni emiten eventos.
 
 **Código / tests:** `app/modules/consultas/backlog_documental.py`, `tests/test_backlog_m1_de.py`.
 
+## Decisiones de producto — Ronda de pruebas 1 (2026-10-02)
+
+Decisiones tomadas o abiertas durante la primera ronda de pruebas con usuarios. No
+sustituyen las reglas de dominio cerradas en implementación anteriores; cuando entren en
+conflicto con una sección previa, esta sección prevalece para el alcance del Módulo 1
+hasta que el código y la spec se alineen.
+
+### Bloqueantes para clientes reales
+
+#### D1. Vista previa de evidencia antes de confirmar o rechazar
+
+**Decisión.** El responsable debe poder ver el archivo de evidencia antes de confirmar o
+rechazar una propuesta. G-03 pasa a requisito de salida del Módulo 1.
+
+**Motivo.** Sin vista previa, la revisión es ciega y no cumple el flujo operativo real de
+los responsables de legajos.
+
+**Estado.** Decidida.
+
+#### D2. Gestión de contraseña
+
+**Decisión.** Cambio obligatorio en el primer ingreso; opción «Cambiar contraseña» en Mi
+sesión; reseteo por el responsable desde la app; recuperación por mail cuando exista canal
+de mail configurado.
+
+**Motivo.** Credenciales iniciales compartidas y ausencia de autogestión bloquean el uso en
+producción con clientes reales.
+
+**Estado.** Decidida.
+
+#### D3. Bandeja de revisión como inicio del responsable
+
+**Decisión.** Se unifica la revisión en una «Bandeja de revisión» (propuestas + evidencias
+pendientes de revisar). Esa bandeja pasa a ser la pantalla de inicio del responsable de
+legajos.
+
+**Motivo.** Fragmentar la revisión en varias pantallas retrasa el trabajo diario del rol
+principal del Módulo 1.
+
+**Estado.** Decidida.
+
+### Comportamiento del producto
+
+#### D4. Módulo 1 sin rol supervisor
+
+**Decisión.** El Módulo 1 sale sin rol supervisor; el supervisor llega con el Módulo 2.
+Reemplaza la decisión anterior «supervisor: solo su universo» para el Módulo 1. Alinear
+HANDOFF §4.2 con §4.4 (asignar/reasignar supervisor no se publican en el Módulo 1) y cerrar
+la deuda registrada en BITACORA del 2026-10-01.
+
+**Motivo.** El supervisor opera custodia, excepciones y dotación en Módulo 2; exponerlo en
+M1 generaba alcance y pantallas inconsistentes con la frontera de módulos.
+
+**Estado.** Decidida.
+
+#### D5. OC como compromiso del cliente y reprogramación
+
+**Decisión.** La OC es un compromiso del cliente. «Reprogramar» se renombra a «Registrar
+cambio informado por el cliente», exige fuente (quién informó y por qué medio) y, si una
+planilla importada trae otras fechas para la misma OC, se marca el conflicto para que lo
+resuelva el responsable (no se pisa en silencio). La planificación de OT es del Módulo 2.
+La franja «Sin modificar fechas» pasa a decir «Sin planificar OT».
+
+**Motivo.** Las fechas de la OC reflejan lo que el cliente comunicó; los cambios deben ser
+auditables y los conflictos de importación visibles, no resueltos en background.
+
+**Estado.** Decidida.
+
+#### D6. Fuente de cada matriz
+
+**Decisión.** Toda matriz debe registrar su fuente (contrato, pliego o procedimiento de la
+operadora), con documento adjunto opcional.
+
+**Motivo.** Sin trazabilidad de origen no se puede auditar ni discutir qué reglas aplican
+a una operadora.
+
+**Estado.** Decidida.
+
+#### D7. Catálogos solo desde Configuración
+
+**Decisión.** Solo el rol Configuración modifica catálogos. Los elementos de catálogo se
+pueden corregir y dar de baja, nunca borrar físicamente.
+
+**Motivo.** Evita divergencia de maestros entre roles y preserva historial referencial.
+
+**Estado.** Decidida.
+
+#### D8. Historial de versiones por documento
+
+**Decisión.** Cada documento muestra su historial de versiones (fechas y quién cargó cada
+una).
+
+**Motivo.** La cadena de versiones es central en dominio; el usuario debe verla sin depender
+de auditoría técnica.
+
+**Estado.** Decidida.
+
+#### D9. Legajos de baja y OC canceladas
+
+**Decisión.** Legajos dados de baja y OC canceladas quedan ocultos por defecto, visibles con
+un filtro, en solo lectura.
+
+**Motivo.** Reduce ruido en el día a día sin perder consulta histórica.
+
+**Estado.** Decidida.
+
+### Diseño
+
+#### D10. Documentos de empresa para el técnico
+
+**Decisión.** El técnico ve solo los documentos de empresa que afectan su habilitación,
+marcados «Lo gestiona tu empresa», sin acciones.
+
+**Motivo.** El técnico no opera documentación de empresa pero necesita entender por qué su
+habilitación depende de requisitos corporativos.
+
+**Estado.** Decidida.
+
+#### D11. Calendario documental
+
+**Decisión.** Se elimina el Calendario documental o se convierte en una vista del Timeline
+de recursos.
+
+**Motivo.** Dos vistas temporales duplicadas confunden; el Timeline de recursos concentra la
+planificación documental relevante en M1.
+
+**Estado.** Decidida.
+
+#### D12. Sesión e inactividad
+
+**Decisión.** La sesión se mantiene al recargar la página y se cierra tras 30 minutos de
+inactividad.
+
+**Motivo.** Equilibrio entre continuidad de trabajo en campo y cierre por seguridad en
+terminales compartidos.
+
+**Estado.** Decidida.
+
+#### D13. «Excepcionable» informativo en Módulo 1
+
+**Decisión.** En el Módulo 1, «Excepcionable» es solo informativo, con el texto «Este
+requisito puede exceptuarse desde Operación (Módulo 2)».
+
+**Motivo.** Las excepciones son competencia del supervisor en M2; mostrar acciones en M1
+generaba expectativa incorrecta.
+
+**Estado.** Decidida.
+
+### Pendientes
+
+#### P1. Plazo de aviso por requisito
+
+**Decisión.** `definicion_requisito.plazo_aviso_dias`: se decide según validación con
+usuarios. Si no se usa, se elimina la columna.
+
+**Motivo.** El override por tipo de requisito (§15) puede no aportar valor operativo; hay
+que confirmarlo antes de mantener complejidad en modelo y UI.
+
+**Estado.** Pendiente.
+
+#### P2. Cola `evidencia_qr`
+
+**Decisión.** Se posterga la cola `evidencia_qr`. Mientras tanto no debe generar jobs que
+vayan a dead-letter.
+
+**Motivo.** La funcionalidad QR no entra en el corte de M1; jobs huérfanos generan ruido
+operativo y alertas falsas.
+
+**Estado.** Pendiente.
+
+#### P3. Barras de OC por técnico en el Timeline
+
+**Decisión.** Se decide según el origen de esos datos (pregunta 24 del diagnóstico).
+
+**Motivo.** Sin definir la fuente (planificación M2 vs. solo compromisos M1) no se puede
+diseñar la visualización ni el contrato de consulta.
+
+**Estado.** Pendiente.
+
