@@ -26,6 +26,7 @@ from scripts.demo.db_util import (  # noqa: E402
     ErrorDemo,
     borrar_storage_tenants,
     exigir_base_demo,
+    exigir_permiso_reset_base,
     leer_env,
     precargar_plantillas_json,
     reset_base,
@@ -89,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     slugs = [t.slug for t in TENANTS]
 
     if args.reset:
+        exigir_permiso_reset_base(dsn_owner)
         ids_viejos = list(tenant_ids_por_slugs(dsn_owner, slugs).values())
         n = borrar_storage_tenants(ids_viejos)
         print(f"Storage: {n} objetos borrados (tenants demo previos)")

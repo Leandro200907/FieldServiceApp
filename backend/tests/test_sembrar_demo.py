@@ -378,3 +378,75 @@ def test_demo_password_leida_desde_env_file(tmp_path):
             {"t": str(tid), "e": "responsable_legajos1@patagonia-demo.demo.test"},
         ).first()
         assert fila and verificar_password(pwd, fila.password_hash)
+
+
+def test_database_url_admin_desde_env_file_sin_variable_de_proceso(tmp_path):
+    """DATABASE_URL_ADMIN sólo en ENV_FILE: owner sin CREATEDB puede --reset vía admin del archivo."""
+    _exigir_base_demo_tests()
+    admin = os.environ.get("DATABASE_URL_ADMIN")
+    if not admin:
+        pytest.skip("DATABASE_URL_ADMIN en el entorno del test (postgres) requerido como valor de referencia")
+    env_file = tmp_path / "sembrado.env"
+    env_file.write_text(
+        "\n".join(
+            [
+                f"DATABASE_URL={os.environ['DATABASE_URL']}",
+                f"DATABASE_URL_MIGRATIONS={os.environ['DATABASE_URL_MIGRATIONS']}",
+                f"DATABASE_URL_ADMIN={admin}",
+                "DEMO_PASSWORD=demo-secreto-12",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    env = _env_sembrado(ENV_FILE=str(env_file))
+    env.pop("DATABASE_URL_ADMIN", None)
+    r = _correr_sembrado("--reset", env=env)
+    assert r.returncode == 0, r.stderr or r.stdout
+
+
+def test_reset_aborta_sin_admin_si_owner_sin_createdb(demo_sembrado, tmp_path):
+    """Sin DATABASE_URL_ADMIN el --reset aborta antes de borrar storage ni DROP DATABASE."""
+    _exigir_base_demo_tests()
+    from app.db import platform_session
+
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
+        assert tid is not None, "requiere demo sembrado previo o fixture module"
+        tid_s = str(tid)
+    from app.config import settings
+
+    storage_base = Path(settings.storage_local_dir).resolve()
+    storage_base.mkdir(parents=True, exist_ok=True)
+    marcador = storage_base / tid_s / "no_debe_borrarse_reset_abort.txt"
+    marcador.parent.mkdir(parents=True, exist_ok=True)
+    marcador.write_text("ok", encoding="utf-8")
+
+    env_file = tmp_path / "sin_admin.env"
+    env_file.write_text(
+        "\n".join(
+            [
+                f"DATABASE_URL={os.environ['DATABASE_URL']}",
+                f"DATABASE_URL_MIGRATIONS={os.environ['DATABASE_URL_MIGRATIONS']}",
+                "DEMO_PASSWORD=demo-secreto-12",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    env = _env_sembrado(ENV_FILE=str(env_file))
+    env.pop("DATABASE_URL_ADMIN", None)
+
+    with platform_session() as ps:
+        rev_antes = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        assert rev_antes
+
+    r = _correr_sembrado("--reset", env=env)
+    assert r.returncode == 2, r.stdout
+    assert "DATABASE_URL_ADMIN" in (r.stderr or r.stdout)
+    assert marcador.is_file(), "storage no debía borrarse al abortar"
+    with platform_session() as ps:
+        rev_despues = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        assert rev_despues == rev_antes
+        tid_despues = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
+        assert tid_despues is not None

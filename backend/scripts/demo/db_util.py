@@ -31,7 +31,7 @@ def leer_env() -> dict[str, str]:
             if "=" in linea and not linea.lstrip().startswith("#"):
                 k, v = linea.split("=", 1)
                 valores[k.strip()] = v.strip()
-    for k in ("DATABASE_URL", "DATABASE_URL_MIGRATIONS"):
+    for k in ("DATABASE_URL", "DATABASE_URL_MIGRATIONS", "DATABASE_URL_ADMIN"):
         if os.environ.get(k):
             valores[k] = os.environ[k]
     return valores
@@ -64,17 +64,53 @@ def exigir_base_demo() -> tuple[str, str, str]:
     return _normalizar_dsn(app), _normalizar_dsn(owner), app_n
 
 
-def _dsn_admin_para_reset(dsn_owner: str) -> str:
+def dsn_admin_para_reset(dsn_owner: str) -> str:
     """Superusuario o rol con CREATEDB para DROP/CREATE (p. ej. postgres en CI)."""
-    url = os.environ.get("DATABASE_URL_ADMIN")
+    env = leer_env()
+    url = env.get("DATABASE_URL_ADMIN")
     if url:
         return _normalizar_dsn(url)
     return re.sub(r"/[^/]+$", "/postgres", dsn_owner)
 
 
+def exigir_permiso_reset_base(dsn_owner: str) -> str:
+    """Verifica CREATEDB en la conexión de DROP/CREATE; aborta sin tocar la base demo."""
+    admin = dsn_admin_para_reset(dsn_owner)
+    env = leer_env()
+    admin_explicito = bool(env.get("DATABASE_URL_ADMIN"))
+    try:
+        with psycopg.connect(admin, autocommit=True) as conn:
+            fila = conn.execute(
+                "SELECT rolcreatedb OR rolsuper FROM pg_roles WHERE rolname = current_user"
+            ).fetchone()
+            puede = bool(fila and fila[0])
+    except Exception as exc:  # noqa: BLE001
+        raise ErrorDemo(
+            "No se pudo conectar para DROP/CREATE DATABASE.\n"
+            f"Detalle: {exc}\n"
+            "Definí DATABASE_URL_ADMIN (proceso > ENV_FILE > .env) con un rol que pueda "
+            "conectarse a la base de mantenimiento (p. ej. postgresql://postgres:…@localhost:5432/postgres)."
+        ) from exc
+    if puede:
+        return admin
+    if admin_explicito:
+        raise ErrorDemo(
+            "DATABASE_URL_ADMIN está definida pero el rol no tiene permiso CREATEDB "
+            "(ni es superusuario) para DROP/CREATE DATABASE.\n"
+            "Usá un administrador de Postgres (p. ej. postgres) o un rol con CREATEDB.\n"
+            "DATABASE_URL_MIGRATIONS (modulo1_owner) solo corre migraciones Alembic."
+        )
+    raise ErrorDemo(
+        "Falta permiso CREATEDB para recrear la base _demo con --reset.\n"
+        "Definí DATABASE_URL_ADMIN en el archivo de entorno (proceso > ENV_FILE > .env), "
+        "por ejemplo postgresql://postgres:…@localhost:5432/postgres.\n"
+        "modulo1_owner (DATABASE_URL_MIGRATIONS) no tiene CREATEDB; no se borró la base ni el storage."
+    )
+
+
 def reset_base(dsn_owner: str, nombre_base: str) -> None:
     """DROP/CREATE DATABASE y alembic upgrade head."""
-    admin = _dsn_admin_para_reset(dsn_owner)
+    admin = exigir_permiso_reset_base(dsn_owner)
     with psycopg.connect(admin, autocommit=True) as conn:
         conn.execute(
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",

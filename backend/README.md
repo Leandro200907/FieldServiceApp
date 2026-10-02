@@ -68,6 +68,16 @@ Requiere PostgreSQL 16 con un superusuario y `psql`/`pg_dump` en el PATH (o ruta
 psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v owner_password='…' -v app_password='…' -f scripts/crear_roles.sql
 ```
 
+Roles de Postgres (ver `scripts/crear_roles.sql`):
+
+| Rol | Uso | Permisos relevantes |
+|-----|-----|---------------------|
+| **postgres** (u otro superusuario) | `DATABASE_URL_ADMIN` en `--reset` del sembrado demo | `DROP DATABASE` / `CREATE DATABASE` |
+| **modulo1_owner** | `DATABASE_URL_MIGRATIONS` — Alembic, `generar_schema.py`, DDL del owner | Migraciones; **sin** `CREATEDB` |
+| **modulo1_app** | `DATABASE_URL` — API, worker, scripts de aplicación | DML bajo RLS; **sin** owner ni `CREATEDB` |
+
+Precedencia de URLs en entorno: variables del proceso → archivo `ENV_FILE` → `.env`.
+
 ```bash
 # 2) Base con owner correcto
 psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v db=modulo1 -f scripts/crear_base.sql
@@ -142,7 +152,9 @@ Base dedicada **`fsm_demo`** (el nombre debe terminar en `_demo`). El script abo
 
 1. Crear la base (owner `modulo1_owner`), por ejemplo: `psql … -v db=fsm_demo -f scripts/crear_base.sql`
 2. En `.env`, apuntar `DATABASE_URL` y `DATABASE_URL_MIGRATIONS` a `fsm_demo`; definir
-   **`DEMO_PASSWORD`** (o usar prompt al correr el script).
+   **`DEMO_PASSWORD`** (o usar prompt al correr el script). Para **`--reset`**, definir también
+   **`DATABASE_URL_ADMIN`** (p. ej. `postgresql://postgres:…@localhost:5432/postgres`): el owner
+   no tiene `CREATEDB` y el script aborta **antes** de borrar storage o la base si falta permiso.
 3. Sembrado completo:
 
 ```bash
