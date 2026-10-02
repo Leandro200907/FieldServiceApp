@@ -390,7 +390,10 @@ def test_historial_operadora_rechazo_reenvio_aceptado(demo_sembrado):
                 {"t": tid},
             ).scalar()
             op_id = s.execute(
-                text("SELECT operadora_id::text FROM modulo1.operadora WHERE tenant_id = :t AND nombre = 'YPF'"),
+                text(
+                    "SELECT operadora_id::text FROM modulo1.operadora_documental "
+                    "WHERE tenant_id = :t AND nombre = 'YPF'"
+                ),
                 {"t": tid},
             ).scalar()
             assert suj and rid and op_id

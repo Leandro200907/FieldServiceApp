@@ -529,6 +529,24 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
         est.documentos["t2_propuesta_Constancia ART"] = pr_extra["documento_id"]
 
 
+def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant) -> None:
+    """Marca archivos del técnico 3 como validados (radar sin información incompleta)."""
+    idn = est.idn("responsable_legajos", 1)
+    with tenant_session(est.tenant_id) as s:
+        for key in _EVIDENCIAS_TECNICO3:
+            doc_id = est.documentos.get(key)
+            if not doc_id:
+                continue
+            s.execute(
+                text(
+                    "UPDATE modulo1.documento SET archivo_validacion = 'valido', "
+                    "archivo_validacion_motivo = 'Validación demo técnico 3', archivo_scan_estado = 'ok' "
+                    "WHERE tenant_id = :t AND documento_id = :d AND archivo_estado = 'confirmado'"
+                ),
+                {"t": est.tenant_id, "d": doc_id},
+            )
+
+
 def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
     """Dos evidencias confirmadas con validación pendiente (después del worker en sembrar_demo)."""
     idn = est.idn("responsable_legajos", 1)
