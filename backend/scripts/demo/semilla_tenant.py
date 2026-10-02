@@ -435,16 +435,13 @@ def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
     return est.sujetos["tecnico1"]
 
 
-# Un solo flujo preparar → PUT → confirmar por documento (sin re-subir el mismo doc).
-_EVIDENCIAS_RESERVADAS = frozenset(
+# Sin archivo en este paso: bandeja (licencias t1/t2) o flujo invalidación ART (más abajo).
+_EVIDENCIAS_SIN_ARCHIVO_EN_CARGA = frozenset(
     {
         "t1_por_vencer_Licencia de conducir",
         "t2_por_vencer_Licencia de conducir",
         "t1_vencido_Constancia ART",
         "t2_vencido_Constancia ART",
-        "t3_vigente_Apto médico",
-        "t3_vigente_Licencia de conducir",
-        "t3_vigente_Constancia ART",
     }
 )
 
@@ -454,41 +451,34 @@ _EVIDENCIAS_TECNICO3 = (
     "t3_vigente_Constancia ART",
 )
 
-_EVIDENCIAS_RECURSOS_ALERTA = (
-    "vehiculo_vtv_vencido",
-)
+def _exigir_archivo_confirmado(s, tenant_id: str, doc_id: str) -> bool:
+    estado = s.execute(
+        text("SELECT archivo_estado FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d"),
+        {"t": tenant_id, "d": doc_id},
+    ).scalar()
+    return estado == "confirmado"
 
 
 def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
     from app.modules.evidencia import servicio as ev_svc
 
     idn = est.idn("responsable_legajos", 1)
+    for key in sorted(_EVIDENCIAS_SIN_ARCHIVO_EN_CARGA):
+        if key in est.documentos:
+            ctx.saltados.append(
+                f"evidencias: {key} sin archivo en carga (bandeja o invalidación ART más abajo)"
+            )
     with tenant_session(est.tenant_id) as s:
+        ya_subidos: set[str] = set()
         for key in _EVIDENCIAS_TECNICO3:
             doc_id = est.documentos.get(key)
             if not doc_id:
                 continue
             suj = _sujeto_para_clave_doc(est, key)
             _subir(storage, s, idn, doc_id, suj, key)
-        subidos = 0
-        ya_subidos: set[str] = set(_EVIDENCIAS_TECNICO3)
-        for key, doc_id in est.documentos.items():
-            if "old" in key or key in _EVIDENCIAS_RESERVADAS:
-                continue
-            if subidos >= 6:
-                break
-            suj = _sujeto_para_clave_doc(est, key)
-            _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
             ya_subidos.add(key)
-            subidos += 1
-        for key in _EVIDENCIAS_TECNICO3 + _EVIDENCIAS_RECURSOS_ALERTA + (
-            "equipo_cert_vencido",
-            "empresa_rc_vencido",
-        ):
-            if key in ya_subidos:
-                continue
-            doc_id = est.documentos.get(key)
-            if not doc_id:
+        for key, doc_id in est.documentos.items():
+            if "old" in key or key in _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA or key in ya_subidos:
                 continue
             suj = _sujeto_para_clave_doc(est, key)
             _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
@@ -502,6 +492,16 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART")
             ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv_rep, motivo="Invalidada demo — reemplazo")
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART reemplazo")
+        sin_archivo: list[str] = []
+        for key, doc_id in est.documentos.items():
+            if "old" in key or "propuesta" in key or key in _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA:
+                continue
+            if not _exigir_archivo_confirmado(s, est.tenant_id, doc_id):
+                sin_archivo.append(key)
+        if sin_archivo:
+            ctx.fallas.append(
+                f"evidencias: documentos sin archivo confirmado: {', '.join(sorted(sin_archivo))}"
+            )
         hoy = hoy_tenant(est.tenant_id)
         v1, v2 = rango_vigente(hoy)
         # rechazadas (no cuentan en propuestas pendientes)
