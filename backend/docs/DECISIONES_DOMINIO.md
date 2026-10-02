@@ -698,7 +698,7 @@ hasta que el código y la spec se alineen.
 #### D1. Vista previa de evidencia antes de confirmar o rechazar
 
 **Decisión.** El responsable debe poder ver el archivo de evidencia antes de confirmar o
-rechazar una propuesta. G-03 pasa a requisito de salida del Módulo 1.
+rechazar. G-03 pasa a requisito de salida.
 
 **Motivo.** Sin vista previa, la revisión es ciega y no cumple el flujo operativo real de
 los responsables de legajos.
@@ -707,9 +707,9 @@ los responsables de legajos.
 
 #### D2. Gestión de contraseña
 
-**Decisión.** Cambio obligatorio en el primer ingreso; opción «Cambiar contraseña» en Mi
+**Decisión.** Cambio obligatorio en el primer ingreso y opción «Cambiar contraseña» en Mi
 sesión; reseteo por el responsable desde la app; recuperación por mail cuando exista canal
-de mail configurado.
+de mail.
 
 **Motivo.** Credenciales iniciales compartidas y ausencia de autogestión bloquean el uso en
 producción con clientes reales.
@@ -719,8 +719,8 @@ producción con clientes reales.
 #### D3. Bandeja de revisión como inicio del responsable
 
 **Decisión.** Se unifica la revisión en una «Bandeja de revisión» (propuestas + evidencias
-pendientes de revisar). Esa bandeja pasa a ser la pantalla de inicio del responsable de
-legajos.
+con archivo pendiente de revisar). Esa bandeja pasa a ser la pantalla de inicio del
+responsable de legajos.
 
 **Motivo.** Fragmentar la revisión en varias pantallas retrasa el trabajo diario del rol
 principal del Módulo 1.
@@ -734,23 +734,25 @@ principal del Módulo 1.
 **Decisión.** El Módulo 1 sale sin rol supervisor; el supervisor llega con el Módulo 2.
 Reemplaza la decisión anterior «supervisor: solo su universo» para el Módulo 1. Alinear
 HANDOFF §4.2 con §4.4 (asignar/reasignar supervisor no se publican en el Módulo 1) y cerrar
-la deuda registrada en BITACORA del 2026-10-01.
+la deuda en BITACORA del 2026-10-01.
 
 **Motivo.** El supervisor opera custodia, excepciones y dotación en Módulo 2; exponerlo en
 M1 generaba alcance y pantallas inconsistentes con la frontera de módulos.
 
 **Estado.** Decidida.
 
-#### D5. OC como compromiso del cliente y reprogramación
+#### D5. OC como compromiso del cliente y cambio informado
 
 **Decisión.** La OC es un compromiso del cliente. «Reprogramar» se renombra a «Registrar
-cambio informado por el cliente», exige fuente (quién informó y por qué medio) y, si una
-planilla importada trae otras fechas para la misma OC, se marca el conflicto para que lo
-resuelva el responsable (no se pisa en silencio). La planificación de OT es del Módulo 2.
-La franja «Sin modificar fechas» pasa a decir «Sin planificar OT».
+cambio informado por el cliente» y exige fuente (quién informó y por qué medio). Hoy un
+import de planilla de OC pisa en silencio una reprogramación manual (`oc/servicio.py`
+186–198): debe detectarse el conflicto cuando `origen_oc='manual'` y la planilla trae
+otras fechas, y quedar pendiente de resolución del responsable. La planificación de OT es
+del Módulo 2. La franja «Sin modificar fechas» pasa a decir «Sin planificar OT».
 
-**Motivo.** Las fechas de la OC reflejan lo que el cliente comunicó; los cambios deben ser
-auditables y los conflictos de importación visibles, no resueltos en background.
+**Motivo.** Las fechas de la OC reflejan lo que el cliente comunicó; un cambio manual auditado
+no puede perderse ante un import; la planilla y la operación humana deben reconciliarse de
+forma visible.
 
 **Estado.** Decidida.
 
@@ -792,6 +794,18 @@ un filtro, en solo lectura.
 
 **Estado.** Decidida.
 
+#### D14. Nombre y apellido en el legajo de persona
+
+**Decisión.** El legajo de persona tiene un campo «nombre y apellido» propio.
+`identificador_natural` sigue siendo el DNI (lo usan las importaciones de planillas para
+encontrar a la persona). Las pantallas muestran el nombre como título y el DNI como dato
+secundario.
+
+**Motivo.** El DNI es estable para integraciones masivas pero insuficiente como etiqueta
+humana en listados, revisiones y notificaciones.
+
+**Estado.** Decidida.
+
 ### Diseño
 
 #### D10. Documentos de empresa para el técnico
@@ -816,8 +830,7 @@ planificación documental relevante en M1.
 
 #### D12. Sesión e inactividad
 
-**Decisión.** La sesión se mantiene al recargar la página y se cierra tras 30 minutos de
-inactividad.
+**Decisión.** La sesión se mantiene al recargar y se cierra tras 30 minutos de inactividad.
 
 **Motivo.** Equilibrio entre continuidad de trabajo en campo y cierre por seguridad en
 terminales compartidos.
@@ -838,8 +851,8 @@ generaba expectativa incorrecta.
 
 #### P1. Plazo de aviso por requisito
 
-**Decisión.** `definicion_requisito.plazo_aviso_dias`: se decide según validación con
-usuarios. Si no se usa, se elimina la columna.
+**Decisión.** Plazo de aviso por requisito (`definicion_requisito.plazo_aviso_dias`): se
+decide según validación con usuarios. Si no se usa, se elimina la columna.
 
 **Motivo.** El override por tipo de requisito (§15) puede no aportar valor operativo; hay
 que confirmarlo antes de mantener complejidad en modelo y UI.
@@ -848,20 +861,23 @@ que confirmarlo antes de mantener complejidad en modelo y UI.
 
 #### P2. Cola `evidencia_qr`
 
-**Decisión.** Se posterga la cola `evidencia_qr`. Mientras tanto no debe generar jobs que
-vayan a dead-letter.
+**Decisión.** Se posterga. Mientras tanto no debe generar jobs que vayan a dead-letter.
 
 **Motivo.** La funcionalidad QR no entra en el corte de M1; jobs huérfanos generan ruido
 operativo y alertas falsas.
 
 **Estado.** Pendiente.
 
-#### P3. Barras de OC por técnico en el Timeline
+### Resueltas en el diagnóstico
 
-**Decisión.** Se decide según el origen de esos datos (pregunta 24 del diagnóstico).
+#### P3. Barras de OC en el Timeline
 
-**Motivo.** Sin definir la fuente (planificación M2 vs. solo compromisos M1) no se puede
-diseñar la visualización ni el contrato de consulta.
+**Decisión.** Las barras de OC en el Timeline son las OC vigentes evaluadas (no asignaciones;
+no provienen del Módulo 2). Se mantienen, con el rótulo «OC vigentes evaluadas» y una
+leyenda.
 
-**Estado.** Pendiente.
+**Motivo.** El diagnóstico (pregunta 24) aclaró que la visualización refleja compromisos
+documentales evaluados en M1, no dotación planificada en M2.
+
+**Estado.** Resuelta.
 
