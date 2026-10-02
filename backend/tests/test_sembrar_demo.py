@@ -311,16 +311,16 @@ def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
             tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
             assert tid is not None
             tid = str(tid)
-            uid = ps.execute(
-                text(
-                    "SELECT usuario_id::text FROM modulo1.usuario "
-                    "WHERE tenant_id = :t AND email = :e"
-                ),
-                {"t": tid, "e": f"responsable_legajos1@{slug}.demo.test"},
-            ).scalar()
-            assert uid
-            idn = identidad_de(tid, uid, "responsable_legajos")
             with tenant_session(tid) as s:
+                uid = s.execute(
+                    text(
+                        "SELECT usuario_id::text FROM modulo1.usuario "
+                        "WHERE tenant_id = :t AND email = :e"
+                    ),
+                    {"t": tid, "e": f"responsable_legajos1@{slug}.demo.test"},
+                ).scalar()
+                assert uid
+                idn = identidad_de(tid, uid, "responsable_legajos")
                 oc_id = s.execute(
                     text(
                         "SELECT oc_id::text FROM modulo1.oc "
@@ -368,12 +368,13 @@ def test_historial_operadora_rechazo_reenvio_aceptado(demo_sembrado):
         tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
         assert tid is not None
         tid = str(tid)
-        uid = ps.execute(
-            text("SELECT usuario_id::text FROM modulo1.usuario WHERE tenant_id = :t AND email = :e"),
-            {"t": tid, "e": f"responsable_legajos1@{slug}.demo.test"},
-        ).scalar()
-        idn = identidad_de(tid, uid, "responsable_legajos")
         with tenant_session(tid) as s:
+            uid = s.execute(
+                text("SELECT usuario_id::text FROM modulo1.usuario WHERE tenant_id = :t AND email = :e"),
+                {"t": tid, "e": f"responsable_legajos1@{slug}.demo.test"},
+            ).scalar()
+            assert uid
+            idn = identidad_de(tid, uid, "responsable_legajos")
             suj = s.execute(
                 text(
                     "SELECT sujeto_id FROM modulo1.legajo "

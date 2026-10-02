@@ -504,20 +504,29 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 ),
             )
             legajos.rechazar_propuesta(s, idn, leg_esq.RechazarPropuesta(documento_id=uuid.UUID(pr["documento_id"]), motivo="Rechazo demo"))
-        for n, cantidad in ((1, 2), (2, 1)):
-            for i in range(cantidad):
-                pr = legajos.proponer_documento(
-                    s,
-                    est.idn("tecnico", n),
-                    leg_esq.ProponerDocumento(
-                        sujeto_id=est.sujetos[f"tecnico{n}"],
-                        requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
-                        vigente_desde=v1,
-                        vigente_hasta=v2,
-                    ),
-                )
-                suf = f"_{i + 1}" if cantidad > 1 else ""
-                est.documentos[f"t{n}_propuesta{suf}_Licencia de conducir"] = pr["documento_id"]
+        for n in (1, 2):
+            pr = legajos.proponer_documento(
+                s,
+                est.idn("tecnico", n),
+                leg_esq.ProponerDocumento(
+                    sujeto_id=est.sujetos[f"tecnico{n}"],
+                    requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
+                    vigente_desde=v1,
+                    vigente_hasta=v2,
+                ),
+            )
+            est.documentos[f"t{n}_propuesta_Licencia de conducir"] = pr["documento_id"]
+        pr_extra = legajos.proponer_documento(
+            s,
+            est.idn("tecnico", 2),
+            leg_esq.ProponerDocumento(
+                sujeto_id=est.sujetos["tecnico2"],
+                requisito_definicion_id=uuid.UUID(est.requisitos["Constancia ART"]),
+                vigente_desde=hoy,
+                vigente_hasta=hoy + timedelta(days=200),
+            ),
+        )
+        est.documentos["t2_propuesta_Constancia ART"] = pr_extra["documento_id"]
 
 
 def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
