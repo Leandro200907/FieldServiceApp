@@ -196,7 +196,12 @@ def generar_planillas(est: EstadoTenant) -> Path:
 def _exigir_filas_importadas(etiqueta: str, resp: dict) -> None:
     if int(resp.get("filas_aceptadas") or 0) == 0:
         rech = resp.get("filas_rechazadas")
-        raise ErrorDemo(f"{etiqueta}: importación sin filas aceptadas (rechazadas={rech})")
+        errores = resp.get("errores") or []
+        muestra = ""
+        if errores:
+            e0 = errores[0]
+            muestra = f" — fila {e0.get('fila')}: {e0.get('codigo')} {e0.get('mensaje')}"
+        raise ErrorDemo(f"{etiqueta}: importación sin filas aceptadas (rechazadas={rech}){muestra}")
 
 
 def importar_planillas(est: EstadoTenant, idn) -> None:

@@ -331,17 +331,6 @@ def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
                             vigente_desde=hoy - timedelta(days=400),
                         ),
                     )
-                    req_svc.publicar_version_de_matriz(
-                        s,
-                        idn_cfg,
-                        req_esq.PublicarVersionDeMatriz(
-                            cliente_id=uuid.UUID(cid),
-                            locacion_id=uuid.UUID(lid),
-                            tipo_servicio_id=uuid.UUID(tid),
-                            vigente_desde=hoy - timedelta(days=20),
-                            lineas=lineas,
-                        ),
-                    )
                     continue
             req_svc.publicar_version_de_matriz(
                 s,
