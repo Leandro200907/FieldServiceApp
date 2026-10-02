@@ -652,7 +652,7 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     evidencia=uuid.UUID(doc_t1),
                 ),
             )
-        if loc_ind and doc_t3:
+        if loc_ind and doc_t3 and not est.spec.copiar_globales:
             legajos.registrar_induccion(
                 s,
                 idn,
