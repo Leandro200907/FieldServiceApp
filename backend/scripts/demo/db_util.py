@@ -101,11 +101,16 @@ def tenant_ids_por_slugs(dsn_owner: str, slugs: list[str]) -> dict[str, str]:
     """Consulta cross-tenant previa al reset; usa rol owner (RLS no aplica)."""
     if not slugs:
         return {}
-    with psycopg.connect(dsn_owner) as conn:
-        filas = conn.execute(
-            "SELECT slug, tenant_id::text FROM modulo1.tenant WHERE slug = ANY(%s)",
-            (slugs,),
-        ).fetchall()
+    import psycopg
+
+    try:
+        with psycopg.connect(dsn_owner) as conn:
+            filas = conn.execute(
+                "SELECT slug, tenant_id::text FROM modulo1.tenant WHERE slug = ANY(%s)",
+                (slugs,),
+            ).fetchall()
+    except psycopg.errors.UndefinedTable:
+        return {}
     return {s: t for s, t in filas}
 
 
