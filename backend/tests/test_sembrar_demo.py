@@ -247,47 +247,6 @@ def test_aislamiento_entre_tenants(demo_sembrado):
         assert n_b == 0
 
 
-def test_reset_sobre_base_vacia_sin_migraciones():
-    """--reset debe migrar y sembrar aunque la base exista vacía (sin alembic previo)."""
-    _exigir_base_demo_tests()
-    _recrear_base_vacia_sin_migraciones()
-    r = _correr_sembrado("--reset", "--importar-planillas")
-    assert r.returncode == 0, r.stderr or r.stdout
-    from app.db import platform_session
-
-    with platform_session() as ps:
-        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
-        assert tid is not None
-        rev = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert rev
-
-
-def test_demo_password_leida_desde_env_file(tmp_path):
-    _exigir_base_demo_tests()
-    pwd = "desde-env-demo-12"
-    env_file = tmp_path / "demo.env"
-    env_file.write_text(f"DEMO_PASSWORD={pwd}\n", encoding="utf-8")
-    env = _env_sembrado(ENV_FILE=str(env_file))
-    env.pop("DEMO_PASSWORD", None)
-    r = _correr_sembrado("--reset", env=env)
-    assert r.returncode == 0, r.stderr or r.stdout
-    from app.auth.passwords import verificar_password
-    from app.db import platform_session
-
-    with platform_session() as ps:
-        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
-        assert tid is not None
-    with tenant_session(str(tid)) as s:
-        fila = s.execute(
-            text(
-                "SELECT password_hash FROM modulo1.usuario "
-                "WHERE tenant_id = :t AND email = :e"
-            ),
-            {"t": str(tid), "e": "responsable_legajos1@patagonia-demo.demo.test"},
-        ).first()
-        assert fila and verificar_password(pwd, fila.password_hash)
-
-
 def test_propuestas_pendientes_por_tenant(demo_sembrado):
     _exigir_base_demo_tests()
     from app.db import platform_session
@@ -378,3 +337,44 @@ def test_reset_idempotente_en_cantidades(demo_sembrado):
     r2 = _correr_sembrado("--reset", "--importar-planillas")
     assert r2.returncode == 0
     test_cantidades_demo(r2.stdout)
+
+
+def test_reset_sobre_base_vacia_sin_migraciones():
+    """--reset debe migrar y sembrar aunque la base exista vacía (sin alembic previo)."""
+    _exigir_base_demo_tests()
+    _recrear_base_vacia_sin_migraciones()
+    r = _correr_sembrado("--reset", "--importar-planillas")
+    assert r.returncode == 0, r.stderr or r.stdout
+    from app.db import platform_session
+
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
+        assert tid is not None
+        rev = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        assert rev
+
+
+def test_demo_password_leida_desde_env_file(tmp_path):
+    _exigir_base_demo_tests()
+    pwd = "desde-env-demo-12"
+    env_file = tmp_path / "demo.env"
+    env_file.write_text(f"DEMO_PASSWORD={pwd}\n", encoding="utf-8")
+    env = _env_sembrado(ENV_FILE=str(env_file))
+    env.pop("DEMO_PASSWORD", None)
+    r = _correr_sembrado("--reset", "--importar-planillas", env=env)
+    assert r.returncode == 0, r.stderr or r.stdout
+    from app.auth.passwords import verificar_password
+    from app.db import platform_session
+
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
+        assert tid is not None
+    with tenant_session(str(tid)) as s:
+        fila = s.execute(
+            text(
+                "SELECT password_hash FROM modulo1.usuario "
+                "WHERE tenant_id = :t AND email = :e"
+            ),
+            {"t": str(tid), "e": "responsable_legajos1@patagonia-demo.demo.test"},
+        ).first()
+        assert fila and verificar_password(pwd, fila.password_hash)
