@@ -115,6 +115,18 @@ def test_sembrado_sin_fallas_imprevistas(demo_sembrado):
     assert not inesperadas, "Fallas imprevistas en sembrado:\n" + "\n".join(f"  - {x}" for x in inesperadas)
 
 
+def test_tenant_ids_por_slugs_si_base_no_existe():
+    """Sin conectar a una base inexistente no debe explotar (p. ej. reset tras DROP fallido)."""
+    from scripts.demo.db_util import tenant_ids_por_slugs
+
+    owner = os.environ.get("DATABASE_URL_MIGRATIONS", "")
+    if not owner or "/" not in owner:
+        pytest.skip("DATABASE_URL_MIGRATIONS no configurada")
+    dsn = owner.replace("postgresql+psycopg://", "postgresql://")
+    dsn_inexistente = dsn.rsplit("/", 1)[0] + "/fsm_demo_inexistente_para_test"
+    assert tenant_ids_por_slugs(dsn_inexistente, ["patagonia-demo"]) == {}
+
+
 def test_aborta_si_base_no_es_demo(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://app:app@localhost/modulo1")
     monkeypatch.setenv("DATABASE_URL_MIGRATIONS", "postgresql+psycopg://owner:own@localhost/modulo1")
@@ -285,6 +297,112 @@ def test_espejo_operadora_con_filas_tras_importar(demo_sembrado):
                 assert n >= ESPEJO_ENTREGAS_MIN_POR_TENANT, f"{slug}: entregas espejo={n}"
 
 
+def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
+    """En OC en curso: técnico 3 limpio; empresa, vehículo y equipo con alertas por vencidos."""
+    _exigir_base_demo_tests()
+    from app.comun.paginacion import Pagina
+    from app.db import platform_session
+    from app.modules.proyeccion import radar as radar_mod
+    from scripts.demo.config import dni_tecnico
+    from scripts.demo.contexto import identidad_de
+
+    with platform_session() as ps:
+        for slug in TENANTS_DEMO:
+            tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+            assert tid is not None
+            tid = str(tid)
+            uid = ps.execute(
+                text(
+                    "SELECT usuario_id::text FROM modulo1.usuario "
+                    "WHERE tenant_id = :t AND email = :e"
+                ),
+                {"t": tid, "e": f"responsable_legajos1@{slug}.demo.test"},
+            ).scalar()
+            assert uid
+            idn = identidad_de(tid, uid, "responsable_legajos")
+            with tenant_session(tid) as s:
+                oc_id = s.execute(
+                    text(
+                        "SELECT oc_id::text FROM modulo1.oc "
+                        "WHERE tenant_id = :t AND clave_origen = :c"
+                    ),
+                    {"t": tid, "c": f"OC-{slug}-CURSO"},
+                ).scalar()
+                assert oc_id, slug
+                det = radar_mod.detalle_oc(s, idn, oc_id, Pagina(offset=0, limit=50))
+                legajos = [l for g in det["grupos"] for l in g["legajos"]]
+                por_tipo = {g["tipo_sujeto"]: g for g in det["grupos"]}
+                for tipo in ("empresa", "vehiculo", "equipo"):
+                    alertas = [
+                        l
+                        for l in legajos
+                        if l["tipo_sujeto"] == tipo and l["estado_documental"] == "con_alertas_documentales"
+                    ]
+                    assert alertas, f"{slug}: se esperaba al menos un {tipo} con alertas en {oc_id}"
+                dni3 = dni_tecnico(slug, 3)
+                t3 = next(
+                    (
+                        l
+                        for l in legajos
+                        if l["tipo_sujeto"] == "persona" and l["identificador_natural"] == dni3
+                    ),
+                    None,
+                )
+                assert t3, f"{slug}: técnico 3 no está en el radar de la OC en curso"
+                assert t3["estado_documental"] == "sin_alertas_documentales", (
+                    f"{slug}: técnico 3 debería estar sin alertas, tiene {t3['estado_documental']}"
+                )
+                assert por_tipo["persona"]["total"] >= 3
+
+
+def test_historial_operadora_rechazo_reenvio_aceptado(demo_sembrado):
+    """Tras presentaciones_1 y _2: YPF apto técnico 1 muestra rechazo → enviado → aceptado."""
+    _exigir_base_demo_tests()
+    from app.db import platform_session
+    from app.modules.operadoras import servicio as op_svc
+    from scripts.demo.config import dni_tecnico
+    from scripts.demo.contexto import identidad_de
+
+    slug = "patagonia-demo"
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+        assert tid is not None
+        tid = str(tid)
+        uid = ps.execute(
+            text("SELECT usuario_id::text FROM modulo1.usuario WHERE tenant_id = :t AND email = :e"),
+            {"t": tid, "e": f"responsable_legajos1@{slug}.demo.test"},
+        ).scalar()
+        idn = identidad_de(tid, uid, "responsable_legajos")
+        with tenant_session(tid) as s:
+            suj = s.execute(
+                text(
+                    "SELECT sujeto_id FROM modulo1.legajo "
+                    "WHERE tenant_id = :t AND identificador_natural = :d"
+                ),
+                {"t": tid, "d": dni_tecnico(slug, 1)},
+            ).scalar()
+            rid = s.execute(
+                text(
+                    "SELECT requisito_definicion_id::text FROM modulo1.definicion_requisito "
+                    "WHERE tenant_id = :t AND nombre = 'Apto médico' LIMIT 1"
+                ),
+                {"t": tid},
+            ).scalar()
+            op_id = s.execute(
+                text("SELECT operadora_id::text FROM modulo1.operadora WHERE tenant_id = :t AND nombre = 'YPF'"),
+                {"t": tid},
+            ).scalar()
+            assert suj and rid and op_id
+            hist = op_svc.historial_operadora(
+                s, idn, operadora_id=op_id, sujeto_id=suj, requisito_definicion_id=rid
+            )
+            assert hist["versiones"], "sin versiones en historial operadora"
+            pasos = [p["estado"] for p in hist["versiones"][0]["pasos"]]
+            assert "rechazado" in pasos
+            assert "enviado" in pasos
+            assert "aceptado" in pasos
+
+
 def test_tecnico3_todo_vigente(demo_sembrado):
     _exigir_base_demo_tests()
     from app.db import platform_session
@@ -330,6 +448,15 @@ def test_tecnico3_todo_vigente(demo_sembrado):
                     {"t": tid, "s": suj, "limite": hoy + timedelta(days=45)},
                 ).scalar()
                 assert pendientes == 0, f"{slug}: licencia t3 no está vigente toda la ventana demo"
+                n_prop_t3 = s.execute(
+                    text(
+                        "SELECT count(*) FROM modulo1.documento d "
+                        "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.origen_propuesta "
+                        "AND d.estado_confirmacion = 'declarado' AND d.estado_version = 'vigente'"
+                    ),
+                    {"t": tid, "s": suj},
+                ).scalar()
+                assert n_prop_t3 == 0, f"{slug}: técnico 3 no debe tener propuestas pendientes"
 
 
 def test_reset_idempotente_en_cantidades(demo_sembrado):
@@ -337,6 +464,32 @@ def test_reset_idempotente_en_cantidades(demo_sembrado):
     r2 = _correr_sembrado("--reset", "--importar-planillas")
     assert r2.returncode == 0
     test_cantidades_demo(r2.stdout)
+
+
+def test_reset_cuando_base_no_existe():
+    """--reset con la base _demo borrada debe recrearla y sembrar (sin fallar en tenant_ids_por_slugs)."""
+    _exigir_base_demo_tests()
+    import psycopg
+
+    nb = _nombre_base()
+    assert nb
+    admin = os.environ.get("DATABASE_URL_ADMIN")
+    if not admin:
+        pytest.skip("DATABASE_URL_ADMIN requerido para borrar la base demo")
+    admin = admin.replace("postgresql+psycopg://", "postgresql://")
+    with psycopg.connect(admin, autocommit=True) as conn:
+        conn.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
+            (nb,),
+        )
+        conn.execute(f'DROP DATABASE IF EXISTS "{nb}"')
+    r = _correr_sembrado("--reset", "--importar-planillas")
+    assert r.returncode == 0, r.stderr or r.stdout
+    from app.db import platform_session
+
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
+        assert tid is not None
 
 
 def test_reset_sobre_base_vacia_sin_migraciones():

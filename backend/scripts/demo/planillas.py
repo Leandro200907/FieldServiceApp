@@ -132,7 +132,31 @@ def generar_planillas(est: EstadoTenant) -> Path:
         fila_presentacion(op, doc, "rechazado", "Observación demo")
     p1 = out / "presentaciones_1.xlsx"
     wb.save(p1)
+
     wb2 = load_workbook(p1)
+    hoja2 = wb2["Presentaciones"]
+    doc_ypf = docs[0][1]
+    dia2 = f"{(hoy + timedelta(days=1)).isoformat()}T11:00:00+00:00"
+    dia3 = f"{(hoy + timedelta(days=2)).isoformat()}T11:00:00+00:00"
+    row = hoja2.max_row + 1
+    hoja2.cell(row=row, column=1, value="YPF")
+    hoja2.cell(row=row, column=2, value="persona")
+    hoja2.cell(row=row, column=3, value=dni_tecnico(est.spec.slug, 1))
+    hoja2.cell(row=row, column=5, value="Apto médico")
+    hoja2.cell(row=row, column=7, value=doc_ypf)
+    hoja2.cell(row=row, column=10, value="enviado")
+    hoja2.cell(row=row, column=11, value=dia2)
+    hoja2.cell(row=row, column=12, value=dia2)
+    row += 1
+    hoja2.cell(row=row, column=1, value="YPF")
+    hoja2.cell(row=row, column=2, value="persona")
+    hoja2.cell(row=row, column=3, value=dni_tecnico(est.spec.slug, 1))
+    hoja2.cell(row=row, column=5, value="Apto médico")
+    hoja2.cell(row=row, column=7, value=doc_ypf)
+    hoja2.cell(row=row, column=10, value="aceptado")
+    hoja2.cell(row=row, column=11, value=dia2)
+    hoja2.cell(row=row, column=12, value=dia3)
+    hoja2.cell(row=row, column=13, value=dia3)
     wb2.save(out / "presentaciones_2.xlsx")
 
     wb_err = load_workbook(PLANTILLA)

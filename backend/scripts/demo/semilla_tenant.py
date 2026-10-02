@@ -217,9 +217,48 @@ def cargar_documentos_tecnicos(est: EstadoTenant, ctx: SemillaContext) -> None:
         ve_doc = _cargar_doc(s, idn, est.sujetos["vehiculo1"], "VTV", est, ve1, ve2)
         est.documentos["vehiculo_vtv_vencido"] = ve_doc
         _cargar_doc(s, idn, est.sujetos["vehiculo2"], "Seguro automotor", est, v1, v2)
-        _cargar_doc(s, idn, est.sujetos["equipo1"], "Certificación de equipo", est, ve1, ve2)
+        eq_venc = _cargar_doc(s, idn, est.sujetos["equipo1"], "Certificación de equipo", est, ve1, ve2)
+        est.documentos["equipo_cert_vencido"] = eq_venc
         _cargar_doc(s, idn, est.sujetos["empresa"], "ART empresa", est, v1, v2)
-        _cargar_doc(s, idn, est.sujetos["empresa"], "Seguro de responsabilidad civil", est, ve1, ve2)
+        rc_venc = _cargar_doc(s, idn, est.sujetos["empresa"], "Seguro de responsabilidad civil", est, ve1, ve2)
+        est.documentos["empresa_rc_vencido"] = rc_venc
+
+
+def _lineas_persona_matriz(est: EstadoTenant) -> list[req_esq.LineaDeMatriz]:
+    reqs_linea = [
+        est.requisitos["Apto médico"],
+        est.requisitos["Licencia de conducir"],
+        est.requisitos["Constancia ART"],
+        est.requisitos.get("Inducción operadora") or est.requisitos["Apto médico"],
+    ]
+    return [
+        req_esq.LineaDeMatriz(
+            requisito_definicion_id=uuid.UUID(rid),
+            clasificacion="bloqueante_duro",
+            bloqueante_durante_ejecucion=True,
+        )
+        for rid in reqs_linea[:4]
+    ]
+
+
+def _lineas_recursos_matriz(est: EstadoTenant) -> list[req_esq.LineaDeMatriz]:
+    return [
+        req_esq.LineaDeMatriz(
+            requisito_definicion_id=uuid.UUID(est.requisitos["VTV"]),
+            clasificacion="bloqueante_duro",
+            bloqueante_durante_ejecucion=True,
+        ),
+        req_esq.LineaDeMatriz(
+            requisito_definicion_id=uuid.UUID(est.requisitos["Certificación de equipo"]),
+            clasificacion="bloqueante_duro",
+            bloqueante_durante_ejecucion=True,
+        ),
+        req_esq.LineaDeMatriz(
+            requisito_definicion_id=uuid.UUID(est.requisitos["Seguro de responsabilidad civil"]),
+            clasificacion="bloqueante_duro",
+            bloqueante_durante_ejecucion=True,
+        ),
+    ]
 
 
 def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
@@ -264,20 +303,7 @@ def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
                 )
                 est.requisitos["Inducción operadora"] = r["requisito_definicion_id"]
 
-        reqs_linea = [
-            est.requisitos["Apto médico"],
-            est.requisitos["Licencia de conducir"],
-            est.requisitos["Constancia ART"],
-            est.requisitos.get("Inducción operadora") or est.requisitos["Apto médico"],
-        ]
-        lineas = [
-            req_esq.LineaDeMatriz(
-                requisito_definicion_id=uuid.UUID(rid),
-                clasificacion="bloqueante_duro",
-                bloqueante_durante_ejecucion=True,
-            )
-            for rid in reqs_linea[:4]
-        ]
+        lineas = _lineas_persona_matriz(est) + _lineas_recursos_matriz(est)
 
         combos = [
             ("YPF", 1, "Wireline"),
@@ -305,6 +331,17 @@ def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
                             vigente_desde=hoy - timedelta(days=400),
                         ),
                     )
+                    req_svc.publicar_version_de_matriz(
+                        s,
+                        idn_cfg,
+                        req_esq.PublicarVersionDeMatriz(
+                            cliente_id=uuid.UUID(cid),
+                            locacion_id=uuid.UUID(lid),
+                            tipo_servicio_id=uuid.UUID(tid),
+                            vigente_desde=hoy - timedelta(days=20),
+                            lineas=lineas,
+                        ),
+                    )
                     continue
             req_svc.publicar_version_de_matriz(
                 s,
@@ -321,7 +358,7 @@ def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
         cid = est.catalogos["op_YPF"]
         lid = est.catalogos["loc_YPF_1"]
         tid = est.catalogos["ts_Wireline"]
-        lineas_v2 = lineas + [
+        lineas_v2 = _lineas_persona_matriz(est) + _lineas_recursos_matriz(est) + [
             req_esq.LineaDeMatriz(
                 requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
                 clasificacion="excepcionable",
@@ -392,6 +429,10 @@ def _subir(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = Fal
 def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
     if key.startswith("vehiculo"):
         return est.sujetos["vehiculo1"]
+    if key.startswith("equipo"):
+        return est.sujetos["equipo1"]
+    if key.startswith("empresa"):
+        return est.sujetos["empresa"]
     if key.startswith("t1_"):
         return est.sujetos["tecnico1"]
     if key.startswith("t2_"):
@@ -411,6 +452,16 @@ _EVIDENCIAS_RESERVADAS = frozenset(
     }
 )
 
+_EVIDENCIAS_TECNICO3 = (
+    "t3_vigente_Apto médico",
+    "t3_vigente_Licencia de conducir",
+    "t3_vigente_Constancia ART",
+)
+
+_EVIDENCIAS_RECURSOS_ALERTA = (
+    "vehiculo_vtv_vencido",
+)
+
 
 def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
     from app.modules.evidencia import servicio as ev_svc
@@ -424,8 +475,19 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             if subidos >= 6:
                 break
             suj = _sujeto_para_clave_doc(est, key)
-            _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key)
+            _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
             subidos += 1
+        for key in _EVIDENCIAS_TECNICO3 + _EVIDENCIAS_RECURSOS_ALERTA:
+            doc_id = est.documentos.get(key)
+            if not doc_id:
+                continue
+            suj = _sujeto_para_clave_doc(est, key)
+            _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
+        for key in ("equipo_cert_vencido", "empresa_rc_vencido"):
+            doc_id = est.documentos.get(key)
+            if doc_id:
+                suj = _sujeto_para_clave_doc(est, key)
+                _subir(storage, s, idn, doc_id, suj, key)
         inv = est.documentos.get("t1_vencido_Constancia ART")
         if inv:
             _subir(storage, s, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
@@ -450,18 +512,20 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 ),
             )
             legajos.rechazar_propuesta(s, idn, leg_esq.RechazarPropuesta(documento_id=uuid.UUID(pr["documento_id"]), motivo="Rechazo demo"))
-        for n in (1, 2, 3):
-            pr = legajos.proponer_documento(
-                s,
-                est.idn("tecnico", n),
-                leg_esq.ProponerDocumento(
-                    sujeto_id=est.sujetos[f"tecnico{n}"],
-                    requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
-                    vigente_desde=v1,
-                    vigente_hasta=v2,
-                ),
-            )
-            est.documentos[f"t{n}_propuesta_Licencia de conducir"] = pr["documento_id"]
+        for n, cantidad in ((1, 2), (2, 1)):
+            for i in range(cantidad):
+                pr = legajos.proponer_documento(
+                    s,
+                    est.idn("tecnico", n),
+                    leg_esq.ProponerDocumento(
+                        sujeto_id=est.sujetos[f"tecnico{n}"],
+                        requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
+                        vigente_desde=v1,
+                        vigente_hasta=v2,
+                    ),
+                )
+                suf = f"_{i + 1}" if cantidad > 1 else ""
+                est.documentos[f"t{n}_propuesta{suf}_Licencia de conducir"] = pr["documento_id"]
 
 
 def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
@@ -569,6 +633,18 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     vigente_desde=v1,
                     vigente_hasta=v2,
                     evidencia=uuid.UUID(doc_t3),
+                ),
+            )
+        if doc_t3:
+            legajos.registrar_acreditacion_de_competencia(
+                s,
+                idn,
+                leg_esq.RegistrarAcreditacionDeCompetencia(
+                    persona_id=est.sujetos["tecnico3"],
+                    requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
+                    vigente_desde=v1,
+                    vigente_hasta=v2,
+                    evidencias=[uuid.UUID(doc_t3)],
                 ),
             )
         oc_id = est.ocs.get("en_curso")

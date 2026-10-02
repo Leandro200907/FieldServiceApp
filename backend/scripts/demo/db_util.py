@@ -145,8 +145,14 @@ def tenant_ids_por_slugs(dsn_owner: str, slugs: list[str]) -> dict[str, str]:
                 "SELECT slug, tenant_id::text FROM modulo1.tenant WHERE slug = ANY(%s)",
                 (slugs,),
             ).fetchall()
+    except psycopg.errors.InvalidCatalogName:
+        return {}
     except psycopg.errors.UndefinedTable:
         return {}
+    except psycopg.OperationalError as exc:
+        if "does not exist" in str(exc).lower() or "no existe" in str(exc).lower():
+            return {}
+        raise
     return {s: t for s, t in filas}
 
 
