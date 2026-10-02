@@ -91,18 +91,19 @@ def _fechas_por_estado(hoy, estado: str) -> tuple[str, str, str]:
 def generar_planillas(est: EstadoTenant) -> Path:
     out = _dir_slug(est)
     hoy = hoy_tenant(est.tenant_id)
-    doc_id = (
-        est.documentos.get("t1_suceder_Apto médico")
-        or est.documentos.get("t1_vigente_Apto médico")
-        or next(iter(est.documentos.values()), "")
-    )
     with tenant_session(est.tenant_id) as s:
-        fechas_doc = s.execute(
-            text("SELECT vigente_desde, vigente_hasta FROM modulo1.documento WHERE documento_id = :d"),
-            {"d": doc_id},
-        ).first()
-    assert fechas_doc, "documento demo para planilla operadoras"
-    emit, venc = fechas_doc.vigente_desde, fechas_doc.vigente_hasta
+        doc_id = s.execute(
+            text(
+                "SELECT d.documento_id::text FROM modulo1.documento d "
+                "JOIN modulo1.definicion_requisito r "
+                "ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id "
+                "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.estado_version = 'vigente' "
+                "AND r.nombre = 'Apto médico' LIMIT 1"
+            ),
+            {"t": est.tenant_id, "s": est.sujetos["tecnico1"]},
+        ).scalar()
+    assert doc_id, f"sin apto vigente para planilla operadoras ({est.spec.slug})"
+    docs = [(op, str(doc_id)) for op in ("YPF", "Vista", "Tecpetrol")]
     wb = load_workbook(PLANTILLA)
     hoja = wb["Presentaciones"]
 
@@ -112,12 +113,8 @@ def generar_planillas(est: EstadoTenant) -> Path:
         hoja.cell(row=row, column=1, value=op)
         hoja.cell(row=row, column=2, value="persona")
         hoja.cell(row=row, column=3, value=dni_tecnico(est.spec.slug, 1))
-        hoja.cell(row=row, column=4, value=est.sujetos["tecnico1"])
         hoja.cell(row=row, column=5, value="Apto médico")
-        hoja.cell(row=row, column=6, value=est.requisitos["Apto médico"])
         hoja.cell(row=row, column=7, value=doc_id)
-        hoja.cell(row=row, column=8, value=emit.isoformat())
-        hoja.cell(row=row, column=9, value=venc.isoformat())
         hoja.cell(row=row, column=10, value=estado)
         if f_exp:
             hoja.cell(row=row, column=11, value=f_exp)
@@ -129,7 +126,6 @@ def generar_planillas(est: EstadoTenant) -> Path:
         row += 1
 
     row = 6
-    docs = [(op, doc_id) for op in ("YPF", "Vista", "Tecpetrol")]
     for i, (op, doc) in enumerate(docs):
         fila_presentacion(op, doc, ("exportado", "enviado", "aceptado")[i])
     for op, doc in docs[:2]:
