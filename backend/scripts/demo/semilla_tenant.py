@@ -531,20 +531,27 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
 
 def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant) -> None:
     """Marca archivos del técnico 3 como validados (radar sin información incompleta)."""
-    idn = est.idn("responsable_legajos", 1)
     with tenant_session(est.tenant_id) as s:
-        for key in _EVIDENCIAS_TECNICO3:
-            doc_id = est.documentos.get(key)
-            if not doc_id:
-                continue
-            s.execute(
-                text(
-                    "UPDATE modulo1.documento SET archivo_validacion = 'valido', "
-                    "archivo_validacion_motivo = 'Validación demo técnico 3', archivo_scan_estado = 'limpio' "
-                    "WHERE tenant_id = :t AND documento_id = :d AND archivo_estado = 'confirmado'"
-                ),
-                {"t": est.tenant_id, "d": doc_id},
-            )
+        s.execute(
+            text(
+                "UPDATE modulo1.documento SET archivo_validacion = 'valido', "
+                "archivo_validacion_motivo = 'Validación demo técnico 3', archivo_scan_estado = 'limpio' "
+                "WHERE tenant_id = :t AND sujeto_id = :s AND archivo_estado = 'confirmado' "
+                "AND archivo_validacion IS DISTINCT FROM 'valido'"
+            ),
+            {"t": est.tenant_id, "s": est.sujetos["tecnico3"]},
+        )
+        s.execute(
+            text(
+                "UPDATE modulo1.documento d SET archivo_validacion = 'valido', "
+                "archivo_validacion_motivo = 'Validación demo técnico 3 (inducción)', archivo_scan_estado = 'limpio' "
+                "FROM modulo1.definicion_requisito r "
+                "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.tenant_id = r.tenant_id "
+                "AND d.requisito_definicion_id = r.requisito_definicion_id AND r.categoria = 'induccion' "
+                "AND d.archivo_validacion IS DISTINCT FROM 'valido'"
+            ),
+            {"t": est.tenant_id, "s": est.sujetos["tecnico3"]},
+        )
 
 
 def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
