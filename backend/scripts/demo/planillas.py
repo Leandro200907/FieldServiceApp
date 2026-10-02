@@ -14,7 +14,9 @@ from app.modules.operadoras.lector_xlsx import leer_planilla as leer_planilla_op
 from app.modules.operadoras import servicio as op_svc
 from app.modules.oc import servicio as oc_svc
 from app.auth.identidad import Rol
+from scripts.demo.config import dni_tecnico
 from scripts.demo.contexto import EstadoTenant
+from scripts.demo.db_util import ErrorDemo
 from scripts.demo.fechas import hoy_tenant
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -88,7 +90,7 @@ def generar_planillas(est: EstadoTenant) -> Path:
         hoja.cell(row=row, column=1, value=op)
         hoja.cell(row=row, column=2, value="persona")
         hoja.cell(row=row, column=3, value=est.sujetos["tecnico1"])
-        hoja.cell(row=row, column=4, value=est.sujetos["tecnico1"])
+        hoja.cell(row=row, column=4, value=dni_tecnico(est.spec.slug, 1))
         hoja.cell(row=row, column=5, value="Apto médico")
         hoja.cell(row=row, column=6, value=est.requisitos["Apto médico"])
         hoja.cell(row=row, column=7, value=doc_id)
@@ -142,12 +144,18 @@ def generar_planillas(est: EstadoTenant) -> Path:
     return out
 
 
+def _exigir_filas_importadas(etiqueta: str, resp: dict) -> None:
+    if int(resp.get("filas_aceptadas") or 0) == 0:
+        rech = resp.get("filas_rechazadas")
+        raise ErrorDemo(f"{etiqueta}: importación sin filas aceptadas (rechazadas={rech})")
+
+
 def importar_planillas(est: EstadoTenant, idn) -> None:
     base = _dir_slug(est)
     for nombre in ("presentaciones_1.xlsx", "presentaciones_2.xlsx"):
         data = (base / nombre).read_bytes()
         filas, err = leer_planilla_operadoras(data)
-        ejecutar_comando(
+        resp = ejecutar_comando(
             idn,
             str(uuid.uuid4()),
             (Rol.RESPONSABLE_LEGAJOS,),
@@ -157,16 +165,18 @@ def importar_planillas(est: EstadoTenant, idn) -> None:
             ruta="/comandos/importar_planilla_operadoras",
             body={"archivo": nombre},
         )
+        _exigir_filas_importadas(f"planilla operadoras {nombre} ({est.spec.slug})", resp)
     lote = uuid.uuid5(uuid.NAMESPACE_DNS, f"import-oc-{est.spec.slug}")
     data_oc = (base / "oc.xlsx").read_bytes()
     filas, err = leer_planilla_oc(data_oc)
     with tenant_session(est.tenant_id) as s:
         from app.comun.idempotencia import ejecutar_idempotente, fingerprint_de
 
-        ejecutar_idempotente(
+        resp = ejecutar_idempotente(
             est.tenant_id,
             idn.usuario_id,
             f"lote_oc:{lote}",
             fingerprint_de("POST", "/comandos/importar_planilla_oc", {"lote_id": str(lote)}),
             lambda s: oc_svc.importar_lote_oc(s, idn, str(lote), "planilla", filas),
         )
+        _exigir_filas_importadas(f"planilla OC ({est.spec.slug})", resp)

@@ -26,6 +26,7 @@ from scripts.demo.db_util import (  # noqa: E402
     ErrorDemo,
     borrar_storage_tenants,
     exigir_base_demo,
+    leer_env,
     precargar_plantillas_json,
     reset_base,
     tenant_ids_por_slugs,
@@ -36,7 +37,8 @@ from scripts.demo.semilla_tenant import SemillaContext, sembrar_bandeja_pendient
 
 
 def obtener_demo_password() -> str:
-    pwd = os.environ.get("DEMO_PASSWORD")
+    env = leer_env()
+    pwd = os.environ.get("DEMO_PASSWORD") or env.get("DEMO_PASSWORD")
     if pwd:
         validar_longitud(pwd)
         return pwd
@@ -109,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.importar_planillas:
             try:
                 importar_planillas(est, est.idn("responsable_legajos", 1))
+            except ErrorDemo:
+                raise
             except Exception as e:  # noqa: BLE001
                 ctx.fallas.append(f"importar_planillas {spec.slug}: {e}")
         estados.append(est)
@@ -133,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     imprimir_tabla_usuarios(estados)
     imprimir_paquetes(estados)
     imprimir_resumen(ctx)
-    return 0
+    return 1 if ctx.fallas else 0
 
 
 if __name__ == "__main__":

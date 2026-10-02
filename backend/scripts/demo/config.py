@@ -69,3 +69,29 @@ TENANTS: tuple[TenantDemo, ...] = (
     TenantDemo("anelo-demo", "Añelo Field Demo SRL", False),
     TenantDemo("neuquen-demo", "Neuquén Wells Demo SA", False),
 )
+
+# identificador_natural por legajo (D14 agrega nombre aparte; acá solo DNI realistas por tenant).
+DNIS_POR_SLUG: dict[str, tuple[str, str, str]] = {
+    "patagonia-demo": ("DNI 30.111.222", "DNI 30.111.223", "DNI 30.111.224"),
+    "anelo-demo": ("DNI 31.222.333", "DNI 31.222.334", "DNI 31.222.335"),
+    "neuquen-demo": ("DNI 32.333.444", "DNI 32.333.445", "DNI 32.333.446"),
+}
+DNI_BAJA_POR_SLUG: dict[str, str] = {
+    "patagonia-demo": "DNI 30.888.888",
+    "anelo-demo": "DNI 31.888.888",
+    "neuquen-demo": "DNI 32.888.888",
+}
+PATENTES_POR_SLUG: dict[str, tuple[str, str]] = {
+    "patagonia-demo": ("PA100DE", "PA200FG"),
+    "anelo-demo": ("AN100DE", "AN200FG"),
+    "neuquen-demo": ("NE100DE", "NE200FG"),
+}
+EQUIPO_POR_SLUG: dict[str, str] = {
+    "patagonia-demo": "WINCH-PAT-01",
+    "anelo-demo": "WINCH-ANE-01",
+    "neuquen-demo": "WINCH-NEU-01",
+}
+
+
+def dni_tecnico(slug: str, n: int) -> str:
+    return DNIS_POR_SLUG[slug][n - 1]

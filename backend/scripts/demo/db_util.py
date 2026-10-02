@@ -23,7 +23,7 @@ class ErrorDemo(SystemExit):
         super().__init__(2)
 
 
-def _leer_env() -> dict[str, str]:
+def leer_env() -> dict[str, str]:
     ruta = Path(archivo_de_entorno())
     valores: dict[str, str] = {}
     if ruta.is_file():
@@ -50,7 +50,7 @@ def nombre_base_desde_url(url: str) -> str:
 
 def exigir_base_demo() -> tuple[str, str, str]:
     """Devuelve (dsn_app, dsn_owner, nombre_base). Aborta si no termina en _demo o difieren."""
-    env = _leer_env()
+    env = leer_env()
     app = env.get("DATABASE_URL")
     owner = env.get("DATABASE_URL_MIGRATIONS")
     if not app or not owner:

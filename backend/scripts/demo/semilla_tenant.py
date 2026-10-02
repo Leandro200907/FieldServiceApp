@@ -21,11 +21,15 @@ from app.modules.requisitos import esquemas as req_esq
 from app.modules.requisitos import plantillas, servicio as req_svc
 from app.storage.servicio import confirmar_subida, preparar_subida
 from scripts.demo.config import (
+    DNI_BAJA_POR_SLUG,
+    EQUIPO_POR_SLUG,
     GLOBAL_A_DEMO,
     LOCACIONES_POR_OPERADORA,
     OPERADORAS,
+    PATENTES_POR_SLUG,
     REQUISITOS_LOCALES,
     TIPOS_SERVICIO,
+    dni_tecnico,
 )
 from scripts.demo.contexto import EstadoTenant, identidad_de
 from scripts.demo.evidencia_fake import jpg_demo, pdf_demo
@@ -111,21 +115,40 @@ def cargar_sujetos(est: EstadoTenant, ctx: SemillaContext) -> None:
             legajos.alta_de_sujeto(
                 s,
                 idn,
-                leg_esq.AltaDeSujeto(tipo_sujeto="persona", identificador_natural=f"DNI demo {n}", sujeto_id=sid),
+                leg_esq.AltaDeSujeto(
+                    tipo_sujeto="persona",
+                    identificador_natural=dni_tecnico(est.spec.slug, n),
+                    sujeto_id=sid,
+                ),
             )
         extra = f"persona_{est.spec.slug.replace('-', '_')}_baja"
         est.sujetos["tecnico_baja"] = extra
         legajos.alta_de_sujeto(
-            s, idn, leg_esq.AltaDeSujeto(tipo_sujeto="persona", identificador_natural="Técnico dado de baja", sujeto_id=extra)
+            s,
+            idn,
+            leg_esq.AltaDeSujeto(
+                tipo_sujeto="persona",
+                identificador_natural=DNI_BAJA_POR_SLUG[est.spec.slug],
+                sujeto_id=extra,
+            ),
         )
         legajos.baja_de_sujeto(s, idn, leg_esq.BajaDeSujeto(sujeto_id=extra))
-        for i, pat in enumerate(("AB100DE", "CD200FG"), 1):
+        patentes = PATENTES_POR_SLUG[est.spec.slug]
+        for i, pat in enumerate(patentes, 1):
             vid = f"vehiculo_{est.spec.slug.replace('-', '_')}_{i}"
             est.sujetos[f"vehiculo{i}"] = vid
             legajos.alta_de_sujeto(s, idn, leg_esq.AltaDeSujeto(tipo_sujeto="vehiculo", identificador_natural=pat, sujeto_id=vid))
         eq = f"equipo_{est.spec.slug.replace('-', '_')}_1"
         est.sujetos["equipo1"] = eq
-        legajos.alta_de_sujeto(s, idn, leg_esq.AltaDeSujeto(tipo_sujeto="equipo", identificador_natural="WINCH-DEMO-01", sujeto_id=eq))
+        legajos.alta_de_sujeto(
+            s,
+            idn,
+            leg_esq.AltaDeSujeto(
+                tipo_sujeto="equipo",
+                identificador_natural=EQUIPO_POR_SLUG[est.spec.slug],
+                sujeto_id=eq,
+            ),
+        )
         emp = f"empresa_{est.spec.slug.replace('-', '_')}"
         est.sujetos["empresa"] = emp
         legajos.alta_de_sujeto(s, idn, leg_esq.AltaDeSujeto(tipo_sujeto="empresa", identificador_natural=est.spec.nombre, sujeto_id=emp))
@@ -153,15 +176,21 @@ def cargar_documentos_tecnicos(est: EstadoTenant, ctx: SemillaContext) -> None:
     v1, v2 = rango_vigente(hoy)
     pv1, pv2 = rango_por_vencer(hoy)
     ve1, ve2 = rango_vencido(hoy)
-    mapa = [
+    mapa_t12 = [
         ("Apto médico", "vigente", v1, v2),
         ("Licencia de conducir", "por_vencer", pv1, pv2),
         ("Constancia ART", "vencido", ve1, ve2),
         ("Apto médico", "suceder", v1, v2),
     ]
+    mapa_t3 = [
+        ("Apto médico", "vigente", v1, v2),
+        ("Licencia de conducir", "vigente", v1, v2),
+        ("Constancia ART", "vigente", v1, v2),
+    ]
     with tenant_session(est.tenant_id) as s:
         for n in (1, 2, 3):
             suj = est.sujetos[f"tecnico{n}"]
+            mapa = mapa_t3 if n == 3 else mapa_t12
             for req, kind, d1, d2 in mapa:
                 key = f"t{n}_{kind}_{req}"
                 if kind == "propuesta":
@@ -406,25 +435,21 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART")
             ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv_rep, motivo="Invalidada demo — reemplazo")
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART reemplazo")
-        # propuesta desde lote (declarado)
-        lote_prop = uuid.uuid5(uuid.NAMESPACE_DNS, f"prop-lote-{est.spec.slug}")
-        legajos.importar_lote(
-            s,
-            idn,
-            leg_esq.ImportarLote(
-                lote_id=lote_prop,
-                filas=[
-                    {
-                        "sujeto_id": est.sujetos["tecnico2"],
-                        "requisito_definicion_id": est.requisitos["Inducción operadora"],
-                        "vigente_desde": hoy_tenant(est.tenant_id).isoformat(),
-                        "vigente_hasta": (hoy_tenant(est.tenant_id) + timedelta(days=300)).isoformat(),
-                        "estado_confirmacion": "declarado",
-                    }
-                ],
-            ),
-        )
-        # rechazadas
+        hoy = hoy_tenant(est.tenant_id)
+        v1, v2 = rango_vigente(hoy)
+        for n in (1, 2, 3):
+            pr = legajos.proponer_documento(
+                s,
+                est.idn("tecnico", n),
+                leg_esq.ProponerDocumento(
+                    sujeto_id=est.sujetos[f"tecnico{n}"],
+                    requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
+                    vigente_desde=v1,
+                    vigente_hasta=v2,
+                ),
+            )
+            est.documentos[f"t{n}_propuesta_Curso de manejo defensivo"] = pr["documento_id"]
+        # rechazadas (no cuentan en propuestas pendientes)
         for n in (1, 2):
             pr = legajos.proponer_documento(
                 s,
@@ -541,8 +566,8 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     persona_id=est.sujetos["tecnico3"],
                     locacion_id=uuid.UUID(loc_ind),
                     requisito_definicion_id=uuid.UUID(req_ind),
-                    vigente_desde=ve1,
-                    vigente_hasta=ve2,
+                    vigente_desde=v1,
+                    vigente_hasta=v2,
                     evidencia=uuid.UUID(doc_t3),
                 ),
             )
