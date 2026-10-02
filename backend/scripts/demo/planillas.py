@@ -17,7 +17,7 @@ from app.auth.identidad import Rol
 from scripts.demo.config import dni_tecnico
 from scripts.demo.contexto import EstadoTenant
 from scripts.demo.db_util import ErrorDemo
-from scripts.demo.fechas import hoy_tenant
+from scripts.demo.fechas import hoy_tenant, rango_vigente
 
 RAIZ = Path(__file__).resolve().parents[1]
 PLANTILLA = RAIZ.parents[1] / "frontend" / "public" / "Plantilla_presentaciones_operadoras.xlsx"
@@ -75,9 +75,22 @@ def _guardar_oc(est: EstadoTenant, path: Path, filas_datos: list[list]) -> None:
     path.write_bytes(contenido.getvalue())
 
 
+def _fechas_por_estado(hoy, estado: str) -> tuple[str, str, str]:
+    """Columnas 11–13: exportación, presentación, respuesta (ISO con hora si aplica)."""
+    dia = f"{hoy.isoformat()}T10:00:00+00:00"
+    if estado == "exportado":
+        return dia, "", ""
+    if estado == "enviado":
+        return dia, dia, ""
+    if estado in ("aceptado", "rechazado"):
+        return dia, dia, dia
+    return "", "", ""
+
+
 def generar_planillas(est: EstadoTenant) -> Path:
     out = _dir_slug(est)
     hoy = hoy_tenant(est.tenant_id)
+    v1, v2 = rango_vigente(hoy)
     docs = []
     for op in ("YPF", "Vista", "Tecpetrol"):
         doc_id = est.documentos.get(f"t1_vigente_Apto médico") or next(iter(est.documentos.values()), "")
@@ -87,24 +100,31 @@ def generar_planillas(est: EstadoTenant) -> Path:
 
     def fila_presentacion(op: str, doc_id: str, estado: str, obs: str = "") -> None:
         nonlocal row
+        f_exp, f_pres, f_resp = _fechas_por_estado(hoy, estado)
         hoja.cell(row=row, column=1, value=op)
         hoja.cell(row=row, column=2, value="persona")
-        hoja.cell(row=row, column=3, value=est.sujetos["tecnico1"])
-        hoja.cell(row=row, column=4, value=dni_tecnico(est.spec.slug, 1))
+        hoja.cell(row=row, column=3, value=dni_tecnico(est.spec.slug, 1))
+        hoja.cell(row=row, column=4, value=est.sujetos["tecnico1"])
         hoja.cell(row=row, column=5, value="Apto médico")
         hoja.cell(row=row, column=6, value=est.requisitos["Apto médico"])
         hoja.cell(row=row, column=7, value=doc_id)
+        hoja.cell(row=row, column=8, value=v1.isoformat())
+        hoja.cell(row=row, column=9, value=v2.isoformat())
         hoja.cell(row=row, column=10, value=estado)
+        if f_exp:
+            hoja.cell(row=row, column=11, value=f_exp)
+        if f_pres:
+            hoja.cell(row=row, column=12, value=f_pres)
+        if f_resp:
+            hoja.cell(row=row, column=13, value=f_resp)
         hoja.cell(row=row, column=14, value=obs)
         row += 1
 
     row = 6
-    estados = ["exportado", "enviado", "aceptado", "rechazado", "pendiente"]
     for i, (op, doc) in enumerate(docs):
-        fila_presentacion(op, doc, estados[i], "Observación demo" if estados[i] == "rechazado" else "")
+        fila_presentacion(op, doc, ("exportado", "enviado", "aceptado")[i])
     for op, doc in docs[:2]:
-        fila_presentacion(op, doc, "reenviado")
-        fila_presentacion(op, doc, "aceptado")
+        fila_presentacion(op, doc, "rechazado", "Observación demo")
     p1 = out / "presentaciones_1.xlsx"
     wb.save(p1)
     wb2 = load_workbook(p1)
