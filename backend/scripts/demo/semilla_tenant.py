@@ -458,6 +458,7 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
     idn = est.idn("responsable_legajos", 1)
     with tenant_session(est.tenant_id) as s:
         subidos = 0
+        ya_subidos: set[str] = set()
         for key, doc_id in est.documentos.items():
             if "old" in key or key in _EVIDENCIAS_RESERVADAS:
                 continue
@@ -465,18 +466,20 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 break
             suj = _sujeto_para_clave_doc(est, key)
             _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
+            ya_subidos.add(key)
             subidos += 1
-        for key in _EVIDENCIAS_TECNICO3 + _EVIDENCIAS_RECURSOS_ALERTA:
+        for key in _EVIDENCIAS_TECNICO3 + _EVIDENCIAS_RECURSOS_ALERTA + (
+            "equipo_cert_vencido",
+            "empresa_rc_vencido",
+        ):
+            if key in ya_subidos:
+                continue
             doc_id = est.documentos.get(key)
             if not doc_id:
                 continue
             suj = _sujeto_para_clave_doc(est, key)
             _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
-        for key in ("equipo_cert_vencido", "empresa_rc_vencido"):
-            doc_id = est.documentos.get(key)
-            if doc_id:
-                suj = _sujeto_para_clave_doc(est, key)
-                _subir(storage, s, idn, doc_id, suj, key)
+            ya_subidos.add(key)
         inv = est.documentos.get("t1_vencido_Constancia ART")
         if inv:
             _subir(storage, s, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
