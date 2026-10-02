@@ -549,7 +549,7 @@ def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant) -> None:
             text(
                 "UPDATE modulo1.documento SET archivo_validacion = 'valido', "
                 "archivo_validacion_motivo = 'Validación demo técnico 3', archivo_scan_estado = 'limpio' "
-                "WHERE tenant_id = :t AND sujeto_id = :s AND archivo_estado = 'confirmado' "
+                "WHERE tenant_id = :t AND sujeto_id = :s "
                 "AND archivo_validacion IS DISTINCT FROM 'valido'"
             ),
             {"t": est.tenant_id, "s": est.sujetos["tecnico3"]},
