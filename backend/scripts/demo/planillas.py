@@ -6,6 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from openpyxl import load_workbook
+from sqlalchemy import text
 
 from app.db import tenant_session
 from app.modules.legajos.infra import ejecutar_comando
