@@ -442,6 +442,9 @@ _EVIDENCIAS_RESERVADAS = frozenset(
         "t2_por_vencer_Licencia de conducir",
         "t1_vencido_Constancia ART",
         "t2_vencido_Constancia ART",
+        "t3_vigente_Apto médico",
+        "t3_vigente_Licencia de conducir",
+        "t3_vigente_Constancia ART",
     }
 )
 
@@ -461,8 +464,14 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
 
     idn = est.idn("responsable_legajos", 1)
     with tenant_session(est.tenant_id) as s:
+        for key in _EVIDENCIAS_TECNICO3:
+            doc_id = est.documentos.get(key)
+            if not doc_id:
+                continue
+            suj = _sujeto_para_clave_doc(est, key)
+            _subir(storage, s, idn, doc_id, suj, key)
         subidos = 0
-        ya_subidos: set[str] = set()
+        ya_subidos: set[str] = set(_EVIDENCIAS_TECNICO3)
         for key, doc_id in est.documentos.items():
             if "old" in key or key in _EVIDENCIAS_RESERVADAS:
                 continue
