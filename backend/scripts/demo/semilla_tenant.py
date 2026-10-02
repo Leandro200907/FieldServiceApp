@@ -437,18 +437,6 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART reemplazo")
         hoy = hoy_tenant(est.tenant_id)
         v1, v2 = rango_vigente(hoy)
-        for n in (1, 2, 3):
-            pr = legajos.proponer_documento(
-                s,
-                est.idn("tecnico", n),
-                leg_esq.ProponerDocumento(
-                    sujeto_id=est.sujetos[f"tecnico{n}"],
-                    requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
-                    vigente_desde=v1,
-                    vigente_hasta=v2,
-                ),
-            )
-            est.documentos[f"t{n}_propuesta_Curso de manejo defensivo"] = pr["documento_id"]
         # rechazadas (no cuentan en propuestas pendientes)
         for n in (1, 2):
             pr = legajos.proponer_documento(
@@ -456,12 +444,24 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 est.idn("tecnico", n),
                 leg_esq.ProponerDocumento(
                     sujeto_id=est.sujetos[f"tecnico{n}"],
-                    requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
-                    vigente_desde=hoy_tenant(est.tenant_id),
-                    vigente_hasta=hoy_tenant(est.tenant_id) + timedelta(days=200),
+                    requisito_definicion_id=uuid.UUID(est.requisitos["Constancia ART"]),
+                    vigente_desde=hoy,
+                    vigente_hasta=hoy + timedelta(days=200),
                 ),
             )
             legajos.rechazar_propuesta(s, idn, leg_esq.RechazarPropuesta(documento_id=uuid.UUID(pr["documento_id"]), motivo="Rechazo demo"))
+        for n in (1, 2, 3):
+            pr = legajos.proponer_documento(
+                s,
+                est.idn("tecnico", n),
+                leg_esq.ProponerDocumento(
+                    sujeto_id=est.sujetos[f"tecnico{n}"],
+                    requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
+                    vigente_desde=v1,
+                    vigente_hasta=v2,
+                ),
+            )
+            est.documentos[f"t{n}_propuesta_Licencia de conducir"] = pr["documento_id"]
 
 
 def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
