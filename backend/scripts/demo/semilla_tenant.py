@@ -317,6 +317,10 @@ def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
             cid = est.catalogos[f"op_{op}"]
             lid = est.catalogos[f"loc_{op}_{loc_i}"]
             tid = est.catalogos[f"ts_{ts}"]
+            lineas_publicar = lineas
+            if est.spec.copiar_globales and op == "Vista" and ts == "Slickline":
+                # Patagonia: inducción global atada a loc YPF no cierra bien en OC Vista (radar t3).
+                lineas_publicar = _lineas_persona_matriz(est)[:3] + _lineas_recursos_matriz(est)
             if est.spec.copiar_globales and op == "YPF" and ts == "Wireline":
                 mid = glob["mat"].get("YPF|servicios de campo")
                 if mid:
@@ -340,7 +344,7 @@ def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
                     locacion_id=uuid.UUID(lid),
                     tipo_servicio_id=uuid.UUID(tid),
                     vigente_desde=hoy - timedelta(days=180),
-                    lineas=lineas,
+                    lineas=lineas_publicar,
                 ),
             )
         # Matriz v2 YPF Wireline loc1 — agrega Seguro automotor (vehículo no aplica a persona OC; usa requisito persona extra)
