@@ -428,15 +428,25 @@ def _subir(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = Fal
     confirmar_subida(s, idn, doc_id, storage=storage)
 
 
-def _confirmar_tras_archivo(s, idn, doc_id: str) -> None:
-    """D19: tras subida confirmada, marcar archivo válido y verificar el documento."""
+def _marcar_archivo_valido(s, doc_id: str) -> None:
     s.execute(
         text(
-            "UPDATE modulo1.documento SET archivo_validacion = 'valido' "
+            "UPDATE modulo1.documento SET archivo_validacion = 'valido', archivo_scan_estado = 'limpio' "
             "WHERE documento_id = CAST(:d AS uuid) AND archivo_estado = 'confirmado'"
         ),
         {"d": doc_id},
     )
+
+
+def _confirmar_tras_archivo(s, idn, doc_id: str) -> None:
+    """D19: tras subida confirmada, marcar archivo válido y verificar si sigue declarado."""
+    _marcar_archivo_valido(s, doc_id)
+    estado = s.execute(
+        text("SELECT estado_confirmacion FROM modulo1.documento WHERE documento_id = CAST(:d AS uuid)"),
+        {"d": doc_id},
+    ).scalar()
+    if estado != "declarado":
+        return
     legajos.confirmar_documento(s, idn, leg_esq.ConfirmarDocumento(documento_id=uuid.UUID(doc_id)))
 
 
@@ -487,11 +497,28 @@ _EVIDENCIAS_TECNICO3 = (
 )
 
 def _exigir_archivo_confirmado(s, tenant_id: str, doc_id: str) -> bool:
-    estado = s.execute(
-        text("SELECT archivo_estado FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d"),
+    fila = s.execute(
+        text(
+            "SELECT archivo_estado, estado_version FROM modulo1.documento "
+            "WHERE tenant_id = :t AND documento_id = :d"
+        ),
         {"t": tenant_id, "d": doc_id},
+    ).first()
+    if not fila or fila.estado_version != "vigente":
+        return True
+    return fila.archivo_estado == "confirmado"
+
+
+def _apto_medico_vigente_id(s, est: EstadoTenant, sujeto_id: str) -> str | None:
+    rid = est.requisitos["Apto médico"]
+    return s.execute(
+        text(
+            "SELECT documento_id::text FROM modulo1.documento "
+            "WHERE tenant_id = :t AND sujeto_id = :sj AND requisito_definicion_id = :r "
+            "AND estado_version = 'vigente'"
+        ),
+        {"t": est.tenant_id, "sj": sujeto_id, "r": rid},
     ).scalar()
-    return estado == "confirmado"
 
 
 def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
@@ -650,7 +677,7 @@ def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
             confirmar_subida(s, idn, doc, storage=storage)
 
 
-def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
+def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
     idn = est.idn("responsable_legajos", 1)
     hoy = hoy_tenant(est.tenant_id)
     v1, v2 = rango_vigente(hoy)
@@ -688,9 +715,16 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
             ),
         )
         legajos.revertir_lote(s, idn, leg_esq.RevertirLote(lote_id=lote_rev))
-        doc_t1 = est.documentos.get("t1_vigente_Apto médico")
-        doc_t2 = est.documentos.get("t2_vigente_Apto médico")
-        doc_t3 = est.documentos.get("t3_vigente_Apto médico")
+        doc_t1 = _apto_medico_vigente_id(s, est, est.sujetos["tecnico1"])
+        doc_t2 = _apto_medico_vigente_id(s, est, est.sujetos["tecnico2"])
+        doc_t3 = _apto_medico_vigente_id(s, est, est.sujetos["tecnico3"])
+        for doc_id, suj, etiqueta in (
+            (doc_t1, est.sujetos["tecnico1"], "Apto médico t1"),
+            (doc_t2, est.sujetos["tecnico2"], "Apto médico t2"),
+            (doc_t3, est.sujetos["tecnico3"], "Apto médico t3"),
+        ):
+            if doc_id:
+                _subir_y_verificar(storage, s, idn, doc_id, suj, etiqueta)
         if doc_t1:
             acr_t1 = legajos.registrar_acreditacion_de_competencia(
                 s,
@@ -841,7 +875,7 @@ def sembrar_tenant(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
     _run("documentos", lambda: cargar_documentos_tecnicos(est, ctx), ctx)
     _run("ocs", lambda: cargar_ocs(est, ctx), ctx)
     _run("evidencias", lambda: cargar_evidencias_y_propuestas(est, storage, ctx), ctx)
-    _run("lotes", lambda: cargar_lotes_competencias(est, ctx), ctx)
+    _run("lotes", lambda: cargar_lotes_competencias(est, storage, ctx), ctx)
     _run("evidencias_competencia", lambda: subir_evidencias_competencia_induccion(est, storage), ctx)
     _run("supervisores", lambda: asignar_supervisores(est, ctx), ctx)
     _run("alertas_paquetes", lambda: configurar_alertas_y_paquetes(est, ctx), ctx)
