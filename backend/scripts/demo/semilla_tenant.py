@@ -441,6 +441,12 @@ def _confirmar_tras_archivo(s, idn, doc_id: str) -> None:
 
 
 def _subir_y_verificar(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = False) -> None:
+    version = s.execute(
+        text("SELECT estado_version FROM modulo1.documento WHERE documento_id = CAST(:d AS uuid)"),
+        {"d": doc_id},
+    ).scalar()
+    if version != "vigente":
+        return
     _subir(storage, s, idn, doc_id, sujeto, req, jpeg=jpeg)
     _confirmar_tras_archivo(s, idn, doc_id)
 
@@ -601,7 +607,7 @@ def subir_evidencias_competencia_induccion(est: EstadoTenant, storage) -> None:
             if not doc_id:
                 continue
             suj = _sujeto_para_clave_doc(est, key)
-            _subir(storage, s, idn, doc_id, suj, key)
+            _subir_y_verificar(storage, s, idn, doc_id, suj, key)
 
 
 def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant) -> None:
