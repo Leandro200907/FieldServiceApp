@@ -183,8 +183,7 @@ export function BacklogOcScreen({ roles }: { roles: readonly string[] }) {
   return (
     <div className="planning-layout">
       <header className="panel">
-        <p className="eyebrow">Modo consulta</p>
-        <h2>Mapa del backlog de OC</h2>
+        <h2>Backlog de OC</h2>
         <p>Alertas ciertas y disponibilidad documental. No asigna recursos.</p>
         <div className="form-row">
           <label>

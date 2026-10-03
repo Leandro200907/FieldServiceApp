@@ -78,7 +78,7 @@ export function CatalogosOcScreen() {
         >
           <label>Nueva operadora<input value={nuevaOperadora} onChange={e => setNuevaOperadora(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form> : <p className="muted">Solo el rol Configuración puede dar de alta operadoras.</p>}
+        </form> : <p className="muted" role="note">Solo lectura (D7): el alta de operadoras corresponde al rol Configuración.</p>}
       </section>
 
       <section className="panel">
@@ -110,7 +110,7 @@ export function CatalogosOcScreen() {
           </label>
           <label>Nueva locación<input value={nuevaLocacion} onChange={e => setNuevaLocacion(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form> : <p className="muted">Solo el rol Configuración puede dar de alta locaciones.</p>}
+        </form> : <p className="muted" role="note">Solo lectura (D7): el alta de locaciones corresponde al rol Configuración.</p>}
       </section>
 
       <section className="panel">
@@ -129,7 +129,7 @@ export function CatalogosOcScreen() {
         >
           <label>Nuevo tipo<input value={nuevoTipo} onChange={e => setNuevoTipo(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form> : <p className="muted">Solo el rol Configuración puede dar de alta tipos de servicio.</p>}
+        </form> : <p className="muted" role="note">Solo lectura (D7): el alta de tipos de servicio corresponde al rol Configuración.</p>}
       </section>
     </div>
   );
