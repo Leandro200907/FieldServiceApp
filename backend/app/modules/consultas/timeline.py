@@ -77,7 +77,7 @@ def timeline_recursos(
         cond += " AND l.tipo_sujeto = :ts"
         params["ts"] = tipo_sujeto
     if q:
-        cond += " AND (l.sujeto_id ILIKE :q OR l.identificador_natural ILIKE :q)"
+        cond += " AND (l.sujeto_id ILIKE :q OR l.identificador_natural ILIKE :q OR l.nombre_apellido ILIKE :q)"
         params["q"] = f"%{q.strip()}%"
 
     tipos_oc: set[str] | None = None
@@ -106,7 +106,7 @@ def timeline_recursos(
     total = session.execute(text(f"SELECT count(*) FROM modulo1.legajo l {cond}"), params).scalar()
     legajos = session.execute(
         text(
-            f"SELECT l.sujeto_id, l.tipo_sujeto, l.identificador_natural FROM modulo1.legajo l {cond} "
+            f"SELECT l.sujeto_id, l.tipo_sujeto, l.identificador_natural, l.nombre_apellido FROM modulo1.legajo l {cond} "
             f"ORDER BY l.tipo_sujeto, l.identificador_natural OFFSET :off LIMIT :lim"
         ),
         {**params, "off": p.offset, "lim": p.limit},
@@ -220,6 +220,7 @@ def timeline_recursos(
             "sujeto_id": sid,
             "tipo_sujeto": legajo["tipo_sujeto"],
             "identificador": legajo["identificador_natural"],
+            "nombre_apellido": legajo.get("nombre_apellido"),
             "tramos": tramos,
             "ocs": cruces,
         })
