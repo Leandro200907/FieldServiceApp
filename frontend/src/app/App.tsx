@@ -218,6 +218,7 @@ export function App() {
         <Route path="/legajos/:detailId" element={<Workspace />} />
         <Route path="/radar-documental/:detailId" element={<Workspace />} />
         <Route path="/matrices/:detailId" element={<Workspace />} />
+        <Route path="/backlog-oc/:detailId" element={<Workspace />} />
         <Route path="*" element={<Workspace />} />
       </Routes>
     </>
