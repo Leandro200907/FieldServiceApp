@@ -5,6 +5,7 @@ Unifica documento vigente confirmado vs. propuesta pendiente, archivo_validacion
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date
 from typing import Any, Mapping
 
@@ -223,10 +224,18 @@ def filas_evidencia_para_legajo(
     return salida
 
 
+def _serializar_valor_fila(valor: Any) -> Any:
+    if isinstance(valor, uuid.UUID):
+        return str(valor)
+    if hasattr(valor, "isoformat") and not isinstance(valor, str):
+        return valor.isoformat()
+    return valor
+
+
 def _fila_con_vigencia(fila: dict[str, Any], hoy: date) -> dict[str, Any]:
     desde: date = fila["vigente_desde"]
     hasta: date | None = fila["vigente_hasta"]
-    salida = {k: (v.isoformat() if hasattr(v, "isoformat") and not isinstance(v, str) else v) for k, v in fila.items()}
+    salida = {k: _serializar_valor_fila(v) for k, v in fila.items()}
     salida["vigente_hoy"] = desde <= hoy and (hasta is None or hoy <= hasta)
     salida["dias_para_vencer"] = (hasta - hoy).days if hasta is not None else None
     salida["vencido"] = hasta is not None and hasta < hoy
