@@ -89,6 +89,18 @@ def test_verificado_sin_archivo_requiere_revision():
     assert resultado.estado == EstadoRequisitoDocumental.PENDIENTE_REVISION
 
 
+def test_vencido_verificado_sin_archivo_es_alerta_no_revision():
+    """D19 precedencia: vencimiento alerta aunque falte respaldo."""
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 10, 17),
+            validacion=EstadoValidacionArchivo.SIN_ARCHIVO,
+        )
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO
+    assert resultado.primer_quiebre == DESDE
+
+
 def test_archivo_invalido_se_informa_expresamente():
     resultado = evaluar(evidencia(validacion=EstadoValidacionArchivo.INVALIDO))
     assert resultado.estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA

@@ -6,6 +6,11 @@ la propuesta, el requisito queda en pendiente de revisión / requiere revisión.
 
 D19: además debe estar verificado y tener respaldo válido (archivo del documento o, en
 competencia/inducción, al menos un documento soporte con archivo válido).
+
+Precedencia del estado documental agregado (motor, radar, acciones, paquete): en
+`estado_documental.evaluar_requisito_documental`, las alertas por vencimiento/calendario
+prevalecen sobre *pendiente de revisión* por respaldo; sin respaldo en un documento aún
+vigente en el período sigue siendo revisión. Ver D19 en DECISIONES_DOMINIO.md.
 """
 from __future__ import annotations
 
