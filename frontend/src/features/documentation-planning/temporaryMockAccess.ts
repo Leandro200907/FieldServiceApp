@@ -30,7 +30,48 @@ const radarItems: ItemRadar[] = [
 ];
 
 function radarDetail(item: ItemRadar, offset = 0, limit = 50): DetalleOcRadarResponse {
-  const mockLegajos = [{ sujeto_id: 'persona-marina', identificador_natural: 'Marina López', estado_documental: item.estado_documental, primer_quiebre: item.primer_quiebre, requisitos: [] }];
+  const mockLegajos = [{
+    sujeto_id: 'persona-marina',
+    tipo_sujeto: 'persona',
+    nombre_apellido: 'María González',
+    identificador_natural: '30.111.222',
+    estado_documental: item.estado_documental,
+    primer_quiebre: item.primer_quiebre,
+    requisitos: [
+      {
+        nombre: 'Apto médico',
+        estado: 'vigente_todo_el_periodo',
+        vigente_hasta: '2026-12-01',
+        motivo: 'Apto médico está vigente durante todo el período',
+        archivo_validacion: 'valido',
+        requerido: true,
+      },
+      {
+        nombre: 'Licencia de conducir',
+        estado: 'vence_durante_periodo',
+        vigente_hasta: '2026-10-08',
+        motivo: 'Licencia de conducir deja un período sin cobertura documental',
+        archivo_validacion: 'valido',
+        requerido: true,
+      },
+      {
+        nombre: 'Constancia ART',
+        estado: 'pendiente_revision',
+        vigente_hasta: '2026-11-30',
+        motivo: 'Constancia ART tiene información pendiente de revisión',
+        archivo_validacion: 'pendiente',
+        requerido: true,
+      },
+      {
+        nombre: 'Inducción operadora',
+        estado: 'pendiente_revision',
+        vigente_hasta: '2026-11-15',
+        motivo: 'Inducción operadora tiene información pendiente de revisión',
+        archivo_validacion: 'sin_archivo',
+        requerido: true,
+      },
+    ],
+  }];
   return {
     oc: { oc_id: item.oc_id, clave_origen: item.clave_origen, referencia: item.referencia, vigencia_desde: item.vigencia_desde, vigencia_hasta: item.vigencia_hasta },
     estado_documental: item.estado_documental,

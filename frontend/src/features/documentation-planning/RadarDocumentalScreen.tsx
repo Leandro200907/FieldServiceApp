@@ -7,6 +7,7 @@ import { formatFecha } from './dates';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
+import { RadarLegajoEvidenciaPanel } from './RadarLegajoEvidenciaPanel';
 import './planning.css';
 import './radar.css';
 
@@ -151,7 +152,7 @@ export function RadarDocumentalScreen({ roles }: { roles: readonly string[] }) {
     </>}
 
     {selected && (detail.loading ? <LoadingState /> : detail.error ? <ErrorState message={detail.error.message} /> : detail.data && <DetailPanel detail={detail.data} onLegajo={setSelectedLegajo} onOffsetChange={value => { setDetailOffset(value); setSelectedLegajo(null); }} />)}
-    {selectedLegajo && (legajo.loading ? <LoadingState /> : legajo.error ? <ErrorState message={legajo.error.message} /> : legajo.data && <section className="panel" aria-live="polite"><p className="eyebrow">Evidencia del legajo en esta OC</p><h3>{asText(asRecord(legajo.data.legajo)?.identificador_natural, selectedLegajo)}</h3><p>Estado: {asText(asRecord(legajo.data.legajo)?.estado_documental)}</p><p>{asArray(asRecord(legajo.data.legajo)?.requisitos).length} requisito{asArray(asRecord(legajo.data.legajo)?.requisitos).length === 1 ? '' : 's'} evaluado{asArray(asRecord(legajo.data.legajo)?.requisitos).length === 1 ? '' : 's'}.</p><p className="detail-note">{legajo.data.advertencia}</p></section>)}
+    {selectedLegajo && (legajo.loading ? <LoadingState /> : legajo.error ? <ErrorState message={legajo.error.message} /> : legajo.data && <RadarLegajoEvidenciaPanel data={legajo.data} />)}
 
     <section className="module-boundary"><strong>Límite del Módulo 1</strong><span>Sin disponibilidad</span><span>Sin candidatos</span><span>Sin asignar recursos</span><span>Sin modificar fechas ni crear OT</span></section>
   </>;
