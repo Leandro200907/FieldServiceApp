@@ -225,6 +225,10 @@ def cargar_documentos_tecnicos(est: EstadoTenant, ctx: SemillaContext) -> None:
         _cargar_doc(s, idn, est.sujetos["empresa"], "ART empresa", est, v1, v2)
         rc_venc = _cargar_doc(s, idn, est.sujetos["empresa"], "Seguro de responsabilidad civil", est, ve1, ve2)
         est.documentos["empresa_rc_vencido"] = rc_venc
+        s.execute(
+            text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE documento_id = CAST(:d AS uuid)"),
+            {"d": rc_venc},
+        )
 
 
 def _lineas_persona_matriz(est: EstadoTenant) -> list[req_esq.LineaDeMatriz]:
@@ -424,6 +428,23 @@ def _subir(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = Fal
     confirmar_subida(s, idn, doc_id, storage=storage)
 
 
+def _confirmar_tras_archivo(s, idn, doc_id: str) -> None:
+    """D19: tras subida confirmada, marcar archivo válido y verificar el documento."""
+    s.execute(
+        text(
+            "UPDATE modulo1.documento SET archivo_validacion = 'valido' "
+            "WHERE documento_id = CAST(:d AS uuid) AND archivo_estado = 'confirmado'"
+        ),
+        {"d": doc_id},
+    )
+    legajos.confirmar_documento(s, idn, leg_esq.ConfirmarDocumento(documento_id=uuid.UUID(doc_id)))
+
+
+def _subir_y_verificar(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = False) -> None:
+    _subir(storage, s, idn, doc_id, sujeto, req, jpeg=jpeg)
+    _confirmar_tras_archivo(s, idn, doc_id)
+
+
 def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
     if key.startswith("vehiculo"):
         return est.sujetos["vehiculo1"]
@@ -487,7 +508,7 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             if not doc_id:
                 continue
             suj = _sujeto_para_clave_doc(est, key)
-            _subir(storage, s, idn, doc_id, suj, key)
+            _subir_y_verificar(storage, s, idn, doc_id, suj, key)
             ya_subidos.add(key)
         for key, doc_id in est.documentos.items():
             if (
@@ -498,15 +519,15 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             ):
                 continue
             suj = _sujeto_para_clave_doc(est, key)
-            _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
+            _subir_y_verificar(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
             ya_subidos.add(key)
         inv = est.documentos.get("t1_vencido_Constancia ART")
         if inv:
-            _subir(storage, s, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
+            _subir_y_verificar(storage, s, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
             ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv, motivo="Evidencia demo invalidada")
         inv_rep = est.documentos.get("t2_vencido_Constancia ART")
         if inv_rep:
-            _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART")
+            _subir_y_verificar(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART")
             ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv_rep, motivo="Invalidada demo — reemplazo")
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART reemplazo")
         sin_archivo: list[str] = []
