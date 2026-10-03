@@ -31,6 +31,7 @@ from scripts.demo.config import (
     REQUISITOS_LOCALES,
     TIPOS_SERVICIO,
     dni_tecnico,
+    nombre_tecnico,
 )
 from scripts.demo.contexto import EstadoTenant, identidad_de
 from scripts.demo.evidencia_fake import jpg_demo, pdf_demo
@@ -119,6 +120,7 @@ def cargar_sujetos(est: EstadoTenant, ctx: SemillaContext) -> None:
                 leg_esq.AltaDeSujeto(
                     tipo_sujeto="persona",
                     identificador_natural=dni_tecnico(est.spec.slug, n),
+                    nombre_apellido=nombre_tecnico(est.spec.slug, n),
                     sujeto_id=sid,
                 ),
             )

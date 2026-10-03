@@ -106,3 +106,14 @@ EQUIPO_POR_SLUG: dict[str, str] = {
 
 def dni_tecnico(slug: str, n: int) -> str:
     return DNIS_POR_SLUG[slug][n - 1]
+
+
+NOMBRES_TECNICO_POR_SLUG: dict[str, tuple[str, str, str]] = {
+    "patagonia-demo": ("María González", "Juan Pérez", "Lucía Fernández"),
+    "anelo-demo": ("Carlos Méndez", "Ana Ruiz", "Pedro Soto"),
+    "neuquen-demo": ("Sofía López", "Diego Martínez", "Valentina Díaz"),
+}
+
+
+def nombre_tecnico(slug: str, n: int) -> str:
+    return NOMBRES_TECNICO_POR_SLUG[slug][n - 1]

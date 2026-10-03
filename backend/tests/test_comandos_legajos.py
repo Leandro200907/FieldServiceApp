@@ -28,8 +28,8 @@ def _alta_def(cliente_api, tenant, nombre: str, categoria: str = "documento", ti
     body = {"nombre": nombre, "categoria": categoria, "tipo_sujeto_aplicable": tipo, **extra}
     return _ok(_post(cliente_api, tenant, "configuracion", "dar_de_alta_definicion_de_requisito", body))["requisito_definicion_id"]
 
-def _alta_persona(cliente_api, tenant, ident: str, sujeto_id: str | None = None) -> str:
-    body = {"tipo_sujeto": "persona", "identificador_natural": ident}
+def _alta_persona(cliente_api, tenant, ident: str, sujeto_id: str | None = None, **extra) -> str:
+    body = {"tipo_sujeto": "persona", "identificador_natural": ident, **extra}
     if sujeto_id:
         body["sujeto_id"] = sujeto_id
     return _ok(_post(cliente_api, tenant, "responsable_legajos", "alta_de_sujeto", body))["sujeto_id"]
