@@ -20,6 +20,7 @@ from app.comun.eventos import registrar_evento_interno
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
 from app.modules.oc.catalogos_maestros import resolver_operadora
+from app.comun.importacion_filas import ordenar_por_fila
 from app.modules.operadoras.esquemas import validar_campos_planilla
 from app.worker.cola import encolar
 
@@ -390,7 +391,12 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
                 validar_campos_planilla(fila)
                 estado = str(fila.get("estado") or "").strip().lower()
                 if estado not in {"exportado", "enviado", "aceptado", "rechazado"}:
-                    raise ErrorDeDominio("Estado inválido", {"estado": estado})
+                    raise ErrorDeDominio(
+                        f"Fila {numero}, Estado: '{estado or ''}' no es válido "
+                        f"(valores aceptados: exportado, enviado, aceptado, rechazado)",
+                        {"estado": estado},
+                        codigo="estado_invalido",
+                    )
                 if estado == "exportado" and fila.get("fecha_exportacion") is None:
                     raise ErrorDeDominio("El estado exportado requiere Fecha de exportación")
                 if estado in {"enviado", "aceptado", "rechazado"} and fila.get("fecha_presentacion") is None:
@@ -418,6 +424,7 @@ def importar_filas(session: Session, identidad: Identidad, *, archivo: str, hoja
         except DBAPIError as exc:
             errores.append({"fila": numero, "codigo": "dato_invalido", "mensaje": "Identificador con formato inválido",
                             "detalles": {"causa": str(exc.orig) if exc.orig else None}})
+    errores = ordenar_por_fila(errores)
     total_filas = len(filas) + len(errores_lectura or [])
     registrar_evento_interno(session, identidad.tenant_id, "PlanillaOperadorasImportada", {
         "archivo": archivo, "hoja": hoja, "filas_totales": total_filas,

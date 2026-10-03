@@ -79,7 +79,7 @@ def test_rechazar_propuesta_restaura_el_anterior_y_es_terminal(cliente_api, tena
     assert r["restaurado_documento_id"] == v1
     assert _vigentes(_docs(t, persona, req)) == [v1]
     # Terminal: no se rechaza dos veces ni se confirma una rechazada.
-    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": prop}).status_code == 409
+    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": prop, "motivo": "reintento"}).status_code == 409
     assert _post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": prop}).status_code == 409
 
 
@@ -98,7 +98,7 @@ def test_rechazo_sobre_cadena_con_lote_revertido_restaura_el_antecesor_no_termin
     rev = _ok(_post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": lote}))
     assert rev["documentos_restaurados"] == []  # V3 seguía vigente: no se restaura nada
     assert _vigentes(_docs(t, persona, req)) == [v3]
-    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": v3}))
+    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": v3, "motivo": "descartar"}))
     assert r["restaurado_documento_id"] == v1
     estados = {d["documento_id"]: d["estado_version"] for d in _docs(t, persona, req)}
     assert estados[v1] == "vigente" and estados[v3] == "rechazada"

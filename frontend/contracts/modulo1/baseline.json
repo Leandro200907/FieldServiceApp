@@ -50,7 +50,7 @@
   "sources": [
     {
       "file": "backend/docs/openapi.json",
-      "sha256": "bd36a636fd3d7b42ca4b10d434c575e92f41b4836b3423565598f726dfd40cc5"
+      "sha256": "34f707f7abf0f4296d83cc5020ed66fa89e55928bedde9f1c40c7c521bb6b5c2"
     },
     {
       "file": "backend/docs/HANDOFF_FRONTEND.md",

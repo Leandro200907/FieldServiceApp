@@ -71,7 +71,7 @@ def _alta_operadora(cliente_api, tenant, nombre: str) -> None:
     r = cliente_api.post(
         "/v1/comandos/alta_operadora_oc",
         json={"nombre": nombre},
-        headers=tenant.headers("responsable_legajos"),
+        headers=tenant.headers("configuracion"),
     )
     assert r.status_code == 200, r.text
 

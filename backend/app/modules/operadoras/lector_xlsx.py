@@ -13,6 +13,7 @@ from zipfile import BadZipFile, ZipFile
 from xml.etree import ElementTree as ET
 
 from app.api.errores import ErrorDeDominio
+from app.comun.importacion_filas import mensaje_fecha_invalida
 
 
 _NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
@@ -43,6 +44,13 @@ _COLUMNAS = {
     "observacion": "observacion",
 }
 _REQUERIDAS = {"operadora", "tipo_sujeto", "identificador_sujeto", "tipo_documento", "estado"}
+_ETIQUETAS_FECHA = {
+    "fecha_emision": "Fecha de emisión",
+    "fecha_vencimiento": "Fecha de vencimiento",
+    "fecha_exportacion": "Fecha de exportación",
+    "fecha_presentacion": "Fecha de presentación",
+    "fecha_respuesta": "Fecha de respuesta",
+}
 _IGNORAR_ENCABEZADOS = {"control"}
 _MENSAJES_COLUMNA_CONTROL = frozenset({
     "Faltan campos obligatorios",
@@ -168,6 +176,14 @@ def _observacion_desde_planilla(valor: object) -> object:
     return valor
 
 
+def _celda_con_contenido(valor: object) -> bool:
+    return valor is not None and str(valor).strip() != ""
+
+
+def _fila_totalmente_vacia(valores: dict[int, object], columnas: dict[int, str]) -> bool:
+    return not any(_celda_con_contenido(valores.get(col)) for col in columnas)
+
+
 def _registro_desde_valores(
     numero: int,
     valores: dict[int, object],
@@ -177,20 +193,34 @@ def _registro_desde_valores(
     registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
     if "observacion" in registro:
         registro["observacion"] = _observacion_desde_planilla(registro.get("observacion"))
-    if not any(registro.get(c) not in (None, "") for c in _REQUERIDAS):
+    if not str(registro.get("operadora") or "").strip():
+        errores.append(_error_fila(numero, "fila_invalida", "Falta la operadora"))
+        return None
+    if not any(_celda_con_contenido(registro.get(c)) for c in _REQUERIDAS):
+        errores.append(_error_fila(numero, "fila_invalida", "Faltan campos obligatorios de la fila"))
         return None
     registro["fila"] = numero
     for campo in ("fecha_emision", "fecha_vencimiento"):
+        bruto = registro.get(campo)
         try:
-            registro[campo] = _fecha(registro.get(campo), con_hora=False)
+            registro[campo] = _fecha(bruto, con_hora=False)
         except (ErrorDeDominio, OverflowError, ValueError):
-            errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+            errores.append(_error_fila(
+                numero, "fecha_invalida",
+                mensaje_fecha_invalida(numero, _ETIQUETAS_FECHA[campo], bruto),
+                campo=campo,
+            ))
             return None
     for campo in ("fecha_exportacion", "fecha_presentacion", "fecha_respuesta"):
+        bruto = registro.get(campo)
         try:
-            registro[campo] = _fecha(registro.get(campo), con_hora=True)
+            registro[campo] = _fecha(bruto, con_hora=True)
         except (ErrorDeDominio, OverflowError, ValueError):
-            errores.append(_error_fila(numero, "fecha_invalida", "Fecha inválida en la planilla", campo=campo))
+            errores.append(_error_fila(
+                numero, "fecha_invalida",
+                mensaje_fecha_invalida(numero, _ETIQUETAS_FECHA[campo], bruto),
+                campo=campo,
+            ))
             return None
     return registro
 
@@ -228,6 +258,8 @@ def _leer_filas_hoja(xml_bytes: bytes, compartidos: list[str], *, hoja: str) -> 
             continue
         fila_encabezado, columnas = encabezado
         if numero <= fila_encabezado:
+            continue
+        if _fila_totalmente_vacia(valores, columnas):
             continue
         registro = _registro_desde_valores(numero, valores, columnas, errores)
         if registro is None:

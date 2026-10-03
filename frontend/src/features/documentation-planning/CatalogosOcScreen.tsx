@@ -8,6 +8,7 @@ import './planning.css';
 type Catalogos = components['schemas']['CatalogosOcResponse'];
 
 export function CatalogosOcScreen() {
+  const puedeAlta = session.getSnapshot().identity?.roles.includes('configuracion') ?? false;
   const [reloadKey, setReloadKey] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [nuevaOperadora, setNuevaOperadora] = useState('');
@@ -64,7 +65,7 @@ export function CatalogosOcScreen() {
       <section className="panel">
         <h3>Operadoras</h3>
         <ul>{operadoras.map(o => <li key={o.operadora_id as string}>{o.nombre as string}</li>)}</ul>
-        <form
+        {puedeAlta ? <form
           className="form-row"
           onSubmit={e => {
             e.preventDefault();
@@ -77,7 +78,7 @@ export function CatalogosOcScreen() {
         >
           <label>Nueva operadora<input value={nuevaOperadora} onChange={e => setNuevaOperadora(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form>
+        </form> : <p className="muted">Solo el rol Configuración puede dar de alta operadoras.</p>}
       </section>
 
       <section className="panel">
@@ -88,7 +89,7 @@ export function CatalogosOcScreen() {
             <ul>{(locPorOperadora.get(o.operadora_id as string) || []).map(l => <li key={l.locacion_id as string}>{l.nombre as string}</li>)}</ul>
           </div>
         ))}
-        <form
+        {puedeAlta ? <form
           className="form-row"
           onSubmit={e => {
             e.preventDefault();
@@ -109,13 +110,13 @@ export function CatalogosOcScreen() {
           </label>
           <label>Nueva locación<input value={nuevaLocacion} onChange={e => setNuevaLocacion(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form>
+        </form> : <p className="muted">Solo el rol Configuración puede dar de alta locaciones.</p>}
       </section>
 
       <section className="panel">
         <h3>Tipos de servicio</h3>
         <ul>{tipos.map(t => <li key={t.tipo_servicio_id as string}>{t.nombre as string}</li>)}</ul>
-        <form
+        {puedeAlta ? <form
           className="form-row"
           onSubmit={e => {
             e.preventDefault();
@@ -128,7 +129,7 @@ export function CatalogosOcScreen() {
         >
           <label>Nuevo tipo<input value={nuevoTipo} onChange={e => setNuevoTipo(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form>
+        </form> : <p className="muted">Solo el rol Configuración puede dar de alta tipos de servicio.</p>}
       </section>
     </div>
   );

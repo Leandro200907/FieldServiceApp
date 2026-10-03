@@ -149,7 +149,11 @@ def test_api_repetida_con_locacion_null_responde_409_no_500(cliente_api, tenant_
 def test_migracion_0013_aborta_si_hay_duplicados_null_y_no_borra_nada(tenant_de_prueba):
     """Con la base en 0012 (UNIQUE clásico) se plantan dos definiciones iguales con
     locación NULL; `upgrade 0013` debe abortar con diagnóstico, dejar las dos filas y la
-    restricción vieja intactas. Limpiadas, el upgrade pasa."""
+    restricción vieja intactas. Limpiadas, el upgrade pasa.
+
+    Destructivo a nivel catálogo: downgrade hasta 0012 elimina tablas de espejo operadora
+    (0022) y al volver a head el backfill 0028 recrea operadoras con nombre «Operadora …».
+    Solo debe correr contra modulo1_test / modulo1_ci (guardia en conftest)."""
     import os
     from alembic import command
     from alembic.config import Config

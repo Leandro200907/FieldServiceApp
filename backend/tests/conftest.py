@@ -3,15 +3,24 @@ tokens JWT firmados con el mismo secreto que usa la app.
 
 Cada test que use `tenant_de_prueba` corre contra un tenant nuevo y todo lo que crea
 se borra al final (borrado por RLS dentro de tenant_session — solo alcanza lo propio).
+
+La base debe ser explícita (modulo1_test / modulo1_ci); nunca fsm_demo. Ver guardia_base.py.
 """
 from __future__ import annotations
 
 import uuid
+
+import pytest
+
+from tests.guardia_base import validar_base_para_pytest
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    validar_base_para_pytest(config)
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import jwt
-import pytest
 from sqlalchemy import text
 
 from app.config import settings

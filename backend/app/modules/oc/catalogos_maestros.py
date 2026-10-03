@@ -8,8 +8,9 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.errores import ErrorDeDominio, NoEncontrado
+from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad, Rol
+from app.comun.eventos import registrar_evento
 from app.comun.normalizar_texto import normalizar_clave
 from app.comun.paginacion import Pagina, envolver
 
@@ -126,39 +127,71 @@ def resolver_fila_por_nombres(session: Session, tenant_id: str, fila: dict[str, 
     return base, None
 
 
+def _exigir_rol_catalogo(identidad: Identidad) -> None:
+    if not identidad.tiene_rol(Rol.CONFIGURACION):
+        raise Prohibido("Solo el rol configuración puede modificar catálogos de OC")
+
+
+def _rechazar_operadora_parecida(session: Session, tenant_id: str, nombre: str) -> None:
+    clave = normalizar_clave(nombre)
+    existente_id, err = resolver_operadora(session, tenant_id, nombre)
+    if existente_id:
+        raise ErrorDeDominio("operadora duplicada", {"nombre": nombre})
+    for fila in session.execute(
+        text("SELECT nombre FROM modulo1.operadora_documental WHERE tenant_id = :t"),
+        {"t": tenant_id},
+    ):
+        existente = str(fila[0])
+        nc = normalizar_clave(existente)
+        if nc == clave:
+            raise ErrorDeDominio("operadora duplicada", {"nombre": nombre})
+        if clave.startswith(f"{nc} ") or nc.startswith(f"{clave} "):
+            raise ErrorDeDominio(
+                f"operadora desconocida: «{nombre.strip()}» — ¿Quisiste decir {existente}?",
+                {"nombre": nombre, "sugerencia": existente},
+            )
+    if err and "¿Quisiste decir" in err:
+        raise ErrorDeDominio(err, {"nombre": nombre, "sugerencia": err.split("¿Quisiste decir", 1)[-1].strip(" ?.")})
+
+
 def alta_operadora(session: Session, identidad: Identidad, nombre: str) -> dict[str, Any]:
-    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
+    _exigir_rol_catalogo(identidad)
+    nombre = nombre.strip()
+    if not nombre:
+        raise ErrorDeDominio("nombre obligatorio")
+    _rechazar_operadora_parecida(session, identidad.tenant_id, nombre)
+    oid = session.execute(
+        text("INSERT INTO modulo1.operadora_documental (tenant_id, nombre) VALUES (:t, :n) RETURNING operadora_id"),
+        {"t": identidad.tenant_id, "n": nombre},
+    ).scalar()
+    registrar_evento(
+        session, identidad.tenant_id, "OperadoraOcCreada",
+        {"operadora_id": str(oid), "nombre": nombre},
+        identidad.usuario_id,
+    )
+    return {"operadora_id": str(oid), "nombre": nombre}
+
+
+def alta_locacion(session: Session, identidad: Identidad, operadora_id: str, nombre: str) -> dict[str, Any]:
+    _exigir_rol_catalogo(identidad)
     nombre = nombre.strip()
     if not nombre:
         raise ErrorDeDominio("nombre obligatorio")
     clave = normalizar_clave(nombre)
     for fila in session.execute(
-        text("SELECT operadora_id, nombre FROM modulo1.operadora_documental WHERE tenant_id = :t"),
-        {"t": identidad.tenant_id},
-    ):
-        if normalizar_clave(fila[1]) == clave:
-            raise ErrorDeDominio("operadora duplicada", {"nombre": nombre})
-    oid = session.execute(
-        text("INSERT INTO modulo1.operadora_documental (tenant_id, nombre) VALUES (:t, :n) RETURNING operadora_id"),
-        {"t": identidad.tenant_id, "n": nombre},
-    ).scalar()
-    return {"operadora_id": str(oid), "nombre": nombre}
-
-
-def alta_locacion(session: Session, identidad: Identidad, operadora_id: str, nombre: str) -> dict[str, Any]:
-    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
-    nombre = nombre.strip()
-    if not nombre:
-        raise ErrorDeDominio("nombre obligatorio")
-    existente = session.execute(
         text(
-            "SELECT locacion_id FROM modulo1.locacion_oc "
-            "WHERE tenant_id = :t AND operadora_id = CAST(:o AS uuid) AND lower(nombre) = lower(:n)"
+            "SELECT nombre FROM modulo1.locacion_oc "
+            "WHERE tenant_id = :t AND operadora_id = CAST(:o AS uuid)"
         ),
-        {"t": identidad.tenant_id, "o": operadora_id, "n": nombre},
-    ).scalar()
-    if existente:
+        {"t": identidad.tenant_id, "o": operadora_id},
+    ):
+        if normalizar_clave(fila[0]) == clave:
+            raise ErrorDeDominio("locación duplicada para esta operadora", {"nombre": nombre})
+    existente_id, err = resolver_locacion(session, identidad.tenant_id, operadora_id, nombre)
+    if existente_id:
         raise ErrorDeDominio("locación duplicada para esta operadora", {"nombre": nombre})
+    if err and "¿Quisiste decir" in err:
+        raise ErrorDeDominio(err, {"nombre": nombre})
     lid = str(uuid.uuid4())
     session.execute(
         text(
@@ -167,23 +200,31 @@ def alta_locacion(session: Session, identidad: Identidad, operadora_id: str, nom
         ),
         {"id": lid, "t": identidad.tenant_id, "o": operadora_id, "n": nombre},
     )
+    registrar_evento(
+        session, identidad.tenant_id, "LocacionOcCreada",
+        {"locacion_id": lid, "operadora_id": operadora_id, "nombre": nombre},
+        identidad.usuario_id,
+    )
     return {"locacion_id": lid, "operadora_id": operadora_id, "nombre": nombre}
 
 
 def alta_tipo_servicio(session: Session, identidad: Identidad, nombre: str) -> dict[str, Any]:
-    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
+    _exigir_rol_catalogo(identidad)
     nombre = nombre.strip()
     if not nombre:
         raise ErrorDeDominio("nombre obligatorio")
-    existente = session.execute(
-        text(
-            "SELECT tipo_servicio_id FROM modulo1.tipo_servicio_oc "
-            "WHERE tenant_id = :t AND lower(nombre) = lower(:n)"
-        ),
-        {"t": identidad.tenant_id, "n": nombre},
-    ).scalar()
-    if existente:
+    clave = normalizar_clave(nombre)
+    for fila in session.execute(
+        text("SELECT nombre FROM modulo1.tipo_servicio_oc WHERE tenant_id = :t"),
+        {"t": identidad.tenant_id},
+    ):
+        if normalizar_clave(fila[0]) == clave:
+            raise ErrorDeDominio("tipo de servicio duplicado", {"nombre": nombre})
+    existente_id, err = resolver_tipo_servicio(session, identidad.tenant_id, nombre)
+    if existente_id:
         raise ErrorDeDominio("tipo de servicio duplicado", {"nombre": nombre})
+    if err and "¿Quisiste decir" in err:
+        raise ErrorDeDominio(err, {"nombre": nombre})
     tid = str(uuid.uuid4())
     session.execute(
         text(
@@ -191,6 +232,11 @@ def alta_tipo_servicio(session: Session, identidad: Identidad, nombre: str) -> d
             "VALUES (CAST(:id AS uuid), :t, :n)"
         ),
         {"id": tid, "t": identidad.tenant_id, "n": nombre},
+    )
+    registrar_evento(
+        session, identidad.tenant_id, "TipoServicioOcCreado",
+        {"tipo_servicio_id": tid, "nombre": nombre},
+        identidad.usuario_id,
     )
     return {"tipo_servicio_id": tid, "nombre": nombre}
 

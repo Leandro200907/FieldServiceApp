@@ -31,5 +31,10 @@ export const realLegajosAccess: LegajosAccess = {
       params: { query: { sujeto_id: sujetoId, offset: 0, limit: 50 } },
     }));
   },
+  async readEspejoOperadora(sujetoId: string) {
+    return unwrap(session.client.GET('/v1/consultas/espejo_operadora', {
+      params: { query: { q: sujetoId, offset: 0, limit: 100 } },
+    }));
+  },
 };
 

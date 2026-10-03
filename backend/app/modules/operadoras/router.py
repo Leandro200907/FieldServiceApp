@@ -179,12 +179,8 @@ def importar_planilla_operadoras(
             detail="Se requiere Content-Type application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     filas, errores_lectura = leer_planilla(contenido, hoja=hoja)
-    if errores_lectura and not filas:
-        raise ErrorDeDominio(
-            "La planilla tiene filas con errores de formato",
-            {"errores": errores_lectura},
-            codigo="planilla_invalida",
-        )
+    if not filas and not errores_lectura:
+        raise ErrorDeDominio("La hoja no contiene filas para importar", {"hoja": hoja})
     huella = hashlib.sha256(contenido).hexdigest()
     resultado = ejecutar_comando(
         identidad, clave, (Rol.RESPONSABLE_LEGAJOS,),

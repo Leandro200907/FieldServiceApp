@@ -179,9 +179,15 @@ Las planillas generadas viven en `scripts/demo_planillas/<slug>/` (gitignored).
 ```
 
 ```bash
-# Tests (usan DATABASE_URL de .env; la base debe estar en el head)
-.venv/Scripts/python -m pytest -q
+# Tests: base explícita modulo1_test (nunca fsm_demo ni el .env de demo manual)
+# Copiar .env.test.example → .env.test, crear modulo1_test, alembic upgrade head
+ENV_FILE=.env.test .venv/Scripts/python -m pytest -q --ignore=tests/test_sembrar_demo.py
 ```
+
+`pytest` aborta si `DATABASE_URL` apunta a `fsm_demo`, a cualquier `*_demo` en la suite
+general, o a una base que no sea `modulo1_ci` / `modulo1_test` / `*_test`. Los tests de
+`test_sembrar_demo.py` solo contra `modulo1_ci_demo` (ver `.env.demo-test.example`), nunca
+contra `fsm_demo`.
 
 Salud (públicas, sin JWT): `GET /v1/salud/vivo` (liveness) y `GET /v1/salud/listo`
 (readiness: DB, migración en `MIGRACION_HEAD`, storage y worker — último latido global en

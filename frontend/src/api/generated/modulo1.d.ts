@@ -3751,7 +3751,7 @@ export interface components {
              */
             documento_id: string;
             /** Motivo */
-            motivo?: string | null;
+            motivo: string;
         };
         /** RechazarPropuestaResponse */
         RechazarPropuestaResponse: {

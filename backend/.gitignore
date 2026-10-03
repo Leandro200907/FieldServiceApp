@@ -7,3 +7,5 @@ storage_local/
 scripts/demo_planillas/
 .env.*
 !.env.example
+!.env.test.example
+!.env.demo-test.example

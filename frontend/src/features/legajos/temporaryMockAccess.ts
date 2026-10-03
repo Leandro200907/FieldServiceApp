@@ -71,5 +71,8 @@ export const temporaryMockAccess: LegajosAccess = {
   async readAlertasOperadora() {
     return { items: [], total: 0, offset: 0, limit: 50 };
   },
+  async readEspejoOperadora() {
+    return { items: [], total: 0, offset: 0, limit: 50 };
+  },
 };
 
