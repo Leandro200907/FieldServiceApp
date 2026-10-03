@@ -10,7 +10,7 @@ import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
 import type { EvidenciaVigente } from '../mi-legajo/contracts';
 import type { LegajoCompuesto } from '../mi-legajo/contracts';
-import { subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
+import { formatDniIdentificador, subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
 import {
   contarBuckets,
   enReglaCount,
@@ -21,6 +21,7 @@ import {
 } from './legajoResumen';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { legajosAccess } from './access';
+import { LegajoHistorialTab } from './LegajoHistorialTab';
 
 const tipoRuta: Record<string, string> = {
   persona: 'Personas',
@@ -34,11 +35,10 @@ type Tab = 'documentos' | 'presentaciones' | 'historial';
 function observacionFila(item: EvidenciaVigente): string {
   const parts: string[] = [];
   if (item.propuesta_en_revision) parts.push(textoPropuestaEnRevision(item.propuesta_en_revision));
-  if ((item.ocs_afectadas ?? []).length > 0) parts.push('OC afectadas');
   return parts.join(' · ') || '—';
 }
 
-export function LegajoFicha({ data, sujetoId, onClose }: { data: LegajoCompuesto; sujetoId: string; onClose: () => void }) {
+export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoId: string; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('documentos');
   const [historialSel, setHistorialSel] = useState<{ operadoraId: string; requisitoId: string } | null>(null);
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
@@ -64,14 +64,13 @@ export function LegajoFicha({ data, sujetoId, onClose }: { data: LegajoCompuesto
         breadcrumb={`Legajos / ${tipoRuta[tipo] || tipo}`}
         titulo={tituloLegajoPersona(data.legajo)}
         subtitulo={subtituloLegajoPersona(data.legajo) || undefined}
-        acciones={<button type="button" className="button button-secondary" onClick={onClose}>Cerrar</button>}
         datosClave={(
           <>
-            {tipo === 'persona' && <FichaDato label="DNI" mono>{data.legajo.identificador_natural}</FichaDato>}
+            {tipo === 'persona' && <FichaDato label="DNI" mono>{formatDniIdentificador(data.legajo.identificador_natural)}</FichaDato>}
             <FichaDato label="Alta">{fmt(data.legajo.creado_en.slice(0, 10))}</FichaDato>
             <FichaDato label="Cumplimiento">{enRegla} de {total} en regla</FichaDato>
             <FichaDato label="Próximo vencimiento">{proximo ? fmt(proximo) : '—'}</FichaDato>
-            <FichaDato label="OC afectadas">{ocsCount > 0 ? `${ocsCount} orden${ocsCount === 1 ? '' : 'es'}` : 'Ninguna'}</FichaDato>
+            <FichaDato label="OC afectadas">{ocsCount > 0 ? `${ocsCount} órden${ocsCount === 1 ? '' : 'es'}` : 'Ninguna'}</FichaDato>
             <FichaDato label="Resumen">{resumenVencimientosTexto(data.resumen.vencidos, data.resumen.por_vencer ?? 0)}</FichaDato>
           </>
         )}
@@ -109,7 +108,7 @@ export function LegajoFicha({ data, sujetoId, onClose }: { data: LegajoCompuesto
                   return (
                     <tr key={item.id}>
                       <td>{item.requisito || 'Requisito sin nombre'}</td>
-                      <td>{labels.map(label => <StatusDot key={label} variant={variantFromEtiquetaVigencia(label)}>{label}</StatusDot>)}</td>
+                      <td><span className="estado-tags">{labels.map(label => <StatusDot key={label} variant={variantFromEtiquetaVigencia(label)}>{label}</StatusDot>)}</span></td>
                       <td>{fmt(item.vigente_hasta)} · {formatDaysToExpiry(item.dias_para_vencer)}</td>
                       <td>
                         {observacionFila(item)}
@@ -125,28 +124,35 @@ export function LegajoFicha({ data, sujetoId, onClose }: { data: LegajoCompuesto
             </table>
             {items.length === 0 && <p className="empty-inline">Sin documentación registrada.</p>}
           </div>
+          <EstadoReferenciaLegajo />
         </>
       )}
 
       {tab === 'presentaciones' && (
-        espejo.loading ? <p>Cargando presentaciones…</p> : espejo.data?.items.length ? (
-          <ul className="evidence-list">
-            {espejo.data.items.map(item => (
-              <li className="evidence-row" key={`${item.operadora_id}-${item.requisito_definicion_id}`}>
-                <span className="evidence-name">{item.requisito} · {item.operadora}</span>
-                <StatusDot variant={item.estado_operadora === 'al_dia' ? 'vigente' : 'por_vencer'}>{estadoLabels[item.estado_operadora as string] || item.estado_operadora}</StatusDot>
-                <small>{item.motivo || '—'}</small>
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => setHistorialSel({ operadoraId: item.operadora_id as string, requisitoId: item.requisito_definicion_id as string })}
-                >
-                  Ver historial
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : <p className="empty-inline">Sin presentaciones registradas.</p>
+        <>
+          {espejo.loading ? <p>Cargando presentaciones…</p> : espejo.data?.items.length ? (
+            <ul className="evidence-list">
+              {espejo.data.items.map(item => (
+                <li className="evidence-row" key={`${item.operadora_id}-${item.requisito_definicion_id}`}>
+                  <span className="evidence-name">{item.requisito} · {item.operadora}</span>
+                  <StatusDot variant={item.estado_operadora === 'al_dia' ? 'vigente' : item.estado_operadora === 'rechazado' ? 'vencido' : 'revision'}>{estadoLabels[item.estado_operadora as string] || item.estado_operadora}</StatusDot>
+                  <small>{item.motivo || '—'}</small>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => {
+                      setHistorialSel({ operadoraId: item.operadora_id as string, requisitoId: item.requisito_definicion_id as string });
+                      setTab('historial');
+                    }}
+                  >
+                    Ver historial
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="empty-inline">Sin presentaciones registradas.</p>}
+          <EstadoReferenciaLegajo incluirPresentaciones />
+        </>
       )}
 
       {tab === 'historial' && (
@@ -158,11 +164,9 @@ export function LegajoFicha({ data, sujetoId, onClose }: { data: LegajoCompuesto
             onClose={() => setHistorialSel(null)}
           />
         ) : (
-          <p className="muted">Elegí «Ver historial» en la pestaña Presentaciones a operadoras para un requisito y operadora.</p>
+          <LegajoHistorialTab sujetoId={sujetoId} />
         )
       )}
-
-      <EstadoReferenciaLegajo />
     </>
   );
 }

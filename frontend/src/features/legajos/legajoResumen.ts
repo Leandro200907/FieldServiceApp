@@ -8,11 +8,19 @@ export function todosLosDocumentos(data: LegajoCompuesto): EvidenciaVigente[] {
   return [...data.documentos, ...data.acreditaciones, ...data.inducciones];
 }
 
+function enRevision(item: EvidenciaVigente): boolean {
+  if (item.propuesta_en_revision) return true;
+  const codigos = [item.estado_presentacion, ...(item.estados_adicionales ?? [])].filter(Boolean) as string[];
+  if (codigos.some(c => c === 'propuesta_en_revision' || c === 'archivo_en_revision')) return true;
+  const labels = etiquetasEvidencia(item).map(l => l.toLowerCase());
+  return labels.some(l => l.includes('revisión') || l.includes('revision') || l.includes('propuesta'));
+}
+
 function bucketDeItem(item: EvidenciaVigente): BucketDocumento {
   const labels = etiquetasEvidencia(item).map(l => l.toLowerCase());
   if (labels.some(l => l.includes('vencid'))) return 'vencidos';
   if (labels.some(l => l.includes('por vencer'))) return 'por_vencer';
-  if (labels.some(l => l.includes('revisión') || l.includes('propuesta'))) return 'en_revision';
+  if (enRevision(item)) return 'en_revision';
   return 'vigentes';
 }
 

@@ -1,3 +1,66 @@
+.estado-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.legajo-doc-table .estado-tags .status-dot + .status-dot {
+  margin-left: 0;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+}
+
+.filter-checkboxes legend {
+  margin-bottom: 6px;
+}
+
+.form-success {
+  color: var(--color-success, #0d6b3a);
+  margin-top: 8px;
+}
+
+.config-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.config-dashboard-card {
+  text-decoration: none;
+  color: inherit;
+}
+
+.config-dashboard-card--soon {
+  opacity: 0.75;
+}
+
+.vencimientos-import-toggle {
+  margin-left: auto;
+}
+
+.espejo-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+
+.legajo-historial-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.radar-requisitos-table--nowrap td {
+  white-space: nowrap;
+}
+
 .list-detail-layout {
   display: grid;
   grid-template-columns: minmax(260px, var(--list-detail-list-width)) minmax(0, 1fr);

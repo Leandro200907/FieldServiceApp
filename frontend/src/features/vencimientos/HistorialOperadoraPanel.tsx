@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ApiFailure, safeFailure } from '../../api';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { session } from '../../api';
-import { formatFecha } from '../documentation-planning/dates';
+import { formatFecha, formatFechaHora } from '../documentation-planning/dates';
 import { vencimientosAccess } from './access';
 import type { HistorialOperadoraResponse } from './contracts';
 import { ESTADO_HISTORIAL_LABELS } from './importacionUi';
@@ -11,23 +11,18 @@ type Props = {
   operadoraId: string;
   sujetoId: string;
   requisitoDefinicionId: string;
-  onClose: () => void;
+  onClose?: () => void;
+  tituloExtra?: string;
+  embedded?: boolean;
 };
 
-export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefinicionId, onClose }: Props) {
+export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefinicionId, onClose, tituloExtra, embedded }: Props) {
   const [data, setData] = useState<HistorialOperadoraResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ReturnType<typeof safeFailure> | null>(null);
   const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (value: string) => formatFecha(value, timeZone);
-  const fmtPaso = (value: string) => {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return fmt(value);
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('es-AR', {
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone,
-    }).format(date);
-  };
+  const fmtPaso = (value: string) => formatFechaHora(value, timeZone);
   const estadoLabel = (estado: string) => ESTADO_HISTORIAL_LABELS[estado] || estado;
 
   useEffect(() => {
@@ -42,14 +37,15 @@ export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefini
     return () => { cancelled = true; };
   }, [operadoraId, sujetoId, requisitoDefinicionId]);
 
+  const Wrapper = embedded ? 'section' : 'div';
   return (
-    <div className="panel historial-operadora-panel" role="dialog" aria-labelledby="historial-operadora-title">
+    <Wrapper className={`panel historial-operadora-panel${embedded ? ' historial-operadora-panel--embedded' : ''}`} role={embedded ? undefined : 'dialog'} aria-labelledby="historial-operadora-title">
       <div className="panel-top">
         <div>
-          <p className="eyebrow">Espejo por operadora</p>
-          <h3 id="historial-operadora-title">Historial de presentaciones</h3>
+          {!embedded && <p className="eyebrow">Presentaciones a operadoras</p>}
+          <h3 id="historial-operadora-title">{tituloExtra || 'Historial de presentaciones'}</h3>
         </div>
-        <button type="button" className="button button-secondary" onClick={onClose}>Cerrar</button>
+        {onClose && <button type="button" className="button button-secondary" onClick={onClose}>Cerrar</button>}
       </div>
       {loading ? <LoadingState /> : error ? <ErrorState message={error.message} /> : data?.versiones.length ? (
         <div className="historial-versiones">
@@ -77,6 +73,6 @@ export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefini
           ))}
         </div>
       ) : <p className="empty-inline">Sin movimientos registrados para este legajo y operadora.</p>}
-    </div>
+    </Wrapper>
   );
 }
