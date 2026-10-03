@@ -884,8 +884,22 @@ planilla (D15) sigue entrando como `declarado` por defecto.
 **Datos existentes.** No se modifica `estado_confirmacion` en silencio; en consultas se
 muestra «Sin archivo de respaldo» y, por esta decisión, no habilitan.
 
+**Precedencia del estado documental.** Si un requisito cumple varias condiciones a la vez,
+se exponen todas en el detalle, pero el estado general del requisito y del legajo lo define
+la más grave:
+
+1. **Vencido** (vencido antes del período o deja de cubrirlo) → alerta documental; no
+   habilita, haya o no respaldo válido.
+2. **Sin respaldo válido** (sin archivo, purgado o archivo inválido) en evidencia verificada
+   aún aplicable al período → *pendiente de revisión*; no habilita.
+3. **Archivo pendiente de revisión** (`archivo_validacion` pendiente) → *pendiente de
+   revisión*; no habilita.
+
+La regla de calendario se aplica en `evaluar_requisito_documental`; la de respaldo en
+`resolucion_evidencia.py` (habilitación y archivo efectivo para el radar).
+
 **Motivo.** Alinear habilitación operativa con evidencia respaldada y evitar documentos
-“verificados” sin archivo en producción.
+“verificados” sin archivo en producción, sin ocultar vencimientos reales.
 
 **Estado.** Decidida.
 
