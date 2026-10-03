@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './app/App';
 import './ui/styles.css';
+import './ui/shell.css';
+import './ui/list-detail.css';
 
 async function bootstrap() {
   if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCKS === 'true') {
