@@ -389,6 +389,11 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
 
   const ganttBlock = (
     <>
+      <div className="planning-legend gantt-legend">
+        <span><i className="legend-dot status-vigente" />Vigente</span>
+        <span><i className="legend-dot status-por_vencer" />Por vencer</span>
+        <span><i className="legend-dot status-vencido" />Sin cobertura</span>
+      </div>
       <OcGanttNav
         zoom={gantt.zoom}
         onZoomChange={gantt.setZoom}
@@ -419,11 +424,11 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
         <label htmlFor="backlog-mes">Mes</label>
         <input id="backlog-mes" type="month" value={mes} onChange={e => setParams(p => { p.set('mes', e.target.value); p.delete('offset'); return p; })} />
       </div>
-      <label className="form-field">
+      <label className="form-field checkbox-inline">
         <input type="checkbox" checked={soloAlertas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_con_alertas', '1'); else p.delete('solo_con_alertas'); p.delete('offset'); return p; })} />
         Solo con alertas
       </label>
-      <label className="form-field">
+      <label className="form-field checkbox-inline">
         <input type="checkbox" checked={soloReprogramadas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_reprogramadas', '1'); else p.delete('solo_reprogramadas'); p.delete('offset'); return p; })} />
         Solo reprogramadas
       </label>
@@ -527,7 +532,7 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
             )}
           </div>
         )}
-        <Link className="button button-secondary" to="/catalogos-oc">Administrar catálogos</Link>
+        <Link className="button button-secondary" to="/catalogos-oc">{roles.includes('responsable_legajos') && !roles.includes('configuracion') ? 'Ver catálogos' : 'Administrar catálogos'}</Link>
       </header>
 
       {backlogQuery.error && <ErrorState message={backlogQuery.error.message} onRetry={() => setReloadKey(k => k + 1)} />}
