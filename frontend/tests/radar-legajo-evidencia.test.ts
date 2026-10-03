@@ -26,7 +26,6 @@ describe('radar legajo evidencia', () => {
     expect(etiquetaEstadoRequisitoRadar({
       estado: 'vencido_antes_inicio',
       archivo_validacion: 'invalido',
-      motivo: 'Constancia ART está vencido antes del inicio del período',
     })).toBe('Vencido');
     expect(motivoFalloRequisitoRadar({
       estado: 'vencido_antes_inicio',
@@ -39,12 +38,11 @@ describe('radar legajo evidencia', () => {
     expect(etiquetaEstadoRequisitoRadar({
       estado: 'vence_durante_periodo',
       archivo_validacion: 'valido',
-      vigente_hasta: '2026-10-23',
-      motivo: 'Licencia de conducir deja un período sin cobertura documental',
     })).toBe('Vence durante la OC');
     expect(motivoFalloRequisitoRadar({
       estado: 'vence_durante_periodo',
       archivo_validacion: 'valido',
+      vigente_hasta: '2026-10-23',
       motivo: 'Licencia de conducir deja un período sin cobertura documental',
     })).toContain('sin cobertura documental');
   });
