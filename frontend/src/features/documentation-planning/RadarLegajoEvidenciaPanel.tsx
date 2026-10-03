@@ -1,5 +1,6 @@
 import { session } from '../../api';
-import { Badge } from '../../ui/States';
+import { StatusDot, variantFromEtiquetaVigencia } from '../../ui/StatusDot';
+import { variantEstadoDocumentalOc } from '../../ui/documentalLabels';
 import { formatFecha } from './dates';
 import type { DetalleLegajoRadarResponse } from './contracts';
 import {
@@ -9,7 +10,6 @@ import {
   textoSinCoberturaRequisitoRadar,
   textoVencimientoRequisitoRadar,
   tituloLegajoRadar,
-  tonoEstadoRequisitoRadar,
   type RadarRequisitoEvaluado,
 } from './radarLegajoPresentation';
 
@@ -46,16 +46,14 @@ export function RadarLegajoEvidenciaPanel({ data }: { data: DetalleLegajoRadarRe
       {estadoDoc && (
         <p>
           Estado documental:{' '}
-          <span className={`projection-status projection-${estadoDoc}`}>
-            {labelEstadoDocumentalOc(estadoDoc)}
-          </span>
+          <StatusDot variant={variantEstadoDocumentalOc(estadoDoc)}>{labelEstadoDocumentalOc(estadoDoc)}</StatusDot>
         </p>
       )}
       {requisitos.length === 0 ? (
         <p className="empty-inline">No hay requisitos evaluados para este legajo en la OC.</p>
       ) : (
         <div className="projection-table-wrap">
-          <table className="projection-table radar-requisitos-table">
+          <table className="projection-table radar-requisitos-table radar-requisitos-table--nowrap">
             <thead>
               <tr>
                 <th>Requisito</th>
@@ -73,7 +71,7 @@ export function RadarLegajoEvidenciaPanel({ data }: { data: DetalleLegajoRadarRe
                 return (
                   <tr key={key}>
                     <td><strong>{req.nombre || 'Requisito sin nombre'}</strong></td>
-                    <td><Badge tone={tonoEstadoRequisitoRadar(etiqueta)}>{etiqueta}</Badge></td>
+                    <td><StatusDot variant={variantFromEtiquetaVigencia(etiqueta)}>{etiqueta}</StatusDot></td>
                     <td>{textoVencimientoRequisitoRadar(req.vigente_hasta, format)}</td>
                     <td>
                       {motivo && <span>{motivo}</span>}

@@ -11,7 +11,8 @@ import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { RadarLegajoEvidenciaPanel } from './RadarLegajoEvidenciaPanel';
 import { ListDetailLayout } from '../../ui/ListDetailLayout';
 import { StatusDot, variantFromEtiquetaVigencia } from '../../ui/StatusDot';
-import { estadoDocumentalOcLabels, labelEstadoDocumentalOc } from '../../ui/documentalLabels';
+import { estadoDocumentalOcLabels, labelEstadoDocumentalOc, variantEstadoDocumentalOc } from '../../ui/documentalLabels';
+import { etiquetaTipoSujeto } from '../../ui/tipoSujetoLabels';
 import { NotaAnalisisInformativo } from '../../ui/InformativoFooter';
 import './planning.css';
 import './radar.css';
@@ -40,32 +41,61 @@ function asText(value: unknown, fallback = 'Sin dato') { return typeof value ===
 function asArray(value: unknown) { return Array.isArray(value) ? value : []; }
 
 function estadoVariant(estado: string) {
-  if (estado === 'sin_alertas_documentales') return 'vigente';
-  if (estado === 'con_alertas_documentales') return 'por_vencer';
-  if (estado === 'informacion_incompleta') return 'revision';
-  return 'neutral';
+  return variantEstadoDocumentalOc(estado);
+}
+
+function etiquetaOcContexto(parts: { operadora_nombre?: string | null; locacion_nombre?: string | null; tipo_servicio_nombre?: string | null }) {
+  return [parts.operadora_nombre, parts.locacion_nombre, parts.tipo_servicio_nombre].filter(Boolean).join(' · ');
+}
+
+function contarAlertas(row: ItemRadar): number {
+  return Object.values(row.resumen).reduce((t, item) => t + item.con_alertas + item.incompletos, 0);
+}
+
+function textoMatrizUtilizada(
+  raw: Record<string, unknown>,
+  oc: Record<string, unknown>,
+  timeZone: string,
+): string {
+  const contexto = [oc.operadora_nombre, oc.locacion_nombre, oc.tipo_servicio_nombre].filter(Boolean).join(' · ');
+  const version = raw.version;
+  const desde = typeof raw.desde === 'string' ? formatFecha(raw.desde, timeZone) : '';
+  return `${contexto || 'Matriz'} — Versión ${version} — vigente desde ${desde}`;
 }
 
 function DetailPanel({ detail, onLegajo, onOffsetChange }: { detail: DetalleOcRadarResponse; onLegajo: (sujetoId: string) => void; onOffsetChange: (offset: number) => void }) {
   const oc = asRecord(detail.oc);
+  const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   return (
     <div aria-live="polite">
       <p className="ficha-breadcrumb">Radar de OC / Detalle</p>
       <h2 className="ficha-titulo">{asText(oc?.clave_origen, 'Orden de compra')}</h2>
+      {oc && etiquetaOcContexto(oc) && <p className="ficha-subtitulo">{etiquetaOcContexto(oc)}</p>}
       <p className="ficha-subtitulo">{displayDate(asText(oc?.vigencia_desde, ''))} — {displayDate(asText(oc?.vigencia_hasta, ''))}</p>
       <StatusDot variant={estadoVariant(detail.estado_documental)}>{labelEstadoDocumentalOc(detail.estado_documental)}</StatusDot>
       <p className="detail-note">{detail.advertencia}</p>
       <div>
         <strong>Matrices y requisitos considerados</strong>
-        <p>{detail.matrices_utilizadas.length} tramo{detail.matrices_utilizadas.length === 1 ? '' : 's'} de matriz · {detail.requisitos_particulares.length} requisito{detail.requisitos_particulares.length === 1 ? '' : 's'} particular{detail.requisitos_particulares.length === 1 ? '' : 'es'}.</p>
+        {detail.matrices_utilizadas.length > 0 ? (
+          <ul>
+            {detail.matrices_utilizadas.map((m, i) => (
+              <li key={i}>{textoMatrizUtilizada(asRecord(m) || {}, oc || {}, timeZone)}</li>
+            ))}
+          </ul>
+        ) : <p>Sin matriz aplicable en el período.</p>}
+        {detail.requisitos_particulares.length > 0 && (
+          <p>{detail.requisitos_particulares.length} requisito{detail.requisitos_particulares.length === 1 ? '' : 's'} particular{detail.requisitos_particulares.length === 1 ? '' : 'es'}.</p>
+        )}
         {(detail.disponibilidad_por_tipo?.length ?? 0) > 0 && <p><strong>Habilitación por tipo:</strong> {detail.disponibilidad_por_tipo!.map(d => d.texto).join(' · ')}</p>}
         <strong>Legajos observados por tipo</strong>
         <ul>
           {detail.grupos.map((rawGroup, groupIndex) => {
             const group = asRecord(rawGroup);
             const legajos = asArray(group?.legajos);
-            return <li key={`${asText(group?.tipo_sujeto)}-${groupIndex}`}>
-              {asText(group?.tipo_sujeto)}: {legajos.length} en esta página / {typeof group?.total === 'number' ? group.total : legajos.length} en total
+            const total = typeof group?.total === 'number' ? group.total : legajos.length;
+            const tipo = asText(group?.tipo_sujeto);
+            return <li key={`${tipo}-${groupIndex}`}>
+              <strong>{etiquetaTipoSujeto(tipo, total)}</strong>
               {group?.sin_legajos_requeridos === true && <strong> · Sin legajos habilitados visibles para este tipo</strong>}
               {legajos.length > 0 && <ul>{legajos.map((rawLegajo, index) => {
                 const legajo = asRecord(rawLegajo);
@@ -137,7 +167,9 @@ export function RadarDocumentalScreen({ roles, detailId }: { roles: readonly str
             <button key={row.oc_id} type="button" className={`list-item-button${selected === row.oc_id ? ' selected' : ''}`} onClick={() => abrirOc(row.oc_id)}>
               <span>
                 <span className="list-item-primary">{row.clave_origen}</span>
+                {etiquetaOcContexto(row) && <span className="list-item-secondary">{etiquetaOcContexto(row)}</span>}
                 <span className="list-item-secondary">{displayDate(row.vigencia_desde)} — {displayDate(row.vigencia_hasta)}</span>
+                {contarAlertas(row) > 0 && <span className="list-item-secondary">{contarAlertas(row)} alerta{contarAlertas(row) === 1 ? '' : 's'}</span>}
               </span>
               <StatusDot variant={estadoVariant(row.estado_documental)}>{labelEstadoDocumentalOc(row.estado_documental)}</StatusDot>
             </button>
