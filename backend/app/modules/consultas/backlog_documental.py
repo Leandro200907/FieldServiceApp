@@ -196,10 +196,13 @@ def evaluar_oc_backlog(
                 }
             )
 
+        def _n(n: int, uno: str, varios: str) -> str:
+            return f"{n} {uno if n == 1 else varios}"
+
         partes = [
-            f"{len(toda_v)} habilitados toda la ventana" if toda_v else None,
-            f"{len(cae_v)} se caen en la ventana" if cae_v else None,
-            f"{len(no_v)} no habilitados" if no_v else None,
+            f"{_n(len(toda_v), 'habilitado', 'habilitados')} toda la ventana" if toda_v else None,
+            f"{_n(len(cae_v), 'se cae', 'se caen')} en la ventana" if cae_v else None,
+            f"{_n(len(no_v), 'no habilitado', 'no habilitados')}" if no_v else None,
             MSG_FUERA if habilitados_fuera else None,
         ]
         texto = f"{_ETIQUETA.get(tipo, tipo)}: " + " · ".join(p for p in partes if p)

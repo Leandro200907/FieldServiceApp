@@ -46,6 +46,28 @@
             "title": "Legajo Nombre",
             "type": "string"
           },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
+          },
           "ocs_afectadas": {
             "items": {
               "additionalProperties": true,
@@ -3808,6 +3830,17 @@
             "title": "Identificador Natural",
             "type": "string"
           },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
           "motivo": {
             "title": "Motivo",
             "type": "string"
@@ -3955,6 +3988,17 @@
               }
             ],
             "title": "Usuario Nombre"
+          },
+          "legajo_requisito_etiqueta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legajo Requisito Etiqueta"
           }
         },
         "required": [

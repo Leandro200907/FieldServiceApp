@@ -441,6 +441,23 @@ def cobertura_oc(
     }
 
 
+def _fecha_desde_cuando_bloquea(oc: dict[str, Any], req: dict[str, Any], fallback: date) -> date:
+    """Posterior entre inicio de la OC y el día siguiente al vencimiento de la evidencia (consulta)."""
+    oc_inicio = oc["vigencia_desde"]
+    if isinstance(oc_inicio, str):
+        oc_inicio = date.fromisoformat(oc_inicio)
+    vh = req.get("vigente_hasta")
+    if vh:
+        vh_d = vh if isinstance(vh, date) else date.fromisoformat(str(vh))
+        return max(oc_inicio, vh_d + timedelta(days=1))
+    pq = req.get("primer_quiebre")
+    if pq:
+        pq_d = pq if isinstance(pq, date) else date.fromisoformat(str(pq))
+        return max(oc_inicio, pq_d)
+    fb = fallback if isinstance(fallback, date) else date.fromisoformat(str(fallback))
+    return max(oc_inicio, fb)
+
+
 def acciones_pendientes(
     session: Session,
     identidad: Identidad,
@@ -487,7 +504,7 @@ def acciones_pendientes(
             for req in leg.get("requisitos") or []:
                 if not req.get("accion_sugerida"):
                     continue
-                fecha_limite = str(req.get("primer_quiebre") or inicio)
+                fecha_limite = _fecha_desde_cuando_bloquea(oc, req, inicio).isoformat()
                 fecha_accion = req.get("accion_sugerida_fecha")
                 if hasattr(fecha_accion, "isoformat"):
                     fecha_accion = fecha_accion.isoformat()
@@ -508,7 +525,9 @@ def acciones_pendientes(
                 agrupadas[clave] = {
                     "requisito": req.get("nombre"),
                     "legajo_id": leg["sujeto_id"],
-                    "legajo_nombre": leg.get("identificador_natural") or leg["sujeto_id"],
+                    "legajo_nombre": leg.get("nombre_apellido") or leg.get("identificador_natural") or leg["sujeto_id"],
+                    "nombre_apellido": leg.get("nombre_apellido"),
+                    "identificador_natural": leg.get("identificador_natural"),
                     "tipo_sujeto": leg["tipo_sujeto"],
                     "fecha_limite": fecha_limite,
                     "accion_sugerida": req["accion_sugerida"],
@@ -647,8 +666,63 @@ def log_auditoria(
         uid = (fila.get("payload") or {}).get("usuario_id")
         if fila.get("usuario_nombre") is None and uid == "sistema":
             fila["usuario_nombre"] = "Sistema"
+        fila["legajo_requisito_etiqueta"] = _etiqueta_legajo_requisito_auditoria(
+            session, identidad.tenant_id, fila.get("tipo") or "", fila.get("payload") or {},
+        )
         salida.append(fila)
     return envolver(salida, int(total or 0), p)
+
+
+def _etiqueta_legajo_requisito_auditoria(
+    session: Session,
+    tenant_id: str,
+    tipo: str,
+    payload: dict[str, Any],
+) -> str | None:
+    if tipo == "LocacionOcCreada":
+        loc_id = payload.get("locacion_id")
+        op_id = payload.get("operadora_id")
+        if not loc_id or not op_id:
+            return None
+        fila = session.execute(
+            text(
+                "SELECT o.nombre AS operadora, l.nombre AS locacion "
+                "FROM modulo1.locacion_oc l "
+                "JOIN modulo1.operadora_documental o ON o.tenant_id = l.tenant_id AND o.operadora_id = l.operadora_id "
+                "WHERE l.tenant_id = :t AND l.locacion_id = CAST(:l AS uuid)"
+            ),
+            {"t": tenant_id, "l": str(loc_id)},
+        ).mappings().first()
+        if fila:
+            return f"{fila['operadora']} · {fila['locacion']}"
+        return None
+    sujeto_id = payload.get("sujeto_id")
+    req_id = payload.get("requisito_definicion_id")
+    if not sujeto_id:
+        return None
+    leg = session.execute(
+        text(
+            "SELECT nombre_apellido, identificador_natural, tipo_sujeto FROM modulo1.legajo "
+            "WHERE tenant_id = :t AND sujeto_id = :s"
+        ),
+        {"t": tenant_id, "s": str(sujeto_id)},
+    ).mappings().first()
+    req_nombre = None
+    if req_id:
+        req_nombre = session.execute(
+            text(
+                "SELECT nombre FROM modulo1.definicion_requisito "
+                "WHERE tenant_id = :t AND requisito_definicion_id = CAST(:r AS uuid)"
+            ),
+            {"t": tenant_id, "r": str(req_id)},
+        ).scalar()
+    if leg and leg["tipo_sujeto"] == "persona" and leg.get("nombre_apellido"):
+        persona = leg["nombre_apellido"]
+    else:
+        persona = (leg or {}).get("identificador_natural") or str(sujeto_id)
+    if req_nombre:
+        return f"{persona} · {req_nombre}"
+    return persona if persona else None
 
 
 def matriz_vigente(

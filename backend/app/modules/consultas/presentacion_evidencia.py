@@ -148,7 +148,7 @@ def filas_evidencia_para_legajo(
                    d.estado_confirmacion, d.origen_propuesta, d.locacion_id,
                    d.estado_version, d.archivo_estado, d.archivo_validacion, d.clave_storage,
                    d.sucede_a, r.plazo_aviso_dias,
-                   l.identificador_natural
+                   l.identificador_natural, l.nombre_apellido, l.tipo_sujeto
             FROM modulo1.documento d
             LEFT JOIN modulo1.definicion_requisito r
               ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
@@ -187,7 +187,7 @@ def filas_evidencia_para_legajo(
                                d.estado_confirmacion, d.origen_propuesta, d.locacion_id,
                                d.estado_version, d.archivo_estado, d.archivo_validacion, d.clave_storage,
                                d.sucede_a, r.plazo_aviso_dias,
-                               l.identificador_natural
+                               l.identificador_natural, l.nombre_apellido, l.tipo_sujeto
                         FROM modulo1.documento d
                         LEFT JOIN modulo1.definicion_requisito r
                           ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id

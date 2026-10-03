@@ -509,8 +509,19 @@ def detalle_oc(session: Session, identidad: Identidad, oc_id: str, p: Pagina | N
         session, identidad.tenant_id, oc, legajos, _evidencias(session, identidad.tenant_id),
         oc["vigencia_desde"], oc["vigencia_hasta"], tipos_fuera_de_alcance=fuera,
     )
-    matrices = [{k: t[k] for k in ("matriz_version_id", "version", "fuente", "desde", "hasta")}
-                for t in calculo["tramos"] if t["matriz_version_id"] is not None]
+    matrices: list[dict[str, Any]] = []
+    vistos: set[str] = set()
+    for t in calculo["tramos"]:
+        if t["matriz_version_id"] is None:
+            continue
+        mid = str(t["matriz_version_id"])
+        if mid in vistos:
+            continue
+        vistos.add(mid)
+        matrices.append({
+            k: t[k]
+            for k in ("matriz_version_id", "version", "fuente", "vigente_desde", "vigente_hasta")
+        })
     legajos_pagina = calculo["legajos"][p.offset:p.offset + p.limit]
     grupos = []
     for tipo in ("empresa", "persona", "vehiculo", "equipo"):

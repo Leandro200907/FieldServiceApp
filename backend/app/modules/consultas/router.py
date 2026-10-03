@@ -38,7 +38,9 @@ class EvidenciaVigente(BaseModel):
     tipo: str
     id: str
     sujeto_id: str
+    tipo_sujeto: str | None = None
     identificador_natural: str | None = None
+    nombre_apellido: str | None = None
     requisito_definicion_id: str
     requisito: str | None
     categoria: str | None
@@ -307,6 +309,7 @@ class EventoAuditoria(BaseModel):
     payload: dict[str, Any]
     ocurrido_en: str
     usuario_nombre: str | None = None
+    legajo_requisito_etiqueta: str | None = None
 
 
 class LogAuditoriaResponse(BaseModel):
@@ -408,6 +411,8 @@ class AccionPendienteItem(BaseModel):
     requisito: str | None = None
     legajo_id: str
     legajo_nombre: str
+    nombre_apellido: str | None = None
+    identificador_natural: str | None = None
     tipo_sujeto: str
     fecha_limite: str
     accion_sugerida: str

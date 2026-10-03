@@ -547,8 +547,12 @@ def listar_espejo_operadora(
         cond_al_dia.append("l.tipo_sujeto = :tipo_sujeto")
     if q:
         params["q"] = f"%{q.strip()}%"
-        cond_alertas.append("(l.identificador_natural ILIKE :q OR l.sujeto_id ILIKE :q)")
-        cond_al_dia.append("(l.identificador_natural ILIKE :q OR l.sujeto_id ILIKE :q)")
+        cond_alertas.append(
+            "(l.identificador_natural ILIKE :q OR l.sujeto_id ILIKE :q OR l.nombre_apellido ILIKE :q)"
+        )
+        cond_al_dia.append(
+            "(l.identificador_natural ILIKE :q OR l.sujeto_id ILIKE :q OR l.nombre_apellido ILIKE :q)"
+        )
     if estado_operadora:
         alerta_est = [e for e in estado_operadora if e != "al_dia"]
         if alerta_est:
@@ -599,7 +603,7 @@ def _construir_espejo_sql(
 ) -> str:
     alertas_where = " AND ".join(cond_alertas)
     base_alertas = f"""
-        SELECT a.alerta_id, a.sujeto_id, l.identificador_natural, l.tipo_sujeto,
+        SELECT a.alerta_id, a.sujeto_id, l.identificador_natural, l.nombre_apellido, l.tipo_sujeto,
                a.requisito_definicion_id, COALESCE(r.nombre, a.requisito_definicion_id::text) AS requisito,
                o.operadora_id, o.nombre AS operadora, a.documento_vigente_id,
                a.ultimo_documento_operadora_id, a.estado AS estado_operadora, a.motivo,
@@ -629,7 +633,7 @@ def _construir_espejo_sql(
     if estado_operadora and "al_dia" in estado_operadora:
         al_dia_where = " AND ".join(cond_al_dia)
         partes.append(f"""
-            SELECT NULL::uuid AS alerta_id, e.sujeto_id, l.identificador_natural, l.tipo_sujeto,
+            SELECT NULL::uuid AS alerta_id, e.sujeto_id, l.identificador_natural, l.nombre_apellido, l.tipo_sujeto,
                    e.requisito_definicion_id, COALESCE(r.nombre, e.requisito_definicion_id::text) AS requisito,
                    o.operadora_id, o.nombre AS operadora, d.documento_id AS documento_vigente_id,
                    e.documento_id AS ultimo_documento_operadora_id, 'al_dia' AS estado_operadora,

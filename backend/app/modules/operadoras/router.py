@@ -105,6 +105,7 @@ class EspejoOperadoraItem(BaseModel):
     alerta_id: str | None
     sujeto_id: str
     identificador_natural: str
+    nombre_apellido: str | None = None
     tipo_sujeto: str
     requisito_definicion_id: str
     requisito: str
