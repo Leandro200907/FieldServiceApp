@@ -865,6 +865,30 @@ verifique en el portón. Resuelve la P2 (cola `evidencia_qr`).
 
 **Estado.** Decidida; se implementa en una rama propia después de la C.
 
+#### D19. Respaldo válido para habilitar
+
+**Decisión.** Un requisito solo habilita si la evidencia evaluable está **confirmada**
+(`estado_confirmacion = verificado`) y tiene **respaldo válido**: archivo del documento con
+`archivo_estado = confirmado` y `archivo_validacion = valido`, salvo competencias e
+inducciones, donde el respaldo es el documento soporte asociado (`documento_soporte`) con
+archivo válido. Sin respaldo válido (sin archivo, purgado o archivo inválido/pendiente) el
+requisito figura como *requiere revisión* en el motor de habilitación, el Radar documental,
+acciones pendientes y el paquete de entrega público. La regla se centraliza en
+`app/core/resolucion_evidencia.py` y se aplica desde `cargar_evidencias`, el radar y el
+paquete.
+
+**Escrituras nuevas.** `cargar_documento` ingresa como `declarado`; la verificación pasa por
+`confirmar_documento`, que rechaza la confirmación sin respaldo válido. La importación por
+planilla (D15) sigue entrando como `declarado` por defecto.
+
+**Datos existentes.** No se modifica `estado_confirmacion` en silencio; en consultas se
+muestra «Sin archivo de respaldo» y, por esta decisión, no habilitan.
+
+**Motivo.** Alinear habilitación operativa con evidencia respaldada y evitar documentos
+“verificados” sin archivo en producción.
+
+**Estado.** Decidida.
+
 ### Diseño
 
 #### D10. Documentos de empresa para el técnico
@@ -915,6 +939,18 @@ decide según validación con usuarios. Si no se usa, se elimina la columna.
 
 **Motivo.** El override por tipo de requisito (§15) puede no aportar valor operativo; hay
 que confirmarlo antes de mantener complejidad en modelo y UI.
+
+**Estado.** Pendiente.
+
+#### P4. Carga masiva de archivos de respaldo
+
+**Decisión.** Para la puesta en marcha asistida (D15), cuando los metadatos ya están en el
+sistema como `declarado` vía planilla, hace falta un flujo de **carga masiva de archivos de
+respaldo** (asociar PDFs a documentos importados y dejarlos listos para confirmación).
+Queda fuera del corte actual de comandos unitarios.
+
+**Motivo.** D19 exige respaldo para verificar; sin esta pieza el onboarding masivo depende de
+subidas documento por documento.
 
 **Estado.** Pendiente.
 

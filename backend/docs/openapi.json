@@ -1254,7 +1254,7 @@
             "title": "Confianza Extraccion"
           },
           "estado_confirmacion": {
-            "default": "verificado",
+            "default": "declarado",
             "enum": [
               "declarado",
               "verificado",
