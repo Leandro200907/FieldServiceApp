@@ -224,20 +224,21 @@ def cargar_evidencias(
         )
 
     if requisito_ids:
-        for fila in session.execute(
+        from app.core.resolucion_evidencia import filas_evidencia_para_evaluacion
+
+        filas = session.execute(
             text(
                 "SELECT documento_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, "
-                "estado_confirmacion, archivo_estado, archivo_validacion FROM modulo1.documento "
-                "WHERE tenant_id = :t AND estado_version = 'vigente' "
+                "estado_confirmacion, estado_version, origen_propuesta, sucede_a, "
+                "archivo_estado, archivo_validacion FROM modulo1.documento "
+                "WHERE tenant_id = :t AND estado_version IN ('vigente', 'sucedida') "
                 "  AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_sujeto
             ),
             {"t": tenant_id, "ids": requisito_ids, "sids": sujeto_ids},
-        ).mappings():
-            # El gate técnico aplica uniformemente a cualquier categoría documental.
+        ).mappings()
+        for clave, fila in filas_evidencia_para_evaluacion(filas).items():
             requiere = fila["archivo_estado"] == "confirmado" and fila["archivo_validacion"] != "valido"
-            evidencias[(str(fila["sujeto_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, requiere
-            )
+            evidencias[clave] = _doc(fila, requiere)
     return evidencias
 
 

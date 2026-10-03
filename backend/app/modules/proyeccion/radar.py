@@ -205,25 +205,19 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
         FROM modulo1.documento d WHERE d.tenant_id = :t AND d.vigente_hasta IS NOT NULL
           AND d.estado_version IN ('vigente', 'sucedida')
     """ + condicion_sujeto), params).mappings().all()
-    por_clave: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for f in filas:
-        d = dict(f)
-        por_clave[(d["sujeto_id"], d["requisito_definicion_id"])].append(d)
+    from app.core.resolucion_evidencia import agrupar_filas_documento, es_propuesta_pendiente, fila_para_evaluacion
+
     salida: dict[tuple[str, str], list[EvidenciaDocumental]] = defaultdict(list)
-    for clave, grupo in por_clave.items():
+    for clave, grupo in agrupar_filas_documento(filas).items():
         vigente = next((g for g in grupo if g["estado_version"] == "vigente"), None)
-        promover_sucedida: str | None = None
-        if (
-            vigente
-            and vigente.get("origen_propuesta")
-            and vigente["estado_confirmacion"] == "declarado"
-            and vigente.get("sucede_a")
-        ):
-            promover_sucedida = str(vigente["sucede_a"])
-            grupo = [g for g in grupo if g["estado_version"] != "vigente" or not g.get("origen_propuesta")]
-        for d in grupo:
-            if promover_sucedida and d["estado_version"] == "sucedida" and str(d["evidencia_id"]) == promover_sucedida:
-                d = {**d, "estado_version": "vigente"}
+        if vigente and es_propuesta_pendiente(vigente) and vigente.get("sucede_a"):
+            elegida = fila_para_evaluacion(grupo)
+            filas_eval = [elegida] if elegida else []
+        elif vigente and es_propuesta_pendiente(vigente):
+            filas_eval = [vigente]
+        else:
+            filas_eval = [g for g in grupo if g["estado_version"] in ("vigente", "sucedida")]
+        for d in filas_eval:
             salida[clave].append(
                 EvidenciaDocumental(
                     d["evidencia_id"],
