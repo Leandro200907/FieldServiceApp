@@ -1,4 +1,4 @@
-"""OCs donde un requisito deja de cubrir el período (mismo barrido que acciones pendientes)."""
+"""OCs donde un requisito no cubre el período evaluado (mismo barrido que acciones pendientes)."""
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -8,6 +8,17 @@ from sqlalchemy.orm import Session
 
 from app.auth.identidad import Identidad
 from app.comun.reloj import hoy_del_tenant
+
+# Mismas alertas temporales que `estado_documental._ESTADOS_ALERTA_TEMPORAL`.
+_ESTADOS_SIN_COBERTURA_PERIODO = frozenset({
+    "vence_durante_periodo",
+    "vencido_antes_inicio",
+    "faltante",
+})
+
+
+def requisito_sin_cobertura_en_periodo(req: dict[str, Any]) -> bool:
+    return req.get("estado") in _ESTADOS_SIN_COBERTURA_PERIODO
 
 
 def _as_date(value: date | str) -> date:
@@ -44,7 +55,7 @@ def _agregar_oc(destino: list[dict[str, str]], oc_ref: dict[str, str]) -> None:
         destino.append(oc_ref)
 
 
-def iter_vence_durante_en_ocs(
+def iter_sin_cobertura_en_ocs(
     session: Session,
     identidad: Identidad,
     *,
@@ -75,7 +86,7 @@ def iter_vence_durante_en_ocs(
             if tipo_recurso and leg["tipo_sujeto"] != tipo_recurso:
                 continue
             for req in leg.get("requisitos") or []:
-                if req.get("estado") != "vence_durante_periodo":
+                if not requisito_sin_cobertura_en_periodo(req):
                     continue
                 rid = str(req.get("requisito_definicion_id") or "")
                 if not rid:
@@ -95,7 +106,7 @@ def mapa_ocs_afectadas_por_requisito(
     desde = vigencia_desde or hoy
     hasta = vigencia_hasta or (hoy + timedelta(days=60))
     mapa: dict[str, list[dict[str, str]]] = {}
-    for suj, rid, oc_ref in iter_vence_durante_en_ocs(
+    for suj, rid, oc_ref in iter_sin_cobertura_en_ocs(
         session, identidad, desde=desde, hasta=hasta, sujeto_id=sujeto_id,
     ):
         if suj != sujeto_id:
