@@ -27,7 +27,6 @@ from app.core.estado_documental import (
     evaluar_requisito_documental,
 )
 from app.core.radar_documental import ResumenDocumental, resumir_oc, resumir_resultados
-from app.modules.consultas.backlog_documental import evaluar_oc_backlog
 from app.modules.oc.catalogos_maestros import nombres_oc
 
 
@@ -362,6 +361,8 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
     items: list[dict[str, Any]] = []
 
     def _adjuntar_habilitacion(item: dict[str, Any], oc: dict[str, Any], inicio: date, fin: date) -> None:
+        from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+
         eval_doc = evaluar_oc_backlog(
             session,
             identidad,
@@ -496,6 +497,8 @@ def detalle_oc(session: Session, identidad: Identidad, oc_id: str, p: Pagina | N
                "legajos": [l for l in legajos_pagina if l["tipo_sujeto"] == tipo], "total": len(legajos_tipo),
                "offset": p.offset, "limit": p.limit})
     inicio, fin = oc["vigencia_desde"], oc["vigencia_hasta"]
+    from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+
     eval_doc = evaluar_oc_backlog(
         session,
         identidad,
