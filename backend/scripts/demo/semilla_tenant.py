@@ -477,10 +477,9 @@ def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
     return est.sujetos["tecnico1"]
 
 
-# Sin archivo en este paso: bandeja (licencias t1/t2) o flujo invalidación ART (más abajo).
+# Sin archivo en este paso: licencia t2 (archivo en revisión post-worker) o invalidación ART.
 _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA = frozenset(
     {
-        "t1_por_vencer_Licencia de conducir",
         "t2_por_vencer_Licencia de conducir",
         "t1_vencido_Constancia ART",
         "t2_vencido_Constancia ART",
@@ -527,9 +526,15 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
     idn = est.idn("responsable_legajos", 1)
     for key in sorted(_EVIDENCIAS_SIN_ARCHIVO_EN_CARGA):
         if key in est.documentos:
-            ctx.notas.append(
-                f"evidencias: {key} sin archivo en carga (bandeja o invalidación ART más abajo)"
-            )
+            if key == "t2_por_vencer_Licencia de conducir":
+                ctx.notas.append(
+                    "evidencias: licencia técnico 2 sin archivo en carga; post-worker queda «archivo en revisión» "
+                    "(técnico 1: licencia vigente verificada por vencer + propuesta de renovación pendiente)"
+                )
+            else:
+                ctx.notas.append(
+                    f"evidencias: {key} sin archivo en carga (invalidación ART más abajo)"
+                )
     if "empresa_rc_vencido" in est.documentos:
         ctx.notas.append(
             "evidencias: empresa_rc_vencido queda verificado sin archivo de respaldo (demo Sin archivo de respaldo)"
@@ -666,7 +671,7 @@ def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
     """Dos evidencias confirmadas con validación pendiente (después del worker en sembrar_demo)."""
     idn = est.idn("responsable_legajos", 1)
     with tenant_session(est.tenant_id) as s:
-        for key in ("t1_por_vencer_Licencia de conducir", "t2_por_vencer_Licencia de conducir"):
+        for key in ("t2_por_vencer_Licencia de conducir",):
             if key not in est.documentos:
                 continue
             doc = est.documentos[key]
