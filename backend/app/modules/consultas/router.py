@@ -19,6 +19,14 @@ router = APIRouter()
 
 # --------------------------------------------------------------------------- servicio.py: evidencia vigente
 
+class PropuestaEnRevision(BaseModel):
+    documento_id: str
+    vigente_desde: str | None
+    vigente_hasta: str | None
+    estado_presentacion: Literal["propuesta_en_revision"] = "propuesta_en_revision"
+    estado_presentacion_explicacion: str
+
+
 class EvidenciaVigente(BaseModel):
     tipo: str
     id: str
@@ -33,13 +41,20 @@ class EvidenciaVigente(BaseModel):
     origen_propuesta: bool
     locacion_id: str | None
     vigente_hoy: bool
-    dias_para_vencer: int
+    dias_para_vencer: int | None
     vencido: bool
+    archivo_validacion: str | None = None
+    estado_presentacion: str
+    estado_presentacion_explicacion: str
+    estados_adicionales: list[str] | None = None
+    estados_adicionales_explicacion: dict[str, str] | None = None
+    propuesta_en_revision: PropuestaEnRevision | None = None
 
 
 class ResumenLegajo(BaseModel):
     total: int
     vigentes_hoy: int
+    por_vencer: int = 0
     vencidos: int
 
 
@@ -48,6 +63,7 @@ class LegajoDatos(BaseModel):
     sujeto_id: str
     tipo_sujeto: str
     identificador_natural: str
+    nombre_apellido: str | None = None
     dado_de_baja_en: str | None
     creado_en: str
 
@@ -64,6 +80,9 @@ class LegajoResponse(BaseModel):
 class DocumentoPropuesto(BaseModel):
     documento_id: str
     sujeto_id: str
+    identificador_natural: str | None = None
+    nombre_apellido: str | None = None
+    tipo_sujeto: str | None = None
     requisito_definicion_id: str | None
     requisito: str | None
     numero: str | None
@@ -76,6 +95,9 @@ class DocumentoPropuesto(BaseModel):
     vigente_hoy: bool
     dias_para_vencer: int
     vencido: bool
+    archivo_validacion: str | None = None
+    estado_presentacion: str | None = None
+    estado_presentacion_explicacion: str | None = None
 
 
 class PropuestasPendientesResponse(BaseModel):
@@ -276,6 +298,7 @@ class EventoAuditoria(BaseModel):
     tipo: str
     payload: dict[str, Any]
     ocurrido_en: str
+    usuario_nombre: str | None = None
 
 
 class LogAuditoriaResponse(BaseModel):
@@ -459,6 +482,7 @@ class RecursoTimeline(BaseModel):
     sujeto_id: str
     tipo_sujeto: str
     identificador: str
+    nombre_apellido: str | None = None
     tramos: list[TramoTimeline]
     ocs: list[CruceOcTimeline]
 
@@ -644,6 +668,7 @@ class RecursoCustodiado(BaseModel):
 
 class ResumenMiLegajo(BaseModel):
     vencidos: int
+    por_vencer: int = 0
     vigentes_hoy: int
 
 
@@ -664,6 +689,7 @@ class SujetoItem(BaseModel):
     sujeto_id: str
     tipo_sujeto: str
     identificador_natural: str
+    nombre_apellido: str | None = None
     dado_de_baja_en: datetime | None
     creado_en: datetime
 
@@ -713,11 +739,15 @@ class MatrizItem(BaseModel):
     cliente_id: str
     locacion_id: str
     tipo_servicio_id: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    tipo_servicio_nombre: str | None = None
     version: int
     vigente_desde: date
     vigente_hasta: date | None
     fuente: str | None
     autor: str | None
+    autor_nombre: str | None = None
     matriz_global_id: str | None
     copiada_de_version: int | None
     creado_en: datetime
@@ -732,9 +762,23 @@ class MatricesResponse(BaseModel):
 
 
 @router.get("/consultas/matrices", response_model=MatricesResponse)
-def matrices(cliente_id: UUID | None = Query(None), solo_vigentes: bool = Query(False),
-             identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> MatricesResponse:
-    return MatricesResponse(**_con(catalogos.matrices, identidad, p=p, cliente_id=str(cliente_id) if cliente_id else None, solo_vigentes=solo_vigentes))
+def matrices(
+    cliente_id: UUID | None = Query(None),
+    solo_vigentes: bool = Query(False),
+    q: str | None = Query(None, max_length=200),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> MatricesResponse:
+    return MatricesResponse(
+        **_con(
+            catalogos.matrices,
+            identidad,
+            p=p,
+            cliente_id=str(cliente_id) if cliente_id else None,
+            solo_vigentes=solo_vigentes,
+            q=q,
+        )
+    )
 
 
 class UsuarioItem(BaseModel):

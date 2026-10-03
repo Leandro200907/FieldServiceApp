@@ -6,6 +6,7 @@ import type { EvidenciaVigente, LegajoCompuesto, LegajoDatos, MiLegajoAccess, Mi
 const HOY = '2026-09-22';
 
 function evidencia(partial: Pick<EvidenciaVigente, 'tipo' | 'id' | 'sujeto_id' | 'requisito' | 'vigente_hasta' | 'estado_confirmacion' | 'dias_para_vencer' | 'vencido'>): EvidenciaVigente {
+  const estado_presentacion = partial.vencido ? 'vencida' : (partial.estado_confirmacion === 'declarado' ? 'declarada' : 'verificada');
   return {
     requisito_definicion_id: `req-${partial.id}`,
     categoria: partial.tipo === 'documento' ? 'documento' : partial.tipo === 'acreditacion' ? 'competencia' : 'induccion',
@@ -13,6 +14,8 @@ function evidencia(partial: Pick<EvidenciaVigente, 'tipo' | 'id' | 'sujeto_id' |
     locacion_id: null,
     vigente_hoy: !partial.vencido,
     vigente_desde: '2026-08-01',
+    estado_presentacion,
+    estado_presentacion_explicacion: 'Mock temporal',
     ...partial,
   };
 }
@@ -34,7 +37,7 @@ const persona: LegajoCompuesto = {
   inducciones: [
     evidencia({ tipo: 'induccion', id: 'ind-locacion', sujeto_id: 'persona-mock', requisito: 'Inducción de locación', vigente_hasta: '2026-11-01', estado_confirmacion: 'verificado', dias_para_vencer: 40, vencido: false }),
   ],
-  resumen: { total: 4, vigentes_hoy: 3, vencidos: 1 },
+  resumen: { total: 4, vigentes_hoy: 3, por_vencer: 0, vencidos: 1 },
 };
 
 const recursosBajoCustodia: RecursoCustodiado[] = [
@@ -43,7 +46,7 @@ const recursosBajoCustodia: RecursoCustodiado[] = [
     legajo: legajoDatos('vehiculo-mock', 'vehiculo', 'Unidad de ejemplo VX-23'),
     documentos: [evidencia({ tipo: 'documento', id: 'doc-vtv', sujeto_id: 'vehiculo-mock', requisito: 'VTV', vigente_hasta: '2026-10-05', estado_confirmacion: 'verificado', dias_para_vencer: 13, vencido: false })],
     acreditaciones: [], inducciones: [],
-    resumen: { total: 1, vigentes_hoy: 1, vencidos: 0 },
+    resumen: { total: 1, vigentes_hoy: 1, por_vencer: 0, vencidos: 0 },
   },
 ];
 
@@ -51,7 +54,7 @@ const respuesta: MiLegajoResponse = {
   hoy: HOY,
   persona,
   recursos_bajo_custodia: recursosBajoCustodia,
-  resumen: { vencidos: 1, vigentes_hoy: 4 },
+  resumen: { vencidos: 1, por_vencer: 0, vigentes_hoy: 4 },
 };
 
 export const temporaryMockAccess: MiLegajoAccess = {

@@ -4,8 +4,7 @@ import { ApiFailure, safeFailure, session } from '../../api';
 import { formatFecha } from '../documentation-planning/dates';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
-import { deriveVisualState } from '../documentation-planning/contracts';
-import type { VisualCalendarState } from '../documentation-planning/contracts';
+import { etiquetaEvidencia, tonoEvidencia } from '../../ui/evidenciaPresentacion';
 import { PAGE_SIZE, PaginationControls } from '../documentation-planning/PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isVencimientosIntegrated, vencimientosAccess } from './access';
@@ -15,7 +14,6 @@ import '../documentation-planning/planning.css';
 import { buildOperadoraFilterOpts, erroresDesdeImportacion, etiquetaFilaImportacion, ordenarErroresImportacion, toggleSearchListParam } from './importacionUi';
 import './importacion.css';
 
-const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };
 const DIAS_OPTIONS = [7, 15, 30, 60, 90];
 const ESTADO_ESPEJO_LABELS: Record<string, string> = {
   pendiente_envio: 'Pendiente de envío',
@@ -183,17 +181,14 @@ export function VencimientosScreen() {
     </div>
     {tablero.loading ? <LoadingState /> : tablero.error ? <ErrorState message={tablero.error.message} requestId={tablero.error instanceof ApiFailure && tablero.error.detail.referenceSource === 'server' ? tablero.error.detail.requestId : undefined} /> : <>
       <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Sujeto</th><th>Requisito</th><th>Categoría</th><th>Vence el</th><th>Estado</th><th>Días</th></tr></thead><tbody>
-        {tablero.data?.items.map(item => {
-          const state = deriveVisualState(item);
-          return <tr key={item.id}>
+        {tablero.data?.items.map(item => <tr key={item.id}>
             <td><strong>{item.identificador_natural || item.sujeto_id}</strong></td>
             <td>{item.requisito || 'Requisito sin nombre'}</td>
             <td>{item.categoria || 'Sin categoría'}</td>
             <td>{formatFecha(item.vigente_hasta, timeZone)}</td>
-            <td><Badge tone={state === 'vencida' ? 'warning' : 'accent'}>{visualStateLabels[state]}</Badge></td>
+            <td><Badge tone={tonoEvidencia(item)}>{etiquetaEvidencia(item)}</Badge></td>
             <td>{formatDaysToExpiry(item.dias_para_vencer)}</td>
-          </tr>;
-        })}
+          </tr>)}
       </tbody></table></div>
       {tablero.data?.items.length === 0 && <p className="empty-inline">Sin vencimientos en esta ventana y alcance.</p>}
       {tablero.data && <PaginationControls offset={tablero.data.offset} limit={tablero.data.limit} total={tablero.data.total} onOffsetChange={setOffset} />}
