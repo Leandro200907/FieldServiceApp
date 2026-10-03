@@ -7677,6 +7677,11 @@
       },
       "ResumenPaquete": {
         "properties": {
+          "pendiente_revision": {
+            "default": 0,
+            "title": "Pendiente Revision",
+            "type": "integer"
+          },
           "sin_verificar": {
             "title": "Sin Verificar",
             "type": "integer"
