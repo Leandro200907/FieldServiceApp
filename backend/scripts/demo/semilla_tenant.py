@@ -450,6 +450,9 @@ _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA = frozenset(
     }
 )
 
+# Verificado sin archivo a propósito (demo «Sin archivo de respaldo»); no subir en evidencias.
+_EVIDENCIAS_SIN_ARCHIVO_DEMO = frozenset({"empresa_rc_vencido"})
+
 _EVIDENCIAS_TECNICO3 = (
     "t3_vigente_Apto médico",
     "t3_vigente_Licencia de conducir",
@@ -473,6 +476,10 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             ctx.notas.append(
                 f"evidencias: {key} sin archivo en carga (bandeja o invalidación ART más abajo)"
             )
+    if "empresa_rc_vencido" in est.documentos:
+        ctx.notas.append(
+            "evidencias: empresa_rc_vencido queda verificado sin archivo de respaldo (demo Sin archivo de respaldo)"
+        )
     with tenant_session(est.tenant_id) as s:
         ya_subidos: set[str] = set()
         for key in _EVIDENCIAS_TECNICO3:
@@ -483,7 +490,12 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             _subir(storage, s, idn, doc_id, suj, key)
             ya_subidos.add(key)
         for key, doc_id in est.documentos.items():
-            if "old" in key or key in _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA or key in ya_subidos:
+            if (
+                "old" in key
+                or key in _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA
+                or key in _EVIDENCIAS_SIN_ARCHIVO_DEMO
+                or key in ya_subidos
+            ):
                 continue
             suj = _sujeto_para_clave_doc(est, key)
             _subir(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
@@ -499,7 +511,12 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART reemplazo")
         sin_archivo: list[str] = []
         for key, doc_id in est.documentos.items():
-            if "old" in key or "propuesta" in key or key in _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA:
+            if (
+                "old" in key
+                or "propuesta" in key
+                or key in _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA
+                or key in _EVIDENCIAS_SIN_ARCHIVO_DEMO
+            ):
                 continue
             if not _exigir_archivo_confirmado(s, est.tenant_id, doc_id):
                 sin_archivo.append(key)
@@ -545,6 +562,25 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             ),
         )
         est.documentos["t2_propuesta_Constancia ART"] = pr_extra["documento_id"]
+
+
+def subir_evidencias_competencia_induccion(est: EstadoTenant, storage) -> None:
+    """Archivos en versiones vigentes creadas tras cargar_evidencias (competencia / inducción)."""
+    idn = est.idn("responsable_legajos", 1)
+    claves = (
+        "t1_competencia_Manejo defensivo",
+        "t1_induccion_Inducción operadora",
+        "t2_competencia_Manejo defensivo",
+        "t3_competencia_Manejo defensivo",
+        "t3_induccion_Inducción operadora",
+    )
+    with tenant_session(est.tenant_id) as s:
+        for key in claves:
+            doc_id = est.documentos.get(key)
+            if not doc_id:
+                continue
+            suj = _sujeto_para_clave_doc(est, key)
+            _subir(storage, s, idn, doc_id, suj, key)
 
 
 def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant) -> None:
@@ -629,7 +665,7 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
         doc_t2 = est.documentos.get("t2_vigente_Apto médico")
         doc_t3 = est.documentos.get("t3_vigente_Apto médico")
         if doc_t1:
-            legajos.registrar_acreditacion_de_competencia(
+            acr_t1 = legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
                 leg_esq.RegistrarAcreditacionDeCompetencia(
@@ -640,8 +676,9 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     evidencias=[uuid.UUID(doc_t1)],
                 ),
             )
+            est.documentos["t1_competencia_Manejo defensivo"] = acr_t1["acreditacion_id"]
         if doc_t2:
-            legajos.registrar_acreditacion_de_competencia(
+            acr_t2 = legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
                 leg_esq.RegistrarAcreditacionDeCompetencia(
@@ -652,10 +689,11 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     evidencias=[uuid.UUID(doc_t2)],
                 ),
             )
+            est.documentos["t2_competencia_Manejo defensivo"] = acr_t2["acreditacion_id"]
         loc_ind = est.catalogos.get("loc_YPF_1")
         req_ind = est.requisitos.get("Inducción operadora", est.requisitos["Apto médico"])
         if loc_ind and doc_t1:
-            legajos.registrar_induccion(
+            ind_t1 = legajos.registrar_induccion(
                 s,
                 idn,
                 leg_esq.RegistrarInduccion(
@@ -667,8 +705,9 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     evidencia=uuid.UUID(doc_t1),
                 ),
             )
+            est.documentos["t1_induccion_Inducción operadora"] = ind_t1["induccion_id"]
         if loc_ind and doc_t3 and not est.spec.copiar_globales:
-            legajos.registrar_induccion(
+            ind_t3 = legajos.registrar_induccion(
                 s,
                 idn,
                 leg_esq.RegistrarInduccion(
@@ -680,8 +719,9 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     evidencia=uuid.UUID(doc_t3),
                 ),
             )
+            est.documentos["t3_induccion_Inducción operadora"] = ind_t3["induccion_id"]
         if doc_t3:
-            legajos.registrar_acreditacion_de_competencia(
+            acr_t3 = legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
                 leg_esq.RegistrarAcreditacionDeCompetencia(
@@ -692,6 +732,7 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
                     evidencias=[uuid.UUID(doc_t3)],
                 ),
             )
+            est.documentos["t3_competencia_Manejo defensivo"] = acr_t3["acreditacion_id"]
         oc_id = est.ocs.get("en_curso")
         if oc_id:
             fila_oc = s.execute(
@@ -774,5 +815,6 @@ def sembrar_tenant(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
     _run("ocs", lambda: cargar_ocs(est, ctx), ctx)
     _run("evidencias", lambda: cargar_evidencias_y_propuestas(est, storage, ctx), ctx)
     _run("lotes", lambda: cargar_lotes_competencias(est, ctx), ctx)
+    _run("evidencias_competencia", lambda: subir_evidencias_competencia_induccion(est, storage), ctx)
     _run("supervisores", lambda: asignar_supervisores(est, ctx), ctx)
     _run("alertas_paquetes", lambda: configurar_alertas_y_paquetes(est, ctx), ctx)
