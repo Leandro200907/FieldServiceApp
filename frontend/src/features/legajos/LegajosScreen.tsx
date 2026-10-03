@@ -1,25 +1,16 @@
 import { useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
-import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
-import { etiquetaEvidencia, tonoEvidencia } from '../../ui/evidenciaPresentacion';
+import { EvidenciaRow } from '../../ui/EvidenciaRow';
 import { subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isLegajosIntegrated, legajosAccess } from './access';
-import type { EvidenciaVigente, SubjectKind } from './contracts';
+import type { SubjectKind } from './contracts';
 import '../documentation-planning/planning.css';
 import '../mi-legajo/mi-legajo.css';
 
 const tipoLabels: Record<string, string> = { persona: 'Persona', vehiculo: 'Vehículo', equipo: 'Equipo', empresa: 'Empresa' };
 const TIPO_OPTIONS: SubjectKind[] = ['persona', 'vehiculo', 'equipo', 'empresa'];
-
-function EvidenceRow({ item }: { item: EvidenciaVigente }) {
-  return <li className="evidence-row">
-    <span className="evidence-name">{item.requisito || 'Requisito sin nombre'}</span>
-    <Badge tone={tonoEvidencia(item)}>{etiquetaEvidencia(item)}</Badge>
-    <small>{item.vigente_hasta} · {formatDaysToExpiry(item.dias_para_vencer)}</small>
-  </li>;
-}
 
 export function LegajosScreen() {
   const [q, setQ] = useState('');

@@ -1,20 +1,11 @@
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
-import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
-import { etiquetaEvidencia, tonoEvidencia } from '../../ui/evidenciaPresentacion';
+import { EvidenciaRow } from '../../ui/EvidenciaRow';
 import { subtituloLegajoPersona, tituloLegajoPersona } from '../legajos/legajoDisplay';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isMiLegajoIntegrated, miLegajoAccess } from './access';
 import type { EvidenciaVigente, LegajoCompuesto } from './contracts';
 import { ApiFailure } from '../../api';
 import './mi-legajo.css';
-
-function EvidenceRow({ item }: { item: EvidenciaVigente }) {
-  return <li className="evidence-row">
-    <span className="evidence-name">{item.requisito || 'Requisito sin nombre'}</span>
-    <Badge tone={tonoEvidencia(item)}>{etiquetaEvidencia(item)}</Badge>
-    <small>{item.vigente_hasta} · {formatDaysToExpiry(item.dias_para_vencer)}</small>
-  </li>;
-}
 
 function LegajoCard({ title, number, legajoNombre, documentos, acreditaciones, inducciones, resumen }: {
   title: string; number: string; legajoNombre: string;
