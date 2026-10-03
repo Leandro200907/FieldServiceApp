@@ -350,6 +350,44 @@ def baja_de_sujeto(s: Session, identidad: Identidad, body: e.BajaDeSujeto) -> di
 # --------------------------------------------------------------------------- documentos
 
 
+def _soportes_archivo(s: Session, tenant_id: str, documento_id: str) -> list[dict[str, Any]]:
+    filas = s.execute(
+        text(
+            "SELECT s.archivo_estado, s.archivo_validacion, s.clave_storage "
+            "FROM modulo1.documento_soporte ds "
+            "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+            "WHERE ds.tenant_id = :t AND ds.documento_id = :d"
+        ),
+        {"t": tenant_id, "d": documento_id},
+    ).mappings().all()
+    return [dict(f) for f in filas]
+
+
+def _exigir_respaldo_valido(s: Session, tenant_id: str, documento_id: str, requisito_definicion_id: str | None) -> None:
+    from app.core.resolucion_evidencia import respaldo_valido
+
+    archivo = s.execute(
+        text(
+            "SELECT archivo_estado, archivo_validacion, clave_storage FROM modulo1.documento "
+            "WHERE tenant_id = :t AND documento_id = :d"
+        ),
+        {"t": tenant_id, "d": documento_id},
+    ).mappings().first()
+    if archivo is None:
+        raise NoEncontrado("Documento inexistente", {"documento_id": documento_id})
+    categoria = "documento"
+    if requisito_definicion_id:
+        definicion = _definicion_activa(s, tenant_id, str(requisito_definicion_id))
+        categoria = definicion["categoria"]
+    soportes = _soportes_archivo(s, tenant_id, documento_id) if categoria in ("competencia", "induccion") else None
+    if not respaldo_valido(dict(archivo), categoria=categoria, soportes=soportes):
+        raise ErrorDeDominio(
+            "No hay respaldo válido para confirmar el documento",
+            {"documento_id": documento_id},
+            codigo="sin_respaldo_valido",
+        )
+
+
 def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) -> dict[str, Any]:
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
@@ -357,13 +395,19 @@ def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) 
     _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
+    if body.estado_confirmacion != "declarado":
+        raise ErrorDeDominio(
+            "La carga manual ingresa como declarado; use confirmar_documento con respaldo válido",
+            {"estado_confirmacion": body.estado_confirmacion},
+            codigo="confirmacion_requiere_respaldo",
+        )
 
     eventos: list[str] = []
     r = _insertar_version_documento(
         s, identidad,
         sujeto_id=body.sujeto_id, requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, numero=body.numero,
-        origen=body.origen, estado_confirmacion=body.estado_confirmacion,
+        origen=body.origen, estado_confirmacion="declarado",
         confianza_extraccion=body.confianza_extraccion, eventos=eventos,
     )
     return {**r, "eventos": eventos}
@@ -443,6 +487,11 @@ def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocum
         raise Conflicto("Solo se confirma la versión vigente", {"estado_version": doc["estado_version"]})
     if doc["estado_confirmacion"] != "declarado":
         raise Conflicto("El documento no está en estado declarado", {"estado_confirmacion": doc["estado_confirmacion"]})
+
+    _exigir_respaldo_valido(
+        s, t, str(doc["documento_id"]),
+        str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None,
+    )
 
     s.execute(
         text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE tenant_id = :t AND documento_id = :d"),

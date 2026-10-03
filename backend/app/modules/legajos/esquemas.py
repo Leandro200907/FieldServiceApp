@@ -62,8 +62,8 @@ class CargarDocumento(BaseModel):
     vigente_hasta: date
     numero: str | None = None
     origen: OrigenDocumento = "carga_manual"
-    # Cuando lo carga el responsable, por defecto ya lo está verificando (1.10).
-    estado_confirmacion: EstadoConfirmacion = "verificado"
+    # D19: la verificación exige respaldo; la carga manual entra declarada hasta confirmar.
+    estado_confirmacion: EstadoConfirmacion = "declarado"
     confianza_extraccion: Confianza | None = None
 
 
