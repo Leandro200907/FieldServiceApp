@@ -14,6 +14,7 @@ def test_legajo_expone_estado_presentacion_y_campos(cliente_api, tenant_de_prueb
     docs = r.json()["documentos"]
     assert len(docs) == 1
     item = docs[0]
-    assert item["estado_presentacion"] in ("verificada", "declarada", "archivo_en_revision")
+    assert item["estado_presentacion"] in ("verificada", "declarada")
+    assert item.get("estados_adicionales") in (None, ["sin_archivo_respaldo"], ["archivo_en_revision"])
     assert item["estado_presentacion_explicacion"]
     assert "archivo_validacion" in item

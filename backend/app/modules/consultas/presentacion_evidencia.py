@@ -20,6 +20,7 @@ ESTADOS_PRESENTACION = (
     "vencida",
     "archivo_en_revision",
     "evidencia_invalida",
+    "sin_archivo_respaldo",
     "propuesta_en_revision",
 )
 
@@ -30,16 +31,19 @@ EXPLICACION_ESTADO: dict[str, str] = {
     "vencida": "La fecha de vigencia ya pasó; hace falta renovar o reemplazar la evidencia.",
     "archivo_en_revision": "El archivo adjunto está pendiente de validación técnica.",
     "evidencia_invalida": "El archivo fue rechazado en la validación; hay que subir una evidencia nueva.",
+    "sin_archivo_respaldo": "No hay archivo de respaldo cargado para esta evidencia.",
     "propuesta_en_revision": "Un técnico propuso una renovación que espera confirmación; no reemplaza la versión vigente.",
 }
 
 
 def _archivo_validacion_de_fila(fila: Mapping[str, Any]) -> str:
-    if fila.get("archivo_validacion") is not None:
-        return str(fila["archivo_validacion"])
     archivo_estado = fila.get("archivo_estado")
     clave = fila.get("clave_storage")
+    if archivo_estado == "sin_archivo" or (clave is None and archivo_estado != "confirmado"):
+        return "sin_archivo"
     if archivo_estado == "confirmado":
+        if fila.get("archivo_validacion") is not None:
+            return str(fila["archivo_validacion"])
         return "pendiente"
     if clave is None:
         return "sin_archivo"
@@ -54,28 +58,31 @@ def _plazo_aviso(plazo_requisito: int | None, plazo_tenant: int) -> int:
     return plazo_requisito if plazo_requisito is not None else plazo_tenant
 
 
-def estado_presentacion(
+def estado_vigencia_presentacion(
     hoy: date,
     *,
     estado_confirmacion: str,
     vigente_hasta: date | None,
     vencido: bool,
-    archivo_validacion: str,
     plazo_aviso_dias: int,
 ) -> str:
+    if estado_confirmacion == "declarado":
+        return "declarada"
+    if vencido:
+        return "vencida"
+    if vigente_hasta is not None and (vigente_hasta - hoy).days <= plazo_aviso_dias:
+        return "por_vencer"
+    return "verificada"
+
+
+def estado_respaldo_presentacion(archivo_validacion: str) -> str | None:
+    if archivo_validacion == "sin_archivo":
+        return "sin_archivo_respaldo"
+    if archivo_validacion == "pendiente":
+        return "archivo_en_revision"
     if archivo_validacion == "invalido":
-        base = "evidencia_invalida"
-    elif archivo_validacion == "pendiente":
-        base = "archivo_en_revision"
-    elif estado_confirmacion == "declarado":
-        base = "declarada"
-    elif vencido:
-        base = "vencida"
-    elif vigente_hasta is not None and (vigente_hasta - hoy).days <= plazo_aviso_dias:
-        base = "por_vencer"
-    else:
-        base = "verificada"
-    return base
+        return "evidencia_invalida"
+    return None
 
 
 def enriquecer_fila_evidencia(
@@ -91,21 +98,15 @@ def enriquecer_fila_evidencia(
     vencido = bool(fila.get("vencido"))
     if hasta is not None and not vencido:
         vencido = hasta < hoy
-    estado = estado_presentacion(
+    estado = estado_vigencia_presentacion(
         hoy,
         estado_confirmacion=str(fila.get("estado_confirmacion") or ""),
         vigente_hasta=hasta,
         vencido=vencido,
-        archivo_validacion=archivo,
         plazo_aviso_dias=plazo,
     )
-    adicionales: list[str] = []
-    if archivo == "invalido" and estado != "evidencia_invalida":
-        adicionales.append("evidencia_invalida")
-    if archivo == "pendiente" and estado not in ("archivo_en_revision",):
-        adicionales.append("archivo_en_revision")
-    if vencido and estado != "vencida":
-        adicionales.append("vencida")
+    respaldo = estado_respaldo_presentacion(archivo)
+    adicionales: list[str] = [respaldo] if respaldo else []
     salida = dict(fila)
     salida["archivo_validacion"] = archivo
     salida["estado_presentacion"] = estado
@@ -253,7 +254,7 @@ def resumen_desde_items(items: list[dict[str, Any]]) -> dict[str, int]:
             vencidos += 1
         elif est == "por_vencer":
             por_vencer += 1
-        elif est in ("verificada", "declarada", "archivo_en_revision", "evidencia_invalida"):
+        elif est in ("verificada", "declarada"):
             if i.get("vigente_hoy"):
                 vigentes += 1
     return {

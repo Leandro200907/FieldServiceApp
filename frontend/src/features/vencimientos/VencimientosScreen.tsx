@@ -4,7 +4,7 @@ import { ApiFailure, safeFailure, session } from '../../api';
 import { formatFecha } from '../documentation-planning/dates';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
-import { etiquetaEvidencia, tonoEvidencia } from '../../ui/evidenciaPresentacion';
+import { etiquetasEvidencia, tonoEvidencia } from '../../ui/evidenciaPresentacion';
 import { PAGE_SIZE, PaginationControls } from '../documentation-planning/PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isVencimientosIntegrated, vencimientosAccess } from './access';
@@ -186,7 +186,7 @@ export function VencimientosScreen() {
             <td>{item.requisito || 'Requisito sin nombre'}</td>
             <td>{item.categoria || 'Sin categoría'}</td>
             <td>{formatFecha(item.vigente_hasta, timeZone)}</td>
-            <td><Badge tone={tonoEvidencia(item)}>{etiquetaEvidencia(item)}</Badge></td>
+            <td><span className="evidence-badges">{etiquetasEvidencia(item).map(label => <Badge key={label} tone={tonoEvidencia(item)}>{label}</Badge>)}</span></td>
             <td>{formatDaysToExpiry(item.dias_para_vencer)}</td>
           </tr>)}
       </tbody></table></div>
