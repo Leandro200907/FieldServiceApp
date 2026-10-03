@@ -61,13 +61,11 @@ def _plazo_aviso(plazo_requisito: int | None, plazo_tenant: int) -> int:
 def estado_vigencia_presentacion(
     hoy: date,
     *,
-    estado_confirmacion: str,
     vigente_hasta: date | None,
     vencido: bool,
     plazo_aviso_dias: int,
 ) -> str:
-    if estado_confirmacion == "declarado":
-        return "declarada"
+    """Solo vigencia por fechas; la confirmación va en estados_adicionales."""
     if vencido:
         return "vencida"
     if vigente_hasta is not None and (vigente_hasta - hoy).days <= plazo_aviso_dias:
@@ -100,13 +98,14 @@ def enriquecer_fila_evidencia(
         vencido = hasta < hoy
     estado = estado_vigencia_presentacion(
         hoy,
-        estado_confirmacion=str(fila.get("estado_confirmacion") or ""),
         vigente_hasta=hasta,
         vencido=vencido,
         plazo_aviso_dias=plazo,
     )
     respaldo = estado_respaldo_presentacion(archivo)
     adicionales: list[str] = [respaldo] if respaldo else []
+    if str(fila.get("estado_confirmacion") or "") == "declarado":
+        adicionales.append("declarada")
     salida = dict(fila)
     salida["archivo_validacion"] = archivo
     salida["estado_presentacion"] = estado

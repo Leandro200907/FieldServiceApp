@@ -10,7 +10,18 @@ describe('evidenciaPresentacion', () => {
       vencido: false,
       estados_adicionales: ['sin_archivo_respaldo'],
     });
-    expect(labels).toEqual(['Verificada', 'Sin archivo de respaldo']);
+    expect(labels).toEqual(['Vigente', 'Sin archivo de respaldo']);
+  });
+
+  it('prioriza por vencer sobre archivo en revisión y confirmación aparte', () => {
+    const labels = etiquetasEvidencia({
+      estado_presentacion: 'por_vencer',
+      estado_confirmacion: 'verificado',
+      dias_para_vencer: 20,
+      vencido: false,
+      estados_adicionales: ['archivo_en_revision'],
+    });
+    expect(labels).toEqual(['Por vencer', 'Archivo en revisión']);
   });
 
   it('muestra vencida e evidencia inválida', () => {
