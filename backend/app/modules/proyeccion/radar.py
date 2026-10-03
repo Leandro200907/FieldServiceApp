@@ -200,12 +200,36 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
         SELECT d.documento_id::text AS evidencia_id, d.sujeto_id, d.requisito_definicion_id::text,
                d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, d.estado_version,
                d.origen_propuesta, d.sucede_a::text AS sucede_a,
-               CASE WHEN d.archivo_estado = 'confirmado' THEN d.archivo_validacion
-                    WHEN d.clave_storage IS NULL THEN 'sin_archivo' ELSE 'pendiente' END AS archivo_validacion
-        FROM modulo1.documento d WHERE d.tenant_id = :t AND d.vigente_hasta IS NOT NULL
+               d.archivo_estado, d.archivo_validacion, d.clave_storage,
+               r.categoria
+        FROM modulo1.documento d
+        LEFT JOIN modulo1.definicion_requisito r
+          ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
+        WHERE d.tenant_id = :t AND d.vigente_hasta IS NOT NULL
           AND d.estado_version IN ('vigente', 'sucedida')
     """ + condicion_sujeto), params).mappings().all()
-    from app.core.resolucion_evidencia import agrupar_filas_documento, es_propuesta_pendiente, fila_para_evaluacion
+    from app.core.resolucion_evidencia import (
+        agrupar_filas_documento,
+        agrupar_soportes_por_documento,
+        archivo_validacion_para_evaluacion_documental,
+        es_propuesta_pendiente,
+        fila_para_evaluacion,
+    )
+
+    ids_doc = [str(f["evidencia_id"]) for f in filas]
+    soportes_por_doc: dict[str, list[dict[str, Any]]] = {}
+    if ids_doc:
+        sop_filas = session.execute(
+            text(
+                "SELECT ds.documento_id::text AS documento_padre_id, "
+                "s.archivo_estado, s.archivo_validacion, s.clave_storage "
+                "FROM modulo1.documento_soporte ds "
+                "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+                "WHERE ds.tenant_id = :t AND ds.documento_id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"t": tenant_id, "ids": ids_doc},
+        ).mappings()
+        soportes_por_doc = agrupar_soportes_por_documento(sop_filas)
 
     salida: dict[tuple[str, str], list[EvidenciaDocumental]] = defaultdict(list)
     for clave, grupo in agrupar_filas_documento(filas).items():
@@ -218,6 +242,11 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
         else:
             filas_eval = [g for g in grupo if g["estado_version"] in ("vigente", "sucedida")]
         for d in filas_eval:
+            arch = archivo_validacion_para_evaluacion_documental(
+                d,
+                categoria=d.get("categoria"),
+                soportes=soportes_por_doc.get(str(d["evidencia_id"]), []),
+            )
             salida[clave].append(
                 EvidenciaDocumental(
                     d["evidencia_id"],
@@ -226,7 +255,7 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
                     d["vigente_hasta"],
                     EstadoConfirmacionDocumental(d["estado_confirmacion"]),
                     EstadoVersionEvidencia(d["estado_version"]),
-                    EstadoValidacionArchivo(d["archivo_validacion"]),
+                    EstadoValidacionArchivo(arch),
                 )
             )
     return salida

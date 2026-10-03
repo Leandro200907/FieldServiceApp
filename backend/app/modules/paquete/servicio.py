@@ -29,7 +29,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
-from app.core.resolucion_evidencia import es_propuesta_pendiente, filas_evidencia_para_evaluacion
+from app.core.resolucion_evidencia import (
+    agrupar_soportes_por_documento,
+    archivo_requiere_revision,
+    es_propuesta_pendiente,
+    filas_evidencia_para_evaluacion,
+)
 from app.auth.alcance import sujeto_en_alcance
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
@@ -121,9 +126,17 @@ def paquetes(session: Session, identidad: Identidad, sujeto_id: str | None = Non
 # --------------------------------------------------------------------------- vista pública
 
 
-def _estado_requisito_paquete(fila: dict[str, Any], hoy: date) -> str:
-    """Estado público del requisito (D16: propuesta sin confirmar → pendiente de revisión)."""
+def _estado_requisito_paquete(
+    fila: dict[str, Any],
+    hoy: date,
+    *,
+    categoria: str,
+    soportes: list[dict[str, Any]] | None = None,
+) -> str:
+    """Estado público del requisito (D16/D19)."""
     if es_propuesta_pendiente(fila):
+        return "pendiente_de_revision"
+    if archivo_requiere_revision(fila, categoria=categoria, soportes=soportes):
         return "pendiente_de_revision"
     hasta = fila.get("vigente_hasta")
     if hasta is not None and hasta < hoy:
@@ -147,7 +160,8 @@ def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str
     filas = session.execute(
         text(
             "SELECT r.nombre AS requisito, r.categoria, d.documento_id, d.sujeto_id, d.requisito_definicion_id, "
-            "d.vigente_hasta, d.estado_confirmacion, d.estado_version, d.origen_propuesta, d.sucede_a "
+            "d.vigente_hasta, d.estado_confirmacion, d.estado_version, d.origen_propuesta, d.sucede_a, "
+            "d.archivo_estado, d.archivo_validacion, d.clave_storage "
             "FROM modulo1.documento d JOIN modulo1.definicion_requisito r "
             "ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id "
             "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.estado_version IN ('vigente', 'sucedida') "
@@ -160,16 +174,32 @@ def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str
         rid = str(f["requisito_definicion_id"])
         meta_por_req[rid] = {"requisito": f["requisito"], "categoria": f["categoria"]}
     elegidas = filas_evidencia_para_evaluacion([dict(f) for f in filas])
+    ids_doc = [str(f["documento_id"]) for f in elegidas.values()]
+    soportes_por_doc: dict[str, list[dict[str, Any]]] = {}
+    if ids_doc:
+        sop_filas = session.execute(
+            text(
+                "SELECT ds.documento_id::text AS documento_padre_id, "
+                "s.archivo_estado, s.archivo_validacion, s.clave_storage "
+                "FROM modulo1.documento_soporte ds "
+                "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+                "WHERE ds.tenant_id = :t AND ds.documento_id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"t": tenant_id, "ids": ids_doc},
+        ).mappings()
+        soportes_por_doc = agrupar_soportes_por_documento(sop_filas)
     requisitos: list[dict[str, Any]] = []
     for (_sujeto, rid), fila in sorted(elegidas.items(), key=lambda item: meta_por_req.get(item[0][1], {}).get("requisito", "")):
         meta = meta_por_req[str(rid)]
         hasta = fila.get("vigente_hasta")
+        cat = meta["categoria"]
+        soportes = soportes_por_doc.get(str(fila["documento_id"]), [])
         requisitos.append(
             {
                 "requisito": meta["requisito"],
-                "categoria": meta["categoria"],
+                "categoria": cat,
                 "vigente_hasta": hasta.isoformat() if hasta else None,
-                "estado": _estado_requisito_paquete(fila, hoy),
+                "estado": _estado_requisito_paquete(fila, hoy, categoria=cat, soportes=soportes),
             }
         )
     session.execute(text("UPDATE modulo1.paquete_entrega SET accesos = accesos + 1, ultimo_acceso_en = now() WHERE tenant_id = :t AND paquete_id = :p"),
