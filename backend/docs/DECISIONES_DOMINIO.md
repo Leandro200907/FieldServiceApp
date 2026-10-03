@@ -840,6 +840,31 @@ de habilitación.
 
 **Estado.** Decidida.
 
+#### D17. Renovación desde el legajo
+
+**Decisión.** El técnico propone un documento desde Mi legajo, con el requisito preseleccionado
+(botón «Renovar» o «Cargar nueva» junto a cada documento; primero los vencidos y por vencer).
+Solo sube el archivo (cámara directa en el celular) y elige la fecha de vencimiento con un
+selector; la fecha «desde» es opcional. La app valida antes de enviar: vencimiento posterior a
+hoy y a la versión vigente, plazo razonable, archivo presente y de tipo y tamaño válidos. El
+responsable verifica lo declarado contra el archivo (control por oposición).
+
+**Motivo.** Simplificar la carga en el campo sin perder trazabilidad.
+
+**Estado.** Decidida; se implementa en la rama C.
+
+#### D18. Documentación en el bolsillo
+
+**Decisión.** El técnico ve en el celular sus documentos verificados (solo versiones
+confirmadas, por D16), disponibles sin conexión, con la fecha de última actualización. Los
+documentos con datos de salud muestran solo estado, vigencia y emisor, sin el archivo
+completo. Incluye un QR que abre su paquete de entrega vigente para que la operadora lo
+verifique en el portón. Resuelve la P2 (cola `evidencia_qr`).
+
+**Motivo.** Valor directo en el campo y verificación oficial ante la operadora.
+
+**Estado.** Decidida; se implementa en una rama propia después de la C.
+
 ### Diseño
 
 #### D10. Documentos de empresa para el técnico
@@ -895,12 +920,15 @@ que confirmarlo antes de mantener complejidad en modelo y UI.
 
 #### P2. Cola `evidencia_qr`
 
-**Decisión.** Se posterga. Mientras tanto no debe generar jobs que vayan a dead-letter.
+**Decisión.** Se posterga como cola de jobs. El alcance de QR y documentación offline del
+técnico queda definido en **D18** (paquete de entrega vigente y verificación en portón, sin
+depender de `evidencia_qr`). Mientras no se implemente D18, no debe generar jobs que vayan
+a dead-letter.
 
 **Motivo.** La funcionalidad QR no entra en el corte de M1; jobs huérfanos generan ruido
-operativo y alertas falsas.
+operativo y alertas falsas. D18 concentra la solución acordada.
 
-**Estado.** Pendiente.
+**Estado.** Pendiente de implementación; ver **D18**.
 
 ### Resueltas en el diagnóstico
 
