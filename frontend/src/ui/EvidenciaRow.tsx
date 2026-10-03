@@ -3,6 +3,7 @@ import type { EvidenciaVigente } from '../features/mi-legajo/contracts';
 import { todayIso } from '../features/documentation-planning/dates';
 import { Badge } from './States';
 import { etiquetasEvidencia, textoPropuestaEnRevision, tonoEvidencia } from './evidenciaPresentacion';
+import { formatFecha } from '../features/documentation-planning/dates';
 import { formatDaysToExpiry } from './formatDaysToExpiry';
 import { OcsAfectadasLine } from './OcsAfectadasLine';
 import type { OcAfectadaRef } from './ocsAfectadasPresentacion';
@@ -21,7 +22,7 @@ export function EvidenciaRow({ item, hoyIso }: { item: EvidenciaVigente; hoyIso?
         ))}
       </span>
       <small>
-        {item.vigente_hasta} · {formatDaysToExpiry(item.dias_para_vencer)}
+        {formatFecha(item.vigente_hasta, timeZone)} · {formatDaysToExpiry(item.dias_para_vencer)}
         {item.propuesta_en_revision && (
           <> · <em>{textoPropuestaEnRevision(item.propuesta_en_revision)}</em></>
         )}
