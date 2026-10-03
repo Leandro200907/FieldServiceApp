@@ -13,13 +13,7 @@ import {
   type RadarRequisitoEvaluado,
 } from './radarLegajoPresentation';
 
-const stateLabels: Record<string, string> = {
-  sin_alertas_documentales: 'Sin alertas documentales',
-  con_alertas_documentales: 'Con alertas documentales',
-  informacion_incompleta: 'Información incompleta',
-  sin_matriz: 'Sin matriz aplicable',
-  fuera_de_alcance: 'Recursos fuera de tu alcance',
-};
+import { labelEstadoDocumentalOc } from '../../ui/documentalLabels';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -53,7 +47,7 @@ export function RadarLegajoEvidenciaPanel({ data }: { data: DetalleLegajoRadarRe
         <p>
           Estado documental:{' '}
           <span className={`projection-status projection-${estadoDoc}`}>
-            {stateLabels[estadoDoc] ?? estadoDoc}
+            {labelEstadoDocumentalOc(estadoDoc)}
           </span>
         </p>
       )}
