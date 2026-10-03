@@ -49,6 +49,6 @@ export function resumenOcsAfectadas(
   const ordenadas = ordenarOcsAfectadas(ocs, hoyIso);
   const etiquetas = ordenadas.map(oc => etiquetaOc(oc, hoyIso, format));
   const n = ordenadas.length;
-  const resumen = `Afecta ${n} OC${n === 1 ? '' : 's'}`;
+  const resumen = `Afecta ${n} OC`;
   return { resumen, tituloCompleto: etiquetas.join(', ') };
 }

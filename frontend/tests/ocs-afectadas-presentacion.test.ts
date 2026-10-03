@@ -22,7 +22,7 @@ describe('ocsAfectadasPresentacion', () => {
       { clave_origen: 'OC-patagonia-demo-4', vigencia_desde: '2026-11-08', vigencia_hasta: '2026-11-12' },
     ];
     const { resumen, tituloCompleto } = resumenOcsAfectadas(ocs, '2026-10-03', TZ)!;
-    expect(resumen).toBe('Afecta 4 OCs');
+    expect(resumen).toBe('Afecta 4 OC');
     expect(tituloCompleto).toContain('OC-patagonia-demo-CURSO (en curso)');
     expect(tituloCompleto.split(', ').length).toBe(4);
   });

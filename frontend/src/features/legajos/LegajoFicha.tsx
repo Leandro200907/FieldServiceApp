@@ -111,10 +111,17 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
                       <td><span className="estado-tags">{labels.map(label => <StatusDot key={label} variant={variantFromEtiquetaVigencia(label)}>{label}</StatusDot>)}</span></td>
                       <td>{fmt(item.vigente_hasta)} · {formatDaysToExpiry(item.dias_para_vencer)}</td>
                       <td>
-                        {observacionFila(item)}
-                        {(item.ocs_afectadas ?? []).length > 0 && (
-                          <div><OcsAfectadasLine ocs={item.ocs_afectadas ?? []} hoyIso={data.hoy} timeZone={tz} /></div>
-                        )}
+                        {(() => {
+                          const obs = observacionFila(item);
+                          const ocs = item.ocs_afectadas ?? [];
+                          return (
+                            <>
+                              {obs !== '—' ? obs : null}
+                              {ocs.length > 0 ? <div><OcsAfectadasLine ocs={ocs} hoyIso={data.hoy} timeZone={tz} /></div> : null}
+                              {obs === '—' && !ocs.length ? '—' : null}
+                            </>
+                          );
+                        })()}
                       </td>
                       <td>—</td>
                     </tr>
