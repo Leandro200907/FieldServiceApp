@@ -4,7 +4,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from app.db import tenant_session
-from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar
+from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _confirmar_con_respaldo, _post
 
 
 def _vigente(t, sujeto: str, req: str) -> dict | None:
@@ -59,6 +59,7 @@ def test_carga_verificada_conserva_documento_si_resolver_alertas_falla(cliente_a
         raise RuntimeError("simulación: resolver_por_verificacion")
 
     monkeypatch.setattr(alertas, "resolver_por_verificacion", _falla)
-    doc = _cargar(cliente_api, t, sujeto, req, estado_confirmacion="verificado")
+    doc = _cargar(cliente_api, t, sujeto, req, solo_declarado=True)
+    conf = _confirmar_con_respaldo(cliente_api, t, doc["documento_id"])
     assert _vigente(t, sujeto, req)["estado_confirmacion"] == "verificado"
-    assert "DocumentoVerificado" in doc["eventos"]
+    assert "DocumentoVerificado" in conf["eventos"]

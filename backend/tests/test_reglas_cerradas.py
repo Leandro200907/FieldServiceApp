@@ -263,7 +263,7 @@ def test_reimportar_sobre_un_declarado_si_entra_como_version_nueva(cliente_api, 
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto médico")
     persona = _alta_persona(cliente_api, t, "DNI-7")
-    _cargar(cliente_api, t, persona, req, desde="2026-03-01", hasta="2026-09-15", estado_confirmacion="declarado")
+    _cargar(cliente_api, t, persona, req, desde="2026-03-01", hasta="2026-09-15", solo_declarado=True)
     r = _ok(_post(cliente_api, t, "responsable_legajos", "importar_lote", {"lote_id": str(uuid.uuid4()), "filas": [
         {"sujeto_id": persona, "requisito_definicion_id": req, "vigente_desde": "2026-01-01", "vigente_hasta": "2026-06-30"}]}))
     assert r["filas_rechazadas"] == 0 and len(r["documentos"]) == 1

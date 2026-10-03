@@ -69,11 +69,24 @@ def _outbox(t, tipo: str = "HabilitacionRequiereRevaluacion") -> list[dict]:
 
 def _cargar_declarado(cliente_api, t, sujeto: str, req: str, desde="2026-06-01", hasta="2027-06-01") -> str:
     """Nueva versión declarada por el comando real (sucede al vigente); lista para confirmar."""
-    r = cliente_api.post("/v1/comandos/cargar_documento", json={"sujeto_id": sujeto, "requisito_definicion_id": req,
-                         "vigente_desde": desde, "vigente_hasta": hasta, "estado_confirmacion": "declarado"},
-                         headers=t.headers("responsable_legajos"))
+    r = cliente_api.post(
+        "/v1/comandos/cargar_documento",
+        json={"sujeto_id": sujeto, "requisito_definicion_id": req, "vigente_desde": desde, "vigente_hasta": hasta},
+        headers=t.headers("responsable_legajos"),
+    )
     assert r.status_code == 200, r.text
     return r.json()["documento_id"]
+
+
+def _confirmar_doc(cliente_api, t, documento_id: str) -> None:
+    with tenant_session(t.tenant_id) as s:
+        apoyo.respaldo_valido_en_documento(s, t.tenant_id, documento_id)
+    r = cliente_api.post(
+        "/v1/comandos/confirmar_documento",
+        json={"documento_id": documento_id},
+        headers=t.headers("responsable_legajos"),
+    )
+    assert r.status_code == 200, r.text
 
 def _eventos(t, tipo: str) -> int:
     with tenant_session(t.tenant_id) as s:
@@ -100,8 +113,7 @@ def test_documento_verificado_marca_decisiones_que_proponen_al_sujeto(cliente_ap
     sesion.commit()
     doc = _cargar_declarado(cliente_api, t, "persona_A", e["req_p"])
     assert _avisos(t) == []  # DocumentoCargado (declarado) es negativo
-    r = cliente_api.post("/v1/comandos/confirmar_documento", json={"documento_id": doc}, headers=t.headers("responsable_legajos"))
-    assert r.status_code == 200, r.text
+    _confirmar_doc(cliente_api, t, doc)
     _espera_un_aviso(t, e["d1"], "DocumentoVerificado", "documento")
 
 def test_documento_verificado_de_empresa_marca_todas_las_decisiones(cliente_api, tenant_de_prueba, sesion):
@@ -112,7 +124,7 @@ def test_documento_verificado_de_empresa_marca_todas_las_decisiones(cliente_api,
     d2 = decidir_habilitacion(sesion, t.tenant_id, "OC-2", ["persona_B"], AHORA, None)["referencia_evaluacion"]
     sesion.commit()
     doc = _cargar_declarado(cliente_api, t, "empresa_0001", e["req_e"])
-    cliente_api.post("/v1/comandos/confirmar_documento", json={"documento_id": doc}, headers=t.headers("responsable_legajos"))
+    _confirmar_doc(cliente_api, t, doc)
     assert {a["referencia_evaluacion"] for a in _avisos(t)} == {uuid.UUID(e["d1"]), uuid.UUID(d2)}
     assert len(_outbox(t)) == 2
 
@@ -413,13 +425,13 @@ def test_incumplimiento_empresa_abre_suma_regulariza_parcial_y_cierra(cliente_ap
     assert estado["estado"] == "abierto" and set(estado["causas_activas"]) == {e["req_e"], req_b}
     # regulariza A: el aviso sigue abierto con B
     doc_a = _cargar_declarado(cliente_api, t, "empresa_0001", e["req_e"], hoy.isoformat(), (hoy + timedelta(days=365)).isoformat())
-    assert cliente_api.post("/v1/comandos/confirmar_documento", json={"documento_id": doc_a}, headers=t.headers("responsable_legajos")).status_code == 200
+    _confirmar_doc(cliente_api, t, doc_a)
     estado = cliente_api.get("/v1/consultas/incumplimiento_empresa", headers=t.headers("responsable_legajos")).json()["aviso"]
     assert estado["estado"] == "abierto" and estado["causas_activas"] == [req_b]
     assert {c["estado"] for c in estado["causas"]} == {"activa", "regularizada"}
     # regulariza B: recién ahora cierra
     doc_b = _cargar_declarado(cliente_api, t, "empresa_0001", req_b, hoy.isoformat(), (hoy + timedelta(days=365)).isoformat())
-    assert cliente_api.post("/v1/comandos/confirmar_documento", json={"documento_id": doc_b}, headers=t.headers("responsable_legajos")).status_code == 200
+    _confirmar_doc(cliente_api, t, doc_b)
     estado = cliente_api.get("/v1/consultas/incumplimiento_empresa", headers=t.headers("responsable_legajos")).json()["aviso"]
     assert estado["estado"] == "regularizado" and estado["causas_activas"] == []
     assert _eventos(t, "CumplimientoEmpresaRegularizado") == 1 and len(_outbox(t, "CumplimientoEmpresaAfectado")) == 1

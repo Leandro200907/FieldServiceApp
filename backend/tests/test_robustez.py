@@ -434,6 +434,8 @@ def test_concurrencia_confirmar_y_rechazar_la_misma_propuesta(cliente_api, tenan
     p = _alta_persona(cliente_api, t, "K-2", t.sujeto_tecnico)
     _cargar(cliente_api, t, p, req, hasta="2026-06-30")
     prop = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-12-31")
+    with tenant_session(t.tenant_id) as s:
+        apoyo.respaldo_valido_en_documento(s, t.tenant_id, prop)
 
     def confirmar():
         with tenant_session(t.tenant_id) as s:
