@@ -806,6 +806,19 @@ humana en listados, revisiones y notificaciones.
 
 **Estado.** Decidida.
 
+#### D15. Puesta en marcha asistida
+
+**Decisión.** Para los primeros clientes, la configuración de requisitos, matrices, alertas
+y catálogos la realiza el equipo de implementación mediante importaciones y plantillas
+globales. Las pantallas de configuración de esos elementos se posponen hasta conocer el uso
+real. Excepción: la gestión de usuarios (alta, baja, asignación de roles y reseteo de
+contraseña) se incluye en la app desde la primera versión, operada por el rol Configuración.
+
+**Motivo.** Salir antes con el uso diario (legajos, revisión, radar), validar la
+configuración real con clientes y no depender de la consola para la rotación de personal.
+
+**Estado.** Decidida.
+
 ### Diseño
 
 #### D10. Documentos de empresa para el técnico
