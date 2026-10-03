@@ -20,6 +20,7 @@ export type GanttOcRow = {
   reprogramada?: boolean;
   bandasOc?: GanttBandaOc[];
   barTone?: 'default' | 'vigente' | 'por_vencer' | 'vencido' | 'declarado_sin_verificar';
+  barTooltip?: string;
   indent?: number;
   ocultarBarra?: boolean;
 };
@@ -90,7 +91,11 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
                   );
                 })}
                 {!f.ocultarBarra && barra && (
-                  <div className={`oc-gantt-bar${barClass}`} style={{ left: `${barra.left}%`, width: `${Math.max(barra.width, 0.5)}%` }} />
+                  <div
+                    className={`oc-gantt-bar${barClass}`}
+                    style={{ left: `${barra.left}%`, width: `${Math.max(barra.width, 0.5)}%` }}
+                    title={f.barTooltip}
+                  />
                 )}
                 {f.tramosAlerta.map((t, i) => {
                   const seg = clipSegment(t.desde, t.hasta, vistaDesde, vistaHasta);

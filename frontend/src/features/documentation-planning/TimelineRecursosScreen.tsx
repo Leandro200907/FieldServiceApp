@@ -105,9 +105,13 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
       });
       if (isOpen) {
         for (const tramo of recurso.tramos) {
-          const incluirVencido = tramo.estado_visual === 'vencido';
           const enRango = tramo.vigente_hasta >= desde && tramo.vigente_desde <= hasta;
-          if (!enRango && !incluirVencido) continue;
+          if (!enRango && tramo.vigente_hasta < desde) continue;
+          const toneVigencia = tramo.estado_visual === 'vencido'
+            ? (tramo.estado_confirmacion === 'declarado' ? 'declarado_sin_verificar' : 'vigente')
+            : (TONE[tramo.estado_visual] || 'default');
+          const confirmado = tramo.estado_confirmacion === 'verificado' || tramo.estado_confirmacion === 'confirmado_en_fuente';
+          const tooltipVigente = `${tramo.requisito || 'Requisito'} · ${tramo.estado_visual} · ${fmtDate(tramo.vigente_desde, tz)} – ${fmtDate(tramo.vigente_hasta, tz)} · ${confirmado ? 'Confirmado' : 'Propuesta sin confirmar'}`;
           out.push({
             id: `${sid}-${tramo.requisito_definicion_id}-${tramo.vigente_desde}`,
             label: tramo.requisito || 'Requisito',
@@ -116,9 +120,25 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
             hasta: tramo.vigente_hasta,
             alertas: [],
             tramosAlerta: [],
-            barTone: TONE[tramo.estado_visual] || 'default',
+            barTone: toneVigencia,
+            barTooltip: tooltipVigente,
             indent: 1,
           });
+          const sinCoberturaDesde = addDays(tramo.vigente_hasta, 1);
+          if (sinCoberturaDesde <= hasta && tramo.vigente_hasta < hasta) {
+            out.push({
+              id: `${sid}-${tramo.requisito_definicion_id}-gap`,
+              label: 'Sin cobertura',
+              sublabel: tramo.requisito || undefined,
+              desde: sinCoberturaDesde,
+              hasta,
+              alertas: [],
+              tramosAlerta: [],
+              barTone: 'vencido',
+              barTooltip: `${tramo.requisito || 'Requisito'} · Sin cobertura · desde ${fmtDate(sinCoberturaDesde, tz)}`,
+              indent: 1,
+            });
+          }
         }
       }
     }
@@ -174,7 +194,7 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
       <div className="planning-legend gantt-legend">
         <span><i className="legend-dot status-vigente" />Vigente</span>
         <span><i className="legend-dot status-por_vencer" />Por vencer</span>
-        <span><i className="legend-dot status-vencido" />Vencido</span>
+        <span><i className="legend-dot status-vencido" />Vencido / Sin cobertura</span>
         <span><i className="legend-dot status-declarado_sin_verificar" />Declarado sin verificar</span>
       </div>
 
