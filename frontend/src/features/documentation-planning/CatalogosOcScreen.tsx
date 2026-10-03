@@ -59,7 +59,6 @@ export function CatalogosOcScreen() {
       <header className="panel">
         <h2>Catálogos de OC</h2>
         <p>Operadoras, locaciones y tipos de servicio usados en la planilla de OC.</p>
-        {msg && <p className={msg === 'Guardado correctamente' ? undefined : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
       </header>
 
       <section className="panel">
@@ -78,17 +77,29 @@ export function CatalogosOcScreen() {
         >
           <label>Nueva operadora<input value={nuevaOperadora} onChange={e => setNuevaOperadora(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form> : <p className="muted" role="note">Solo lectura (D7): el alta de operadoras corresponde al rol Configuración.</p>}
+        </form> : <p className="muted" role="note">Solo lectura: el alta de operadoras corresponde al rol Configuración.</p>}
+        {msg && <p className={msg === 'Guardado correctamente' ? 'form-success' : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
       </section>
 
       <section className="panel">
-        <h3>Locaciones</h3>
-        {operadoras.map(o => (
-          <div key={o.operadora_id as string}>
-            <h4>{o.nombre as string}</h4>
-            <ul>{(locPorOperadora.get(o.operadora_id as string) || []).map(l => <li key={l.locacion_id as string}>{l.nombre as string}</li>)}</ul>
-          </div>
-        ))}
+        <h3>Locaciones por operadora</h3>
+        <div className="projection-table-wrap">
+          <table className="projection-table">
+            <thead><tr><th>Operadora</th><th>Locación</th></tr></thead>
+            <tbody>
+              {operadoras.flatMap(o => {
+                const locs = locPorOperadora.get(o.operadora_id as string) || [];
+                if (!locs.length) return [<tr key={o.operadora_id as string}><td>{o.nombre as string}</td><td className="muted">Sin locaciones</td></tr>];
+                return locs.map((l, idx) => (
+                  <tr key={l.locacion_id as string}>
+                    <td>{idx === 0 ? (o.nombre as string) : ''}</td>
+                    <td>{l.nombre as string}</td>
+                  </tr>
+                ));
+              })}
+            </tbody>
+          </table>
+        </div>
         {puedeAlta ? <form
           className="form-row"
           onSubmit={e => {
@@ -110,7 +121,8 @@ export function CatalogosOcScreen() {
           </label>
           <label>Nueva locación<input value={nuevaLocacion} onChange={e => setNuevaLocacion(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form> : <p className="muted" role="note">Solo lectura (D7): el alta de locaciones corresponde al rol Configuración.</p>}
+        </form> : <p className="muted" role="note">Solo lectura: el alta de locaciones corresponde al rol Configuración.</p>}
+        {msg && <p className={msg === 'Guardado correctamente' ? 'form-success' : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
       </section>
 
       <section className="panel">
@@ -129,7 +141,8 @@ export function CatalogosOcScreen() {
         >
           <label>Nuevo tipo<input value={nuevoTipo} onChange={e => setNuevoTipo(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
-        </form> : <p className="muted" role="note">Solo lectura (D7): el alta de tipos de servicio corresponde al rol Configuración.</p>}
+        </form> : <p className="muted" role="note">Solo lectura: el alta de tipos de servicio corresponde al rol Configuración.</p>}
+        {msg && <p className={msg === 'Guardado correctamente' ? 'form-success' : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
       </section>
     </div>
   );

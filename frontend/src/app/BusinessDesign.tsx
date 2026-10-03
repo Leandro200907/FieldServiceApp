@@ -14,10 +14,9 @@ import { PropuestasScreen } from '../features/propuestas/PropuestasScreen';
 import type { PropuestasAccess } from '../features/propuestas/contracts';
 import { AuditoriaScreen } from '../features/auditoria/AuditoriaScreen';
 import { MatricesScreen } from '../features/matrices/MatricesScreen';
+import { ConfiguracionScreen } from '../features/configuracion/ConfiguracionScreen';
 
-const selectors: Partial<Record<Page['id'], Array<[string, string]>>> = {
-  configuracion: [['Definición local', 'Catálogo local; integración pendiente']],
-};
+const selectors: Partial<Record<Page['id'], Array<[string, string]>>> = {};
 export function BusinessDesign({ page, technicalNotes = false, roles = [], propuestasDeDiseno, propuestasSoloLectura = false, detailId }: { page: Page; technicalNotes?: boolean; roles?: readonly string[]; propuestasDeDiseno?: PropuestasAccess; propuestasSoloLectura?: boolean; detailId?: string }) {
   if (page.id === 'calendario-vigencias') return <><CalendarDocumentalScreen roles={roles} />{technicalNotes && <p className="technical-note">Q-DOC-01 · GET /v1/consultas/calendario_vigencias implementado y con adaptador real (`realDocumentationPlanningAccess`); activación detrás de `featureFlags.documentationCalendarIntegration` (hoy `false`). Q-DOC-03 (GET /v1/consultas/detalle_proyeccion_documental, detalle de tramo por referencia) también implementado en el backend — el frontend todavía no lo consume desde esta pantalla (F-08).</p>}</>;
   if (page.id === 'radar-documental') return <><RadarDocumentalScreen roles={roles} detailId={detailId} />{technicalNotes && <p className="technical-note">GET /v1/consultas/radar_documental_backlog, radar_documental_oc y detalle por legajo integrados. La consulta es informativa y no asigna recursos.</p>}</>;
@@ -31,6 +30,7 @@ export function BusinessDesign({ page, technicalNotes = false, roles = [], propu
   if (page.id === 'propuestas') return <><PropuestasScreen accessOverride={propuestasDeDiseno} readOnly={propuestasSoloLectura} />{technicalNotes && <p className="technical-note">Vista de diseño aislada con datos sintéticos y comandos deshabilitados. La pantalla operativa real integra propuestas fuera de este catálogo.</p>}</>;
   if (page.id === 'auditoria') return <><AuditoriaScreen />{technicalNotes && <p className="technical-note">GET /v1/consultas/log_auditoria implementado y con adaptador real (`realAuditoriaAccess`); activación detrás de `featureFlags.auditLogIntegration` (hoy `false`). El payload de cada evento se muestra tal cual lo entrega el servidor, sin interpretarlo del lado del cliente.</p>}</>;
   if (page.id === 'matrices') return <><MatricesScreen detailId={detailId} />{technicalNotes && <p className="technical-note">GET /v1/consultas/matrices y GET /v1/consultas/matriz_vigente integrados.</p>}</>;
+  if (page.id === 'configuracion') return <><ConfiguracionScreen />{technicalNotes && <p className="technical-note">Accesos de administración documental.</p>}</>;
   const fields = (selectors[page.id] || []).filter(([label]) => !label.includes('Responsable') || roles.includes('responsable_legajos'));
   return <><ReadViewDesign key={page.id} pageId={page.id} technicalNotes={technicalNotes} />{fields.length > 0 && <section className="panel"><h3>Selección de contexto</h3><div className="form-grid">{fields.map(([label, dependency]) => <BlockedSelector key={label} label={label} dependency={dependency} />)}</div></section>}
     {technicalNotes && <p className="technical-note">Dependencias: {page.gaps.join(' · ')}. No se ejecutan consultas de negocio desde esta lámina.</p>}
