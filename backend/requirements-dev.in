@@ -3,3 +3,4 @@
 -c requirements.lock
 pytest
 pip-tools
+openpyxl

@@ -9,7 +9,9 @@ from datetime import date
 import pytest
 from sqlalchemy import text
 
+from app.auth.identidad import Identidad, Rol
 from app.db import tenant_session
+from app.modules.operacion import servicio as operacion
 from tests import apoyo
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _ok, _post
 
@@ -29,13 +31,18 @@ def mundo(cliente_api, tenant_de_prueba):
             apoyo.legajo(s, t.tenant_id, v, "vehiculo")
         apoyo.legajo(s, t.tenant_id, "persona_otra")
     otra = "persona_otra"
-    r = _post(cliente_api, t, "supervisor", "cambiar_custodia", {"recurso_id": "vehiculo_MIO", "tipo_recurso": "vehiculo", "custodio_id": yo, "desde": "2026-01-01"})
-    assert r.status_code == 200, r.text
+    with tenant_session(t.tenant_id) as s:
+        r = operacion.cambiar_custodia(
+            s,
+            Identidad(t.tenant_id, t.usuarios["supervisor"], frozenset({Rol.SUPERVISOR})),
+            recurso_id="vehiculo_MIO", tipo_recurso="vehiculo", custodio_id=yo,
+            desde=date(2026, 1, 1),
+        )
     _cargar(cliente_api, t, yo, req_p, hasta="2027-06-30")
     _cargar(cliente_api, t, "vehiculo_MIO", req_v, hasta="2027-03-31")
     _cargar(cliente_api, t, "vehiculo_AJENO", req_v, hasta="2027-03-31")
     _cargar(cliente_api, t, otra, req_p, hasta="2027-06-30")
-    return {"t": t, "yo": yo, "otra": otra, "req_p": req_p, "req_v": req_v, "periodo": r.json()["periodo_id"]}
+    return {"t": t, "yo": yo, "otra": otra, "req_p": req_p, "req_v": req_v, "periodo": r["periodo_id"]}
 
 
 def _get(cliente_api, t, como, ruta, **params):
@@ -70,7 +77,13 @@ def test_mi_legajo_compuesto_solo_para_tecnico(cliente_api, mundo):
     # la custodia cambia de manos → el vehículo sale de mi legajo y de mi alcance
     with tenant_session(t.tenant_id) as s:
         apoyo.supervisor_de(s, t, mundo["otra"])
-    assert _post(cliente_api, t, "supervisor", "cambiar_custodia", {"recurso_id": "vehiculo_MIO", "tipo_recurso": "vehiculo", "custodio_id": mundo["otra"], "desde": "2026-06-01"}).status_code == 200
+    with tenant_session(t.tenant_id) as s:
+        operacion.cambiar_custodia(
+            s,
+            Identidad(t.tenant_id, t.usuarios["supervisor"], frozenset({Rol.SUPERVISOR})),
+            recurso_id="vehiculo_MIO", tipo_recurso="vehiculo", custodio_id=mundo["otra"],
+            desde=date(2026, 6, 1),
+        )
     assert _get(cliente_api, t, "tecnico", "mi_legajo").json()["recursos_bajo_custodia"] == []
     assert _get(cliente_api, t, "tecnico", "legajo", sujeto_id="vehiculo_MIO").status_code == 403
 
@@ -97,11 +110,7 @@ PERMISOS = {
     "matrices": (("configuracion", "responsable_legajos", "supervisor"), ("tecnico",)),
     "usuarios": (("configuracion", "responsable_legajos"), ("supervisor", "tecnico")),
     "documentos": (("configuracion", "responsable_legajos", "supervisor", "tecnico"), ()),
-    "excepciones": (("configuracion", "responsable_legajos", "supervisor"), ("tecnico",)),
-    "constancias": (("configuracion", "responsable_legajos", "supervisor"), ("tecnico",)),
-    "custodias": (("configuracion", "responsable_legajos", "supervisor", "tecnico"), ()),
     "lotes": (("configuracion", "responsable_legajos"), ("supervisor", "tecnico")),
-    "asignaciones_supervisor": (("configuracion", "responsable_legajos", "supervisor"), ("tecnico",)),
 }
 
 
@@ -118,7 +127,7 @@ def test_permisos_por_rol_y_forma_paginada(cliente_api, mundo, ruta):
     assert cliente_api.get(f"/v1/consultas/{ruta}").status_code == 401
 
 
-def test_alcance_por_rol_en_listas_de_sujetos_documentos_y_custodias(cliente_api, mundo):
+def test_alcance_por_rol_en_listas_de_sujetos_y_documentos(cliente_api, mundo):
     t, yo, otra = mundo["t"], mundo["yo"], mundo["otra"]
     # responsable: todo el tenant; supervisor: su universo (yo + vehiculo_MIO); técnico: yo + vehiculo_MIO
     todos = {i["sujeto_id"] for i in _get(cliente_api, t, "responsable_legajos", "sujetos", limit=100).json()["items"]}
@@ -129,8 +138,6 @@ def test_alcance_por_rol_en_listas_de_sujetos_documentos_y_custodias(cliente_api
     assert docs_sup == {yo, "vehiculo_MIO"}
     docs_tec = _get(cliente_api, t, "tecnico", "documentos", sujeto_id=otra).json()
     assert docs_tec["total"] == 0                                                   # el filtro no abre el alcance
-    cus = _get(cliente_api, t, "tecnico", "custodias", solo_vigentes=True).json()
-    assert cus["total"] == 1 and cus["items"][0]["recurso_id"] == "vehiculo_MIO" and cus["items"][0]["custodio_id"] == yo
 
 
 def test_busqueda_y_filtros(cliente_api, mundo):
@@ -158,10 +165,9 @@ def test_busqueda_y_filtros(cliente_api, mundo):
     assert pag["total"] == todo["total"] and pag["items"] == todo["items"][1:2]
 
 
-def test_listas_dan_los_ids_que_piden_los_comandos(cliente_api, mundo):
-    """Recorrido: cada id que un comando exige sale de una consulta."""
+def test_listas_documentales_dan_los_ids_que_piden_los_comandos_del_modulo(cliente_api, mundo):
+    """Los catálogos públicos conservados alimentan solamente comandos de Módulo 1."""
     t, yo = mundo["t"], mundo["yo"]
-    # excepción → excepciones; constancia → constancias; lote → lotes; matriz → matrices; asignación → asignaciones_supervisor
     lote = str(uuid.uuid4())
     _ok(_post(cliente_api, t, "responsable_legajos", "importar_lote", {"lote_id": lote, "filas": [
         {"sujeto_id": yo, "requisito_definicion_id": mundo["req_p"], "vigente_desde": "2026-01-01", "vigente_hasta": "2027-12-31"}]}))
@@ -174,18 +180,13 @@ def test_listas_dan_los_ids_que_piden_los_comandos(cliente_api, mundo):
     assert mat.status_code == 200
     m = _get(cliente_api, t, "supervisor", "matrices", solo_vigentes=True).json()
     assert m["total"] == 1 and m["items"][0]["lineas"] == 1 and m["items"][0]["matriz_version_id"] == mat.json()["matriz_version_id"]
-    asig = _get(cliente_api, t, "responsable_legajos", "asignaciones_supervisor", supervisor_usuario_id=t.usuarios["supervisor"]).json()
-    assert asig["total"] == 1 and asig["items"][0]["sujeto_id"] == yo and asig["items"][0]["supervisor_email"].startswith("supervisor@")
     docs = _get(cliente_api, t, "responsable_legajos", "documentos", sujeto_id=yo, estado_version="todas").json()
     assert docs["total"] == 2 and {d["estado_version"] for d in docs["items"]} == {"vigente", "revertida_por_lote"} and {"documento_id", "requisito", "estado_version", "archivo_estado"} <= set(docs["items"][0])
-    cus = _get(cliente_api, t, "supervisor", "custodias", recurso_id="vehiculo_MIO").json()
-    assert cus["items"][0]["periodo_id"] == mundo["periodo"]
-    assert _post(cliente_api, t, "supervisor", "corregir_custodia", {"periodo_id": cus["items"][0]["periodo_id"], "desde": "2025-12-31"}).status_code == 200
 
 
 def test_otro_tenant_no_ve_nada(cliente_api, mundo, dos_tenants):
     ta, tb = dos_tenants
-    for ruta in ("sujetos", "documentos", "custodias", "definiciones_requisito", "matrices", "lotes", "excepciones", "constancias", "asignaciones_supervisor"):
+    for ruta in ("sujetos", "documentos", "definiciones_requisito", "matrices", "lotes"):
         r = _get(cliente_api, tb, "responsable_legajos", ruta)
         assert r.status_code == 200 and r.json()["total"] == 0, ruta
     usuarios_b = {i["usuario_id"] for i in _get(cliente_api, tb, "responsable_legajos", "usuarios").json()["items"]}

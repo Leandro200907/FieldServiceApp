@@ -58,6 +58,9 @@ def test_vencimiento_durante_periodo_informa_primer_dia_sin_cobertura():
     resultado = evaluar(evidencia(hasta=date(2026, 10, 20)))
     assert resultado.estado == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO
     assert resultado.primer_quiebre == date(2026, 10, 21)
+    assert resultado.accion_sugerida == "Renovar antes del"
+    assert resultado.accion_sugerida_fecha == date(2026, 10, 21)
+    assert "2026-" not in (resultado.accion_sugerida or "")
 
 
 def test_vencido_antes_del_inicio():
@@ -81,14 +84,52 @@ def test_archivo_pendiente_de_validacion_requiere_revision():
     assert resultado.estado == EstadoRequisitoDocumental.PENDIENTE_REVISION
 
 
+def test_verificado_sin_archivo_requiere_revision():
+    resultado = evaluar(evidencia(validacion=EstadoValidacionArchivo.SIN_ARCHIVO))
+    assert resultado.estado == EstadoRequisitoDocumental.PENDIENTE_REVISION
+
+
+def test_vencido_verificado_sin_archivo_es_alerta_no_revision():
+    """D19 precedencia: vencimiento alerta aunque falte respaldo."""
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 10, 17),
+            validacion=EstadoValidacionArchivo.SIN_ARCHIVO,
+        )
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO
+    assert resultado.primer_quiebre == DESDE
+
+
 def test_archivo_invalido_se_informa_expresamente():
     resultado = evaluar(evidencia(validacion=EstadoValidacionArchivo.INVALIDO))
     assert resultado.estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA
 
 
-def test_version_historica_no_cubre_el_requisito():
-    resultado = evaluar(evidencia(version=EstadoVersionEvidencia.SUCEDIDA))
+def test_vencido_con_archivo_invalido_es_alerta_no_evidencia_invalida():
+    """D19 precedencia: vencimiento alerta aunque la evidencia sea inválida."""
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 10, 17),
+            validacion=EstadoValidacionArchivo.INVALIDO,
+        )
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO
+    assert resultado.primer_quiebre == DESDE
+
+
+def test_version_rechazada_no_cubre_el_requisito():
+    resultado = evaluar(evidencia(version=EstadoVersionEvidencia.RECHAZADA))
     assert resultado.estado == EstadoRequisitoDocumental.FALTANTE
+
+
+def test_compone_version_historica_y_actual_consecutivas():
+    resultado = evaluar(
+        evidencia(hasta=date(2026, 10, 19), version=EstadoVersionEvidencia.SUCEDIDA, evidencia_id="doc-anterior"),
+        evidencia(desde=date(2026, 10, 20), evidencia_id="doc-actual"),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VIGENTE_TODO_EL_PERIODO
+    assert resultado.evidencia_id == "doc-actual"
 
 
 def test_evidencia_probada_prevalece_sobre_otra_invalida():
@@ -118,5 +159,64 @@ def test_fechas_incompletas_no_son_evaluables():
 
 def test_evidencia_que_comienza_despues_del_inicio_no_cubre_el_periodo():
     resultado = evaluar(evidencia(desde=date(2026, 10, 19)))
-    assert resultado.estado == EstadoRequisitoDocumental.NO_EVALUABLE
+    assert resultado.estado == EstadoRequisitoDocumental.FALTANTE
+    assert resultado.primer_quiebre == DESDE
+    assert resultado.accion_sugerida == "Incorporar evidencia vigente desde el"
+    assert resultado.accion_sugerida_fecha == DESDE
+    assert "2026-" not in (resultado.accion_sugerida or "")
+
+
+def test_sucedida_no_cubre_despues_del_inicio_de_la_vigente():
+    """La versión anterior no puede enmascarar una vigente declarada o inválida."""
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 12, 31),
+            version=EstadoVersionEvidencia.SUCEDIDA,
+            evidencia_id="doc-anterior",
+        ),
+        evidencia(
+            desde=date(2026, 10, 18),
+            hasta=date(2026, 10, 22),
+            confirmacion=EstadoConfirmacionDocumental.DECLARADO,
+            evidencia_id="doc-vigente",
+        ),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.PENDIENTE_REVISION
+    assert resultado.evidencia_id == "doc-vigente"
+
+
+def test_sucedida_no_enmascara_vigente_con_vencimiento_anterior():
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 12, 31),
+            version=EstadoVersionEvidencia.SUCEDIDA,
+            evidencia_id="doc-anterior",
+        ),
+        evidencia(
+            desde=date(2026, 10, 10),
+            hasta=date(2026, 10, 19),
+            evidencia_id="doc-vigente",
+        ),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO
+    assert resultado.primer_quiebre == date(2026, 10, 20)
+    assert resultado.evidencia_id == "doc-vigente"
+
+
+def test_sucedida_no_enmascara_vigente_con_archivo_invalido():
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 12, 31),
+            version=EstadoVersionEvidencia.SUCEDIDA,
+            evidencia_id="doc-anterior",
+        ),
+        evidencia(
+            desde=date(2026, 10, 18),
+            hasta=date(2026, 10, 22),
+            validacion=EstadoValidacionArchivo.INVALIDO,
+            evidencia_id="doc-vigente",
+        ),
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA
+    assert resultado.evidencia_id == "doc-vigente"
 

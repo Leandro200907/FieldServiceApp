@@ -6,7 +6,7 @@ explicable. No realiza I/O y usa fechas inclusivas.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from enum import Enum
 from typing import Iterable
@@ -78,6 +78,7 @@ class ResultadoRequisitoDocumental:
     evidencia_id: str | None
     motivo: str
     accion_sugerida: str | None = None
+    accion_sugerida_fecha: date | None = None
 
 
 def _resultado(
@@ -87,6 +88,7 @@ def _resultado(
     evidencia: EvidenciaDocumental | None = None,
     primer_quiebre: date | None = None,
     accion: str | None = None,
+    accion_fecha: date | None = None,
 ) -> ResultadoRequisitoDocumental:
     return ResultadoRequisitoDocumental(
         estado=estado,
@@ -94,12 +96,115 @@ def _resultado(
         evidencia_id=evidencia.evidencia_id if evidencia else None,
         motivo=motivo,
         accion_sugerida=accion,
+        accion_sugerida_fecha=accion_fecha,
     )
 
 
-def _vigentes(evidencias: Iterable[EvidenciaDocumental]) -> list[EvidenciaDocumental]:
-    """Descarta versiones históricas sin modificar ni interpretar su auditoría."""
-    return [e for e in evidencias if e.estado_version == EstadoVersionEvidencia.VIGENTE]
+def _utilizables(evidencias: Iterable[EvidenciaDocumental]) -> list[EvidenciaDocumental]:
+    """La vigente cubre desde su inicio. Las sucedidas sólo cubren días previos a ese inicio."""
+    lista = list(evidencias)
+    vigentes = [e for e in lista if e.estado_version == EstadoVersionEvidencia.VIGENTE]
+    if not vigentes:
+        return []
+    inicios = [e.vigente_desde for e in vigentes if e.vigente_desde is not None]
+    if not inicios:
+        return list(vigentes)
+    limite = min(inicios) - timedelta(days=1)
+    recortadas: list[EvidenciaDocumental] = []
+    for e in lista:
+        if e.estado_version != EstadoVersionEvidencia.SUCEDIDA:
+            continue
+        if e.vigente_desde is None or e.vigente_hasta is None:
+            continue
+        hasta = min(e.vigente_hasta, limite)
+        if hasta < e.vigente_desde:
+            continue
+        recortadas.append(e if hasta == e.vigente_hasta else replace(e, vigente_hasta=hasta))
+    return vigentes + recortadas
+
+
+_ESTADOS_ALERTA_TEMPORAL = frozenset({
+    EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO,
+    EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO,
+    EstadoRequisitoDocumental.FALTANTE,
+})
+
+
+def _cobertura_temporal(
+    candidatas: list[EvidenciaDocumental],
+    desde: date,
+    hasta: date,
+    requisito: RequisitoAplicable,
+) -> ResultadoRequisitoDocumental:
+    """Alertas por calendario (D19: preceden sobre pendiente de revisión por respaldo)."""
+    ordenadas = sorted(candidatas, key=lambda e: (e.vigente_desde, e.vigente_hasta, e.evidencia_id))
+    iniciales = [e for e in ordenadas if e.vigente_desde <= desde <= e.vigente_hasta]
+    if iniciales:
+        elegida = max(iniciales, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
+        cubierto_hasta = elegida.vigente_hasta
+        for evidencia in ordenadas:
+            if evidencia.vigente_desde <= cubierto_hasta + timedelta(days=1) and evidencia.vigente_hasta > cubierto_hasta:
+                cubierto_hasta = evidencia.vigente_hasta
+                elegida = evidencia
+            if cubierto_hasta >= hasta:
+                break
+        if cubierto_hasta >= hasta:
+            return _resultado(
+                EstadoRequisitoDocumental.VIGENTE_TODO_EL_PERIODO,
+                f"{requisito.nombre} está vigente durante todo el período",
+                evidencia=elegida,
+            )
+        quiebre = cubierto_hasta + timedelta(days=1)
+        return _resultado(
+            EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO,
+            f"{requisito.nombre} deja un período sin cobertura documental",
+            evidencia=elegida,
+            primer_quiebre=quiebre,
+            accion="Renovar antes del",
+            accion_fecha=quiebre,
+        )
+
+    futuras = [e for e in ordenadas if e.vigente_desde > desde]
+    if futuras:
+        elegida = min(futuras, key=lambda e: (e.vigente_desde, e.vigente_hasta, e.evidencia_id))
+        return _resultado(
+            EstadoRequisitoDocumental.FALTANTE,
+            f"{requisito.nombre} no tiene cobertura documental al inicio del período",
+            evidencia=elegida,
+            primer_quiebre=desde,
+            accion="Incorporar evidencia vigente desde el",
+            accion_fecha=desde,
+        )
+
+    elegida = max(candidatas, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
+    return _resultado(
+        EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO,
+        f"{requisito.nombre} está vencido antes del inicio del período",
+        evidencia=elegida,
+        primer_quiebre=desde,
+        accion="Renovar antes del inicio del período",
+    )
+
+
+def _alerta_temporal_sin_respaldo(
+    candidatas: list[EvidenciaDocumental],
+    desde: date,
+    hasta: date,
+    requisito: RequisitoAplicable,
+    *,
+    hay_vigente_no_probada: bool,
+) -> ResultadoRequisitoDocumental | None:
+    con_fechas = [e for e in candidatas if e.vigente_desde is not None and e.vigente_hasta is not None]
+    probadas = [
+        e for e in con_fechas
+        if e.estado_version == EstadoVersionEvidencia.VIGENTE or not hay_vigente_no_probada
+    ]
+    if not probadas:
+        return None
+    resultado = _cobertura_temporal(probadas, desde, hasta, requisito)
+    if resultado.estado in _ESTADOS_ALERTA_TEMPORAL:
+        return resultado
+    return None
 
 
 def evaluar_requisito_documental(
@@ -127,7 +232,7 @@ def evaluar_requisito_documental(
         )
 
     evidencias = [
-        e for e in _vigentes(entrada.evidencias)
+        e for e in _utilizables(entrada.evidencias)
         if e.requisito_definicion_id == requisito.requisito_definicion_id
     ]
     if not evidencias:
@@ -138,9 +243,7 @@ def evaluar_requisito_documental(
             accion="Incorporar la evidencia requerida",
         )
 
-    completas: list[EvidenciaDocumental] = []
-    parciales: list[EvidenciaDocumental] = []
-    vencidas: list[EvidenciaDocumental] = []
+    validas: list[EvidenciaDocumental] = []
     pendientes: list[EvidenciaDocumental] = []
     invalidas: list[EvidenciaDocumental] = []
     no_evaluables: list[EvidenciaDocumental] = []
@@ -154,37 +257,32 @@ def evaluar_requisito_documental(
             continue
         if (
             evidencia.estado_confirmacion == EstadoConfirmacionDocumental.DECLARADO
-            or evidencia.archivo_validacion == EstadoValidacionArchivo.PENDIENTE
+            or evidencia.archivo_validacion
+            in (
+                EstadoValidacionArchivo.PENDIENTE,
+                EstadoValidacionArchivo.SIN_ARCHIVO,
+            )
         ):
             pendientes.append(evidencia)
             continue
-        if evidencia.vigente_desde <= desde and evidencia.vigente_hasta >= hasta:
-            completas.append(evidencia)
-        elif evidencia.vigente_desde <= desde <= evidencia.vigente_hasta < hasta:
-            parciales.append(evidencia)
-        elif evidencia.vigente_hasta < desde:
-            vencidas.append(evidencia)
-        else:
-            no_evaluables.append(evidencia)
+        validas.append(evidencia)
 
-    if completas:
-        elegida = max(completas, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
-        return _resultado(
-            EstadoRequisitoDocumental.VIGENTE_TODO_EL_PERIODO,
-            f"{requisito.nombre} está vigente durante todo el período",
-            evidencia=elegida,
-        )
-    if parciales:
-        elegida = max(parciales, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
-        quiebre = elegida.vigente_hasta + timedelta(days=1)
-        return _resultado(
-            EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO,
-            f"{requisito.nombre} vence durante el período evaluado",
-            evidencia=elegida,
-            primer_quiebre=quiebre,
-            accion=f"Renovar antes del {quiebre.isoformat()}",
-        )
+    hay_vigente_no_probada = any(
+        e.estado_version == EstadoVersionEvidencia.VIGENTE for e in pendientes + invalidas
+    )
+    validas_probada = [
+        e for e in validas
+        if e.estado_version == EstadoVersionEvidencia.VIGENTE or not hay_vigente_no_probada
+    ]
+
+    if validas_probada:
+        return _cobertura_temporal(validas_probada, desde, hasta, requisito)
     if pendientes:
+        alerta = _alerta_temporal_sin_respaldo(
+            pendientes, desde, hasta, requisito, hay_vigente_no_probada=hay_vigente_no_probada
+        )
+        if alerta is not None:
+            return alerta
         elegida = max(
             pendientes,
             key=lambda e: (e.vigente_hasta or date.min, e.vigente_desde or date.min, e.evidencia_id),
@@ -197,6 +295,11 @@ def evaluar_requisito_documental(
             accion="Revisar y confirmar la evidencia",
         )
     if invalidas:
+        alerta = _alerta_temporal_sin_respaldo(
+            invalidas, desde, hasta, requisito, hay_vigente_no_probada=hay_vigente_no_probada
+        )
+        if alerta is not None:
+            return alerta
         elegida = max(invalidas, key=lambda e: e.evidencia_id)
         return _resultado(
             EstadoRequisitoDocumental.EVIDENCIA_INVALIDA,
@@ -205,16 +308,6 @@ def evaluar_requisito_documental(
             primer_quiebre=desde,
             accion="Reemplazar o volver a validar la evidencia",
         )
-    if vencidas:
-        elegida = max(vencidas, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
-        return _resultado(
-            EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO,
-            f"{requisito.nombre} está vencido antes del inicio del período",
-            evidencia=elegida,
-            primer_quiebre=desde,
-            accion="Renovar antes del inicio del período",
-        )
-
     elegida = max(no_evaluables, key=lambda e: e.evidencia_id) if no_evaluables else None
     return _resultado(
         EstadoRequisitoDocumental.NO_EVALUABLE,

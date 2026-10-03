@@ -126,7 +126,7 @@ def test_flujo_preparar_put_confirmar_descargar(api, storage, tenant_de_prueba):
     assert fila["clave_storage"] == f"{t.tenant_id}/{doc}/apto.pdf"  # derivada en servidor
     assert fila["archivo_bytes"] == len(contenido) == conf["bytes"]
     assert fila["checksum_archivo"] == conf["checksum_sha256"] == storage.inspeccionar(fila["clave_storage"]).checksum_sha256
-    url = api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).json()["url"]
+    url = api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).json()["url"]
     assert api.get(url).content == contenido
     # confirmar de nuevo es idempotente
     assert api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
@@ -134,6 +134,20 @@ def test_flujo_preparar_put_confirmar_descargar(api, storage, tenant_de_prueba):
     # y no se re-prepara un confirmado (inmutabilidad de la versión)
     assert api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
                     json={"documento_id": doc, "nombre_archivo": "otro.pdf", "content_type": "application/pdf"}).status_code == 409
+
+
+def test_put_solo_con_subida_pendiente_y_no_tras_confirmar(api, storage, tenant_de_prueba):
+    t = tenant_de_prueba
+    doc = _documento(t.tenant_id)
+    prep = api.post("/v1/comandos/preparar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": doc, "nombre_archivo": "apto.pdf", "content_type": "application/pdf"})
+    assert prep.status_code == 200
+    url = prep.json()["url_subida"]
+    contenido = _pdf("v1")
+    assert api.put(url, content=contenido, headers={"Content-Type": "application/pdf"}).status_code == 200
+    assert api.post("/v1/comandos/confirmar_subida_de_evidencia", headers=t.headers("responsable_legajos"),
+                    json={"documento_id": doc}).status_code == 200
+    assert api.put(url, content=_pdf("sobrescribir"), headers={"Content-Type": "application/pdf"}).status_code == 409
 
 
 def test_el_cliente_no_puede_elegir_la_clave_ni_el_checksum(api, tenant_de_prueba):
@@ -192,20 +206,20 @@ def test_adversarial_documento_de_A_no_puede_apuntar_a_clave_de_B(api, storage, 
             with pytest.raises(Prohibido):
                 confirmar_subida(s, _ident(ta, "responsable_legajos"), doc_a, storage=storage)
             estado_simulado["valor"] = "confirmado"
-        assert api.get(f"/v1/storage/documentos/{doc_a}/url", headers=ta.headers("responsable_legajos")).status_code == 403
+        assert api.post(f"/v1/storage/documentos/{doc_a}/url", headers=ta.headers("responsable_legajos")).status_code == 403
     finally:
         srv._documento = original
 
     # 3) Sin JWT: una URL firmada solo puede nacer de firmar_descarga; la de B, usada sin
     #    token, sirve el archivo de B (es el diseño de URL prefirmada) pero con token de A
     #    se rechaza, y con una firma fabricada con otro secreto se rechaza siempre.
-    url_b = api.get(f"/v1/storage/documentos/{doc_b}/url", headers=tb.headers("responsable_legajos")).json()["url"]
+    url_b = api.post(f"/v1/storage/documentos/{doc_b}/url", headers=tb.headers("responsable_legajos")).json()["url"]
     assert api.get(url_b, headers=ta.headers("responsable_legajos")).status_code == 403
     fabricada = StorageLocal(secreto="otro-secreto").firmar(clave_b, "get", 60)
     assert api.get(f"/v1/storage/{fabricada}").status_code == 403
     # y no hay ningún camino por API para que A obtenga una firma sobre clave_b
     for rol in ("responsable_legajos", "supervisor", "tecnico", "configuracion"):
-        assert api.get(f"/v1/storage/documentos/{doc_b}/url", headers=ta.headers(rol)).status_code in (403, 404)
+        assert api.post(f"/v1/storage/documentos/{doc_b}/url", headers=ta.headers(rol)).status_code in (403, 404)
 
 
 def test_adversarial_entre_documentos_del_mismo_tenant(api, storage, tenant_de_prueba):
@@ -246,7 +260,7 @@ def test_bearer_invalido_en_url_firmada_da_401_aunque_el_bearer_sea_opcional(api
     assert put.status_code == 401, put.text
 
     conf = _subir_completo(api, storage, t, doc)  # sube de nuevo, ok: preparar_subida no quedó bloqueado por el 401 de arriba
-    url_descarga = api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).json()["url"]
+    url_descarga = api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).json()["url"]
     get = api.get(url_descarga, headers={"Authorization": "Bearer token-invalido"})
     assert get.status_code == 401, get.text
 
@@ -290,7 +304,7 @@ def test_confirmar_sin_archivo_subido_falla_y_no_confirma(api, storage, tenant_d
     assert r.status_code == 422 and r.json()["error"]["codigo"] == "archivo_ausente"
     assert _fila(t.tenant_id, doc)["archivo_estado"] == "subida_pendiente"
     # descargar un no confirmado no se firma
-    assert api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).status_code == 422
+    assert api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).status_code == 422
 
 
 # --- permisos --------------------------------------------------------------------------
@@ -308,7 +322,7 @@ def test_permisos_de_subida_y_descarga(api, storage, tenant_de_prueba):
                     json={"documento_id": ajeno, "nombre_archivo": "a.pdf", "content_type": "application/pdf"}).status_code == 403
 
     def pedir(rol, doc):
-        return api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers(rol))
+        return api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers(rol))
 
     assert pedir("responsable_legajos", ajeno).status_code == 200
     assert pedir("configuracion", ajeno).status_code == 403
@@ -321,7 +335,7 @@ def test_permisos_de_subida_y_descarga(api, storage, tenant_de_prueba):
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                        "VALUES (:t, 'persona_otra', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["supervisor"]})
     assert pedir("supervisor", ajeno).status_code == 200
-    assert api.get(f"/v1/storage/documentos/{ajeno}/url").status_code == 401
+    assert api.post(f"/v1/storage/documentos/{ajeno}/url").status_code == 401
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = 'DescargarArchivoDeEvidencia'")).scalar() == 3
 

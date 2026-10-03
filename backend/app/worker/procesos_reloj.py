@@ -22,7 +22,9 @@ from app.worker.cola import encolar
 
 log = logging.getLogger("modulo1.worker.reloj")
 
-ESTADOS_NO_VIGENTES = ("sucedida", "rechazada", "revertida_por_lote")
+# `sucedida` no es terminal: puede volver a `vigente` si se rechaza o revierte una
+# versión posterior. Su archivo se conserva mientras esa restauración sea posible.
+ESTADOS_PURGABLES = ("rechazada", "revertida_por_lote")
 UUID_NULO = "00000000-0000-0000-0000-000000000000"
 
 
@@ -159,10 +161,12 @@ def control_retencion(
         pendientes = s.execute(
             text(
                 "SELECT d.documento_id, d.clave_storage, d.checksum_archivo, d.archivo_bytes, d.estado_version, "
-                "       d.requisito_definicion_id, r.plazo_retencion_archivo::text AS plazo, d.creado_en "
+                "       d.requisito_definicion_id, r.plazo_retencion_archivo::text AS plazo, d.creado_en, "
+                "       d.dejo_de_ser_vigente_en "
                 "FROM modulo1.documento d "
                 "LEFT JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = d.requisito_definicion_id "
-                "WHERE d.archivo_estado = 'purga_pendiente' ORDER BY d.creado_en"
+                "WHERE d.archivo_estado = 'purga_pendiente' AND d.estado_version IN ('rechazada', 'revertida_por_lote') "
+                "ORDER BY d.dejo_de_ser_vigente_en"
             ),
         ).mappings().all()
     purgados = 0
@@ -206,6 +210,7 @@ def control_retencion(
                         "requisito_definicion_id": str(fila["requisito_definicion_id"]) if fila["requisito_definicion_id"] else None,
                         "plazo_retencion": fila["plazo"],
                         "creado_en": fila["creado_en"].isoformat() if fila["creado_en"] else None,
+                        "dejo_de_ser_vigente_en": fila["dejo_de_ser_vigente_en"].isoformat() if fila["dejo_de_ser_vigente_en"] else None,
                         "checksum_sha256": fila["checksum_archivo"],
                         "bytes": fila["archivo_bytes"],
                     },
@@ -236,8 +241,9 @@ def _marcar_purga_pendiente(session: Session, ahora_utc: datetime) -> int:
               AND d.estado_version IN :estados
               AND d.archivo_estado = 'confirmado'
               AND r.plazo_retencion_archivo IS NOT NULL
-              AND d.creado_en + r.plazo_retencion_archivo < :ahora
+              AND d.dejo_de_ser_vigente_en IS NOT NULL
+              AND d.dejo_de_ser_vigente_en + r.plazo_retencion_archivo < :ahora
             """
         ).bindparams(bindparam("estados", expanding=True)),
-        {"estados": list(ESTADOS_NO_VIGENTES), "ahora": ahora_utc},
+        {"estados": list(ESTADOS_PURGABLES), "ahora": ahora_utc},
     ).rowcount

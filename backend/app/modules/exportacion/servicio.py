@@ -17,13 +17,18 @@ from app.comun.eventos import registrar_evento_interno
 from app.comun.reloj import hoy_del_tenant
 
 _SECCIONES = {
-    "documentos": ("SELECT documento_id, requisito_definicion_id, version, vigente_desde, vigente_hasta, estado_version, estado_confirmacion, origen, "
-                   "origen_propuesta, numero, lote_id, archivo_estado, checksum_archivo, archivo_bytes, creado_en FROM modulo1.documento "
-                   "WHERE tenant_id = :t AND sujeto_id = :s ORDER BY requisito_definicion_id, version"),
-    "acreditaciones": ("SELECT acreditacion_id, requisito_definicion_id, vigente_desde, vigente_hasta, estado_confirmacion, evidencias, creado_en "
-                       "FROM modulo1.acreditacion_competencia WHERE tenant_id = :t AND persona_id = :s ORDER BY creado_en"),
-    "inducciones": ("SELECT induccion_id, requisito_definicion_id, locacion_id, vigente_desde, vigente_hasta, estado_confirmacion, evidencia, creado_en "
-                    "FROM modulo1.induccion WHERE tenant_id = :t AND persona_id = :s ORDER BY creado_en"),
+    "documentos": ("SELECT d.documento_id, d.requisito_definicion_id, d.version, d.vigente_desde, d.vigente_hasta, d.estado_version, d.estado_confirmacion, d.origen, "
+                   "d.origen_propuesta, d.numero, d.lote_id, d.archivo_estado, d.checksum_archivo, d.archivo_bytes, d.creado_en FROM modulo1.documento d "
+                   "JOIN modulo1.definicion_requisito r ON r.tenant_id=d.tenant_id AND r.requisito_definicion_id=d.requisito_definicion_id "
+                   "WHERE d.tenant_id = :t AND d.sujeto_id = :s ORDER BY d.requisito_definicion_id, d.version"),
+    "acreditaciones": ("SELECT d.documento_id AS acreditacion_id, d.requisito_definicion_id, d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, "
+                       "ARRAY(SELECT ds.soporte_documento_id FROM modulo1.documento_soporte ds WHERE ds.tenant_id=d.tenant_id AND ds.documento_id=d.documento_id) AS evidencias, d.creado_en "
+                       "FROM modulo1.documento d JOIN modulo1.definicion_requisito r ON r.tenant_id=d.tenant_id AND r.requisito_definicion_id=d.requisito_definicion_id "
+                       "WHERE d.tenant_id=:t AND d.sujeto_id=:s AND r.categoria='competencia' ORDER BY d.creado_en"),
+    "inducciones": ("SELECT d.documento_id AS induccion_id, d.requisito_definicion_id, d.locacion_id, d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, "
+                    "(SELECT ds.soporte_documento_id FROM modulo1.documento_soporte ds WHERE ds.tenant_id=d.tenant_id AND ds.documento_id=d.documento_id LIMIT 1) AS evidencia, d.creado_en "
+                    "FROM modulo1.documento d JOIN modulo1.definicion_requisito r ON r.tenant_id=d.tenant_id AND r.requisito_definicion_id=d.requisito_definicion_id "
+                    "WHERE d.tenant_id=:t AND d.sujeto_id=:s AND r.categoria='induccion' ORDER BY d.creado_en"),
     "excepciones": ("SELECT excepcion_id, referencia_evaluacion, requisito_definicion_id, commitment_id, estado, otorgada_por, motivo, vigencia, creado_en "
                     "FROM modulo1.excepcion WHERE tenant_id = :t AND sujeto_id = :s ORDER BY creado_en"),
     "constancias": ("SELECT constancia_id, requisito_definicion_id, cliente_id, commitment_id, estado, emisor, vigencia, creado_en "
@@ -84,3 +89,4 @@ def exportar(session: Session, identidad: Identidad, sujeto_id: str, formato: st
         return "text/csv; charset=utf-8", buf.getvalue().encode("utf-8"), nombre + ".csv"
     import json
     return "application/json", json.dumps(datos, ensure_ascii=False, indent=2).encode("utf-8"), nombre + ".json"
+

@@ -79,6 +79,10 @@ def handler_notificaciones(session: Session, job: Job, contexto: dict[str, Any])
 
 
 def handler_drenaje_outbox(session: Session, job: Job, contexto: dict[str, Any]) -> None:
+    if not contexto.get("drenar_outbox_habilitado", True):
+        raise JobNoProcesable(
+            "outbox deshabilitado: el job drenaje_outbox no publica ni marca eventos como procesados"
+        )
     if job.tenant_id:
         drenar_outbox(session, job.tenant_id, contexto["publicador"])
 
@@ -167,10 +171,16 @@ def procesar_cola(
     ahora: datetime | None = None,
     max_intentos: int = cola_mod.MAX_INTENTOS,
 ) -> int:
+    def instante() -> datetime | None:
+        # Sin reloj inyectado, cada transacción usa `now()` de PostgreSQL. Además de
+        # refrescar la hora en cada iteración, evita comparar un `disponible_en` creado
+        # por la base con un reloj de sistema que puede diferir unos milisegundos.
+        return ahora
+
     procesados = 0
     for _ in range(max_jobs):
         with tenant_session(tenant_id) as s:
-            job = cola_mod.tomar(s, nombre_cola, lease_seg=LEASE_SEG, ahora=ahora)
+            job = cola_mod.tomar(s, nombre_cola, lease_seg=LEASE_SEG, ahora=instante())
         if job is None:
             break
         try:
@@ -190,7 +200,7 @@ def procesar_cola(
                       cola_mod.sanear_error(e), exc_info=not terminal)
             try:
                 with tenant_session(tenant_id) as s:
-                    estado = cola_mod.fallar(s, job.id, job.lease_token, error=e, terminal=terminal, ahora=ahora, max_intentos=max_intentos)
+                    estado = cola_mod.fallar(s, job.id, job.lease_token, error=e, terminal=terminal, ahora=instante(), max_intentos=max_intentos)
                 if estado == "fallido":
                     log.error("job %s (%s) en dead-letter tras %s intento(s)", job.id, nombre_cola, job.intentos)
                     if nombre_cola == "validacion_evidencia" and job.tenant_id:
@@ -234,22 +244,31 @@ def correr_una_vuelta(
     canal_notificaciones: CanalDeNotificaciones | None = None,
     proveedor_drive: Any | None = None,
     canales: dict[str, Any] | None = None,
+    drenar_outbox_habilitado: bool = True,
 ) -> dict[str, Any]:
     handlers = handlers_completos(handlers)
-    contexto = {"publicador": publicador, "storage": storage, "canal_notificaciones": canal_notificaciones,
-                "proveedor_drive": proveedor_drive, "canales": canales}
-    ahora = ahora or ahora_utc()
-    resumen: dict[str, Any] = {"tenants": 0, "outbox_publicados": 0, "jobs": 0}
+    contexto = {
+        "publicador": publicador, "storage": storage, "canal_notificaciones": canal_notificaciones,
+        "proveedor_drive": proveedor_drive, "canales": canales,
+        "drenar_outbox_habilitado": drenar_outbox_habilitado,
+    }
+    def instante() -> datetime:
+        return ahora if ahora is not None else ahora_utc()
+
+    resumen: dict[str, Any] = {"tenants": 0, "outbox_publicados": 0, "jobs": 0,
+                              "outbox_deshabilitado": not drenar_outbox_habilitado}
     for tenant_id in listar_tenants():
         resumen["tenants"] += 1
 
         def _drenar() -> int:
             with tenant_session(tenant_id) as s:
+                # Sin reloj de prueba, el outbox compara con `now()` de PostgreSQL.
                 n = drenar_outbox(s, tenant_id, publicador, ahora=ahora)
                 latir(s, "drenaje_outbox", tenant_id, True, {"publicados": n})
                 return n
 
-        resumen["outbox_publicados"] += _con_latido("drenaje_outbox", tenant_id, _drenar) or 0
+        if drenar_outbox_habilitado:
+            resumen["outbox_publicados"] += _con_latido("drenaje_outbox", tenant_id, _drenar) or 0
 
         for nombre_cola, handler in handlers.items():
             n = _con_latido(f"cola_{nombre_cola}", tenant_id, lambda: procesar_cola(tenant_id, nombre_cola, handler, contexto, ahora=ahora))
@@ -262,13 +281,13 @@ def correr_una_vuelta(
 
             _con_latido(nombre, tenant_id, _correr)
 
-        _reloj("control_vencimientos", lambda s: control_vencimientos(s, tenant_id, ahora))
-        _reloj("vencer_excepciones_y_constancias", lambda s: vencer_excepciones_y_constancias(s, tenant_id, ahora))
-        _reloj("control_plantillas", lambda s: control_plantillas(s, tenant_id, ahora))
-        _reloj("score_documental", lambda s: encolar_snapshot_diario(s, tenant_id, ahora))
-        _con_latido("escaneo_drive", tenant_id, lambda: _escaneo_drive_programado(tenant_id, ahora, storage, contexto))
+        _reloj("control_vencimientos", lambda s: control_vencimientos(s, tenant_id, instante()))
+        _reloj("vencer_excepciones_y_constancias", lambda s: vencer_excepciones_y_constancias(s, tenant_id, instante()))
+        _reloj("control_plantillas", lambda s: control_plantillas(s, tenant_id, instante()))
+        _reloj("score_documental", lambda s: encolar_snapshot_diario(s, tenant_id, instante()))
+        _con_latido("escaneo_drive", tenant_id, lambda: _escaneo_drive_programado(tenant_id, instante(), storage, contexto))
         # La retención maneja sus propias transacciones (borrado físico fuera de la tx).
-        _con_latido("control_retencion", tenant_id, lambda: control_retencion(tenant_id, storage, ahora))
+        _con_latido("control_retencion", tenant_id, lambda: control_retencion(tenant_id, storage, instante()))
 
     # Latido global del worker (tenant NULL): "el loop está vivo".
     try:
@@ -291,13 +310,18 @@ def main(argv: list[str] | None = None) -> int:
     log.info("worker arranca: %s", describir_entorno())  # sin secretos ni DSN completo
     storage = obtener_storage()
     publicador = PublicadorEnLog()
+    if settings.outbox_transport == "disabled":
+        log.warning("outbox deshabilitado: los eventos quedan pendientes hasta configurar un transporte real")
     sin_handler = [c for c in cola_mod.COLAS if c not in HANDLERS]
     if sin_handler:
         log.warning("colas sin implementación en esta versión (sus jobs van al dead-letter): %s", ", ".join(sin_handler))
     poll = float(settings.worker_poll_seg)
     while True:
         try:
-            resumen = correr_una_vuelta(storage, publicador)
+            resumen = correr_una_vuelta(
+                storage, publicador,
+                drenar_outbox_habilitado=settings.outbox_transport != "disabled",
+            )
             log.info("vuelta: %s", resumen)
         except Exception:
             log.exception("la vuelta del worker falló")

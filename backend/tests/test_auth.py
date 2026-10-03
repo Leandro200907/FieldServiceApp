@@ -67,9 +67,14 @@ def test_login_ok_devuelve_par_de_tokens(cliente_api, tenant_de_prueba):
     assert yo.status_code == 200
     assert yo.json() == {
         "tenant_id": tenant_de_prueba.tenant_id,
+        "tenant_nombre": f"Tenant de prueba {tenant_de_prueba.slug}",
         "usuario_id": tenant_de_prueba.usuarios["responsable_legajos"],
+        "usuario_nombre": "responsable_legajos",
+        "usuario_email": f"responsable_legajos@{tenant_de_prueba.slug}.test",
         "roles": ["responsable_legajos"],
         "sujeto_id": None,
+        "legajo_etiqueta": None,
+        "zona_horaria": "America/Argentina/Buenos_Aires",
     }
     # El refresh quedó persistido como hash, vigente.
     fila = _estado_refresh(tenant_de_prueba, cuerpo["refresh_token"])
@@ -192,9 +197,14 @@ def test_yo_con_token_del_conftest(cliente_api, tenant_de_prueba):
     assert r.status_code == 200, r.text
     assert r.json() == {
         "tenant_id": tenant_de_prueba.tenant_id,
+        "tenant_nombre": f"Tenant de prueba {tenant_de_prueba.slug}",
         "usuario_id": tenant_de_prueba.usuarios["supervisor"],
+        "usuario_nombre": "supervisor",
+        "usuario_email": f"supervisor@{tenant_de_prueba.slug}.test",
         "roles": ["supervisor"],
         "sujeto_id": None,
+        "legajo_etiqueta": None,
+        "zona_horaria": "America/Argentina/Buenos_Aires",
     }
 
 
@@ -257,11 +267,11 @@ def test_login_rate_limit_por_origen(cliente_api, tenant_de_prueba, monkeypatch)
         r = _login(cliente_api, t, "responsable_legajos", password="password-incorrecta")
         assert r.status_code == 401
     r = _login(cliente_api, t, "responsable_legajos", password="password-incorrecta")
-    assert r.status_code == 422
+    assert r.status_code == 429
     assert r.json()["error"]["codigo"] == "rate_limit"
     # una vez agotado el límite, ni siquiera la contraseña CORRECTA pasa — el límite es
     # por origen, no por si las credenciales son válidas (si no, un atacante distinguiría
     # "existe" de "no existe" por si el rate limit se activa antes o después).
     _fijar_password(t, "responsable_legajos")
     r2 = _login(cliente_api, t, "responsable_legajos")
-    assert r2.status_code == 422 and r2.json()["error"]["codigo"] == "rate_limit"
+    assert r2.status_code == 429 and r2.json()["error"]["codigo"] == "rate_limit"

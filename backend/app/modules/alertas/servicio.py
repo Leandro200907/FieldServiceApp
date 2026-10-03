@@ -77,24 +77,17 @@ def configuracion(session: Session, identidad: Identidad) -> dict[str, Any]:
 
 
 _SQL_FUENTES = """
-SELECT 'documento' AS fuente_tipo, d.documento_id AS fuente_id, d.sujeto_id, l.tipo_sujeto, d.requisito_definicion_id, d.vigente_hasta,
+SELECT CASE r.categoria WHEN 'competencia' THEN 'acreditacion_competencia'
+                        WHEN 'induccion' THEN 'induccion'
+                        ELSE 'documento' END AS fuente_tipo,
+       d.documento_id AS fuente_id, d.sujeto_id, l.tipo_sujeto, d.requisito_definicion_id, d.vigente_hasta,
        r.plazo_aviso_dias
 FROM modulo1.documento d
 JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id
 JOIN modulo1.definicion_requisito r ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
-WHERE d.tenant_id = :t AND d.estado_version = 'vigente' AND d.requisito_definicion_id IS NOT NULL AND l.dado_de_baja_en IS NULL
-UNION ALL
-SELECT 'acreditacion_competencia', a.acreditacion_id, a.persona_id, 'persona', a.requisito_definicion_id, a.vigente_hasta, r.plazo_aviso_dias
-FROM modulo1.acreditacion_competencia a
-JOIN modulo1.legajo l ON l.tenant_id = a.tenant_id AND l.sujeto_id = a.persona_id
-JOIN modulo1.definicion_requisito r ON r.tenant_id = a.tenant_id AND r.requisito_definicion_id = a.requisito_definicion_id
-WHERE a.tenant_id = :t AND l.dado_de_baja_en IS NULL
-UNION ALL
-SELECT 'induccion', i.induccion_id, i.persona_id, 'persona', i.requisito_definicion_id, i.vigente_hasta, r.plazo_aviso_dias
-FROM modulo1.induccion i
-JOIN modulo1.legajo l ON l.tenant_id = i.tenant_id AND l.sujeto_id = i.persona_id
-JOIN modulo1.definicion_requisito r ON r.tenant_id = i.tenant_id AND r.requisito_definicion_id = i.requisito_definicion_id
-WHERE i.tenant_id = :t AND l.dado_de_baja_en IS NULL
+WHERE d.tenant_id = :t AND d.estado_version = 'vigente'
+  AND d.requisito_definicion_id IS NOT NULL AND d.vigente_hasta IS NOT NULL
+  AND l.dado_de_baja_en IS NULL
 UNION ALL
 SELECT 'constancia_del_cliente', c.constancia_id, c.sujeto_id, l.tipo_sujeto, c.requisito_definicion_id, c.vigencia, r.plazo_aviso_dias
 FROM modulo1.constancia_cliente c
@@ -472,3 +465,4 @@ def historial_alertas(session: Session, identidad: Identidad, p: Pagina, sujeto_
     for f in filas:
         f["eventos"] = eventos[f["alerta_id"]]
     return envolver(filas, int(total or 0), p)
+

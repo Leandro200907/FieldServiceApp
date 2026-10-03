@@ -15,20 +15,33 @@ un lote.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import date, timedelta
 from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado, Prohibido
-from app.auth.identidad import Identidad
+from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
 from app.comun.idempotencia import hash_canonico
 from app.comun.reloj import hoy_del_tenant
 from app.modules.legajos import esquemas as e
+
+log = logging.getLogger("modulo1.legajos")
+
+
+def _hook_secundario(session: Session, etiqueta: str, fn) -> None:
+    """Best-effort en savepoint (DECISIONES D-C / B-5): no revierte la versión documental."""
+    try:
+        with session.begin_nested():
+            fn()
+    except Exception:
+        log.warning("Hook secundario %s falló; la transacción principal sigue", etiqueta, exc_info=True)
 
 # --------------------------------------------------------------------------- helpers
 
@@ -36,7 +49,7 @@ from app.modules.legajos import esquemas as e
 def _legajo_activo(s: Session, tenant_id: str, sujeto_id: str, *, bloquear: bool = False) -> dict[str, Any]:
     fila = s.execute(
         text(
-            "SELECT legajo_id, sujeto_id, tipo_sujeto, dado_de_baja_en FROM modulo1.legajo "
+            "SELECT legajo_id, sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido, dado_de_baja_en FROM modulo1.legajo "
             "WHERE tenant_id = :t AND sujeto_id = :sj" + (" FOR UPDATE" if bloquear else "")
         ),
         {"t": tenant_id, "sj": sujeto_id},
@@ -74,6 +87,14 @@ def _exigir_aplicable(definicion: dict[str, Any], legajo: dict[str, Any]) -> Non
 def _exigir_vigencia(desde: date, hasta: date) -> None:
     if desde > hasta:
         raise ErrorDeDominio("vigente_desde no puede ser posterior a vigente_hasta", {"vigente_desde": str(desde), "vigente_hasta": str(hasta)})
+
+
+def _exigir_categoria_documento(definicion: dict[str, Any]) -> None:
+    if definicion["categoria"] != "documento":
+        raise ErrorDeDominio(
+            "El requisito no es de categoría documento",
+            {"categoria": definicion["categoria"]},
+        )
 
 
 def _bloquear_legajo(s: Session, tenant_id: str, sujeto_id: str) -> None:
@@ -126,6 +147,7 @@ def _insertar_version_documento(
     numero: str | None,
     origen: str,
     estado_confirmacion: str,
+    locacion_id: str | None = None,
     origen_propuesta: bool = False,
     confianza_extraccion: str | None = None,
     lote_id: str | None = None,
@@ -161,15 +183,15 @@ def _insertar_version_documento(
         text(
             "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, numero, "
             "vigente_desde, vigente_hasta, estado_confirmacion, estado_version, origen_propuesta, version, origen, "
-            "confianza_extraccion, lote_id, sucede_a) "
+            "confianza_extraccion, lote_id, lote_entidad, sucede_a, locacion_id) "
             "VALUES (:d, :t, :sj, :r, :num, :desde, :hasta, :conf, 'vigente', :prop, :ver, :origen, "
-            ":confianza, :lote, :sucede_a)"
+            ":confianza, :lote, :lote_ent, :sucede_a, :locacion)"
         ),
         {
             "d": documento_id, "t": t, "sj": sujeto_id, "r": requisito_definicion_id, "num": numero,
             "desde": vigente_desde, "hasta": vigente_hasta, "conf": estado_confirmacion, "prop": origen_propuesta,
             "ver": version, "origen": origen, "confianza": confianza_extraccion,
-            "lote": lote_id, "sucede_a": sucede_a,
+            "lote": lote_id, "lote_ent": "legajos" if lote_id else None, "sucede_a": sucede_a, "locacion": locacion_id,
         },
     )
 
@@ -188,7 +210,10 @@ def _insertar_version_documento(
     if requisito_definicion_id is not None:
         from app.modules.alertas.servicio import registrar_accion
 
-        registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id)
+        _hook_secundario(
+            s, "registrar_accion",
+            lambda: registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id),
+        )
     if estado_confirmacion != "declarado" and requisito_definicion_id is not None:
         # Carga ya validada por el responsable = verificación implícita: se emite el evento
         # canónico (7.2) en vez de reinterpretar DocumentoCargado en la política (A-07).
@@ -201,6 +226,18 @@ def _insertar_version_documento(
             identidad.usuario_id,
         )
         eventos.append("DocumentoSucedido")
+
+    # Si el legajo ya se presenta ante una o más operadoras, una nueva versión interna
+    # puede dejar desactualizado ese espejo. Se compara en la misma transacción y se
+    # notifica una sola vez por operadora + requisito + versión.
+    from app.modules.operadoras.servicio import al_registrar_nueva_version
+
+    _hook_secundario(
+        s, "al_registrar_nueva_version",
+        lambda: al_registrar_nueva_version(
+            s, identidad, sujeto_id=sujeto_id, requisito_definicion_id=str(requisito_definicion_id),
+        ),
+    )
 
     return {"documento_id": documento_id, "version": version, "sucede_a": sucede_a}
 
@@ -215,7 +252,7 @@ def alta_de_sujeto(s: Session, identidad: Identidad, body: e.AltaDeSujeto) -> di
     repetido = s.execute(
         text(
             "SELECT sujeto_id FROM modulo1.legajo WHERE tenant_id = :t AND tipo_sujeto = :tipo "
-            "AND identificador_natural = :ident AND dado_de_baja_en IS NULL"
+            "AND lower(btrim(identificador_natural)) = lower(btrim(:ident)) AND dado_de_baja_en IS NULL"
         ),
         {"t": t, "tipo": body.tipo_sujeto, "ident": body.identificador_natural},
     ).first()
@@ -233,19 +270,70 @@ def alta_de_sujeto(s: Session, identidad: Identidad, body: e.AltaDeSujeto) -> di
         raise Conflicto("Ya existe un legajo con ese sujeto_id", {"sujeto_id": sujeto_id})
 
     legajo_id = str(uuid.uuid4())
+    try:
+        with s.begin_nested():
+            nombre = body.nombre_apellido if body.tipo_sujeto == "persona" else None
+            s.execute(
+                text(
+                    "INSERT INTO modulo1.legajo (legajo_id, tenant_id, sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido) "
+                    "VALUES (:l, :t, :sj, :tipo, :ident, :nom)"
+                ),
+                {
+                    "l": legajo_id,
+                    "t": t,
+                    "sj": sujeto_id,
+                    "tipo": body.tipo_sujeto,
+                    "ident": body.identificador_natural,
+                    "nom": nombre,
+                },
+            )
+    except IntegrityError as exc:
+        restriccion = getattr(getattr(getattr(exc, "orig", None), "diag", None), "constraint_name", None)
+        if restriccion == "uq_legajo_identificador_activo":
+            raise Conflicto(
+                "Ya existe un legajo activo con ese identificador natural",
+                {"tipo_sujeto": body.tipo_sujeto, "identificador_natural": body.identificador_natural},
+            ) from None
+        raise
+    payload = {
+        "legajo_id": legajo_id,
+        "sujeto_id": sujeto_id,
+        "tipo_sujeto": body.tipo_sujeto,
+        "identificador_natural": body.identificador_natural,
+    }
+    if nombre:
+        payload["nombre_apellido"] = nombre
+    registrar_evento(s, t, "LegajoCreado", payload, identidad.usuario_id)
+    return {"legajo_id": legajo_id, "sujeto_id": sujeto_id, "eventos": ["LegajoCreado"]}
+
+
+def corregir_nombre_legajo_persona(s: Session, identidad: Identidad, body: e.CorregirNombreLegajoPersona) -> dict[str, Any]:
+    identidad.exigir_rol(Rol.CONFIGURACION, Rol.RESPONSABLE_LEGAJOS)
+    t = identidad.tenant_id
+    legajo = _legajo_activo(s, t, body.sujeto_id)
+    if legajo["tipo_sujeto"] != "persona":
+        raise ErrorDeDominio("Solo los legajos de persona admiten nombre y apellido", {"sujeto_id": body.sujeto_id})
+    anterior = legajo.get("nombre_apellido")
     s.execute(
         text(
-            "INSERT INTO modulo1.legajo (legajo_id, tenant_id, sujeto_id, tipo_sujeto, identificador_natural) "
-            "VALUES (:l, :t, :sj, :tipo, :ident)"
+            "UPDATE modulo1.legajo SET nombre_apellido = :nom "
+            "WHERE tenant_id = :t AND legajo_id = :l"
         ),
-        {"l": legajo_id, "t": t, "sj": sujeto_id, "tipo": body.tipo_sujeto, "ident": body.identificador_natural},
+        {"nom": body.nombre_apellido, "t": t, "l": str(legajo["legajo_id"])},
     )
     registrar_evento(
-        s, t, "LegajoCreado",
-        {"legajo_id": legajo_id, "sujeto_id": sujeto_id, "tipo_sujeto": body.tipo_sujeto, "identificador_natural": body.identificador_natural},
+        s,
+        t,
+        "NombreLegajoPersonaCorregido",
+        {
+            "legajo_id": str(legajo["legajo_id"]),
+            "sujeto_id": body.sujeto_id,
+            "nombre_apellido_anterior": anterior,
+            "nombre_apellido": body.nombre_apellido,
+        },
         identidad.usuario_id,
     )
-    return {"legajo_id": legajo_id, "sujeto_id": sujeto_id, "eventos": ["LegajoCreado"]}
+    return {"legajo_id": str(legajo["legajo_id"]), "sujeto_id": body.sujeto_id, "eventos": ["NombreLegajoPersonaCorregido"]}
 
 
 def baja_de_sujeto(s: Session, identidad: Identidad, body: e.BajaDeSujeto) -> dict[str, Any]:
@@ -262,19 +350,64 @@ def baja_de_sujeto(s: Session, identidad: Identidad, body: e.BajaDeSujeto) -> di
 # --------------------------------------------------------------------------- documentos
 
 
+def _soportes_archivo(s: Session, tenant_id: str, documento_id: str) -> list[dict[str, Any]]:
+    filas = s.execute(
+        text(
+            "SELECT s.archivo_estado, s.archivo_validacion, s.clave_storage "
+            "FROM modulo1.documento_soporte ds "
+            "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+            "WHERE ds.tenant_id = :t AND ds.documento_id = :d"
+        ),
+        {"t": tenant_id, "d": documento_id},
+    ).mappings().all()
+    return [dict(f) for f in filas]
+
+
+def _exigir_respaldo_valido(s: Session, tenant_id: str, documento_id: str, requisito_definicion_id: str | None) -> None:
+    from app.core.resolucion_evidencia import respaldo_valido
+
+    archivo = s.execute(
+        text(
+            "SELECT archivo_estado, archivo_validacion, clave_storage FROM modulo1.documento "
+            "WHERE tenant_id = :t AND documento_id = :d"
+        ),
+        {"t": tenant_id, "d": documento_id},
+    ).mappings().first()
+    if archivo is None:
+        raise NoEncontrado("Documento inexistente", {"documento_id": documento_id})
+    categoria = "documento"
+    if requisito_definicion_id:
+        definicion = _definicion_activa(s, tenant_id, str(requisito_definicion_id))
+        categoria = definicion["categoria"]
+    soportes = _soportes_archivo(s, tenant_id, documento_id) if categoria in ("competencia", "induccion") else None
+    if not respaldo_valido(dict(archivo), categoria=categoria, soportes=soportes):
+        raise ErrorDeDominio(
+            "No hay respaldo válido para confirmar el documento",
+            {"documento_id": documento_id},
+            codigo="sin_respaldo_valido",
+        )
+
+
 def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) -> dict[str, Any]:
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
     definicion = _definicion_activa(s, t, str(body.requisito_definicion_id))
+    _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
+    if body.estado_confirmacion != "declarado":
+        raise ErrorDeDominio(
+            "La carga manual ingresa como declarado; use confirmar_documento con respaldo válido",
+            {"estado_confirmacion": body.estado_confirmacion},
+            codigo="confirmacion_requiere_respaldo",
+        )
 
     eventos: list[str] = []
     r = _insertar_version_documento(
         s, identidad,
         sujeto_id=body.sujeto_id, requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, numero=body.numero,
-        origen=body.origen, estado_confirmacion=body.estado_confirmacion,
+        origen=body.origen, estado_confirmacion="declarado",
         confianza_extraccion=body.confianza_extraccion, eventos=eventos,
     )
     return {**r, "eventos": eventos}
@@ -287,6 +420,7 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
     definicion = _definicion_activa(s, t, str(body.requisito_definicion_id))
+    _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
 
@@ -318,7 +452,12 @@ def _al_verificar(s: Session, identidad: Identidad, doc: dict[str, Any], eventos
 
         hasta = s.execute(text("SELECT vigente_hasta FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d"),
                           {"t": t, "d": str(doc["documento_id"])}).scalar()
-        resolver_por_verificacion(s, t, doc["sujeto_id"], str(doc["requisito_definicion_id"]), str(doc["documento_id"]), hasta)
+        _hook_secundario(
+            s, "resolver_por_verificacion",
+            lambda: resolver_por_verificacion(
+                s, t, doc["sujeto_id"], str(doc["requisito_definicion_id"]), str(doc["documento_id"]), hasta,
+            ),
+        )
     regularizadas: list[str] = []
     if doc["requisito_definicion_id"] is not None:
         filas = s.execute(
@@ -348,6 +487,11 @@ def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocum
         raise Conflicto("Solo se confirma la versión vigente", {"estado_version": doc["estado_version"]})
     if doc["estado_confirmacion"] != "declarado":
         raise Conflicto("El documento no está en estado declarado", {"estado_confirmacion": doc["estado_confirmacion"]})
+
+    _exigir_respaldo_valido(
+        s, t, str(doc["documento_id"]),
+        str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None,
+    )
 
     s.execute(
         text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE tenant_id = :t AND documento_id = :d"),
@@ -388,6 +532,14 @@ def rechazar_propuesta(s: Session, identidad: Identidad, body: e.RechazarPropues
     return {"documento_id": str(doc["documento_id"]), "restaurado_documento_id": restaurado, "eventos": ["DocumentoRechazado"]}
 
 
+def _archivo_confirmado_presente(clave_storage: str | None) -> bool:
+    if not clave_storage:
+        return False
+    from app.storage import obtener_storage
+
+    return obtener_storage().existe(clave_storage)
+
+
 def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None:
     """Vuelve a `vigente` el antecesor no terminal más cercano de la versión que se está
     anulando, siguiendo la cadena `sucede_a`.
@@ -403,12 +555,21 @@ def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None
     while actual is not None and str(actual) not in visitados:
         visitados.add(str(actual))
         fila = s.execute(
-            text("SELECT estado_version, sucede_a FROM modulo1.documento WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"),
+            text(
+                "SELECT estado_version, sucede_a, archivo_estado, clave_storage FROM modulo1.documento "
+                "WHERE tenant_id = :t AND documento_id = :d FOR UPDATE"
+            ),
             {"t": tenant_id, "d": str(actual)},
         ).mappings().first()
         if fila is None:
             return None
         if fila["estado_version"] == "sucedida":
+            if (
+                fila["archivo_estado"] == "confirmado"
+                and not _archivo_confirmado_presente(fila["clave_storage"])
+            ):
+                actual = fila["sucede_a"]
+                continue
             s.execute(
                 text("UPDATE modulo1.documento SET estado_version = 'vigente' WHERE tenant_id = :t AND documento_id = :d"),
                 {"t": tenant_id, "d": str(actual)},
@@ -439,16 +600,23 @@ def registrar_acreditacion_de_competencia(
     evidencias = [str(x) for x in body.evidencias]
     _exigir_documentos_del_sujeto(s, t, body.persona_id, evidencias)
 
-    acreditacion_id = str(uuid.uuid4())
-    s.execute(
-        text(
-            "INSERT INTO modulo1.acreditacion_competencia (acreditacion_id, tenant_id, persona_id, requisito_definicion_id, "
-            "vigente_desde, vigente_hasta, estado_confirmacion, evidencias) "
-            "VALUES (:a, :t, :p, :r, :desde, :hasta, :conf, CAST(:ev AS uuid[]))"
-        ),
-        {"a": acreditacion_id, "t": t, "p": body.persona_id, "r": str(body.requisito_definicion_id),
-         "desde": body.vigente_desde, "hasta": body.vigente_hasta, "conf": body.estado_confirmacion, "ev": evidencias},
+    eventos: list[str] = []
+    creada = _insertar_version_documento(
+        s, identidad, sujeto_id=body.persona_id,
+        requisito_definicion_id=str(body.requisito_definicion_id),
+        vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta,
+        numero=None, origen="carga_manual", estado_confirmacion=body.estado_confirmacion,
+        eventos=eventos,
     )
+    acreditacion_id = creada["documento_id"]
+    for evidencia in evidencias:
+        s.execute(
+            text(
+                "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) "
+                "VALUES (:t, :d, :e)"
+            ),
+            {"t": t, "d": acreditacion_id, "e": evidencia},
+        )
     registrar_evento(
         s, t, "AcreditacionDeCompetenciaRegistrada",
         {"acreditacion_id": acreditacion_id, "persona_id": body.persona_id, "requisito_definicion_id": str(body.requisito_definicion_id),
@@ -475,15 +643,21 @@ def registrar_induccion(s: Session, identidad: Identidad, body: e.RegistrarInduc
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
     _exigir_documentos_del_sujeto(s, t, body.persona_id, [str(body.evidencia)])
 
-    induccion_id = str(uuid.uuid4())
+    eventos: list[str] = []
+    creada = _insertar_version_documento(
+        s, identidad, sujeto_id=body.persona_id,
+        requisito_definicion_id=str(body.requisito_definicion_id),
+        vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta,
+        numero=None, origen="carga_manual", estado_confirmacion=body.estado_confirmacion,
+        locacion_id=str(body.locacion_id), eventos=eventos,
+    )
+    induccion_id = creada["documento_id"]
     s.execute(
         text(
-            "INSERT INTO modulo1.induccion (induccion_id, tenant_id, persona_id, locacion_id, requisito_definicion_id, "
-            "vigente_desde, vigente_hasta, estado_confirmacion, evidencia) "
-            "VALUES (:i, :t, :p, :loc, :r, :desde, :hasta, :conf, :ev)"
+            "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) "
+            "VALUES (:t, :d, :e)"
         ),
-        {"i": induccion_id, "t": t, "p": body.persona_id, "loc": str(body.locacion_id), "r": str(body.requisito_definicion_id),
-         "desde": body.vigente_desde, "hasta": body.vigente_hasta, "conf": body.estado_confirmacion, "ev": str(body.evidencia)},
+        {"t": t, "d": induccion_id, "e": str(body.evidencia)},
     )
     registrar_evento(
         s, t, "InduccionRegistrada",
@@ -531,13 +705,13 @@ def _politica_reimportacion(s: Session, tenant_id: str, fila: e.FilaDeLote) -> d
 
 def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dict[str, Any]:
     """Una transacción, idempotente por `lote_id` (8.2): si el lote ya existe se devuelve
-    el resultado guardado bajo `lote:<lote_id>` sin re-aplicar nada. Las filas inválidas
+    el resultado guardado bajo `lote_doc:<lote_id>` sin re-aplicar nada. Las filas inválidas
     se rechazan una por una (van a `detalle_filas_rechazadas`); las válidas se aplican
     como CargarDocumento con `lote_id`."""
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
 
-    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # La idempotencia por `lote_doc:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # Red de seguridad de dominio, válida también entre actores distintos: si el lote ya
     # existe, solo se reproduce el resultado si el contenido es el MISMO (hash canónico
     # de las filas, persistido en hash_archivo); con filas distintas es un conflicto.
@@ -545,7 +719,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
     existente = s.execute(
         text(
             "SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, hash_archivo "
-            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l"
+            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos'"
         ),
         {"t": t, "l": lote_id},
     ).mappings().first()
@@ -587,6 +761,7 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
         try:
             legajo = _legajo_activo(s, t, fila.sujeto_id)
             definicion = _definicion_activa(s, t, str(fila.requisito_definicion_id))
+            _exigir_categoria_documento(definicion)
             _exigir_aplicable(definicion, legajo)
             _exigir_vigencia(fila.vigente_desde, fila.vigente_hasta)
             politica = _politica_reimportacion(s, t, fila)
@@ -646,13 +821,11 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
     t = identidad.tenant_id
     lote_id = str(body.lote_id)
     lote = s.execute(
-        text("SELECT estado, entidad FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l FOR UPDATE"),
+        text("SELECT estado FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos' FOR UPDATE"),
         {"t": t, "l": lote_id},
     ).mappings().first()
     if lote is None:
         raise NoEncontrado("Lote inexistente", {"lote_id": lote_id})
-    if lote["entidad"] != "legajos":
-        raise ErrorDeDominio("Este comando solo revierte lotes de legajos", {"entidad": lote["entidad"]})
     if lote["estado"] != "aplicado":
         raise Conflicto("Solo se revierte un lote aplicado", {"estado": lote["estado"]})
 
@@ -698,7 +871,7 @@ def revertir_lote(s: Session, identidad: Identidad, body: e.RevertirLote) -> dic
             restaurados.append(r)
 
     s.execute(
-        text("UPDATE modulo1.lote_importacion SET estado = 'revertido' WHERE tenant_id = :t AND lote_id = :l"),
+        text("UPDATE modulo1.lote_importacion SET estado = 'revertido' WHERE tenant_id = :t AND lote_id = :l AND entidad = 'legajos'"),
         {"t": t, "l": lote_id},
     )
     registrar_evento(

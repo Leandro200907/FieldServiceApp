@@ -198,27 +198,23 @@ def cargar_evidencias(
     session: Session, tenant_id: str, definiciones: dict[str, dict[str, Any]],
     sujeto_ids: list[str] | None = None,
 ) -> dict[tuple[str, str], Documento]:
-    """Mapa (sujeto_id, requisito_definicion_id) → Documento del motor, según categoría:
-    `documento` → tabla documento (estado_version=vigente; único por índice);
-    `competencia` → acreditacion_competencia (la de vigente_hasta mayor);
-    `induccion` → induccion (la de vigente_hasta mayor).
-    Acreditaciones e inducciones no versionan, así que entran siempre como `vigente`.
+    """Mapa (sujeto_id, requisito_definicion_id) → Documento del motor.
+
+    Documento, competencia e inducción comparten la tabla `documento`; la categoría vive
+    en la definición del requisito y el índice garantiza una sola versión vigente.
     `sujeto_ids`: filtro opcional (B-06) — cuando el llamador ya conoce el conjunto
     acotado de candidatos (p. ej. `app/modules/proyeccion/servicio.py`, que evalúa una
     sola OC a la vez), evita traer evidencia de sujetos del tenant que nunca se van a
     mirar. `None` (default) preserva el comportamiento anterior — tenant completo —
     tal como lo sigue usando `evaluar_compromiso` acá mismo."""
     evidencias: dict[tuple[str, str], Documento] = {}
-    por_categoria: dict[str, list[str]] = {"documento": [], "competencia": [], "induccion": []}
-    for req_id, d in definiciones.items():
-        por_categoria.setdefault(d["categoria"], []).append(req_id)
+    requisito_ids = list(definiciones)
     cond_sujeto = " AND sujeto_id = ANY(CAST(:sids AS text[]))" if sujeto_ids is not None else ""
-    cond_persona = " AND persona_id = ANY(CAST(:sids AS text[]))" if sujeto_ids is not None else ""
 
-    def _doc(fila: Any, id_col: str, sujeto_col: str, archivo_requiere_revision: bool = False) -> Documento:
+    def _doc(fila: Any, archivo_requiere_revision: bool = False) -> Documento:
         return Documento(
-            documento_id=str(fila[id_col]),
-            sujeto_id=str(fila[sujeto_col]),
+            documento_id=str(fila["documento_id"]),
+            sujeto_id=str(fila["sujeto_id"]),
             requisito_definicion_id=str(fila["requisito_definicion_id"]),
             vigente_desde=fila["vigente_desde"],
             vigente_hasta=fila["vigente_hasta"],
@@ -227,50 +223,43 @@ def cargar_evidencias(
             archivo_requiere_revision=archivo_requiere_revision,
         )
 
-    if por_categoria["documento"]:
-        for fila in session.execute(
+    if requisito_ids:
+        from app.core.resolucion_evidencia import (
+            agrupar_soportes_por_documento,
+            archivo_requiere_revision,
+            filas_evidencia_para_evaluacion,
+        )
+
+        filas = session.execute(
             text(
                 "SELECT documento_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, "
-                "estado_confirmacion, archivo_estado, archivo_validacion FROM modulo1.documento "
-                "WHERE tenant_id = :t AND estado_version = 'vigente' "
+                "estado_confirmacion, estado_version, origen_propuesta, sucede_a, "
+                "archivo_estado, archivo_validacion, clave_storage FROM modulo1.documento "
+                "WHERE tenant_id = :t AND estado_version IN ('vigente', 'sucedida') "
                 "  AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_sujeto
             ),
-            {"t": tenant_id, "ids": por_categoria["documento"], "sids": sujeto_ids},
-        ).mappings():
-            # Sólo cuenta si hay un archivo real adjunto (reauditoría Fase 2 punto 2):
-            # acreditación/inducción no tienen esta columna y nunca activan el gate.
-            requiere = fila["archivo_estado"] == "confirmado" and fila["archivo_validacion"] != "valido"
-            evidencias[(str(fila["sujeto_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, "documento_id", "sujeto_id", requiere
-            )
-    if por_categoria["competencia"]:
-        for fila in session.execute(
-            text(
-                "SELECT DISTINCT ON (persona_id, requisito_definicion_id) acreditacion_id, persona_id, "
-                "requisito_definicion_id, vigente_desde, vigente_hasta, estado_confirmacion "
-                "FROM modulo1.acreditacion_competencia "
-                "WHERE tenant_id = :t AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_persona + " "
-                "ORDER BY persona_id, requisito_definicion_id, vigente_hasta DESC, creado_en DESC"
-            ),
-            {"t": tenant_id, "ids": por_categoria["competencia"], "sids": sujeto_ids},
-        ).mappings():
-            evidencias[(str(fila["persona_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, "acreditacion_id", "persona_id"
-            )
-    if por_categoria["induccion"]:
-        for fila in session.execute(
-            text(
-                "SELECT DISTINCT ON (persona_id, requisito_definicion_id) induccion_id, persona_id, "
-                "requisito_definicion_id, vigente_desde, vigente_hasta, estado_confirmacion "
-                "FROM modulo1.induccion "
-                "WHERE tenant_id = :t AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_persona + " "
-                "ORDER BY persona_id, requisito_definicion_id, vigente_hasta DESC, creado_en DESC"
-            ),
-            {"t": tenant_id, "ids": por_categoria["induccion"], "sids": sujeto_ids},
-        ).mappings():
-            evidencias[(str(fila["persona_id"]), str(fila["requisito_definicion_id"]))] = _doc(
-                fila, "induccion_id", "persona_id"
-            )
+            {"t": tenant_id, "ids": requisito_ids, "sids": sujeto_ids},
+        ).mappings()
+        elegidas = filas_evidencia_para_evaluacion(filas)
+        ids_acred = [str(f["documento_id"]) for f in elegidas.values()]
+        soportes_por_doc: dict[str, list[dict[str, Any]]] = {}
+        if ids_acred:
+            sop_filas = session.execute(
+                text(
+                    "SELECT ds.documento_id::text AS documento_padre_id, "
+                    "s.archivo_estado, s.archivo_validacion, s.clave_storage "
+                    "FROM modulo1.documento_soporte ds "
+                    "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+                    "WHERE ds.tenant_id = :t AND ds.documento_id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"t": tenant_id, "ids": ids_acred},
+            ).mappings()
+            soportes_por_doc = agrupar_soportes_por_documento(sop_filas)
+        for clave, fila in elegidas.items():
+            cat = definiciones.get(str(fila["requisito_definicion_id"]), {}).get("categoria")
+            soportes = soportes_por_doc.get(str(fila["documento_id"]), [])
+            requiere = archivo_requiere_revision(fila, categoria=cat, soportes=soportes)
+            evidencias[clave] = _doc(fila, requiere)
     return evidencias
 
 
@@ -578,6 +567,8 @@ def _evaluar(
             permitidos = set(candidatos)
             sujetos = [x for x in sujetos if str(x["sujeto_id"]) in permitidos]
     tipo_sin_sujetos: list[str] = []
+    tipos_fuera_de_alcance: list[str] = []
+    permitidos = set(candidatos) if candidatos is not None else None
     for tipo in tipos_recurso:
         evaluados = [
             _evaluar_sujeto(ctx, str(x["sujeto_id"]), tipo, requisitos_por_tipo[tipo])
@@ -585,14 +576,28 @@ def _evaluar(
             if x["tipo_sujeto"] == tipo
         ]
         if not evaluados:
-            tipo_sin_sujetos.append(tipo)
+            todos_tipo = _sujetos_activos(session, tenant_id, [tipo])
+            fuera = (
+                modo == MODO_CONSULTA
+                and permitidos is not None
+                and bool(todos_tipo)
+                and all(str(x["sujeto_id"]) not in permitidos for x in todos_tipo)
+            )
+            if fuera:
+                tipos_fuera_de_alcance.append(tipo)
+            else:
+                tipo_sin_sujetos.append(tipo)
             cobertura_por_tipo[tipo] = None
             requisitos_faltantes.append(
                 {"tipo_sujeto": tipo, "sujeto_id": None, "requisito_definicion_id": None,
                  "veredicto": Veredicto.NO_HABILITADO.value,
-                 "motivo": (f"ningún sujeto propuesto de tipo {tipo}" if modo == MODO_DECISION
-                            else f"sin candidatos de tipo {tipo}"),
-                 "bajo_excepcion": False}
+                 "motivo": (
+                     f"recursos de tipo {tipo} fuera del alcance del consultante"
+                     if fuera
+                     else (f"ningún sujeto propuesto de tipo {tipo}" if modo == MODO_DECISION
+                           else f"sin candidatos de tipo {tipo}")
+                 ),
+                 "bajo_excepcion": False, "fuera_de_alcance": fuera}
             )
             continue
         if modo == MODO_DECISION:
@@ -620,7 +625,7 @@ def _evaluar(
 
     # Agregación: peor entre empresa y el mejor sujeto de cada tipo exigido.
     veredictos_globales = [Veredicto(r["veredicto"]) for r in representantes]
-    if tipo_sin_sujetos or empresa_sin_evaluar:
+    if tipo_sin_sujetos or tipos_fuera_de_alcance or empresa_sin_evaluar:
         veredictos_globales.append(Veredicto.NO_HABILITADO)
     veredicto_global = peor(veredictos_globales)
 
@@ -644,7 +649,10 @@ def _evaluar(
     # el veredicto global nunca es `habilitado` (ck_excepcion_nunca_verde). El veredicto
     # global es siempre el peor de los representantes: nunca más favorable que ellos.
     todos_asignables = (
-        not tipo_sin_sujetos and not empresa_sin_evaluar and all(r["asignable"] for r in representantes)
+        not tipo_sin_sujetos
+        and not tipos_fuera_de_alcance
+        and not empresa_sin_evaluar
+        and all(r["asignable"] for r in representantes)
     )
     if not todos_asignables:
         resultado = ResultadoDecision.NO_PUEDE_ASIGNARSE
@@ -675,11 +683,13 @@ def _evaluar(
             "empresa_sin_evaluar": empresa_sin_evaluar,
             "cobertura_por_tipo": cobertura_por_tipo,
             "sujetos_evaluados": len(por_sujeto),
+            "tipos_fuera_de_alcance": tipos_fuera_de_alcance,
         }
     )
     return {
         "commitment_id": commitment_id,
         "modo": modo,
+        "tipos_fuera_de_alcance": tipos_fuera_de_alcance,
         "veredicto_de_cumplimiento": veredicto_global.value,
         "resultado_de_decision": resultado.value,
         "por_sujeto": _jsonable(por_sujeto),
@@ -831,3 +841,4 @@ def decidir_habilitacion(
         **r,
         "creado_en": fila[1].isoformat(),
     }
+

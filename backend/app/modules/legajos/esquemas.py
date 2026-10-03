@@ -22,6 +22,33 @@ class AltaDeSujeto(BaseModel):
     tipo_sujeto: TipoSujeto
     identificador_natural: str = Field(min_length=1)
     sujeto_id: str | None = Field(default=None, min_length=1)
+    nombre_apellido: str | None = Field(default=None, max_length=200)
+
+    @field_validator("nombre_apellido")
+    @classmethod
+    def _nombre_persona(cls, valor: str | None, info) -> str | None:
+        if valor is None:
+            return None
+        texto = valor.strip()
+        if not texto:
+            return None
+        tipo = info.data.get("tipo_sujeto")
+        if tipo and tipo != "persona":
+            raise ValueError("nombre_apellido solo aplica a legajos de persona")
+        return texto
+
+
+class CorregirNombreLegajoPersona(BaseModel):
+    sujeto_id: str = Field(min_length=1)
+    nombre_apellido: str = Field(min_length=1, max_length=200)
+
+    @field_validator("nombre_apellido")
+    @classmethod
+    def _sin_bordes(cls, valor: str) -> str:
+        texto = valor.strip()
+        if not texto:
+            raise ValueError("El nombre y apellido no puede estar vacío")
+        return texto
 
 
 class BajaDeSujeto(BaseModel):
@@ -35,8 +62,8 @@ class CargarDocumento(BaseModel):
     vigente_hasta: date
     numero: str | None = None
     origen: OrigenDocumento = "carga_manual"
-    # Cuando lo carga el responsable, por defecto ya lo está verificando (1.10).
-    estado_confirmacion: EstadoConfirmacion = "verificado"
+    # D19: la verificación exige respaldo; la carga manual entra declarada hasta confirmar.
+    estado_confirmacion: EstadoConfirmacion = "declarado"
     confianza_extraccion: Confianza | None = None
 
 
@@ -55,7 +82,15 @@ class ConfirmarDocumento(BaseModel):
 
 class RechazarPropuesta(BaseModel):
     documento_id: UUID
-    motivo: str | None = None
+    motivo: str = Field(min_length=1)
+
+    @field_validator("motivo")
+    @classmethod
+    def _motivo_sin_bordes(cls, valor: str) -> str:
+        texto = valor.strip()
+        if not texto:
+            raise ValueError("El motivo de rechazo es obligatorio")
+        return texto
 
 
 class RegistrarAcreditacionDeCompetencia(BaseModel):

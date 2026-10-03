@@ -2,7 +2,7 @@
 CancelarOC.
 
 ImportarLote es UNA transacción e idempotente por `lote_id` (regla dura 6): la clave
-`lote:<lote_id>` en idempotency_keys guarda el resultado y una segunda llamada lo
+`lote_oc:<lote_id>` en idempotency_keys guarda el resultado y una segunda llamada lo
 devuelve sin re-aplicar nada. Es incremental: `clave_origen` identifica la OC en el
 origen, así que una clave conocida actualiza la OC (y `actualizado_en`) en vez de
 duplicarla — para eso está `uq_oc_clave_origen` (migración 0003_oc_uq_clave_origen).
@@ -22,13 +22,14 @@ from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
 from app.core.revaluacion import ultima_decision
+from app.modules.oc import catalogos_maestros
 
 ORIGENES = ("planilla", "drive")
 CAMPOS_OBLIGATORIOS = ("clave_origen", "cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta")
 
 
 def clave_idempotencia_lote(lote_id: str) -> str:
-    return f"lote:{lote_id}"
+    return f"lote_oc:{lote_id}"
 
 
 # --------------------------------------------------------------------- validación
@@ -85,7 +86,7 @@ def importar_lote_oc(
         raise ErrorDeDominio("origen inválido", {"origen": origen, "validos": list(ORIGENES)})
     lote_id = str(uuid.UUID(str(lote_id)))
 
-    # La idempotencia por `lote:<lote_id>` la resuelve el router (reserva atómica, A-03).
+    # La idempotencia por `lote_oc:<lote_id>` la resuelve el router (reserva atómica, A-03).
     # La clave de idempotencia expira (24 h) pero el lote queda: si existe, tampoco se
     # re-aplica — se reconstruye el resultado desde lote_importacion.
     from app.comun.idempotencia import hash_canonico
@@ -94,9 +95,9 @@ def importar_lote_oc(
     lote_existente = session.execute(
         text(
             "SELECT filas_totales, filas_aceptadas, filas_rechazadas, detalle_filas_rechazadas, estado, hash_archivo "
-            "FROM modulo1.lote_importacion WHERE lote_id = :l"
+            "FROM modulo1.lote_importacion WHERE tenant_id = :t AND lote_id = :l AND entidad = 'oc'"
         ),
-        {"l": lote_id},
+        {"t": tenant_id, "l": lote_id},
     ).mappings().first()
     if lote_existente is not None:
         if lote_existente["hash_archivo"] != hash_contenido:
@@ -126,8 +127,16 @@ def importar_lote_oc(
     vistas: set[str] = set()
     aceptadas: list[dict[str, Any]] = []
     rechazadas: list[dict[str, Any]] = []
-    for indice, fila in enumerate(filas):
-        normalizada, motivo = validar_fila(fila if isinstance(fila, dict) else {})
+    for i, fila in enumerate(filas):
+        cruda = fila if isinstance(fila, dict) else {}
+        indice = cruda["fila"] if isinstance(cruda.get("fila"), int) else i
+        if cruda.get("operadora"):
+            resuelta, motivo_nombre = catalogos_maestros.resolver_fila_por_nombres(session, tenant_id, cruda)
+            if resuelta is None:
+                rechazadas.append({"indice": indice, "clave_origen": cruda.get("clave_origen"), "motivo": motivo_nombre})
+                continue
+            cruda = resuelta
+        normalizada, motivo = validar_fila(cruda)
         if normalizada is None:
             rechazadas.append({"indice": indice, "clave_origen": (fila or {}).get("clave_origen"), "motivo": motivo})
             continue
@@ -175,8 +184,8 @@ def importar_lote_oc(
             text(
                 """
                 INSERT INTO modulo1.oc (tenant_id, clave_origen, referencia, cliente_id, locacion_id,
-                                        tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id)
-                VALUES (:t, :clave, :ref, :cli, :loc, :tipo, :desde, :hasta, :l)
+                                        tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id, lote_entidad)
+                VALUES (:t, :clave, :ref, :cli, :loc, :tipo, :desde, :hasta, :l, 'oc')
                 ON CONFLICT (tenant_id, clave_origen) DO UPDATE SET
                     referencia = EXCLUDED.referencia,
                     cliente_id = EXCLUDED.cliente_id,
@@ -185,6 +194,7 @@ def importar_lote_oc(
                     vigencia_desde = EXCLUDED.vigencia_desde,
                     vigencia_hasta = EXCLUDED.vigencia_hasta,
                     lote_id = EXCLUDED.lote_id,
+                    lote_entidad = EXCLUDED.lote_entidad,
                     actualizado_en = now()
                 RETURNING oc_id, (xmax = 0) AS insertada
                 """
@@ -215,6 +225,8 @@ def importar_lote_oc(
                     "campos_modificados": sorted(cambios),
                     "anterior": {k: v[0] for k, v in cambios.items()},
                     "nuevo": {k: v[1] for k, v in cambios.items()},
+                    "motivo": "reimportación por planilla",
+                    "origen": "planilla",
                 },
                 identidad.usuario_id,
             )
@@ -303,6 +315,84 @@ def cancelar_oc(session: Session, identidad: Identidad, oc_id: str | None, clave
     )
     eventos.append("CompromisoCancelado")
     return {"oc_id": str(fila[0]), "clave_origen": fila[1], "estado": "cancelado", "eventos": eventos}
+
+
+def reprogramar_oc(
+    session: Session,
+    identidad: Identidad,
+    oc_id: str,
+    vigencia_desde: date,
+    vigencia_hasta: date,
+    motivo: str,
+) -> dict[str, Any]:
+    identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION)
+    motivo = motivo.strip()
+    if not motivo:
+        raise ErrorDeDominio("motivo obligatorio")
+    if vigencia_desde > vigencia_hasta:
+        raise ErrorDeDominio("vigencia invertida")
+    oc_id = str(uuid.UUID(str(oc_id)))
+    fila = session.execute(
+        text(
+            "SELECT oc_id, clave_origen, origen_oc, vigencia_desde, vigencia_hasta, "
+            "cliente_id, locacion_id, tipo_servicio_id FROM modulo1.oc WHERE oc_id = :id FOR UPDATE"
+        ),
+        {"id": oc_id},
+    ).mappings().first()
+    if fila is None:
+        raise NoEncontrado("OC inexistente", {"oc_id": oc_id})
+    if fila["origen_oc"] == "modulo2":
+        raise ErrorDeDominio("Las OC de Módulo 2 no se reprograman desde Módulo 1", codigo="origen_modulo2")
+    anterior = {
+        "vigencia_desde": fila["vigencia_desde"].isoformat(),
+        "vigencia_hasta": fila["vigencia_hasta"].isoformat(),
+    }
+    session.execute(
+        text(
+            "UPDATE modulo1.oc SET vigencia_desde = :d, vigencia_hasta = :h, origen_oc = 'manual', actualizado_en = now() "
+            "WHERE oc_id = :id"
+        ),
+        {"d": vigencia_desde, "h": vigencia_hasta, "id": oc_id},
+    )
+    nuevo = {"vigencia_desde": vigencia_desde.isoformat(), "vigencia_hasta": vigencia_hasta.isoformat()}
+    referencia = ultima_decision(session, identidad.tenant_id, fila["clave_origen"])
+    evento_id = registrar_evento(
+        session,
+        identidad.tenant_id,
+        "CompromisoModificado",
+        {
+            "commitment_id": fila["clave_origen"],
+            "oc_id": oc_id,
+            "referencias_afectadas": [str(referencia)] if referencia else [],
+            "campos_modificados": ["vigencia_desde", "vigencia_hasta"],
+            "anterior": anterior,
+            "nuevo": nuevo,
+            "motivo": motivo,
+            "origen": "manual",
+        },
+        identidad.usuario_id,
+    )
+    from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+    from app.modules.consultas.comparacion_reprogramacion import comparar_efecto_documental
+
+    oc_anterior = dict(fila)
+    documental_anterior = evaluar_oc_backlog(session, identidad, oc_anterior)
+    oc_eval = dict(fila)
+    oc_eval["vigencia_desde"] = vigencia_desde
+    oc_eval["vigencia_hasta"] = vigencia_hasta
+    documental_nuevo = evaluar_oc_backlog(session, identidad, oc_eval)
+    comparacion = comparar_efecto_documental(documental_anterior, documental_nuevo)
+    return {
+        "oc_id": oc_id,
+        "clave_origen": fila["clave_origen"],
+        "evento_id": evento_id,
+        "vigencia_anterior": anterior,
+        "vigencia_nueva": nuevo,
+        "motivo": motivo,
+        "origen": "manual",
+        "efecto_documental": documental_nuevo,
+        "comparacion_documental": comparacion,
+    }
 
 
 def _json(valor: Any) -> str:

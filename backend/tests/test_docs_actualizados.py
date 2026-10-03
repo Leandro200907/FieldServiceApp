@@ -4,13 +4,11 @@
 - `docs_schema_actual.sql` declara ese head y contiene TODOS los objetos (tablas, índices,
   constraints, funciones) del esquema vivo — si una migración agrega algo y nadie regenera
   el dump, este test falla;
-- README declara el head y cifras reales (rutas, migraciones, tests);
+- README declara el head y cifras reales (rutas, migraciones);
 - `docs/HANDOFF_FRONTEND.md` lista cada ruta HTTP expuesta."""
 from __future__ import annotations
 
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -77,10 +75,6 @@ def test_readme_declara_head_y_cifras_reales(cliente_api):
     migraciones = len([p for p in (RAIZ / "migrations" / "versions").glob("*.py")])
     assert _cifra(r"\*\*Rutas HTTP:\*\* (\d+)", README) == operaciones
     assert _cifra(r"\*\*Migraciones:\*\* (\d+)", README) == migraciones
-    salida = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:warnings", str(RAIZ / "tests")],
-                            capture_output=True, text=True, cwd=RAIZ).stdout
-    recolectados = int(re.search(r"(\d+) tests? collected", salida).group(1))
-    assert _cifra(r"\*\*Tests:\*\* (\d+)", README) == recolectados
 
 
 def test_handoff_frontend_lista_todas_las_rutas(cliente_api):

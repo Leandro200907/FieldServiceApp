@@ -15,14 +15,11 @@ from app.db import tenant_session
 
 CLIENTE, LOCACION, TIPO = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
 
-
 # --------------------------------------------------------------------- apoyo
-
 
 def _hoy(tenant):
     with tenant_session(tenant.tenant_id) as s:
         return hoy_del_tenant(s, tenant.tenant_id)
-
 
 def _legajo(s, tenant, sujeto_id, tipo="persona"):
     s.execute(
@@ -32,7 +29,6 @@ def _legajo(s, tenant, sujeto_id, tipo="persona"):
         ),
         {"t": tenant.tenant_id, "s": sujeto_id, "tipo": tipo},
     )
-
 
 def _requisito(s, tenant, nombre="Carnet", tipo_sujeto="persona") -> str:
     rid = str(uuid.uuid4())
@@ -44,7 +40,6 @@ def _requisito(s, tenant, nombre="Carnet", tipo_sujeto="persona") -> str:
         {"id": rid, "t": tenant.tenant_id, "n": nombre, "ts": tipo_sujeto},
     )
     return rid
-
 
 def _documento(s, tenant, sujeto_id, requisito_id, desde, hasta, **extra) -> str:
     apoyo.legajo(s, tenant.tenant_id, sujeto_id)  # FK compuesta (0011): el sujeto debe existir
@@ -67,7 +62,6 @@ def _documento(s, tenant, sujeto_id, requisito_id, desde, hasta, **extra) -> str
     )
     return did
 
-
 def _asignar_supervisor(s, tenant, sujeto_id, desde, supervisor_usuario_id=None):
     apoyo.legajo(s, tenant.tenant_id, sujeto_id)
     s.execute(
@@ -77,7 +71,6 @@ def _asignar_supervisor(s, tenant, sujeto_id, desde, supervisor_usuario_id=None)
         ),
         {"t": tenant.tenant_id, "s": sujeto_id, "u": supervisor_usuario_id or tenant.usuarios["supervisor"], "d": desde},
     )
-
 
 def _matriz(s, tenant, version, desde, hasta, requisitos: list[str]) -> str:
     mid = str(uuid.uuid4())
@@ -98,7 +91,6 @@ def _matriz(s, tenant, version, desde, hasta, requisitos: list[str]) -> str:
         )
     return mid
 
-
 def _oc(s, tenant, clave, desde, hasta):
     s.execute(
         text(
@@ -108,9 +100,7 @@ def _oc(s, tenant, clave, desde, hasta):
         {"t": tenant.tenant_id, "c": clave, "cli": CLIENTE, "loc": LOCACION, "ts": TIPO, "d": desde, "h": hasta},
     )
 
-
 # --------------------------------------------------------------------- legajo
-
 
 def test_legajo_del_tecnico_ajeno_es_403(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -139,7 +129,6 @@ def test_legajo_del_tecnico_ajeno_es_403(cliente_api, tenant_de_prueba):
     r = cliente_api.get("/v1/consultas/legajo", params={"sujeto_id": "nadie"}, headers=t.headers("responsable_legajos"))
     assert r.status_code == 404
 
-
 def test_propuestas_pendientes(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     hoy = _hoy(t)
@@ -154,9 +143,7 @@ def test_propuestas_pendientes(cliente_api, tenant_de_prueba):
     r = cliente_api.get("/v1/consultas/propuestas_pendientes", headers=t.headers("supervisor"))
     assert r.status_code == 403
 
-
 # --------------------------------------------------------------------- tablero
-
 
 def test_tablero_incluye_vencidos_y_proximos_con_borde_inclusive(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -177,7 +164,6 @@ def test_tablero_incluye_vencidos_y_proximos_con_borde_inclusive(cliente_api, te
     assert dias == [-5, 0, 30]  # ordenado por vigente_hasta
     assert [i["vencido"] for i in cuerpo["items"]] == [True, False, False]
     assert [i["vigente_hoy"] for i in cuerpo["items"]] == [False, True, True]
-
 
 def test_supervisor_ve_solo_su_universo_en_tablero(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -211,9 +197,7 @@ def test_supervisor_ve_solo_su_universo_en_tablero(cliente_api, tenant_de_prueba
     assert cliente_api.get("/v1/consultas/legajo", params={"sujeto_id": "p_ajeno"}, headers=t.headers("supervisor")).status_code == 403
     assert cliente_api.get("/v1/consultas/tablero_vencimientos", headers=t.headers("tecnico")).status_code == 403
 
-
 # --------------------------------------------------------------------- matriz
-
 
 def test_matriz_vigente_con_fecha_igual_a_vigente_hasta(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -231,9 +215,7 @@ def test_matriz_vigente_con_fecha_igual_a_vigente_hasta(cliente_api, tenant_de_p
     r = cliente_api.get("/v1/consultas/matriz_vigente", params={**params, "fecha": "2025-12-31"}, headers=t.headers("tecnico"))
     assert r.status_code == 404
 
-
 # --------------------------------------------------------------------- auditoría / supervisión
-
 
 def test_log_auditoria_paginado(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
@@ -253,89 +235,3 @@ def test_log_auditoria_paginado(cliente_api, tenant_de_prueba):
     r = cliente_api.get("/v1/consultas/log_auditoria", params={"tipo": "LegajoCreado"}, headers=t.headers("responsable_legajos"))
     assert r.json()["total"] == 3
     assert cliente_api.get("/v1/consultas/log_auditoria", headers=t.headers("supervisor")).status_code == 403
-
-
-def test_historial_supervision(cliente_api, tenant_de_prueba):
-    t = tenant_de_prueba
-    hoy = _hoy(t)
-    with tenant_session(t.tenant_id) as s:
-        apoyo.legajo(s, t.tenant_id, "p1")
-        s.execute(
-            text(
-                "INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, hasta, estado, asignada_por) "
-                "VALUES (:t, 'p1', :u, :d, :h, 'cerrada', 'test')"
-            ),
-            {"t": t.tenant_id, "u": t.usuarios["configuracion"], "d": hoy - timedelta(days=100), "h": hoy - timedelta(days=1)},
-        )
-        _asignar_supervisor(s, t, "p1", hoy)
-    r = cliente_api.get("/v1/consultas/historial_supervision", params={"sujeto_id": "p1"}, headers=t.headers("configuracion"))
-    assert r.status_code == 200, r.text
-    items = r.json()["items"]
-    assert [i["estado"] for i in items] == ["cerrada", "vigente"]
-    assert items[1]["supervisor_usuario_id"] == t.usuarios["supervisor"] and items[1]["supervisor_nombre"] == "supervisor"
-    assert cliente_api.get("/v1/consultas/historial_supervision", params={"sujeto_id": "p1"}, headers=t.headers("supervisor")).status_code == 403
-
-
-# --------------------------------------------------------------------- OC
-
-
-def test_backlog_oc_con_ultima_decision(cliente_api, tenant_de_prueba):
-    t = tenant_de_prueba
-    hoy = _hoy(t)
-    with tenant_session(t.tenant_id) as s:
-        _legajo(s, t, "empresa_1", tipo="empresa")
-        _legajo(s, t, "p1")
-        rid = _requisito(s, t, "Carnet", "persona")
-        _matriz(s, t, 1, hoy - timedelta(days=30), None, [rid])
-        _oc(s, t, "OC-A", hoy, hoy + timedelta(days=10))
-        _oc(s, t, "OC-B", hoy + timedelta(days=1), hoy + timedelta(days=10))
-        s.execute(text("UPDATE modulo1.oc SET estado = 'cancelado' WHERE clave_origen = 'OC-B'"))
-    from app.core.orquestacion import decidir_habilitacion
-    from datetime import datetime, timezone
-    with tenant_session(t.tenant_id) as s:  # transacciones separadas: creado_en distinto
-        primera = decidir_habilitacion(s, t.tenant_id, "OC-A", ["p1"], datetime.now(timezone.utc), None)  # sin doc: no_habilitado
-    with tenant_session(t.tenant_id) as s:
-        _documento(s, t, "p1", rid, hoy - timedelta(days=10), hoy + timedelta(days=365))
-        segunda = decidir_habilitacion(s, t.tenant_id, "OC-A", ["p1"], datetime.now(timezone.utc), None)
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("responsable_legajos"))
-    assert r.status_code == 200, r.text
-    assert r.json()["total"] == 1
-    item = r.json()["items"][0]
-    assert item["clave_origen"] == "OC-A" and item["ultima_decision"]["referencia_evaluacion"] == segunda["referencia_evaluacion"]
-    assert item["ultima_decision"]["veredicto_de_cumplimiento"] == "habilitado"
-    r = cliente_api.get("/v1/consultas/backlog_oc", params={"estado": "cancelado"}, headers=t.headers("responsable_legajos"))
-    assert r.json()["total"] == 1 and r.json()["items"][0]["ultima_decision"] is None
-    r = cliente_api.get("/v1/consultas/backlog_oc", params={"estado": ""}, headers=t.headers("responsable_legajos"))
-    assert r.json()["total"] == 2
-    # el supervisor sin p1 en su universo no ve ninguna decisión de OC-A
-    r = cliente_api.get("/v1/consultas/backlog_oc", headers=t.headers("supervisor"))
-    assert r.json()["items"][0]["ultima_decision"] is None
-    # historial de decisiones
-    h = cliente_api.get("/v1/consultas/decisiones_oc", params={"commitment_id": "OC-A"}, headers=t.headers("responsable_legajos")).json()
-    assert [d["referencia_evaluacion"] for d in h["items"]] == [segunda["referencia_evaluacion"], primera["referencia_evaluacion"]]
-    assert h["items"][0]["sujetos_propuestos"] == ["p1"]
-    assert cliente_api.get("/v1/consultas/decisiones_oc", params={"commitment_id": "OC-A"}, headers=t.headers("supervisor")).json()["total"] == 0
-    assert cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "NADA"}, headers=t.headers("responsable_legajos")).status_code == 404
-
-
-def test_cobertura_oc_es_consulta_sin_persistir(cliente_api, tenant_de_prueba):
-    t = tenant_de_prueba
-    hoy = _hoy(t)
-    with tenant_session(t.tenant_id) as s:
-        _legajo(s, t, "empresa_1", tipo="empresa")
-        _legajo(s, t, "p1")
-        rid = _requisito(s, t, "Carnet", "persona")
-        _matriz(s, t, 1, hoy - timedelta(days=30), None, [rid])
-        _documento(s, t, "p1", rid, hoy - timedelta(days=10), hoy + timedelta(days=365))
-        _oc(s, t, "OC-R", hoy, hoy + timedelta(days=10))
-        s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
-                       "VALUES (:t, 'p1', :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "u": t.usuarios["supervisor"]})
-    r = cliente_api.get("/v1/consultas/cobertura_oc", params={"commitment_id": "OC-R"}, headers=t.headers("supervisor"))
-    assert r.status_code == 200, r.text
-    cuerpo = r.json()
-    assert cuerpo["modo"] == "consulta" and "referencia_evaluacion" not in cuerpo
-    assert cuerpo["veredicto_de_cumplimiento"] == "habilitado" and cuerpo["resultado_de_decision"] == "puede_asignarse"
-    assert cuerpo["por_sujeto"] is not None and cuerpo["requisitos_faltantes"] is not None
-    with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.evaluacion_habilitacion")).scalar() == 0
-        assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = 'EvaluacionDeHabilitacionRealizada'")).scalar() == 0

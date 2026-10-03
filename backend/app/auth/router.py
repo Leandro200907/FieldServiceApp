@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.errores import ErrorDeDominio, NoAutenticado
+from app.api.errores import DemasiadasSolicitudes, NoAutenticado
 from app.auth import jwt as tokens
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
@@ -74,9 +74,14 @@ class ParDeTokens(BaseModel):
 
 class IdentidadResponse(BaseModel):
     tenant_id: str
+    tenant_nombre: str
     usuario_id: str
+    usuario_nombre: str | None = None
+    usuario_email: str | None = None
     roles: list[str]
     sujeto_id: str | None
+    legajo_etiqueta: str | None = None
+    zona_horaria: str
 
 
 class LogoutResponse(BaseModel):
@@ -91,7 +96,7 @@ def login(body: LoginRequest, request: Request) -> ParDeTokens:
     origen = origen_real(request.client.host if request.client else None,
                          request.headers.get("x-forwarded-for"), settings.proxies_confiables)
     if not _limiter_login.permitir(f"origen:{origen}"):
-        raise ErrorDeDominio("Demasiados intentos; reintentar en un minuto", codigo="rate_limit")
+        raise DemasiadasSolicitudes("Demasiados intentos; reintentar en un minuto")
     with platform_session() as s:
         tenant_id = s.execute(
             text("SELECT modulo1.resolver_tenant_por_slug(:slug)"), {"slug": body.tenant_slug}
@@ -135,11 +140,39 @@ def logout(body: LogoutRequest, identidad: Identidad = Depends(identidad_actual)
 
 @router.get("/yo", response_model=IdentidadResponse)
 def yo(identidad: Identidad = Depends(identidad_actual)) -> IdentidadResponse:
+    with tenant_session(identidad.tenant_id) as s:
+        tenant = s.execute(
+            text("SELECT nombre, zona_horaria FROM modulo1.tenant WHERE tenant_id = :t"),
+            {"t": identidad.tenant_id},
+        ).mappings().first()
+        usuario = s.execute(
+            text("SELECT email, nombre FROM modulo1.usuario WHERE usuario_id = CAST(:u AS uuid)"),
+            {"u": identidad.usuario_id},
+        ).mappings().first()
+        legajo_etiqueta = None
+        if identidad.sujeto_id:
+            legajo = s.execute(
+                text(
+                    "SELECT tipo_sujeto, identificador_natural, nombre_apellido FROM modulo1.legajo "
+                    "WHERE tenant_id = :t AND sujeto_id = :s"
+                ),
+                {"t": identidad.tenant_id, "s": identidad.sujeto_id},
+            ).mappings().first()
+            if legajo is not None:
+                if legajo["tipo_sujeto"] == "persona" and legajo.get("nombre_apellido"):
+                    legajo_etiqueta = f"{legajo['nombre_apellido']} (DNI {legajo['identificador_natural']})"
+                else:
+                    legajo_etiqueta = str(legajo["identificador_natural"])
     return IdentidadResponse(
         tenant_id=identidad.tenant_id,
+        tenant_nombre=str(tenant["nombre"]) if tenant else "",
         usuario_id=identidad.usuario_id,
+        usuario_nombre=str(usuario["nombre"]) if usuario and usuario.get("nombre") else None,
+        usuario_email=str(usuario["email"]) if usuario and usuario.get("email") else None,
         roles=sorted(r.value for r in identidad.roles),
         sujeto_id=identidad.sujeto_id,
+        legajo_etiqueta=legajo_etiqueta,
+        zona_horaria=str(tenant["zona_horaria"]) if tenant else "UTC",
     )
 
 

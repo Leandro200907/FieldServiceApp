@@ -25,6 +25,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.auth.passwords import PasswordDemasiadoLarga
@@ -66,6 +67,11 @@ class Prohibido(ErrorDeDominio):
     codigo = "prohibido"
 
 
+class DemasiadasSolicitudes(ErrorDeDominio):
+    status = 429
+    codigo = "rate_limit"
+
+
 def envelope(codigo: str, mensaje: str, detalles: Any = None, request_id: str | None = None) -> dict:
     cuerpo: dict[str, Any] = {"codigo": codigo, "mensaje": mensaje, "detalles": jsonable_encoder(detalles)}
     if request_id:
@@ -97,6 +103,8 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request.state.request_id = rid
         respuesta = await call_next(request)
         respuesta.headers[HEADER_REQUEST_ID] = rid
+        if request.url.path.startswith("/v1/consultas/"):
+            respuesta.headers["Cache-Control"] = "no-store"
         return respuesta
 
 
@@ -111,6 +119,15 @@ def registrar_handlers(app: FastAPI) -> None:
     async def _validacion(request: Request, exc: RequestValidationError):
         return _respuesta(request, 422, "validacion", "Request inválido", _errores_de_validacion_sin_input(exc))
 
+    @app.exception_handler(StarletteHTTPException)
+    async def _http(request: Request, exc: StarletteHTTPException):
+        codigos = {
+            404: "no_encontrado",
+            405: "metodo_no_permitido",
+        }
+        mensaje = exc.detail if isinstance(exc.detail, str) else "Solicitud HTTP inválida"
+        return _respuesta(request, exc.status_code, codigos.get(exc.status_code, "error_http"), mensaje)
+
     @app.exception_handler(PasswordDemasiadoLarga)
     async def _password_larga(request: Request, exc: PasswordDemasiadoLarga):
         # Red de seguridad para cualquier ruta que hashee (alta/cambio de contraseña):
@@ -122,10 +139,8 @@ def registrar_handlers(app: FastAPI) -> None:
         # Red de seguridad: una restricción de la base (UNIQUE/CHECK/FK) que la lógica no
         # anticipó — típicamente una carrera — es un conflicto reintentable, no un 500.
         # La transacción ya quedó revertida por tenant_session.
-        nombre = getattr(getattr(exc, "orig", None), "diag", None)
-        restriccion = getattr(nombre, "constraint_name", None)
         return _respuesta(request, 409, "conflicto_concurrencia",
-                          "La operación chocó con una restricción de la base; reintentar", {"restriccion": restriccion})
+                          "La operación chocó con una restricción de la base; reintentar")
 
     @app.exception_handler(Exception)
     async def _generico(request: Request, exc: Exception):

@@ -29,8 +29,13 @@ def test_resultados_vigentes_no_crean_alerta():
     assert resumen.estado == "sin_alertas_documentales"
 
 
-def test_sin_matriz_tiene_precedencia_en_la_oc():
+def test_alerta_real_tiene_precedencia_sobre_hueco_de_matriz():
     legajo = resumir_resultados([resultado(EstadoRequisitoDocumental.FALTANTE)])
+    assert resumir_oc([legajo], sin_matriz=True).estado == "con_alertas_documentales"
+
+
+def test_sin_matriz_se_informa_cuando_no_hay_otras_alertas():
+    legajo = resumir_resultados([resultado(EstadoRequisitoDocumental.VIGENTE_TODO_EL_PERIODO)])
     assert resumir_oc([legajo], sin_matriz=True).estado == "sin_matriz"
 
 
@@ -45,5 +50,4 @@ def test_respuesta_no_introduce_semantica_de_planificacion():
     fuente = (Path(__file__).parents[1] / "app/modules/proyeccion/router.py").read_text(encoding="utf-8")
     prohibidos = ("asignable", "candidato", "capacidad_documental", "bajo_excepcion")
     assert not any(nombre in fuente for nombre in prohibidos)
-
 

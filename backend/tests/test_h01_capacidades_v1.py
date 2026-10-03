@@ -174,8 +174,15 @@ def persona_con_docs(cliente_api, tenant_de_prueba):
     req = _alta_def(cliente_api, t, "Apto médico")
     req2 = _alta_def(cliente_api, t, "Altura", categoria="competencia")
     p = _alta_persona(cliente_api, t, "DNI 30.000.000")
-    _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2027-12-31")
-    _cargar(cliente_api, t, p, req2, desde="2026-01-01", hasta="2027-12-31", estado_confirmacion="declarado")
+    doc_apto = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2027-12-31")
+    _ok(_post(cliente_api, t, "responsable_legajos", "registrar_acreditacion_de_competencia", {
+        "persona_id": p,
+        "requisito_definicion_id": req2,
+        "vigente_desde": "2026-01-01",
+        "vigente_hasta": "2027-12-31",
+        "estado_confirmacion": "declarado",
+        "evidencias": [doc_apto["documento_id"]],
+    }))
     return {"t": t, "persona": p, "req": req}
 
 
@@ -272,14 +279,14 @@ def test_score_documental_y_snapshot_diario(cliente_api, tenant_de_prueba):
 
 def test_exportar_legajo_json_y_csv_con_traza(cliente_api, persona_con_docs):
     t, p = persona_con_docs["t"], persona_con_docs["persona"]
-    assert cliente_api.get("/v1/consultas/exportar_legajo", params={"sujeto_id": p}, headers=t.headers("supervisor")).status_code == 403
-    assert cliente_api.get("/v1/consultas/exportar_legajo", params={"sujeto_id": "nadie"}, headers=t.headers("responsable_legajos")).status_code == 404
-    r = cliente_api.get("/v1/consultas/exportar_legajo", params={"sujeto_id": p}, headers=t.headers("responsable_legajos"))
+    assert cliente_api.post("/v1/consultas/exportar_legajo", params={"sujeto_id": p}, headers=t.headers("supervisor")).status_code == 403
+    assert cliente_api.post("/v1/consultas/exportar_legajo", params={"sujeto_id": "nadie"}, headers=t.headers("responsable_legajos")).status_code == 404
+    r = cliente_api.post("/v1/consultas/exportar_legajo", params={"sujeto_id": p}, headers=t.headers("responsable_legajos"))
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/json") and "attachment" in r.headers["content-disposition"]
     d = r.json()
     assert d["legajo"]["sujeto_id"] == p and len(d["documentos"]) == 2 and d["documentos"][0]["requisito"] in ("Apto médico", "Altura")
     assert {"acreditaciones", "inducciones", "excepciones", "constancias", "custodias", "alertas", "supervision"} <= set(d)
-    csv = cliente_api.get("/v1/consultas/exportar_legajo", params={"sujeto_id": p, "formato": "csv"}, headers=t.headers("responsable_legajos"))
+    csv = cliente_api.post("/v1/consultas/exportar_legajo", params={"sujeto_id": p, "formato": "csv"}, headers=t.headers("responsable_legajos"))
     assert csv.status_code == 200 and csv.text.startswith("seccion,campo,valor,fila\n") and "documentos,requisito," in csv.text
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tenant_id = :t AND tipo = 'LegajoExportado'"), {"t": t.tenant_id}).scalar() == 2
@@ -296,7 +303,7 @@ def _remoto(id_, nombre, mime="application/pdf", h=None):
 def drive(cliente_api, tenant_de_prueba, tmp_path):
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto médico")
-    _alta_def(cliente_api, t, "Altura en andamios", categoria="competencia")
+    _alta_def(cliente_api, t, "Altura en andamios", categoria="documento")
     _alta_def(cliente_api, t, "Altura avanzada", categoria="competencia")
     p = _alta_persona(cliente_api, t, "DNI 1", sujeto_id="persona_0042")
     prov = ProveedorEnMemoria(carpetas={"carpeta-1": [

@@ -119,7 +119,7 @@ def test_caso_a_declarado_invalido_rechaza_como_rechazar_propuesta(cliente_api, 
     persona = t.sujeto_tecnico
     with tenant_session(t.tenant_id) as s:
         apoyo.legajo(s, t.tenant_id, persona)
-    original = _cargar(cliente_api, t, persona, req, hasta="2027-06-30")["documento_id"]
+    original = _cargar(cliente_api, t, persona, req, hasta="2027-06-30", solo_declarado=True)["documento_id"]
 
     r = _post(cliente_api, t, "tecnico", "proponer_documento",
               {"sujeto_id": persona, "requisito_definicion_id": req, "vigente_desde": "2026-01-01", "vigente_hasta": "2028-01-01"})
@@ -155,7 +155,12 @@ def escenario_caso_b(sesion, cliente_api, tenant_de_prueba):
     req_p = _alta_def(cliente_api, t, "Apto médico")
     with tenant_session(t.tenant_id) as s:
         apoyo.legajo(s, t.tenant_id, "persona_A")
-    doc = _cargar(cliente_api, t, "persona_A", req_p, hasta="2027-06-30")["documento_id"]
+    doc = _cargar(cliente_api, t, "persona_A", req_p, hasta="2027-06-30", solo_declarado=True)["documento_id"]
+    with tenant_session(t.tenant_id) as s:
+        s.execute(
+            text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE documento_id = CAST(:d AS uuid)"),
+            {"d": doc},
+        )
     clave = clave_de_matriz()
     with tenant_session(t.tenant_id) as s:
         insertar_matriz(s, t.tenant_id, clave, {req_p: "excepcionable"})
@@ -177,7 +182,7 @@ def test_caso_b_verificado_invalido_no_toca_estado_confirmacion_notifica_y_reval
     assert fila["estado_confirmacion"] == "verificado"  # NUNCA se toca solo (caso B)
     assert fila["estado_version"] == "vigente"  # tampoco se rechaza
 
-    r = cliente_api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos"))
+    r = cliente_api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos"))
     assert r.status_code == 422 and r.json()["error"]["codigo"] == "archivo_invalido"
 
     with tenant_session(t.tenant_id) as s:
@@ -369,7 +374,7 @@ def test_reemplazo_de_archivo_invalido_permite_nueva_subida_y_valida(cliente_api
     assert _fila(t.tenant_id, doc)["archivo_validacion"] == "pendiente"
     _validar(t, storage)
     assert _fila(t.tenant_id, doc)["archivo_validacion"] == "valido"
-    assert cliente_api.get(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).status_code == 200
+    assert cliente_api.post(f"/v1/storage/documentos/{doc}/url", headers=t.headers("responsable_legajos")).status_code == 200
 
 
 def test_invalidar_evidencia_verificada_manual_responsable_only(cliente_api, storage, escenario_caso_b):

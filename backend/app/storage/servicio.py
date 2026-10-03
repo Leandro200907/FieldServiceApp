@@ -46,7 +46,8 @@ def _documento(session: Session, documento_id: str, *, bloquear: bool = False) -
     fila = session.execute(
         text(
             "SELECT documento_id, tenant_id, sujeto_id, origen_propuesta, clave_storage, archivo_estado, "
-            "checksum_archivo, archivo_bytes, archivo_validacion FROM modulo1.documento WHERE documento_id = :d"
+            "checksum_archivo, archivo_bytes, archivo_validacion, archivo_validacion_motivo "
+            "FROM modulo1.documento WHERE documento_id = :d"
             + (" FOR UPDATE" if bloquear else "")
         ),
         {"d": documento_id},
@@ -188,6 +189,7 @@ def firmar_descarga(
     audita (DescargarArchivoDeEvidencia) y devuelve la URL GET efímera."""
     storage = storage or _storage_por_defecto()
     doc = _documento(session, documento_id)
+    _autorizar_descarga(session, identidad, doc["sujeto_id"])
     if doc["archivo_estado"] != "confirmado":
         raise ErrorDeDominio(
             "El documento no tiene archivo de evidencia confirmado",
@@ -207,7 +209,15 @@ def firmar_descarga(
             {"documento_id": str(documento_id)},
             codigo="archivo_pendiente_de_validacion",
         )
-    _autorizar_descarga(session, identidad, doc["sujeto_id"])
+    info = storage.inspeccionar(clave)
+    if info is None:
+        raise ErrorDeDominio("El archivo no existe en el storage", codigo="sin_archivo")
+    if doc["checksum_archivo"] and info.checksum_sha256 != doc["checksum_archivo"]:
+        raise ErrorDeDominio(
+            "El checksum del archivo no coincide con el registrado",
+            {"documento_id": str(documento_id)},
+            codigo="checksum_no_coincide",
+        )
     expira_en = ahora_utc() + timedelta(seconds=expira_seg)
     registrar_evento(
         session,

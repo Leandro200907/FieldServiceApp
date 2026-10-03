@@ -168,7 +168,7 @@ def score_documental(identidad: Identidad = Depends(identidad_actual)) -> ScoreD
 # --------------------------------------------------------------------------- exportación
 
 
-@router.get("/consultas/exportar_legajo")
+@router.post("/consultas/exportar_legajo")
 def exportar_legajo(sujeto_id: str = Query(...), formato: Literal["json", "csv"] = Query("json"), identidad: Identidad = Depends(identidad_actual)) -> Response:
     with tenant_session(identidad.tenant_id) as s:
         ct, contenido, nombre = exportacion.exportar(s, identidad, sujeto_id, formato)

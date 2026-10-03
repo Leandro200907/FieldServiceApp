@@ -11,10 +11,8 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 89 operaciones sobre 88 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 24 archivos en `migrations/versions/`, un solo head: `0021_validacion_evidencia`.
-- **Tests:** 559 (pytest, contra PostgreSQL real; incluyen los 5 casos de oro, E2E HTTP,
-  concurrencia con hilos, aislamiento multi-tenant y dos workers).
+- **Rutas HTTP:** 87 operaciones sobre 86 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 33 archivos en `migrations/versions/`, un solo head: `0030_legajo_nombre_apellido`.
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
   `scripts/generar_openapi.py`; `tests/test_openapi_versionado.py` lo compara con la app).
@@ -41,20 +39,21 @@ app/
                         # revaluación declarativa, incumplimiento de empresa, etapa de alerta (pura)
   comun/                # eventos + outbox, idempotencia, reloj del tenant, paginación
   modules/
-    legajos/            # sujetos, documentos, acreditaciones, inducciones, lotes, supervisor
+    legajos/            # sujetos, documentos habilitantes unificados, lotes, supervisor
     requisitos/         # definiciones, matrices, requisitos particulares
-    operacion/          # custodia, excepciones, constancias, evaluar habilitación
+    operacion/          # servicios internos heredados; sin rutas HTTP en Módulo 1
     alertas/            # alerta de vencimiento (agregado, políticas, coalescing, consultas)
     notificaciones/     # canales mail / Telegram (adaptadores), entrega idempotente, render
     paquete/            # paquete de entrega público firmado + QR (sin JWT, rate limit)
     score/              # score de salud documental + snapshot diario
     exportacion/        # exportar legajo (json/csv) con traza
+    operadoras/         # espejo por operadora, diferencias de versión y alertas
     drive/              # carpeta de Drive de solo lectura: proveedor, escaneo, extracción por confianza, bandeja
     oc/                 # importación/cancelación de OC (vista de compromiso)
     consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0021, lineales, un head)
+migrations/             # Alembic (0001 … 0022, lineales, un head)
 scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
 tests/                  # suite completa (ver Cifras)
 docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
@@ -68,6 +67,16 @@ Requiere PostgreSQL 16 con un superusuario y `psql`/`pg_dump` en el PATH (o ruta
 # 1) Roles (contraseñas SOLO por variables de psql, mínimo 12 caracteres; nunca en el repo)
 psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v owner_password='…' -v app_password='…' -f scripts/crear_roles.sql
 ```
+
+Roles de Postgres (ver `scripts/crear_roles.sql`):
+
+| Rol | Uso | Permisos relevantes |
+|-----|-----|---------------------|
+| **postgres** (u otro superusuario) | `DATABASE_URL_ADMIN` en `--reset` del sembrado demo | `DROP DATABASE` / `CREATE DATABASE` |
+| **modulo1_owner** | `DATABASE_URL_MIGRATIONS` — Alembic, `generar_schema.py`, DDL del owner | Migraciones; **sin** `CREATEDB` |
+| **modulo1_app** | `DATABASE_URL` — API, worker, scripts de aplicación | DML bajo RLS; **sin** owner ni `CREATEDB` |
+
+Precedencia de URLs en entorno: variables del proceso → archivo `ENV_FILE` → `.env`.
 
 ```bash
 # 2) Base con owner correcto
@@ -136,6 +145,27 @@ Pendiente expresamente para después de v1: cambio y restablecimiento de contras
 reactivación (exigirá `tokens_validos_desde` o una versión de seguridad en el claim para
 que no revivan tokens emitidos antes de la desactivación) y gestión de usuarios por API.
 
+## Base de demo
+
+Base dedicada **`fsm_demo`** (el nombre debe terminar en `_demo`). El script aborta si
+`DATABASE_URL` y `DATABASE_URL_MIGRATIONS` no apuntan a la misma base con ese sufijo.
+
+1. Crear la base (owner `modulo1_owner`), por ejemplo: `psql … -v db=fsm_demo -f scripts/crear_base.sql`
+2. En `.env`, apuntar `DATABASE_URL` y `DATABASE_URL_MIGRATIONS` a `fsm_demo`; definir
+   **`DEMO_PASSWORD`** (o usar prompt al correr el script). Para **`--reset`**, definir también
+   **`DATABASE_URL_ADMIN`** (p. ej. `postgresql://postgres:…@localhost:5432/postgres`): el owner
+   no tiene `CREATEDB` y el script aborta **antes** de borrar storage o la base si falta permiso.
+3. Sembrado completo:
+
+```bash
+ENV_FILE=.env .venv/Scripts/python scripts/sembrar_demo.py --reset --importar-planillas
+```
+
+4. Levantar API, frontend y storage local; ingresar con un mail `*@<slug>.demo.test` del
+   listado que imprime el script (contraseña: la de `DEMO_PASSWORD`).
+
+Las planillas generadas viven en `scripts/demo_planillas/<slug>/` (gitignored).
+
 ## Correr
 
 ```bash
@@ -149,9 +179,15 @@ que no revivan tokens emitidos antes de la desactivación) y gestión de usuario
 ```
 
 ```bash
-# Tests (usan DATABASE_URL de .env; la base debe estar en el head)
-.venv/Scripts/python -m pytest -q
+# Tests: base explícita modulo1_test (nunca fsm_demo ni el .env de demo manual)
+# Copiar .env.test.example → .env.test, crear modulo1_test, alembic upgrade head
+ENV_FILE=.env.test .venv/Scripts/python -m pytest -q --ignore=tests/test_sembrar_demo.py
 ```
+
+`pytest` aborta si `DATABASE_URL` apunta a `fsm_demo`, a cualquier `*_demo` en la suite
+general, o a una base que no sea `modulo1_ci` / `modulo1_test` / `*_test`. Los tests de
+`test_sembrar_demo.py` solo contra `modulo1_ci_demo` (ver `.env.demo-test.example`), nunca
+contra `fsm_demo`.
 
 Salud (públicas, sin JWT): `GET /v1/salud/vivo` (liveness) y `GET /v1/salud/listo`
 (readiness: DB, migración en `MIGRACION_HEAD`, storage y worker — último latido global en
@@ -239,4 +275,3 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Validación técnica de evidencia: formato/tipo de contenido real/PDF no corrupto, malware (`no_configurado` sin scanner real), eje `archivo_validacion` independiente de `estado_confirmacion`, caso A (declarado→`RechazarPropuesta`) / caso B (verificado→notifica + revaluación, nunca toca `estado_confirmacion`), bloquea descarga, fencing por token, recuperación manual (reemplazo o `invalidar_evidencia`) | Hecho (0021) |
 | Transporte real a Módulo 2 (hoy `PublicadorEnLog`; el drenaje ya tiene backoff/tope de reintentos/alerta obligatoria — 0020), storage S3, lectura de contenido más allá de tipo/sujeto/fecha (OCR general) | Pendiente / segunda etapa (declarado, no silencioso) |
 | Gestión de usuarios por API (alta/cambio/reset de contraseña, reactivación) | Pendiente (CLI `scripts/administracion.py`: tenant, usuarios, desactivación) |
-

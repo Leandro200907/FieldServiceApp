@@ -6,7 +6,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad
@@ -80,12 +80,25 @@ class ItemRadar(BaseModel):
     cliente_id: str
     locacion_id: str
     tipo_servicio_id: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    tipo_servicio_nombre: str | None = None
     vigencia_desde: date
     vigencia_hasta: date
-    estado_documental: Literal["sin_alertas_documentales", "con_alertas_documentales", "informacion_incompleta", "sin_matriz"]
+    estado_documental: Literal[
+        "sin_alertas_documentales",
+        "con_alertas_documentales",
+        "informacion_incompleta",
+        "sin_matriz",
+        "fuera_de_alcance",
+    ]
     primer_quiebre: date | None
     resumen: dict[str, ConteoTipo]
     motivos_resumidos: list[str]
+    disponibilidad_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    impacto_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    alertas_ciertas: list[dict[str, Any]] = Field(default_factory=list)
+    tiene_alertas: bool = False
 
 
 class RadarBacklogResponse(BaseModel):
@@ -104,7 +117,15 @@ class DetalleOcRadarResponse(BaseModel):
     estado_documental: str
     matrices_utilizadas: list[dict[str, Any]]
     requisitos_particulares: list[dict[str, Any]]
+    huecos_matriz: list[dict[str, date]]
     grupos: list[dict[str, Any]]
+    disponibilidad_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    impacto_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    alertas_ciertas: list[dict[str, Any]] = Field(default_factory=list)
+    tiene_alertas: bool = False
+    total_legajos: int
+    offset: int
+    limit: int
     advertencia: str
 
 
@@ -135,9 +156,10 @@ def radar_documental_backlog(
 @router.get("/consultas/radar_documental_oc", response_model=DetalleOcRadarResponse)
 def radar_documental_oc(
     oc_id: UUID = Query(...), identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
 ) -> DetalleOcRadarResponse:
     with tenant_session(identidad.tenant_id) as session:
-        return DetalleOcRadarResponse(**radar.detalle_oc(session, identidad, str(oc_id)))
+        return DetalleOcRadarResponse(**radar.detalle_oc(session, identidad, str(oc_id), p))
 
 
 @router.get("/consultas/radar_documental_oc/{oc_id}/legajos/{sujeto_id}", response_model=DetalleLegajoRadarResponse)
@@ -146,4 +168,3 @@ def radar_documental_legajo(
 ) -> DetalleLegajoRadarResponse:
     with tenant_session(identidad.tenant_id) as session:
         return DetalleLegajoRadarResponse(**radar.detalle_legajo(session, identidad, str(oc_id), sujeto_id))
-

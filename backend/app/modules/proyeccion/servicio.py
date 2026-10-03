@@ -29,28 +29,15 @@ def _exigir_rango(desde: date, hasta: date, hoy: date, limite_pasado: date | Non
 
 _SQL_CALENDARIO = """
     WITH evidencia AS (
-        SELECT 'documento' AS categoria, d.documento_id AS id, d.sujeto_id, l.tipo_sujeto,
+        SELECT COALESCE(r.categoria, 'documento') AS categoria, d.documento_id AS id, d.sujeto_id, l.tipo_sujeto,
                l.identificador_natural, d.requisito_definicion_id, r.nombre AS requisito,
                d.vigente_desde, d.vigente_hasta, d.estado_confirmacion,
                (CASE WHEN d.archivo_estado = 'confirmado' THEN d.archivo_validacion ELSE NULL END) AS archivo_validacion
         FROM modulo1.documento d
         JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id
         LEFT JOIN modulo1.definicion_requisito r ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
-        WHERE d.tenant_id = :t AND d.estado_version = 'vigente' AND l.dado_de_baja_en IS NULL
-        UNION ALL
-        SELECT 'competencia', a.acreditacion_id, a.persona_id, l.tipo_sujeto, l.identificador_natural,
-               a.requisito_definicion_id, r.nombre, a.vigente_desde, a.vigente_hasta, a.estado_confirmacion, NULL
-        FROM modulo1.acreditacion_competencia a
-        JOIN modulo1.legajo l ON l.tenant_id = a.tenant_id AND l.sujeto_id = a.persona_id
-        LEFT JOIN modulo1.definicion_requisito r ON r.tenant_id = a.tenant_id AND r.requisito_definicion_id = a.requisito_definicion_id
-        WHERE a.tenant_id = :t AND l.dado_de_baja_en IS NULL
-        UNION ALL
-        SELECT 'induccion', i.induccion_id, i.persona_id, l.tipo_sujeto, l.identificador_natural,
-               i.requisito_definicion_id, r.nombre, i.vigente_desde, i.vigente_hasta, i.estado_confirmacion, NULL
-        FROM modulo1.induccion i
-        JOIN modulo1.legajo l ON l.tenant_id = i.tenant_id AND l.sujeto_id = i.persona_id
-        LEFT JOIN modulo1.definicion_requisito r ON r.tenant_id = i.tenant_id AND r.requisito_definicion_id = i.requisito_definicion_id
-        WHERE i.tenant_id = :t AND l.dado_de_baja_en IS NULL
+        WHERE d.tenant_id = :t AND d.estado_version = 'vigente'
+          AND d.vigente_hasta IS NOT NULL AND l.dado_de_baja_en IS NULL
     )
 """
 
