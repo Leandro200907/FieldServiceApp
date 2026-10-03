@@ -25,6 +25,7 @@ from scripts.demo.config import (
     EQUIPO_POR_SLUG,
     GLOBAL_A_DEMO,
     LOCACIONES_POR_OPERADORA,
+    nombre_locacion_demo,
     OPERADORAS,
     PATENTES_POR_SLUG,
     REQUISITOS_LOCALES,
@@ -46,7 +47,7 @@ from scripts.demo.fechas import (
 
 @dataclass
 class SemillaContext:
-    saltados: list[str] = field(default_factory=list)
+    notas: list[str] = field(default_factory=list)
     fallas: list[str] = field(default_factory=list)
 
 
@@ -269,8 +270,10 @@ def cargar_catalogos_y_matrices(est: EstadoTenant, ctx: SemillaContext) -> None:
         for op in OPERADORAS:
             r = catalogos_maestros.alta_operadora(s, idn_cfg, op)
             est.catalogos[f"op_{op}"] = r["operadora_id"]
-            for i in range(1, LOCACIONES_POR_OPERADORA + 1):
-                loc = catalogos_maestros.alta_locacion(s, idn_cfg, r["operadora_id"], f"{op} — Locación {i}")
+            for i in range(1, len(LOCACIONES_POR_OPERADORA[op]) + 1):
+                loc = catalogos_maestros.alta_locacion(
+                    s, idn_cfg, r["operadora_id"], nombre_locacion_demo(op, i)
+                )
                 est.catalogos[f"loc_{op}_{i}"] = loc["locacion_id"]
         for ts in TIPOS_SERVICIO:
             r = catalogos_maestros.alta_tipo_servicio(s, idn_cfg, ts)
@@ -465,7 +468,7 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
     idn = est.idn("responsable_legajos", 1)
     for key in sorted(_EVIDENCIAS_SIN_ARCHIVO_EN_CARGA):
         if key in est.documentos:
-            ctx.saltados.append(
+            ctx.notas.append(
                 f"evidencias: {key} sin archivo en carga (bandeja o invalidación ART más abajo)"
             )
     with tenant_session(est.tenant_id) as s:
@@ -706,7 +709,7 @@ def cargar_lotes_competencias(est: EstadoTenant, ctx: SemillaContext) -> None:
 
 def asignar_supervisores(est: EstadoTenant, ctx: SemillaContext) -> None:
     if not hasattr(legajos, "asignar_supervisor"):
-        ctx.saltados.append("asignar_supervisor: función no disponible")
+        ctx.notas.append("asignar_supervisor: función no disponible")
         return
     idn = est.idn("responsable_legajos", 1)
     sup1 = est.uid("supervisor", 1)

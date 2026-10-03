@@ -8,8 +8,19 @@ ZONA_TENANT = "America/Argentina/Buenos_Aires"
 ROLES = ("configuracion", "responsable_legajos", "supervisor", "tecnico")
 
 OPERADORAS = ("YPF", "Vista", "Tecpetrol", "Pluspetrol")
-LOCACIONES_POR_OPERADORA = 2
+# Nombres de yacimiento / área por operadora (dos locaciones demo por cliente).
+LOCACIONES_POR_OPERADORA: dict[str, tuple[str, str]] = {
+    "YPF": ("Loma Campana", "El Trapial"),
+    "Vista": ("Bandurria Sur", "La Amarga Chica"),
+    "Tecpetrol": ("Fortín de Piedra", "Aguada Pichana"),
+    "Pluspetrol": ("Loma La Lata", "Río Neuquén"),
+}
 TIPOS_SERVICIO = ("Wireline", "Slickline", "Cementación")
+
+
+def nombre_locacion_demo(operadora: str, indice: int) -> str:
+    """Etiqueta de catálogo OC (1-based)."""
+    return f"{operadora} — {LOCACIONES_POR_OPERADORA[operadora][indice - 1]}"
 
 # Nombres locales (tenants que no copian del global)
 REQUISITOS_LOCALES: list[dict] = [

@@ -34,11 +34,14 @@ def imprimir_paquetes(estados: list[EstadoTenant]) -> None:
 
 
 def imprimir_resumen(ctx_global) -> None:
+    print("\n=== Notas ===")
+    if not ctx_global.notas:
+        print("(ninguna)")
+    for n in ctx_global.notas:
+        print(f"  - {n}")
     print("\n=== Pasos saltados o con fallas ===")
-    if not ctx_global.saltados and not ctx_global.fallas:
+    if not ctx_global.fallas:
         print("(ninguno)")
-    for s in ctx_global.saltados:
-        print(f"  [saltado] {s}")
     for f in ctx_global.fallas:
         print(f"  [falla] {f}")
     print("\n=== Hallazgos sobre la app ===")

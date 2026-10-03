@@ -15,7 +15,7 @@ from app.modules.operadoras.lector_xlsx import leer_planilla as leer_planilla_op
 from app.modules.operadoras import servicio as op_svc
 from app.modules.oc import servicio as oc_svc
 from app.auth.identidad import Rol
-from scripts.demo.config import dni_tecnico
+from scripts.demo.config import dni_tecnico, nombre_locacion_demo
 from scripts.demo.contexto import EstadoTenant
 from scripts.demo.db_util import ErrorDemo
 from scripts.demo.fechas import hoy_tenant
@@ -125,6 +125,43 @@ def generar_planillas(est: EstadoTenant) -> Path:
         hoja.cell(row=row, column=14, value=obs)
         row += 1
 
+    def _escribir_fila_presentacion(
+        hoja,
+        row: int,
+        *,
+        operadora: str,
+        doc_id: str,
+        estado: str,
+        slug: str,
+        hoy,
+        fecha_emision: str | None = None,
+        fecha_vencimiento: str | None = None,
+        requisito_id: str | None = None,
+        observacion: str = "",
+    ) -> None:
+        f_exp, f_pres, f_resp = _fechas_por_estado(hoy, estado)
+        emision = fecha_emision if fecha_emision is not None else hoy.isoformat()
+        vencimiento = fecha_vencimiento if fecha_vencimiento is not None else (hoy + timedelta(days=365)).isoformat()
+        hoja.cell(row=row, column=1, value=operadora)
+        hoja.cell(row=row, column=2, value="persona")
+        hoja.cell(row=row, column=3, value=dni_tecnico(slug, 1))
+        if requisito_id is not None:
+            hoja.cell(row=row, column=6, value=requisito_id)
+        hoja.cell(row=row, column=5, value="Apto médico")
+        if doc_id:
+            hoja.cell(row=row, column=7, value=doc_id)
+        hoja.cell(row=row, column=8, value=emision)
+        hoja.cell(row=row, column=9, value=vencimiento)
+        hoja.cell(row=row, column=10, value=estado)
+        if f_exp:
+            hoja.cell(row=row, column=11, value=f_exp)
+        if f_pres:
+            hoja.cell(row=row, column=12, value=f_pres)
+        if f_resp:
+            hoja.cell(row=row, column=13, value=f_resp)
+        if observacion:
+            hoja.cell(row=row, column=14, value=observacion)
+
     row = 6
     for i, (op, doc) in enumerate(docs):
         fila_presentacion(op, doc, ("exportado", "enviado", "aceptado")[i])
@@ -160,19 +197,46 @@ def generar_planillas(est: EstadoTenant) -> Path:
     wb2.save(out / "presentaciones_2.xlsx")
 
     wb_err = load_workbook(PLANTILLA)
-    h = wb_err["Presentaciones"]
-    h.cell(row=6, column=1, value="YPF SA")
-    h.cell(row=7, column=7, value="00000000-0000-0000-0000-000000000099")
-    h.cell(row=8, column=9, value="2099-99-99")
-    h.cell(row=9, column=1, value="")
+    h_err = wb_err["Presentaciones"]
+    doc_falso = "00000000-0000-0000-0000-000000000099"
+    _escribir_fila_presentacion(
+        h_err, 6, operadora="YPF SA", doc_id=doc_id, estado="exportado", slug=est.spec.slug, hoy=hoy
+    )
+    _escribir_fila_presentacion(
+        h_err, 7, operadora="YPF", doc_id=doc_falso, estado="exportado", slug=est.spec.slug, hoy=hoy
+    )
+    _escribir_fila_presentacion(
+        h_err,
+        8,
+        operadora="YPF",
+        doc_id=doc_id,
+        estado="exportado",
+        slug=est.spec.slug,
+        hoy=hoy,
+        fecha_vencimiento="2099-99-99",
+    )
+    _escribir_fila_presentacion(
+        h_err,
+        9,
+        operadora="YPF",
+        doc_id=doc_id,
+        estado="exportado",
+        slug=est.spec.slug,
+        hoy=hoy,
+        requisito_id="NO-UUID",
+    )
+    _escribir_fila_presentacion(
+        h_err, 10, operadora="", doc_id=doc_id, estado="exportado", slug=est.spec.slug, hoy=hoy
+    )
     wb_err.save(out / "presentaciones_con_errores.xlsx")
 
+    loc_ypf = nombre_locacion_demo("YPF", 1)
     oc_rows = [
         [
             f"OC-PLAN-{est.spec.slug}-OK",
             "ref",
             "YPF",
-            "YPF — Locación 1",
+            loc_ypf,
             "Wireline",
             (hoy + timedelta(days=60)).isoformat(),
             (hoy + timedelta(days=90)).isoformat(),
@@ -182,7 +246,7 @@ def generar_planillas(est: EstadoTenant) -> Path:
             f"OC-PLAN-{est.spec.slug}-BAD",
             "ref",
             "Operadora Inexistente",
-            "YPF — Locación 1",
+            loc_ypf,
             "Wireline",
             hoy.isoformat(),
             (hoy + timedelta(days=10)).isoformat(),

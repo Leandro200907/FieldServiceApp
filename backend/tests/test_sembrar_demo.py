@@ -29,22 +29,34 @@ PROPUESTAS_PENDIENTES_MIN_POR_TENANT = 3
 ESPEJO_ENTREGAS_MIN_POR_TENANT = 1
 
 
-def _seccion_pasos_saltados_o_fallas(stdout: str) -> tuple[list[str], list[str]]:
+def _seccion_notas(stdout: str) -> list[str]:
+    marcador = "=== Notas ==="
+    if marcador not in stdout:
+        pytest.fail(f"La salida del sembrado no incluye {marcador!r}")
+    bloque = stdout.split(marcador, 1)[1].split("=== Pasos saltados o con fallas ===", 1)[0]
+    notas: list[str] = []
+    for linea in bloque.splitlines():
+        t = linea.strip()
+        if t in ("(ninguna)", ""):
+            continue
+        if t.startswith("- "):
+            notas.append(t[2:].strip())
+    return notas
+
+
+def _seccion_pasos_saltados_o_fallas(stdout: str) -> list[str]:
     marcador = "=== Pasos saltados o con fallas ==="
     if marcador not in stdout:
         pytest.fail(f"La salida del sembrado no incluye {marcador!r}")
     bloque = stdout.split(marcador, 1)[1].split("=== Hallazgos sobre la app ===", 1)[0]
-    saltados: list[str] = []
     fallas: list[str] = []
     for linea in bloque.splitlines():
         t = linea.strip()
         if t == "(ninguno)":
             continue
-        if t.startswith("[saltado]"):
-            saltados.append(t[len("[saltado]") :].strip())
-        elif t.startswith("[falla]"):
+        if t.startswith("[falla]"):
             fallas.append(t[len("[falla]") :].strip())
-    return saltados, fallas
+    return fallas
 
 
 def _lote_id_demo(slug: str, sufijo: str) -> uuid.UUID:
@@ -110,9 +122,95 @@ def demo_sembrado():
 def test_sembrado_sin_fallas_imprevistas(demo_sembrado):
     """El reporte final del sembrado no debe listar fallas fuera de FALLAS_ESPERADAS_SEMBRADO."""
     _exigir_base_demo_tests()
-    _, fallas = _seccion_pasos_saltados_o_fallas(demo_sembrado)
+    fallas = _seccion_pasos_saltados_o_fallas(demo_sembrado)
     inesperadas = [f for f in fallas if f not in FALLAS_ESPERADAS_SEMBRADO]
     assert not inesperadas, "Fallas imprevistas en sembrado:\n" + "\n".join(f"  - {x}" for x in inesperadas)
+
+
+def test_sembrado_separa_notas_de_fallas(demo_sembrado):
+    _exigir_base_demo_tests()
+    notas = _seccion_notas(demo_sembrado)
+    fallas = _seccion_pasos_saltados_o_fallas(demo_sembrado)
+    assert any("sin archivo en carga" in n for n in notas)
+    assert not [f for f in fallas if f not in FALLAS_ESPERADAS_SEMBRADO]
+    bloque_fallas = demo_sembrado.split("=== Pasos saltados o con fallas ===", 1)[1].split(
+        "=== Hallazgos sobre la app ===", 1
+    )[0]
+    assert "(ninguno)" in bloque_fallas
+
+
+def test_locaciones_demo_nombres_reales(demo_sembrado):
+    _exigir_base_demo_tests()
+    from app.db import platform_session
+    from scripts.demo.config import nombre_locacion_demo
+
+    with platform_session() as ps:
+        for slug in TENANTS_DEMO:
+            tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+            assert tid is not None
+            tid = str(tid)
+            with tenant_session(tid) as s:
+                n_genéricas = s.execute(
+                    text(
+                        "SELECT count(*) FROM modulo1.locacion_oc "
+                        "WHERE tenant_id = :t AND nombre LIKE '%Locación %'"
+                    ),
+                    {"t": tid},
+                ).scalar()
+                assert n_genéricas == 0, f"{slug}: aún hay locaciones genéricas"
+                esperada = nombre_locacion_demo("YPF", 1)
+                n = s.execute(
+                    text(
+                        "SELECT count(*) FROM modulo1.locacion_oc "
+                        "WHERE tenant_id = :t AND nombre = :n"
+                    ),
+                    {"t": tid, "n": esperada},
+                ).scalar()
+                assert n == 1, f"{slug}: falta {esperada}"
+
+
+def test_presentaciones_con_errores_rechaza_cinco_filas(demo_sembrado):
+    """Planilla demo: cinco filas completas, cada una con un único error distinto."""
+    _exigir_base_demo_tests()
+    from app.db import platform_session
+    from app.modules.operadoras import servicio as op_svc
+    from app.modules.operadoras.lector_xlsx import leer_planilla
+    from scripts.demo.contexto import identidad_de
+
+    slug = "patagonia-demo"
+    path = RAIZ / "scripts" / "demo_planillas" / slug / "presentaciones_con_errores.xlsx"
+    assert path.is_file(), "correr sembrado con --importar-planillas genera la planilla"
+    data = path.read_bytes()
+    filas, err_lectura = leer_planilla(data)
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+        assert tid is not None
+        tid = str(tid)
+        with tenant_session(tid) as s:
+            uid = s.execute(
+                text("SELECT usuario_id::text FROM modulo1.usuario WHERE tenant_id = :t AND email = :e"),
+                {"t": tid, "e": f"responsable_legajos1@{slug}.demo.test"},
+            ).scalar()
+            idn = identidad_de(tid, uid, "responsable_legajos")
+            resp = op_svc.importar_filas(
+                s,
+                idn,
+                archivo="presentaciones_con_errores.xlsx",
+                hoja="Presentaciones",
+                filas=filas,
+                errores_lectura=err_lectura,
+            )
+    assert resp["filas_aceptadas"] == 0
+    assert resp["filas_rechazadas"] == 5
+    por_fila = {e["fila"]: e for e in resp["errores"]}
+    assert set(por_fila) == {6, 7, 8, 9, 10}
+    assert por_fila[6]["codigo"] == "operadora_inexistente"
+    assert "YPF SA" in por_fila[6]["mensaje"]
+    assert por_fila[7]["codigo"] == "no_encontrado"
+    assert por_fila[8]["codigo"] == "fecha_invalida"
+    assert por_fila[9]["codigo"] == "regla_de_dominio"
+    assert "Requisito ID inválido" in por_fila[9]["mensaje"]
+    assert por_fila[10]["codigo"] == "fila_invalida"
 
 
 def test_tenant_ids_por_slugs_si_base_no_existe():
