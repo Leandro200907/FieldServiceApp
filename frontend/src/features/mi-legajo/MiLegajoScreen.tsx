@@ -19,7 +19,7 @@ function LegajoCard({ title, number, legajoNombre, documentos, acreditaciones, i
     <p className="muted">{legajoNombre}</p>
     {items.length === 0
       ? <p className="empty-inline">Sin documentación registrada.</p>
-      : <ul className="evidence-list">{items.map(item => <EvidenceRow key={item.id} item={item} />)}</ul>}
+      : <ul className="evidence-list">{items.map(item => <EvidenciaRow key={item.id} item={item} />)}</ul>}
   </section>;
 }
 
