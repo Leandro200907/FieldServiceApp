@@ -1254,7 +1254,7 @@
             "title": "Confianza Extraccion"
           },
           "estado_confirmacion": {
-            "default": "verificado",
+            "default": "declarado",
             "enum": [
               "declarado",
               "verificado",
@@ -4068,6 +4068,13 @@
             ],
             "title": "Locacion Id"
           },
+          "ocs_afectadas": {
+            "items": {
+              "$ref": "#/components/schemas/OcAfectadaRef"
+            },
+            "title": "Ocs Afectadas",
+            "type": "array"
+          },
           "origen_propuesta": {
             "title": "Origen Propuesta",
             "type": "boolean"
@@ -5999,6 +6006,34 @@
         "title": "MiLegajoResponse",
         "type": "object"
       },
+      "OcAfectadaRef": {
+        "properties": {
+          "clave_origen": {
+            "title": "Clave Origen",
+            "type": "string"
+          },
+          "oc_id": {
+            "title": "Oc Id",
+            "type": "string"
+          },
+          "vigencia_desde": {
+            "title": "Vigencia Desde",
+            "type": "string"
+          },
+          "vigencia_hasta": {
+            "title": "Vigencia Hasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clave_origen",
+          "oc_id",
+          "vigencia_desde",
+          "vigencia_hasta"
+        ],
+        "title": "OcAfectadaRef",
+        "type": "object"
+      },
       "OcBacklogItem": {
         "properties": {
           "actualizado_en": {
@@ -7677,6 +7712,11 @@
       },
       "ResumenPaquete": {
         "properties": {
+          "pendiente_revision": {
+            "default": 0,
+            "title": "Pendiente Revision",
+            "type": "integer"
+          },
           "sin_verificar": {
             "title": "Sin Verificar",
             "type": "integer"

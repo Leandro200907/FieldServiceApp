@@ -27,6 +27,13 @@ class PropuestaEnRevision(BaseModel):
     estado_presentacion_explicacion: str
 
 
+class OcAfectadaRef(BaseModel):
+    clave_origen: str
+    oc_id: str
+    vigencia_desde: str
+    vigencia_hasta: str
+
+
 class EvidenciaVigente(BaseModel):
     tipo: str
     id: str
@@ -49,6 +56,7 @@ class EvidenciaVigente(BaseModel):
     estados_adicionales: list[str] | None = None
     estados_adicionales_explicacion: dict[str, str] | None = None
     propuesta_en_revision: PropuestaEnRevision | None = None
+    ocs_afectadas: list[OcAfectadaRef] = Field(default_factory=list)
 
 
 class ResumenLegajo(BaseModel):

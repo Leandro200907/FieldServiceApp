@@ -104,6 +104,9 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
         raise NoEncontrado("Legajo inexistente", {"sujeto_id": sujeto_id})
 
     items = filas_evidencia_para_legajo(session, identidad.tenant_id, sujeto_id, hoy)
+    from app.modules.consultas.ocs_afectadas import adjuntar_ocs_afectadas_evidencias
+
+    adjuntar_ocs_afectadas_evidencias(session, identidad, sujeto_id, items)
     resumen = resumen_desde_items(items)
     return {
         "hoy": hoy.isoformat(),
@@ -452,6 +455,7 @@ def acciones_pendientes(
     tipo_recurso: str | None = None,
 ) -> dict[str, Any]:
     """Renovaciones/regularizaciones que afectan OCs activas (modo consulta)."""
+    from app.modules.consultas.ocs_afectadas import ordenar_ocs_afectadas, referencia_oc
     from app.modules.proyeccion import radar as radar_mod
 
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
@@ -490,7 +494,7 @@ def acciones_pendientes(
                 elif fecha_accion is not None:
                     fecha_accion = str(fecha_accion)
                 clave = (leg["sujeto_id"], str(req.get("nombre") or ""), str(req["accion_sugerida"]))
-                oc_ref = {"clave_origen": oc["clave_origen"], "oc_id": str(oc["oc_id"])}
+                oc_ref = referencia_oc(oc)
                 if clave in agrupadas:
                     item = agrupadas[clave]
                     if oc_ref not in item["ocs_afectadas"]:
@@ -513,6 +517,9 @@ def acciones_pendientes(
                     "efecto": req.get("motivo"),
                     "genera_alerta_cierta": genera_alerta,
                 }
+    hoy_acciones = hoy_del_tenant(session, identidad.tenant_id)
+    for item in agrupadas.values():
+        item["ocs_afectadas"] = ordenar_ocs_afectadas(item["ocs_afectadas"], hoy_acciones)
     acciones = list(agrupadas.values())
     acciones.sort(
         key=lambda a: (

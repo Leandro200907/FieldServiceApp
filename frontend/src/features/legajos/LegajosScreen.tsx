@@ -50,7 +50,7 @@ export function LegajosScreen() {
       <p className="muted">Hoy: {legajo.data.hoy} · {legajo.data.legajo.dado_de_baja_en ? 'Dado de baja' : 'Activo'}</p>
       {[...legajo.data.documentos, ...legajo.data.acreditaciones, ...legajo.data.inducciones].length === 0
         ? <p className="empty-inline">Sin documentación registrada.</p>
-        : <ul className="evidence-list">{[...legajo.data.documentos, ...legajo.data.acreditaciones, ...legajo.data.inducciones].map(item => <EvidenciaRow key={item.id} item={item} />)}</ul>}
+        : <ul className="evidence-list">{[...legajo.data.documentos, ...legajo.data.acreditaciones, ...legajo.data.inducciones].map(item => <EvidenciaRow key={item.id} item={item} hoyIso={legajo.data!.hoy} />)}</ul>}
     </section>)}
     {selected && (espejoOperadora.loading ? <LoadingState /> : espejoOperadora.error ? <ErrorState message={espejoOperadora.error.message} requestId={espejoOperadora.error instanceof ApiFailure && espejoOperadora.error.detail.referenceSource === 'server' ? espejoOperadora.error.detail.requestId : undefined} /> : espejoOperadora.data && (() => {
       const items = espejoOperadora.data.items;

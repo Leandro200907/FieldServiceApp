@@ -7,10 +7,11 @@ import type { EvidenciaVigente, LegajoCompuesto } from './contracts';
 import { ApiFailure } from '../../api';
 import './mi-legajo.css';
 
-function LegajoCard({ title, number, legajoNombre, documentos, acreditaciones, inducciones, resumen }: {
+function LegajoCard({ title, number, legajoNombre, documentos, acreditaciones, inducciones, resumen, hoyIso }: {
   title: string; number: string; legajoNombre: string;
   documentos: EvidenciaVigente[]; acreditaciones: EvidenciaVigente[]; inducciones: EvidenciaVigente[];
   resumen: { total: number; vigentes_hoy: number; por_vencer?: number; vencidos: number };
+  hoyIso: string;
 }) {
   const items = [...documentos, ...acreditaciones, ...inducciones];
   return <section className="panel resource-panel">
@@ -19,7 +20,7 @@ function LegajoCard({ title, number, legajoNombre, documentos, acreditaciones, i
     <p className="muted">{legajoNombre}</p>
     {items.length === 0
       ? <p className="empty-inline">Sin documentación registrada.</p>
-      : <ul className="evidence-list">{items.map(item => <EvidenciaRow key={item.id} item={item} />)}</ul>}
+      : <ul className="evidence-list">{items.map(item => <EvidenciaRow key={item.id} item={item} hoyIso={hoyIso} />)}</ul>}
   </section>;
 }
 
@@ -35,7 +36,7 @@ export function MiLegajoScreen() {
       <div className="composite-grid">
         <LegajoCard title="Persona" number="01" legajoNombre={[tituloLegajoPersona(legajo.data.persona.legajo), subtituloLegajoPersona(legajo.data.persona.legajo)].filter(Boolean).join(' · ')}
           documentos={legajo.data.persona.documentos} acreditaciones={legajo.data.persona.acreditaciones} inducciones={legajo.data.persona.inducciones}
-          resumen={legajo.data.persona.resumen} />
+          resumen={legajo.data.persona.resumen} hoyIso={legajo.data.hoy} />
       </div>
     </>}
     <section className="module-boundary"><strong>Límite con Módulo 2</strong><span>Sin custodias ni recursos asignados</span><span>Sin modificar fechas</span><span>Sin crear OT</span><span>Sin ejecución, tiempos reales, firma ni certificados</span></section>

@@ -1898,7 +1898,7 @@ export interface components {
             confianza_extraccion?: ("alta" | "media" | "baja") | null;
             /**
              * Estado Confirmacion
-             * @default verificado
+             * @default declarado
              * @enum {string}
              */
             estado_confirmacion: "declarado" | "verificado" | "confirmado_en_fuente";
@@ -2892,6 +2892,8 @@ export interface components {
             identificador_natural?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
+            /** Ocs Afectadas */
+            ocs_afectadas?: components["schemas"]["OcAfectadaRef"][];
             /** Origen Propuesta */
             origen_propuesta: boolean;
             propuesta_en_revision?: components["schemas"]["PropuestaEnRevision"] | null;
@@ -3538,6 +3540,17 @@ export interface components {
             recursos_bajo_custodia: components["schemas"]["RecursoCustodiado"][];
             resumen: components["schemas"]["ResumenMiLegajo"];
         };
+        /** OcAfectadaRef */
+        OcAfectadaRef: {
+            /** Clave Origen */
+            clave_origen: string;
+            /** Oc Id */
+            oc_id: string;
+            /** Vigencia Desde */
+            vigencia_desde: string;
+            /** Vigencia Hasta */
+            vigencia_hasta: string;
+        };
         /** OcBacklogItem */
         OcBacklogItem: {
             /** Actualizado En */
@@ -4169,6 +4182,11 @@ export interface components {
         };
         /** ResumenPaquete */
         ResumenPaquete: {
+            /**
+             * Pendiente Revision
+             * @default 0
+             */
+            pendiente_revision: number;
             /** Sin Verificar */
             sin_verificar: number;
             /** Vencidos */

@@ -4,7 +4,9 @@ import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { textoAccionSugerida, textoEfectoAccion } from './copy';
-import { formatFecha } from './dates';
+import { formatFecha, todayIso } from './dates';
+import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
+import type { OcAfectadaRef } from '../../ui/ocsAfectadasPresentacion';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
@@ -98,7 +100,13 @@ export function AccionesPendientesScreen() {
                 {a.efecto && <p>{textoEfectoAccion(a.efecto)}</p>}
                 {a.genera_alerta_cierta && <em> Genera alerta cierta</em>}
                 {a.ocs_afectadas?.length > 0 && (
-                  <p>OCs: {a.ocs_afectadas.map(o => String((o as { clave_origen?: string }).clave_origen || '')).filter(Boolean).join(', ')}</p>
+                  <p>
+                    <OcsAfectadasLine
+                      ocs={a.ocs_afectadas as OcAfectadaRef[]}
+                      hoyIso={todayIso()}
+                      timeZone={session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires'}
+                    />
+                  </p>
                 )}
               </li>
             ))}
