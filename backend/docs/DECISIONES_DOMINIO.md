@@ -819,6 +819,27 @@ configuración real con clientes y no depender de la consola para la rotación d
 
 **Estado.** Decidida.
 
+#### D16. Confirmación para habilitar (propuesta vs. versión confirmada)
+
+**Decisión.** Un documento sin confirmar (`estado_confirmacion = declarado`, incluida una
+propuesta del técnico) **nunca** habilita ni cuenta como requisito cumplido. Si existe una
+versión **confirmada** anterior (típicamente en `sucedida` enlazada por `sucede_a`), todas
+las evaluaciones de la app —Radar documental, vencimientos, acciones pendientes, motor de
+habilitación (`cargar_evidencias` / `evaluar_compromiso` / `decidir_habilitacion`) y
+consultas de cobertura— usan esa versión confirmada para el período que cubra. Si **solo**
+hay propuesta sin predecesor confirmado, el requisito queda en *pendiente de revisión* /
+*requiere revisión* y no figura como vigente cumplido.
+
+**Motivo.** Evitar que una renovación propuesta sustituya visual o operativamente la
+evidencia verificada vigente, y unificar criterio entre consultas informativas y decisión
+de habilitación.
+
+**Código.** `app/core/resolucion_evidencia.py` (`fila_para_evaluacion`),
+`app/core/orquestacion.py` (`cargar_evidencias`), `app/modules/proyeccion/radar.py`
+(`_evidencias`), `app/modules/consultas/presentacion_evidencia.py` (listados de legajo).
+
+**Estado.** Decidida.
+
 ### Diseño
 
 #### D10. Documentos de empresa para el técnico
