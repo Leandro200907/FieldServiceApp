@@ -3,6 +3,7 @@ import {
   etiquetaEstadoRequisitoRadar,
   motivoFalloRequisitoRadar,
   requisitosRadarVisibles,
+  textoSinCoberturaRequisitoRadar,
   tituloLegajoRadar,
 } from '../src/features/documentation-planning/radarLegajoPresentation';
 import { temporaryMockAccess } from '../src/features/documentation-planning/temporaryMockAccess';
@@ -32,6 +33,18 @@ describe('radar legajo evidencia', () => {
       archivo_validacion: 'invalido',
       motivo: 'Constancia ART está vencido antes del inicio del período',
     })).toContain('vencido antes del inicio');
+  });
+
+  it('describe el período sin cobertura para vence_durante_periodo', () => {
+    const format = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    expect(textoSinCoberturaRequisitoRadar({
+      estado: 'vence_durante_periodo',
+      primer_quiebre: '2026-10-24',
+    }, '2026-11-02', format)).toBe('Sin cobertura del 24/10/2026 al 02/11/2026 (10 días)');
+    expect(textoSinCoberturaRequisitoRadar({
+      estado: 'vencido_antes_inicio',
+      primer_quiebre: '2026-10-24',
+    }, '2026-11-02', format)).toBeNull();
   });
 
   it('licencia que vence durante la OC no se etiqueta como Vencido', () => {

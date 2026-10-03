@@ -49,7 +49,8 @@ function radarDetail(item: ItemRadar, offset = 0, limit = 50): DetalleOcRadarRes
       {
         nombre: 'Licencia de conducir',
         estado: 'vence_durante_periodo',
-        vigente_hasta: '2026-10-08',
+        vigente_hasta: '2026-10-23',
+        primer_quiebre: '2026-10-24',
         motivo: 'Licencia de conducir deja un período sin cobertura documental',
         archivo_validacion: 'valido',
         requerido: true,

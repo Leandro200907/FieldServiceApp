@@ -6,6 +6,7 @@ import {
   etiquetaEstadoRequisitoRadar,
   motivoFalloRequisitoRadar,
   requisitosRadarVisibles,
+  textoSinCoberturaRequisitoRadar,
   textoVencimientoRequisitoRadar,
   tituloLegajoRadar,
   tonoEstadoRequisitoRadar,
@@ -37,6 +38,8 @@ export function RadarLegajoEvidenciaPanel({ data }: { data: DetalleLegajoRadarRe
   const format = (iso: string) => formatFecha(iso, timeZone);
   const requisitos = requisitosRadarVisibles(asRequisitos(legajo.requisitos));
   const estadoDoc = typeof legajo.estado_documental === 'string' ? legajo.estado_documental : '';
+  const ocRecord = asRecord(data.oc);
+  const periodoHastaOc = typeof ocRecord?.vigencia_hasta === 'string' ? ocRecord.vigencia_hasta : null;
 
   return (
     <section className="panel backlog-legajo-detail" aria-live="polite">
@@ -71,13 +74,20 @@ export function RadarLegajoEvidenciaPanel({ data }: { data: DetalleLegajoRadarRe
               {requisitos.map((req, index) => {
                 const etiqueta = etiquetaEstadoRequisitoRadar(req);
                 const motivo = motivoFalloRequisitoRadar(req);
+                const sinCobertura = textoSinCoberturaRequisitoRadar(req, periodoHastaOc, format);
                 const key = `${req.nombre ?? 'req'}-${index}`;
                 return (
                   <tr key={key}>
                     <td><strong>{req.nombre || 'Requisito sin nombre'}</strong></td>
                     <td><Badge tone={tonoEstadoRequisitoRadar(etiqueta)}>{etiqueta}</Badge></td>
                     <td>{textoVencimientoRequisitoRadar(req.vigente_hasta, format)}</td>
-                    <td>{motivo ?? '—'}</td>
+                    <td>
+                      {motivo && <span>{motivo}</span>}
+                      {sinCobertura && (
+                        <span className={motivo ? 'radar-motivo-sin-cobertura' : undefined}>{sinCobertura}</span>
+                      )}
+                      {!motivo && !sinCobertura && '—'}
+                    </td>
                   </tr>
                 );
               })}
