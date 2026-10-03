@@ -38,6 +38,17 @@
             "title": "Genera Alerta Cierta",
             "type": "boolean"
           },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
+          },
           "legajo_id": {
             "title": "Legajo Id",
             "type": "string"
@@ -56,17 +67,6 @@
               }
             ],
             "title": "Nombre Apellido"
-          },
-          "identificador_natural": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Identificador Natural"
           },
           "ocs_afectadas": {
             "items": {
@@ -3830,6 +3830,10 @@
             "title": "Identificador Natural",
             "type": "string"
           },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
           "nombre_apellido": {
             "anyOf": [
               {
@@ -3840,10 +3844,6 @@
               }
             ],
             "title": "Nombre Apellido"
-          },
-          "motivo": {
-            "title": "Motivo",
-            "type": "string"
           },
           "operadora": {
             "title": "Operadora",
@@ -3965,6 +3965,17 @@
             "title": "Id",
             "type": "integer"
           },
+          "legajo_requisito_etiqueta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legajo Requisito Etiqueta"
+          },
           "ocurrido_en": {
             "title": "Ocurrido En",
             "type": "string"
@@ -3988,17 +3999,6 @@
               }
             ],
             "title": "Usuario Nombre"
-          },
-          "legajo_requisito_etiqueta": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Legajo Requisito Etiqueta"
           }
         },
         "required": [
@@ -4112,6 +4112,17 @@
             ],
             "title": "Locacion Id"
           },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
           "ocs_afectadas": {
             "items": {
               "$ref": "#/components/schemas/OcAfectadaRef"
@@ -4155,6 +4166,17 @@
           "tipo": {
             "title": "Tipo",
             "type": "string"
+          },
+          "tipo_sujeto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Sujeto"
           },
           "vencido": {
             "title": "Vencido",
