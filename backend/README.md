@@ -68,6 +68,16 @@ Requiere PostgreSQL 16 con un superusuario y `psql`/`pg_dump` en el PATH (o ruta
 psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v owner_password='…' -v app_password='…' -f scripts/crear_roles.sql
 ```
 
+Roles de Postgres (ver `scripts/crear_roles.sql`):
+
+| Rol | Uso | Permisos relevantes |
+|-----|-----|---------------------|
+| **postgres** (u otro superusuario) | `DATABASE_URL_ADMIN` en `--reset` del sembrado demo | `DROP DATABASE` / `CREATE DATABASE` |
+| **modulo1_owner** | `DATABASE_URL_MIGRATIONS` — Alembic, `generar_schema.py`, DDL del owner | Migraciones; **sin** `CREATEDB` |
+| **modulo1_app** | `DATABASE_URL` — API, worker, scripts de aplicación | DML bajo RLS; **sin** owner ni `CREATEDB` |
+
+Precedencia de URLs en entorno: variables del proceso → archivo `ENV_FILE` → `.env`.
+
 ```bash
 # 2) Base con owner correcto
 psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v db=modulo1 -f scripts/crear_base.sql
@@ -134,6 +144,27 @@ Máximo 72 bytes UTF-8, sin truncar.
 Pendiente expresamente para después de v1: cambio y restablecimiento de contraseña,
 reactivación (exigirá `tokens_validos_desde` o una versión de seguridad en el claim para
 que no revivan tokens emitidos antes de la desactivación) y gestión de usuarios por API.
+
+## Base de demo
+
+Base dedicada **`fsm_demo`** (el nombre debe terminar en `_demo`). El script aborta si
+`DATABASE_URL` y `DATABASE_URL_MIGRATIONS` no apuntan a la misma base con ese sufijo.
+
+1. Crear la base (owner `modulo1_owner`), por ejemplo: `psql … -v db=fsm_demo -f scripts/crear_base.sql`
+2. En `.env`, apuntar `DATABASE_URL` y `DATABASE_URL_MIGRATIONS` a `fsm_demo`; definir
+   **`DEMO_PASSWORD`** (o usar prompt al correr el script). Para **`--reset`**, definir también
+   **`DATABASE_URL_ADMIN`** (p. ej. `postgresql://postgres:…@localhost:5432/postgres`): el owner
+   no tiene `CREATEDB` y el script aborta **antes** de borrar storage o la base si falta permiso.
+3. Sembrado completo:
+
+```bash
+ENV_FILE=.env .venv/Scripts/python scripts/sembrar_demo.py --reset --importar-planillas
+```
+
+4. Levantar API, frontend y storage local; ingresar con un mail `*@<slug>.demo.test` del
+   listado que imprime el script (contraseña: la de `DEMO_PASSWORD`).
+
+Las planillas generadas viven en `scripts/demo_planillas/<slug>/` (gitignored).
 
 ## Correr
 

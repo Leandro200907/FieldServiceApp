@@ -1,0 +1,108 @@
+"""Constantes de la base de demo (tenants, catálogos, requisitos)."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+ZONA_TENANT = "America/Argentina/Buenos_Aires"
+
+ROLES = ("configuracion", "responsable_legajos", "supervisor", "tecnico")
+
+OPERADORAS = ("YPF", "Vista", "Tecpetrol", "Pluspetrol")
+# Nombres de yacimiento / área por operadora (dos locaciones demo por cliente).
+LOCACIONES_POR_OPERADORA: dict[str, tuple[str, str]] = {
+    "YPF": ("Loma Campana", "El Trapial"),
+    "Vista": ("Bandurria Sur", "La Amarga Chica"),
+    "Tecpetrol": ("Fortín de Piedra", "Aguada Pichana"),
+    "Pluspetrol": ("Loma La Lata", "Río Neuquén"),
+}
+TIPOS_SERVICIO = ("Wireline", "Slickline", "Cementación")
+
+
+def nombre_locacion_demo(operadora: str, indice: int) -> str:
+    """Etiqueta de catálogo OC (1-based)."""
+    return f"{operadora} — {LOCACIONES_POR_OPERADORA[operadora][indice - 1]}"
+
+# Nombres locales (tenants que no copian del global)
+REQUISITOS_LOCALES: list[dict] = [
+    {"nombre": "Apto médico", "categoria": "documento", "tipo_sujeto_aplicable": "persona"},
+    {"nombre": "Constancia ART", "categoria": "documento", "tipo_sujeto_aplicable": "persona"},
+    {"nombre": "Licencia de conducir", "categoria": "documento", "tipo_sujeto_aplicable": "persona"},
+    {"nombre": "Curso de manejo defensivo", "categoria": "competencia", "tipo_sujeto_aplicable": "persona"},
+    {"nombre": "Inducción operadora", "categoria": "induccion", "tipo_sujeto_aplicable": "persona"},
+    {"nombre": "VTV", "categoria": "documento", "tipo_sujeto_aplicable": "vehiculo"},
+    {"nombre": "Seguro automotor", "categoria": "documento", "tipo_sujeto_aplicable": "vehiculo"},
+    {"nombre": "Certificación de equipo", "categoria": "documento", "tipo_sujeto_aplicable": "equipo"},
+    {"nombre": "ART empresa", "categoria": "documento", "tipo_sujeto_aplicable": "empresa"},
+    {"nombre": "Seguro de responsabilidad civil", "categoria": "documento", "tipo_sujeto_aplicable": "empresa"},
+]
+
+# Mapeo nombre demo → nombre en plataforma.definicion_requisito_global (base_v1.json)
+GLOBAL_A_DEMO: dict[str, str] = {
+    "Apto médico": "Apto médico",
+    "Constancia ART": "Constancia de cobertura ART (nómina)",
+    "Licencia de conducir": "Licencia de conducir",
+    "Curso de manejo defensivo": "Manejo defensivo",
+    "Inducción operadora": "Inducción HSE de la operadora",
+    "VTV": "VTV / RTO",
+    "Seguro automotor": "Seguro del vehículo",
+    "Certificación de equipo": "Certificación de arnés / línea de vida",
+    "ART empresa": "Certificado de cobertura ART",
+    "Seguro de responsabilidad civil": "Seguro de responsabilidad civil",
+}
+
+NOMBRES_PERSONA = (
+    ("María", "Acosta"),
+    ("Lucas", "Benítez"),
+    ("Camila", "Cáceres"),
+    ("Diego", "Domínguez"),
+    ("Florencia", "Espinoza"),
+    ("Gonzalo", "Fernández"),
+    ("Helena", "Giménez"),
+    ("Iván", "Herrera"),
+    ("Julieta", "Ibarra"),
+    ("Kevin", "Juárez"),
+    ("Laura", "Klein"),
+    ("Martín", "López"),
+    ("Nadia", "Mansilla"),
+    ("Oscar", "Navarro"),
+)
+
+
+@dataclass(frozen=True)
+class TenantDemo:
+    slug: str
+    nombre: str
+    copiar_globales: bool
+
+
+TENANTS: tuple[TenantDemo, ...] = (
+    TenantDemo("patagonia-demo", "Patagonia Servicios Demo SA", True),
+    TenantDemo("anelo-demo", "Añelo Field Demo SRL", False),
+    TenantDemo("neuquen-demo", "Neuquén Wells Demo SA", False),
+)
+
+# identificador_natural por legajo (D14 agrega nombre aparte; acá solo DNI realistas por tenant).
+DNIS_POR_SLUG: dict[str, tuple[str, str, str]] = {
+    "patagonia-demo": ("DNI 30.111.222", "DNI 30.111.223", "DNI 30.111.224"),
+    "anelo-demo": ("DNI 31.222.333", "DNI 31.222.334", "DNI 31.222.335"),
+    "neuquen-demo": ("DNI 32.333.444", "DNI 32.333.445", "DNI 32.333.446"),
+}
+DNI_BAJA_POR_SLUG: dict[str, str] = {
+    "patagonia-demo": "DNI 30.888.888",
+    "anelo-demo": "DNI 31.888.888",
+    "neuquen-demo": "DNI 32.888.888",
+}
+PATENTES_POR_SLUG: dict[str, tuple[str, str]] = {
+    "patagonia-demo": ("PA100DE", "PA200FG"),
+    "anelo-demo": ("AN100DE", "AN200FG"),
+    "neuquen-demo": ("NE100DE", "NE200FG"),
+}
+EQUIPO_POR_SLUG: dict[str, str] = {
+    "patagonia-demo": "WINCH-PAT-01",
+    "anelo-demo": "WINCH-ANE-01",
+    "neuquen-demo": "WINCH-NEU-01",
+}
+
+
+def dni_tecnico(slug: str, n: int) -> str:
+    return DNIS_POR_SLUG[slug][n - 1]
