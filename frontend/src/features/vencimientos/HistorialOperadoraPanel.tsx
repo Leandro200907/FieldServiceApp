@@ -52,8 +52,7 @@ export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefini
           {data.versiones.map(version => (
             <section key={version.documento_id} className="historial-version">
               <header>
-                <strong>Versión {fmt(version.vigente_desde)}</strong>
-                <span className="muted"> → {fmt(version.vigente_hasta)}</span>
+                <strong>{tituloExtra ? `${tituloExtra} — versión ${fmt(version.vigente_desde)} → ${fmt(version.vigente_hasta)}` : `Versión ${fmt(version.vigente_desde)} → ${fmt(version.vigente_hasta)}`}</strong>
               </header>
               <ol className="historial-pasos">
                 {version.pasos.map((paso, index) => (

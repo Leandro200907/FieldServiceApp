@@ -25,7 +25,7 @@ export function variantFromEtiquetaVigencia(label: string): StatusVariant {
   if (n.includes('vencid')) return 'vencido';
   if (n.includes('por vencer') || n.includes('vence durante')) return 'por_vencer';
   if (n.includes('revisión') || n.includes('revision') || n.includes('propuesta')) return 'revision';
-  if (n.includes('sin respaldo') || n.includes('inválid')) return 'sin_respaldo';
+  if (n.includes('sin archivo') || n.includes('sin respaldo') || n.includes('inválid')) return 'sin_respaldo';
   if (n.includes('vigente') || n.includes('verificada') || n.includes('en regla')) return 'vigente';
   return 'neutral';
 }

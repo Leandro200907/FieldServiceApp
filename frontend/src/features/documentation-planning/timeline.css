@@ -1,4 +1,12 @@
 .timeline-shell{display:flex;flex-direction:column;gap:16px}
+.timeline-range-form{align-items:end}
+.timeline-range-form .timeline-range-submit{align-self:end;width:auto;min-width:0;flex:0 0 auto}
+.gantt-legend.planning-legend{display:flex;flex-wrap:wrap;gap:12px 20px;font-size:13px;margin:8px 0 16px}
+.gantt-legend .legend-dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.gantt-legend .legend-dot.status-vigente{background:var(--color-state-vigente,#2e7d32)}
+.gantt-legend .legend-dot.status-por_vencer{background:var(--color-state-por-vencer,#cd8518)}
+.gantt-legend .legend-dot.status-vencido{background:var(--color-state-vencido,#c62828)}
+.gantt-legend .legend-dot.status-declarado_sin_verificar{background:repeating-linear-gradient(45deg,#cfd8dc,#cfd8dc 3px,#eceff1 3px,#eceff1 6px)}
 .timeline-chart{display:flex;flex-direction:column;gap:12px}
 .timeline-row{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface)}
 .timeline-row-head{display:flex;justify-content:space-between;margin-bottom:8px}

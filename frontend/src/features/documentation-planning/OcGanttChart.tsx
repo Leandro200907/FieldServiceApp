@@ -21,6 +21,7 @@ export type GanttOcRow = {
   bandasOc?: GanttBandaOc[];
   barTone?: 'default' | 'vigente' | 'por_vencer' | 'vencido' | 'declarado_sin_verificar';
   barTooltip?: string;
+  barSegmentos?: { desde: string; hasta: string; barTone?: GanttOcRow['barTone']; barTooltip?: string }[];
   indent?: number;
   ocultarBarra?: boolean;
 };
@@ -69,7 +70,6 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
           {hoyEnVista && hoyPct != null && <div className="oc-gantt-hoy" style={{ left: `${hoyPct}%` }} title="Hoy" />}
           {filas.map(f => {
             const barra = clipSegment(f.desde, f.hasta, vistaDesde, vistaHasta);
-            const barClass = f.barTone && f.barTone !== 'default' ? ` oc-gantt-bar-${f.barTone}` : '';
             return (
               <button
                 type="button"
@@ -90,13 +90,19 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
                     />
                   );
                 })}
-                {!f.ocultarBarra && barra && (
-                  <div
-                    className={`oc-gantt-bar${barClass}`}
-                    style={{ left: `${barra.left}%`, width: `${Math.max(barra.width, 0.5)}%` }}
-                    title={f.barTooltip}
-                  />
-                )}
+                {!f.ocultarBarra && (f.barSegmentos?.length ? f.barSegmentos : barra ? [{ desde: f.desde, hasta: f.hasta, barTone: f.barTone, barTooltip: f.barTooltip }] : []).map((seg, segIdx) => {
+                  const s = clipSegment(seg.desde, seg.hasta, vistaDesde, vistaHasta);
+                  if (!s) return null;
+                  const cls = seg.barTone && seg.barTone !== 'default' ? ` oc-gantt-bar-${seg.barTone}` : '';
+                  return (
+                    <div
+                      key={`${seg.desde}-${segIdx}`}
+                      className={`oc-gantt-bar${cls}`}
+                      style={{ left: `${s.left}%`, width: `${Math.max(s.width, 0.5)}%` }}
+                      title={seg.barTooltip}
+                    />
+                  );
+                })}
                 {f.tramosAlerta.map((t, i) => {
                   const seg = clipSegment(t.desde, t.hasta, vistaDesde, vistaHasta);
                   if (!seg) return null;

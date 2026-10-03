@@ -17,7 +17,7 @@ function LegajoCard({ title, number, legajoNombre, documentos, acreditaciones, i
   const items = [...documentos, ...acreditaciones, ...inducciones];
   return <section className="panel resource-panel">
     <div className="panel-top"><span className="section-number">{number}</span><Badge tone={resumen.vencidos > 0 ? 'warning' : 'accent'}>{resumen.vencidos > 0 ? `${resumen.vencidos} vencido${resumen.vencidos > 1 ? 's' : ''}` : 'Todo vigente'}</Badge></div>
-    <h3>{title}</h3>
+    <h3 className="mi-legajo-card-title">{title}</h3>
     <p className="muted">{legajoNombre}</p>
     {items.length === 0
       ? <p className="empty-inline">Sin documentación registrada.</p>

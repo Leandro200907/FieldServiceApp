@@ -13,13 +13,6 @@ import './auditoria.css';
 function toIsoStart(date: string) { return date ? `${date}T00:00:00Z` : undefined; }
 function toIsoEnd(date: string) { return date ? `${date}T23:59:59Z` : undefined; }
 
-function detalleLegajoRequisito(payload: Record<string, unknown>): string {
-  const partes: string[] = [];
-  if (typeof payload.sujeto_id === 'string') partes.push(payload.sujeto_id);
-  if (typeof payload.requisito_definicion_id === 'string') partes.push(payload.requisito_definicion_id);
-  if (typeof payload.documento_id === 'string' && !partes.length) partes.push(payload.documento_id);
-  return partes.length ? partes.join(' · ') : '—';
-}
 
 function detalleCambio(payload: Record<string, unknown>): string | null {
   const antes = payload.antes ?? payload.valor_anterior;
@@ -62,7 +55,7 @@ export function AuditoriaScreen() {
               <td>{formatFechaHora(evento.ocurrido_en, tz)}</td>
               <td>{usuario ?? '—'}</td>
               <td>{labelTipoEventoAuditoria(evento.tipo)}</td>
-              <td className="font-mono">{detalleLegajoRequisito(payload)}</td>
+              <td>{evento.legajo_requisito_etiqueta || '—'}</td>
               <td>
                 {detalle && <span>{detalle}</span>}
                 <details><summary className="text-button">Payload</summary><pre className="audit-payload">{JSON.stringify(evento.payload, null, 2)}</pre></details>

@@ -150,6 +150,7 @@ export function VencimientosScreen() {
           {requisitoOpts.map(r => <option key={r.requisito_definicion_id} value={r.requisito_definicion_id}>{r.nombre}</option>)}
         </select></div>
       </div>
+      <p className="eyebrow">Estado</p>
       <div className="espejo-filter-chips">
         {(['pendiente_envio', 'pendiente_aceptacion', 'rechazado', 'al_dia'] as const).map(estado => (
           <label key={estado} className="checkbox-inline"><input type="checkbox" checked={params.getAll('estado_operadora').includes(estado)} onChange={() => patchParams(p => {
@@ -160,6 +161,7 @@ export function VencimientosScreen() {
           })} /> {ESTADO_ESPEJO_LABELS[estado]}</label>
         ))}
       </div>
+      {(operadoraOpts.length > 0 || integrated) && <p className="eyebrow">Operadora</p>}
       {(operadoraOpts.length > 0 || integrated) && <div className="espejo-filter-chips">
         {operadoraOpts.map(o => (
           <label key={o.operadora_id} className="checkbox-inline"><input type="checkbox" checked={params.getAll('operadora_id').includes(o.operadora_id)} onChange={() => patchParams(p => {
@@ -172,7 +174,7 @@ export function VencimientosScreen() {
       {espejo.loading ? <LoadingState /> : espejo.error ? <ErrorState message={espejo.error.message} requestId={espejo.error instanceof ApiFailure && espejo.error.detail.referenceSource === 'server' ? espejo.error.detail.requestId : undefined} /> : espejo.data?.items.length ?
         <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Legajo</th><th>Documento</th><th>Operadora</th><th>Estado</th><th>Acción requerida</th><th></th></tr></thead><tbody>
           {espejo.data.items.map(item => <tr key={`${item.sujeto_id}-${item.requisito_definicion_id}-${item.operadora_id}`}>
-            <td><strong>{lineaPersonaConDni({ tipo_sujeto: item.tipo_sujeto, nombre_apellido: null, identificador_natural: item.identificador_natural, sujeto_id: item.sujeto_id })}</strong></td>
+            <td><strong>{lineaPersonaConDni({ tipo_sujeto: item.tipo_sujeto, nombre_apellido: item.nombre_apellido ?? null, identificador_natural: item.identificador_natural, sujeto_id: item.sujeto_id })}</strong></td>
             <td>{item.requisito}</td><td>{item.operadora}</td>
             <td><StatusDot variant={item.estado_operadora === 'al_dia' ? 'vigente' : item.estado_operadora === 'rechazado' ? 'vencido' : 'revision'}>{ESTADO_ESPEJO_LABELS[item.estado_operadora] || item.estado_operadora}</StatusDot></td>
             <td>{item.motivo}</td>
@@ -190,7 +192,7 @@ export function VencimientosScreen() {
     {tablero.loading ? <LoadingState /> : tablero.error ? <ErrorState message={tablero.error.message} requestId={tablero.error instanceof ApiFailure && tablero.error.detail.referenceSource === 'server' ? tablero.error.detail.requestId : undefined} /> : <>
       <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Sujeto</th><th>Requisito</th><th>Categoría</th><th>Vence el</th><th>Estado</th><th>Días</th></tr></thead><tbody>
         {tablero.data?.items.map(item => <tr key={item.id}>
-            <td><strong>{item.identificador_natural || item.sujeto_id}</strong></td>
+            <td><strong>{lineaPersonaConDni({ tipo_sujeto: (item.tipo_sujeto ?? 'persona') as 'persona', nombre_apellido: item.nombre_apellido ?? null, identificador_natural: item.identificador_natural ?? item.sujeto_id, sujeto_id: item.sujeto_id })}</strong></td>
             <td>{item.requisito || 'Requisito sin nombre'}</td>
             <td>{etiquetaCategoria(item.categoria)}</td>
             <td>{formatFecha(item.vigente_hasta, timeZone)}</td>

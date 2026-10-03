@@ -19,6 +19,6 @@ export function variantEstadoDocumentalOc(codigo: string): StatusVariant {
   if (codigo === 'sin_alertas_documentales') return 'vigente';
   if (codigo === 'con_alertas_documentales') return 'por_vencer';
   if (codigo === 'informacion_incompleta') return 'revision';
-  if (codigo === 'sin_matriz') return 'sin_respaldo';
+  if (codigo === 'sin_matriz') return 'neutral';
   return 'neutral';
 }

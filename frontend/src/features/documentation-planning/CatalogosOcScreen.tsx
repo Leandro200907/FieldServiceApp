@@ -10,7 +10,7 @@ type Catalogos = components['schemas']['CatalogosOcResponse'];
 export function CatalogosOcScreen() {
   const puedeAlta = session.getSnapshot().identity?.roles.includes('configuracion') ?? false;
   const [reloadKey, setReloadKey] = useState(0);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ block: 'operadora' | 'locacion' | 'tipo'; text: string; ok: boolean } | null>(null);
   const [nuevaOperadora, setNuevaOperadora] = useState('');
   const [nuevaLocacion, setNuevaLocacion] = useState('');
   const [locOperadora, setLocOperadora] = useState('');
@@ -39,15 +39,19 @@ export function CatalogosOcScreen() {
   const nombresOperadora = useMemo(() => new Set(operadoras.map(o => (o.nombre as string).trim().toLowerCase())), [operadoras]);
   const nombresTipo = useMemo(() => new Set(tipos.map(t => (t.nombre as string).trim().toLowerCase())), [tipos]);
 
-  const post = async (path: '/v1/comandos/alta_operadora_oc' | '/v1/comandos/alta_locacion_oc' | '/v1/comandos/alta_tipo_servicio_oc', body: Record<string, unknown>) => {
-    setMsg(null);
+  const post = async (
+    block: 'operadora' | 'locacion' | 'tipo',
+    path: '/v1/comandos/alta_operadora_oc' | '/v1/comandos/alta_locacion_oc' | '/v1/comandos/alta_tipo_servicio_oc',
+    body: Record<string, unknown>,
+  ) => {
+    setFeedback(null);
     const res = await session.client.POST(path, { body } as never);
     if (res.error || !res.response.ok) {
       const err = parseApiError(res.error, res.response, res.response.headers.get('X-Request-ID') || crypto.randomUUID());
-      setMsg(err.message);
+      setFeedback({ block, text: err.message, ok: false });
       return;
     }
-    setMsg('Guardado correctamente');
+    setFeedback({ block, text: 'Guardado correctamente', ok: true });
     setReloadKey(k => k + 1);
   };
 
@@ -69,16 +73,16 @@ export function CatalogosOcScreen() {
           onSubmit={e => {
             e.preventDefault();
             const nombre = nuevaOperadora.trim();
-            if (!nombre) { setMsg('El nombre de operadora no puede estar vacío'); return; }
-            if (nombresOperadora.has(nombre.toLowerCase())) { setMsg('Operadora duplicada'); return; }
-            void post('/v1/comandos/alta_operadora_oc', { nombre });
+            if (!nombre) { setFeedback({ block: 'operadora', text: 'El nombre de operadora no puede estar vacío', ok: false }); return; }
+            if (nombresOperadora.has(nombre.toLowerCase())) { setFeedback({ block: 'operadora', text: 'Operadora duplicada', ok: false }); return; }
+            void post('operadora', '/v1/comandos/alta_operadora_oc', { nombre });
             setNuevaOperadora('');
           }}
         >
           <label>Nueva operadora<input value={nuevaOperadora} onChange={e => setNuevaOperadora(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
         </form> : <p className="muted" role="note">Solo lectura: el alta de operadoras corresponde al rol Configuración.</p>}
-        {msg && <p className={msg === 'Guardado correctamente' ? 'form-success' : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
+        {feedback?.block === 'operadora' && <p className={feedback.ok ? 'form-success' : 'field-error'} role={feedback.ok ? 'status' : 'alert'}>{feedback.text}</p>}
       </section>
 
       <section className="panel">
@@ -105,11 +109,11 @@ export function CatalogosOcScreen() {
           onSubmit={e => {
             e.preventDefault();
             const nombre = nuevaLocacion.trim();
-            if (!locOperadora) { setMsg('Elegí una operadora'); return; }
-            if (!nombre) { setMsg('El nombre de locación no puede estar vacío'); return; }
+            if (!locOperadora) { setFeedback({ block: 'locacion', text: 'Elegí una operadora', ok: false }); return; }
+            if (!nombre) { setFeedback({ block: 'locacion', text: 'El nombre de locación no puede estar vacío', ok: false }); return; }
             const dup = (locPorOperadora.get(locOperadora) || []).some(l => (l.nombre as string).trim().toLowerCase() === nombre.toLowerCase());
-            if (dup) { setMsg('Locación duplicada en esta operadora'); return; }
-            void post('/v1/comandos/alta_locacion_oc', { operadora_id: locOperadora, nombre });
+            if (dup) { setFeedback({ block: 'locacion', text: 'Locación duplicada en esta operadora', ok: false }); return; }
+            void post('locacion', '/v1/comandos/alta_locacion_oc', { operadora_id: locOperadora, nombre });
             setNuevaLocacion('');
           }}
         >
@@ -122,7 +126,7 @@ export function CatalogosOcScreen() {
           <label>Nueva locación<input value={nuevaLocacion} onChange={e => setNuevaLocacion(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
         </form> : <p className="muted" role="note">Solo lectura: el alta de locaciones corresponde al rol Configuración.</p>}
-        {msg && <p className={msg === 'Guardado correctamente' ? 'form-success' : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
+        {feedback?.block === 'locacion' && <p className={feedback.ok ? 'form-success' : 'field-error'} role={feedback.ok ? 'status' : 'alert'}>{feedback.text}</p>}
       </section>
 
       <section className="panel">
@@ -133,16 +137,16 @@ export function CatalogosOcScreen() {
           onSubmit={e => {
             e.preventDefault();
             const nombre = nuevoTipo.trim();
-            if (!nombre) { setMsg('El nombre no puede estar vacío'); return; }
-            if (nombresTipo.has(nombre.toLowerCase())) { setMsg('Tipo de servicio duplicado'); return; }
-            void post('/v1/comandos/alta_tipo_servicio_oc', { nombre });
+            if (!nombre) { setFeedback({ block: 'tipo', text: 'El nombre no puede estar vacío', ok: false }); return; }
+            if (nombresTipo.has(nombre.toLowerCase())) { setFeedback({ block: 'tipo', text: 'Tipo de servicio duplicado', ok: false }); return; }
+            void post('tipo', '/v1/comandos/alta_tipo_servicio_oc', { nombre });
             setNuevoTipo('');
           }}
         >
           <label>Nuevo tipo<input value={nuevoTipo} onChange={e => setNuevoTipo(e.target.value)} /></label>
           <button type="submit" className="button button-primary">Agregar</button>
         </form> : <p className="muted" role="note">Solo lectura: el alta de tipos de servicio corresponde al rol Configuración.</p>}
-        {msg && <p className={msg === 'Guardado correctamente' ? 'form-success' : 'field-error'} role={msg === 'Guardado correctamente' ? 'status' : 'alert'}>{msg}</p>}
+        {feedback?.block === 'tipo' && <p className={feedback.ok ? 'form-success' : 'field-error'} role={feedback.ok ? 'status' : 'alert'}>{feedback.text}</p>}
       </section>
     </div>
   );

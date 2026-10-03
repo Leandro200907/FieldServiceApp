@@ -52,7 +52,7 @@ function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPro
     identificador_natural: item.identificador_natural ?? item.sujeto_id,
   };
   return <tr>
-    <td><strong>{tituloLegajoPersona(sujeto)}</strong>{subtituloLegajoPersona(sujeto) && <small> · {subtituloLegajoPersona(sujeto)}</small>}<small>{origenLabels[item.origen] || item.origen}{item.confianza_extraccion ? ` · confianza ${item.confianza_extraccion}` : ''}</small></td>
+    <td><strong>{tituloLegajoPersona(sujeto)}</strong>{subtituloLegajoPersona(sujeto) && <small><br />{subtituloLegajoPersona(sujeto)}</small>}<small>{origenLabels[item.origen] || item.origen}{item.confianza_extraccion ? ` · confianza ${item.confianza_extraccion}` : ''}</small></td>
     <td>{item.requisito || 'Requisito sin nombre'}{item.numero ? <small> · N° {item.numero}</small> : null}</td>
     <td>{formatFecha(item.vigente_desde, tz)} — {formatFecha(item.vigente_hasta, tz)}</td>
     <td>{formatFechaHora(item.creado_en, tz)}</td>

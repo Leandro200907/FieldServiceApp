@@ -6,6 +6,7 @@ import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { addDays, formatFecha, todayIso } from './dates';
+import { lineaPersonaConDni } from '../legajos/legajoDisplay';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
@@ -63,6 +64,12 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
     const out: GanttOcRow[] = [];
     for (const recurso of rows as Recurso[]) {
       const sid = recurso.sujeto_id;
+      const etiquetaLegajo = lineaPersonaConDni({
+        tipo_sujeto: recurso.tipo_sujeto,
+        nombre_apellido: recurso.nombre_apellido ?? null,
+        identificador_natural: recurso.identificador,
+        sujeto_id: sid,
+      });
       const isOpen = expanded[sid] ?? true;
       const bandasOc = recurso.ocs.map(oc => ({
         desde: oc.vigencia_desde,
@@ -74,7 +81,7 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
         out.push({
           id: `${sid}-ocs`,
           label: 'OC vigentes evaluadas',
-          sublabel: recurso.identificador,
+          sublabel: etiquetaLegajo,
           desde,
           hasta,
           bandasOc,
@@ -94,7 +101,7 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
       );
       out.push({
         id: sid,
-        label: recurso.identificador,
+        label: etiquetaLegajo,
         sublabel: recurso.tipo_sujeto,
         desde,
         hasta,
@@ -112,33 +119,32 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
             : (TONE[tramo.estado_visual] || 'default');
           const confirmado = tramo.estado_confirmacion === 'verificado' || tramo.estado_confirmacion === 'confirmado_en_fuente';
           const tooltipVigente = `${tramo.requisito || 'Requisito'} · ${tramo.estado_visual} · ${fmtDate(tramo.vigente_desde, tz)} – ${fmtDate(tramo.vigente_hasta, tz)} · ${confirmado ? 'Confirmado' : 'Propuesta sin confirmar'}`;
+          const sinCoberturaDesde = addDays(tramo.vigente_hasta, 1);
+          const segmentos: GanttOcRow['barSegmentos'] = [{
+            desde: tramo.vigente_desde,
+            hasta: tramo.vigente_hasta,
+            barTone: toneVigencia,
+            barTooltip: tooltipVigente,
+          }];
+          if (sinCoberturaDesde <= hasta && tramo.vigente_hasta < hasta) {
+            segmentos.push({
+              desde: sinCoberturaDesde,
+              hasta,
+              barTone: 'vencido',
+              barTooltip: `${tramo.requisito || 'Requisito'} · Sin cobertura · desde ${fmtDate(sinCoberturaDesde, tz)}`,
+            });
+          }
           out.push({
             id: `${sid}-${tramo.requisito_definicion_id}-${tramo.vigente_desde}`,
             label: tramo.requisito || 'Requisito',
             sublabel: tramo.categoria || undefined,
             desde: tramo.vigente_desde,
-            hasta: tramo.vigente_hasta,
+            hasta: segmentos.length > 1 ? hasta : tramo.vigente_hasta,
             alertas: [],
             tramosAlerta: [],
-            barTone: toneVigencia,
-            barTooltip: tooltipVigente,
+            barSegmentos: segmentos,
             indent: 1,
           });
-          const sinCoberturaDesde = addDays(tramo.vigente_hasta, 1);
-          if (sinCoberturaDesde <= hasta && tramo.vigente_hasta < hasta) {
-            out.push({
-              id: `${sid}-${tramo.requisito_definicion_id}-gap`,
-              label: 'Sin cobertura',
-              sublabel: tramo.requisito || undefined,
-              desde: sinCoberturaDesde,
-              hasta,
-              alertas: [],
-              tramosAlerta: [],
-              barTone: 'vencido',
-              barTooltip: `${tramo.requisito || 'Requisito'} · Sin cobertura · desde ${fmtDate(sinCoberturaDesde, tz)}`,
-              indent: 1,
-            });
-          }
         }
       }
     }
@@ -182,11 +188,11 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
         <button type="button" onClick={() => setVista('documentos')}>Por documento</button>
       </div>
       <header className="panel">
-        <div className="form-grid">
+        <div className="form-grid timeline-range-form">
           <label className="form-field">Desde<input type="date" value={desde} onChange={e => setDesde(e.target.value)} /></label>
           <label className="form-field">Hasta<input type="date" value={hasta} onChange={e => setHasta(e.target.value)} /></label>
-          <label className="form-field"><input type="checkbox" checked={soloQuiebres} onChange={e => setSoloQuiebres(e.target.checked)} /> Con quiebres en el período</label>
-          <button type="button" className="button button-primary" onClick={applyRange}>Actualizar rango</button>
+          <label className="form-field checkbox-inline"><input type="checkbox" checked={soloQuiebres} onChange={e => setSoloQuiebres(e.target.checked)} /> Con quiebres en el período</label>
+          <button type="button" className="button button-primary timeline-range-submit" onClick={applyRange}>Actualizar rango</button>
         </div>
         {hoy && <p className="muted">Hoy: {fmtDate(hoy, tz)}</p>}
       </header>
@@ -221,7 +227,13 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
                   className="button button-secondary"
                   onClick={() => setExpanded(e => ({ ...e, [recurso.sujeto_id]: !(e[recurso.sujeto_id] ?? true) }))}
                 >
-                  {(expanded[recurso.sujeto_id] ?? true) ? '▾' : '▸'} {recurso.identificador}
+                  {(expanded[recurso.sujeto_id] ?? true) ? '▾' : '▸'}{' '}
+                  {lineaPersonaConDni({
+                    tipo_sujeto: recurso.tipo_sujeto,
+                    nombre_apellido: recurso.nombre_apellido ?? null,
+                    identificador_natural: recurso.identificador,
+                    sujeto_id: recurso.sujeto_id,
+                  })}
                 </button>
               </div>
             ))}

@@ -41,11 +41,21 @@ function itemTieneAlertas(row: BacklogItem): boolean {
     || (row.disponibilidad_por_tipo || []).some(d => (d.se_cae_en_ventana?.length ?? 0) > 0);
 }
 
+function etiquetaOcContexto(row: BacklogItem): string {
+  return [row.operadora_nombre, row.locacion_nombre, row.tipo_servicio_nombre].filter(Boolean).join(' · ');
+}
+
+function contarAlertasBacklog(row: BacklogItem): number {
+  const ciertas = row.alertas_ciertas?.length ?? 0;
+  const caidas = (row.disponibilidad_por_tipo || []).reduce((t, d) => t + (d.se_cae_en_ventana?.length ?? 0), 0);
+  return ciertas + caidas;
+}
+
 function buildGanttRows(items: BacklogItem[]): GanttOcRow[] {
   return items.map(row => ({
     id: row.clave_origen,
     label: row.clave_origen,
-    sublabel: [row.operadora_nombre, row.locacion_nombre].filter(Boolean).join(' · '),
+    sublabel: etiquetaOcContexto(row),
     desde: row.vigencia_desde,
     hasta: row.vigencia_hasta,
     reprogramada: row.reprogramada,
@@ -424,14 +434,16 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
         <label htmlFor="backlog-mes">Mes</label>
         <input id="backlog-mes" type="month" value={mes} onChange={e => setParams(p => { p.set('mes', e.target.value); p.delete('offset'); return p; })} />
       </div>
-      <label className="form-field checkbox-inline">
-        <input type="checkbox" checked={soloAlertas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_con_alertas', '1'); else p.delete('solo_con_alertas'); p.delete('offset'); return p; })} />
-        Solo con alertas
-      </label>
-      <label className="form-field checkbox-inline">
-        <input type="checkbox" checked={soloReprogramadas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_reprogramadas', '1'); else p.delete('solo_reprogramadas'); p.delete('offset'); return p; })} />
-        Solo reprogramadas
-      </label>
+      <div className="espejo-filter-chips">
+        <label className="checkbox-inline">
+          <input type="checkbox" checked={soloAlertas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_con_alertas', '1'); else p.delete('solo_con_alertas'); p.delete('offset'); return p; })} />
+          Solo con alertas
+        </label>
+        <label className="checkbox-inline">
+          <input type="checkbox" checked={soloReprogramadas} onChange={e => setParams(p => { if (e.target.checked) p.set('solo_reprogramadas', '1'); else p.delete('solo_reprogramadas'); p.delete('offset'); return p; })} />
+          Solo reprogramadas
+        </label>
+      </div>
       {backlogQuery.loading ? <LoadingState /> : (
         <>
           {items.map(row => (
@@ -444,8 +456,11 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
               <span>
                 <span className="list-item-primary">{row.clave_origen}</span>
                 <span className="list-item-secondary">{fmtDate(row.vigencia_desde)} — {fmtDate(row.vigencia_hasta)}</span>
-                {(row.operadora_nombre || row.locacion_nombre) && (
-                  <span className="list-item-secondary">{[row.operadora_nombre, row.locacion_nombre].filter(Boolean).join(' · ')}</span>
+                {etiquetaOcContexto(row) && (
+                  <span className="list-item-secondary">{etiquetaOcContexto(row)}</span>
+                )}
+                {contarAlertasBacklog(row) > 0 && (
+                  <span className="list-item-secondary">{contarAlertasBacklog(row)} alerta{contarAlertasBacklog(row) === 1 ? '' : 's'}</span>
                 )}
               </span>
               <StatusDot variant={itemTieneAlertas(row) ? 'por_vencer' : 'vigente'}>
@@ -502,7 +517,6 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
           <button type="button" className={!vistaMapa ? 'active' : ''} onClick={() => setVistaMapa(false)}>Lista y fichas</button>
           <button type="button" className={vistaMapa ? 'active' : ''} onClick={() => setVistaMapa(true)}>Mapa temporal</button>
         </div>
-        <p className="muted">Alertas ciertas y disponibilidad documental. No asigna recursos.</p>
         <fieldset className="form-field">
           <legend>Operadoras</legend>
           {operadoraOpts.map(o => (

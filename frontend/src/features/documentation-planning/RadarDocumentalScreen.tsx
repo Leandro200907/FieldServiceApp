@@ -13,6 +13,7 @@ import { ListDetailLayout } from '../../ui/ListDetailLayout';
 import { StatusDot, variantFromEtiquetaVigencia } from '../../ui/StatusDot';
 import { estadoDocumentalOcLabels, labelEstadoDocumentalOc, variantEstadoDocumentalOc } from '../../ui/documentalLabels';
 import { etiquetaTipoSujeto } from '../../ui/tipoSujetoLabels';
+import { lineaPersonaConDni } from '../legajos/legajoDisplay';
 import { NotaAnalisisInformativo } from '../../ui/InformativoFooter';
 import './planning.css';
 import './radar.css';
@@ -59,7 +60,8 @@ function textoMatrizUtilizada(
 ): string {
   const contexto = [oc.operadora_nombre, oc.locacion_nombre, oc.tipo_servicio_nombre].filter(Boolean).join(' · ');
   const version = raw.version;
-  const desde = typeof raw.desde === 'string' ? formatFecha(raw.desde, timeZone) : '';
+  const desdeRaw = typeof raw.vigente_desde === 'string' ? raw.vigente_desde : raw.desde;
+  const desde = typeof desdeRaw === 'string' ? formatFecha(desdeRaw, timeZone) : '';
   return `${contexto || 'Matriz'} — Versión ${version} — vigente desde ${desde}`;
 }
 
@@ -82,7 +84,11 @@ function DetailPanel({ detail, onLegajo, onOffsetChange }: { detail: DetalleOcRa
               <li key={i}>{textoMatrizUtilizada(asRecord(m) || {}, oc || {}, timeZone)}</li>
             ))}
           </ul>
-        ) : <p>Sin matriz aplicable en el período.</p>}
+        ) : (
+          <p className="muted">
+            Falta cargar la matriz de {[oc?.operadora_nombre, oc?.locacion_nombre].filter(Boolean).join(' · ') || 'esta OC'}.
+          </p>
+        )}
         {detail.requisitos_particulares.length > 0 && (
           <p>{detail.requisitos_particulares.length} requisito{detail.requisitos_particulares.length === 1 ? '' : 's'} particular{detail.requisitos_particulares.length === 1 ? '' : 'es'}.</p>
         )}
@@ -102,9 +108,14 @@ function DetailPanel({ detail, onLegajo, onOffsetChange }: { detail: DetalleOcRa
                 const sujetoId = asText(legajo?.sujeto_id, '');
                 const estadoLeg = asText(legajo?.estado_documental, '');
                 return <li key={sujetoId || index}>
-                  {legajo?.nombre_apellido ? `${asText(legajo.nombre_apellido)} (${asText(legajo?.identificador_natural, sujetoId)})` : asText(legajo?.identificador_natural, sujetoId || 'Legajo')}
+                  {lineaPersonaConDni({
+                    tipo_sujeto: asText(legajo?.tipo_sujeto, 'persona'),
+                    nombre_apellido: typeof legajo?.nombre_apellido === 'string' ? legajo.nombre_apellido : null,
+                    identificador_natural: asText(legajo?.identificador_natural, sujetoId),
+                    sujeto_id: sujetoId,
+                  })}
                   {' · '}
-                  <StatusDot variant={variantFromEtiquetaVigencia(labelEstadoDocumentalOc(estadoLeg))}>{labelEstadoDocumentalOc(estadoLeg)}</StatusDot>
+                  <StatusDot variant={variantEstadoDocumentalOc(estadoLeg)}>{labelEstadoDocumentalOc(estadoLeg)}</StatusDot>
                   {sujetoId && <button type="button" className="text-button detail-link" onClick={() => onLegajo(sujetoId)}>Ver evidencia</button>}
                 </li>;
               })}</ul>}

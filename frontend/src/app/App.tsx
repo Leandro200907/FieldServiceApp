@@ -101,7 +101,7 @@ function Profile() {
           <dt>Empresa</dt><dd>{identity.tenant_nombre}</dd>
         </dl>
         <div className="form-actions">
-          <button type="button" className="button button-secondary" disabled title="Disponible en una próxima versión">Cambiar contraseña</button>
+          <button type="button" className="button button-secondary button-soon" disabled title="Disponible en una próxima versión">Próximamente</button>
           <button className="button button-primary" type="button" onClick={() => { void session.logout(); }}>Salir</button>
         </div>
       </section>
@@ -176,7 +176,8 @@ function Workspace() {
         <Link className="brand" to="/perfil"><span className="brand-mark">F</span><span>FieldServiceApp</span></Link>
         <div className="app-topbar-meta">
           <span className="app-topbar-empresa">Empresa: <strong>{snapshot.identity.tenant_nombre}</strong></span>
-          <Link className="app-topbar-user" to="/perfil">{usuarioNombre} · {rolEtiqueta}</Link>
+          <Link className="app-topbar-user" to="/perfil">{usuarioNombre} · {rolEtiqueta} ▾</Link>
+          <button type="button" className="button button-secondary app-topbar-salir" onClick={() => { void session.logout(); }}>Salir</button>
         </div>
       </header>
       <div className="workspace-shell">

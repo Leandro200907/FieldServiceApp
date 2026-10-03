@@ -20,9 +20,10 @@ function tituloMatriz(item: MatrizItem): string {
   return ctx || `${item.cliente_id}`;
 }
 
-function etiquetaVersion(item: MatrizItem, hoy: string): string {
+function etiquetaVersion(item: MatrizItem, hoy: string, fmt: (iso: string) => string): string {
   const vigente = !item.vigente_hasta || item.vigente_hasta >= hoy;
-  return vigente ? `v${item.version} vigente` : `v${item.version} reemplazada`;
+  if (vigente) return `v${item.version} vigente`;
+  return `Vigente del ${fmt(item.vigente_desde)} al ${fmt(item.vigente_hasta!)}`;
 }
 
 export function MatricesScreen({ detailId }: { detailId?: string }) {
@@ -86,7 +87,7 @@ export function MatricesScreen({ detailId }: { detailId?: string }) {
                 <span className="list-item-primary">{tituloMatriz(item)}</span>
                 <span className="list-item-secondary">Versión {item.version} — vigente desde {fmt(item.vigente_desde)}</span>
               </span>
-              <StatusDot variant={!item.vigente_hasta || item.vigente_hasta >= hoy ? 'vigente' : 'neutral'}>{etiquetaVersion(item, hoy)}</StatusDot>
+              <StatusDot variant={!item.vigente_hasta || item.vigente_hasta >= hoy ? 'vigente' : 'neutral'}>{etiquetaVersion(item, hoy, fmt)}</StatusDot>
             </button>
           ))}
           {versiones.data?.items.length === 0 && <p className="empty-inline">Sin versiones que coincidan con el filtro.</p>}
