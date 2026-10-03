@@ -138,10 +138,9 @@ def generar_planillas(est: EstadoTenant) -> Path:
         fecha_vencimiento: str | None = None,
         requisito_id: str | None = None,
         observacion: str = "",
+        incluir_vigencia: bool = False,
     ) -> None:
         f_exp, f_pres, f_resp = _fechas_por_estado(hoy, estado)
-        emision = fecha_emision if fecha_emision is not None else hoy.isoformat()
-        vencimiento = fecha_vencimiento if fecha_vencimiento is not None else (hoy + timedelta(days=365)).isoformat()
         hoja.cell(row=row, column=1, value=operadora)
         hoja.cell(row=row, column=2, value="persona")
         hoja.cell(row=row, column=3, value=dni_tecnico(slug, 1))
@@ -150,8 +149,14 @@ def generar_planillas(est: EstadoTenant) -> Path:
         hoja.cell(row=row, column=5, value="Apto médico")
         if doc_id:
             hoja.cell(row=row, column=7, value=doc_id)
-        hoja.cell(row=row, column=8, value=emision)
-        hoja.cell(row=row, column=9, value=vencimiento)
+        if incluir_vigencia:
+            emision = fecha_emision if fecha_emision is not None else hoy.isoformat()
+            vencimiento = fecha_vencimiento if fecha_vencimiento is not None else (hoy + timedelta(days=365)).isoformat()
+            hoja.cell(row=row, column=8, value=emision)
+            hoja.cell(row=row, column=9, value=vencimiento)
+        elif fecha_vencimiento is not None:
+            hoja.cell(row=row, column=8, value=fecha_emision if fecha_emision is not None else hoy.isoformat())
+            hoja.cell(row=row, column=9, value=fecha_vencimiento)
         hoja.cell(row=row, column=10, value=estado)
         if f_exp:
             hoja.cell(row=row, column=11, value=f_exp)
