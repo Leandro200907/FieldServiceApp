@@ -109,6 +109,11 @@ def _exigir_base_demo_tests():
     nb = _nombre_base()
     if not nb or not nb.endswith("_demo"):
         pytest.fail("DATABASE_URL debe apuntar a una base que termine en _demo (job Pytest sembrado demo en CI)")
+    if nb == "fsm_demo":
+        pytest.fail(
+            "No ejecutar tests de sembrado contra fsm_demo (demo manual). "
+            "Usá modulo1_ci_demo con ENV_FILE dedicado; ver backend/.env.test.example."
+        )
 
 
 @pytest.fixture(scope="module")
