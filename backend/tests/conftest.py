@@ -3,15 +3,24 @@ tokens JWT firmados con el mismo secreto que usa la app.
 
 Cada test que use `tenant_de_prueba` corre contra un tenant nuevo y todo lo que crea
 se borra al final (borrado por RLS dentro de tenant_session — solo alcanza lo propio).
+
+La base debe ser explícita (modulo1_test / modulo1_ci); nunca fsm_demo. Ver guardia_base.py.
 """
 from __future__ import annotations
 
 import uuid
+
+import pytest
+
+from tests.guardia_base import validar_base_para_pytest
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    validar_base_para_pytest(config)
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import jwt
-import pytest
 from sqlalchemy import text
 
 from app.config import settings
@@ -21,6 +30,13 @@ ROLES = ("configuracion", "responsable_legajos", "supervisor", "tecnico")
 
 # Orden de borrado: hijos antes que padres (no hay FKs en 0001, pero usuario → tenant sí).
 TABLAS_TENANT = [
+    "alerta_actualizacion_operadora",
+    "movimiento_entrega_operadora",
+    "entrega_documento_operadora",
+    "operadora_legajo",
+    "locacion_oc",
+    "tipo_servicio_oc",
+    "operadora_documental",
     "notificacion_envio",
     "configuracion_canales",
     "paquete_acceso",
@@ -49,8 +65,7 @@ TABLAS_TENANT = [
     "matriz_requisitos",
     "periodo_custodia",
     "custodia_recurso",
-    "induccion",
-    "acreditacion_competencia",
+    "documento_soporte",
     "documento",
     "oc",
     "lote_importacion",
@@ -166,3 +181,4 @@ def cliente_api():
 
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
+

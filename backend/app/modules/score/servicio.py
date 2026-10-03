@@ -38,11 +38,8 @@ WITH exigidos AS (
 ),
 cubiertos AS (
     SELECT sujeto_id, requisito_definicion_id FROM modulo1.documento
-    WHERE tenant_id = :t AND estado_version = 'vigente' AND estado_confirmacion <> 'declarado' AND vigente_desde <= :hoy AND vigente_hasta >= :hoy
-    UNION SELECT persona_id, requisito_definicion_id FROM modulo1.acreditacion_competencia
-    WHERE tenant_id = :t AND estado_confirmacion <> 'declarado' AND vigente_desde <= :hoy AND vigente_hasta >= :hoy
-    UNION SELECT persona_id, requisito_definicion_id FROM modulo1.induccion
-    WHERE tenant_id = :t AND estado_confirmacion <> 'declarado' AND vigente_desde <= :hoy AND vigente_hasta >= :hoy
+    WHERE tenant_id = :t AND estado_version = 'vigente' AND estado_confirmacion <> 'declarado'
+      AND vigente_desde <= :hoy AND (vigente_hasta IS NULL OR vigente_hasta >= :hoy)
     UNION SELECT sujeto_id, requisito_definicion_id FROM modulo1.constancia_cliente
     WHERE tenant_id = :t AND estado = 'vigente' AND (vigencia IS NULL OR vigencia >= :hoy)
 )
@@ -119,3 +116,4 @@ def encolar_snapshot_diario(session: Session, tenant_id: str, ahora: datetime) -
         return {"score_jobs": 0}
     encolar(session, "score_documental", {"fecha": hoy.isoformat()}, tenant_id=tenant_id, disponible_en=ahora)
     return {"score_jobs": 1}
+

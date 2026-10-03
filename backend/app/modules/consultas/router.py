@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query, Response
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad
@@ -19,10 +19,28 @@ router = APIRouter()
 
 # --------------------------------------------------------------------------- servicio.py: evidencia vigente
 
+class PropuestaEnRevision(BaseModel):
+    documento_id: str
+    vigente_desde: str | None
+    vigente_hasta: str | None
+    estado_presentacion: Literal["propuesta_en_revision"] = "propuesta_en_revision"
+    estado_presentacion_explicacion: str
+
+
+class OcAfectadaRef(BaseModel):
+    clave_origen: str
+    oc_id: str
+    vigencia_desde: str
+    vigencia_hasta: str
+
+
 class EvidenciaVigente(BaseModel):
     tipo: str
     id: str
     sujeto_id: str
+    tipo_sujeto: str | None = None
+    identificador_natural: str | None = None
+    nombre_apellido: str | None = None
     requisito_definicion_id: str
     requisito: str | None
     categoria: str | None
@@ -32,13 +50,21 @@ class EvidenciaVigente(BaseModel):
     origen_propuesta: bool
     locacion_id: str | None
     vigente_hoy: bool
-    dias_para_vencer: int
+    dias_para_vencer: int | None
     vencido: bool
+    archivo_validacion: str | None = None
+    estado_presentacion: str
+    estado_presentacion_explicacion: str
+    estados_adicionales: list[str] | None = None
+    estados_adicionales_explicacion: dict[str, str] | None = None
+    propuesta_en_revision: PropuestaEnRevision | None = None
+    ocs_afectadas: list[OcAfectadaRef] = Field(default_factory=list)
 
 
 class ResumenLegajo(BaseModel):
     total: int
     vigentes_hoy: int
+    por_vencer: int = 0
     vencidos: int
 
 
@@ -47,6 +73,7 @@ class LegajoDatos(BaseModel):
     sujeto_id: str
     tipo_sujeto: str
     identificador_natural: str
+    nombre_apellido: str | None = None
     dado_de_baja_en: str | None
     creado_en: str
 
@@ -63,6 +90,9 @@ class LegajoResponse(BaseModel):
 class DocumentoPropuesto(BaseModel):
     documento_id: str
     sujeto_id: str
+    identificador_natural: str | None = None
+    nombre_apellido: str | None = None
+    tipo_sujeto: str | None = None
     requisito_definicion_id: str | None
     requisito: str | None
     numero: str | None
@@ -75,6 +105,9 @@ class DocumentoPropuesto(BaseModel):
     vigente_hoy: bool
     dias_para_vencer: int
     vencido: bool
+    archivo_validacion: str | None = None
+    estado_presentacion: str | None = None
+    estado_presentacion_explicacion: str | None = None
 
 
 class PropuestasPendientesResponse(BaseModel):
@@ -95,11 +128,23 @@ class TableroVencimientosResponse(BaseModel):
 
 # --------------------------------------------------------------------------- servicio.py: OC / decisiones
 
-class UltimaDecisionOC(BaseModel):
-    referencia_evaluacion: str
-    veredicto_de_cumplimiento: str
-    resultado_de_decision: str
-    creado_en: str
+class AlertaCiertaOc(BaseModel):
+    codigo: str
+    mensaje: str
+    tipo_sujeto: str | None = None
+    desde: str | None = None
+    hasta: str | None = None
+    tramos: list[dict[str, Any]] | None = None
+
+
+class DisponibilidadTipoOc(BaseModel):
+    tipo_sujeto: str
+    etiqueta: str
+    estado: str
+    texto: str
+    habilitados_toda_ventana: list[dict[str, Any]]
+    se_cae_en_ventana: list[dict[str, Any]]
+    no_habilitados: list[dict[str, Any]]
 
 
 class OcBacklogItem(BaseModel):
@@ -109,13 +154,23 @@ class OcBacklogItem(BaseModel):
     cliente_id: str
     locacion_id: str
     tipo_servicio_id: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    tipo_servicio_nombre: str | None = None
     vigencia_desde: str
     vigencia_hasta: str
     estado: str
     lote_id: str | None
+    origen_oc: str | None = None
     creado_en: str
     actualizado_en: str
-    ultima_decision: UltimaDecisionOC | None
+    modo: str
+    reprogramada: bool = False
+    tiene_alertas: bool
+    alertas_ciertas: list[AlertaCiertaOc]
+    disponibilidad_por_tipo: list[DisponibilidadTipoOc]
+    impacto_por_tipo: list[dict[str, Any]]
+    tipos_fuera_de_alcance: list[str]
 
 
 class BacklogOcResponse(BaseModel):
@@ -176,15 +231,31 @@ class OcResumenCobertura(BaseModel):
     vigencia_hasta: str
 
 
+class CandidatoCobertura(BaseModel):
+    sujeto_id: str
+    tipo_sujeto: str
+    asignable: bool
+    veredicto: str
+    primer_quiebre: str | None
+    requisitos: list[dict[str, Any]]
+
+
+class GrupoCandidatosCobertura(BaseModel):
+    tipo_sujeto: str
+    candidatos: list[CandidatoCobertura]
+
+
 class CoberturaOcResponse(BaseModel):
     commitment_id: str
-    oc: OcResumenCobertura
+    oc: dict[str, Any]
     modo: str
-    veredicto_de_cumplimiento: str
-    resultado_de_decision: str
-    por_sujeto: list[SujetoEvaluado]
-    requisitos_faltantes: list[RequisitoFaltante]
-    version_matriz: VersionMatrizEvaluada
+    reprogramada: bool = False
+    historial_compromiso: list[dict[str, Any]] = Field(default_factory=list)
+    tiene_alertas: bool
+    alertas_ciertas: list[AlertaCiertaOc]
+    disponibilidad_por_tipo: list[DisponibilidadTipoOc]
+    impacto_por_tipo: list[dict[str, Any]]
+    tipos_fuera_de_alcance: list[str]
 
 
 class DecisionResumen(BaseModel):
@@ -237,6 +308,8 @@ class EventoAuditoria(BaseModel):
     tipo: str
     payload: dict[str, Any]
     ocurrido_en: str
+    usuario_nombre: str | None = None
+    legajo_requisito_etiqueta: str | None = None
 
 
 class LogAuditoriaResponse(BaseModel):
@@ -307,6 +380,158 @@ def propuestas_pendientes(identidad: Identidad = Depends(identidad_actual), p: P
         return PropuestasPendientesResponse(**servicio.propuestas_pendientes(s, identidad, p))
 
 
+@router.get("/consultas/backlog_oc", response_model=BacklogOcResponse)
+def backlog_oc(
+    response: Response,
+    estado: str | None = Query("activo"),
+    vigencia_desde: date | None = Query(None),
+    vigencia_hasta: date | None = Query(None),
+    mes: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    q: str | None = Query(None, max_length=200),
+    operadora_id: list[UUID] | None = Query(None),
+    locacion_id: UUID | None = Query(None),
+    tipo_recurso: str | None = Query(None),
+    solo_con_alertas: bool | None = Query(None),
+    solo_reprogramadas: bool | None = Query(None),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> BacklogOcResponse:
+    response.headers["Cache-Control"] = "no-store"
+    ops = [str(o) for o in operadora_id] if operadora_id else None
+    with tenant_session(identidad.tenant_id) as s:
+        return BacklogOcResponse(**servicio.backlog_oc(
+            s, identidad, p, estado=estado,
+            vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta, mes=mes, q=q,
+            operadora_id=ops, locacion_id=str(locacion_id) if locacion_id else None,
+            tipo_recurso=tipo_recurso, solo_con_alertas=solo_con_alertas, solo_reprogramadas=solo_reprogramadas,
+        ))
+
+
+class AccionPendienteItem(BaseModel):
+    requisito: str | None = None
+    legajo_id: str
+    legajo_nombre: str
+    nombre_apellido: str | None = None
+    identificador_natural: str | None = None
+    tipo_sujeto: str
+    fecha_limite: str
+    accion_sugerida: str
+    accion_sugerida_fecha: str | None = None
+    ocs_afectadas: list[dict[str, Any]]
+    efecto: str | None = None
+    genera_alerta_cierta: bool = False
+
+
+class AccionesPendientesResponse(BaseModel):
+    items: list[AccionPendienteItem]
+    total: int
+    offset: int
+    limit: int
+
+
+@router.get("/consultas/acciones_pendientes", response_model=AccionesPendientesResponse)
+def acciones_pendientes(
+    response: Response,
+    vigencia_desde: date | None = Query(None),
+    vigencia_hasta: date | None = Query(None),
+    mes: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    q: str | None = Query(None, max_length=200),
+    operadora_id: list[UUID] | None = Query(None),
+    locacion_id: UUID | None = Query(None),
+    tipo_recurso: str | None = Query(None),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> AccionesPendientesResponse:
+    response.headers["Cache-Control"] = "no-store"
+    ops = [str(o) for o in operadora_id] if operadora_id else None
+    with tenant_session(identidad.tenant_id) as s:
+        return AccionesPendientesResponse(**servicio.acciones_pendientes(
+            s, identidad, p, vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta, mes=mes, q=q,
+            operadora_id=ops, locacion_id=str(locacion_id) if locacion_id else None, tipo_recurso=tipo_recurso,
+        ))
+
+
+@router.get("/consultas/cobertura_oc", response_model=CoberturaOcResponse)
+def cobertura_oc(
+    response: Response,
+    oc_id: UUID | None = Query(None),
+    commitment_id: str | None = Query(None),
+    identidad: Identidad = Depends(identidad_actual),
+) -> CoberturaOcResponse:
+    response.headers["Cache-Control"] = "no-store"
+    with tenant_session(identidad.tenant_id) as s:
+        return CoberturaOcResponse(**servicio.cobertura_oc(
+            s, identidad, commitment_id=commitment_id, oc_id=str(oc_id) if oc_id else None,
+        ))
+
+
+class TramoTimeline(BaseModel):
+    requisito_definicion_id: str | None
+    requisito: str | None
+    categoria: str | None
+    vigente_desde: str
+    vigente_hasta: str
+    estado_confirmacion: str
+    estado_visual: str
+
+
+class QuiebreOcTimeline(BaseModel):
+    fecha: str
+    requisito: str | None
+    tipo: str | None = None
+
+
+class CruceOcTimeline(BaseModel):
+    oc_id: str
+    clave_origen: str
+    referencia: str | None
+    vigencia_desde: str
+    vigencia_hasta: str
+    llega_cubierto: bool
+    quiebres: list[QuiebreOcTimeline]
+
+
+class RecursoTimeline(BaseModel):
+    sujeto_id: str
+    tipo_sujeto: str
+    identificador: str
+    nombre_apellido: str | None = None
+    tramos: list[TramoTimeline]
+    ocs: list[CruceOcTimeline]
+
+
+class TimelineRecursosResponse(BaseModel):
+    hoy: str
+    desde: str
+    hasta: str
+    items: list[RecursoTimeline]
+    total: int
+    offset: int
+    limit: int
+
+
+@router.get("/consultas/timeline_recursos", response_model=TimelineRecursosResponse)
+def timeline_recursos(
+    response: Response,
+    desde: date = Query(...),
+    hasta: date = Query(...),
+    tipo_sujeto: Literal["empresa", "persona", "vehiculo", "equipo"] | None = Query(None),
+    oc_id: UUID | None = Query(None),
+    q: str | None = Query(None, max_length=200),
+    solo_quiebres: bool = Query(False),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> TimelineRecursosResponse:
+    from app.modules.consultas import timeline as timeline_servicio
+
+    response.headers["Cache-Control"] = "no-store"
+    with tenant_session(identidad.tenant_id) as s:
+        return TimelineRecursosResponse(**timeline_servicio.timeline_recursos(
+            s, identidad, p, desde=desde, hasta=hasta, tipo_sujeto=tipo_sujeto,
+            oc_id=str(oc_id) if oc_id else None, q=q, solo_quiebres=solo_quiebres,
+        ))
+
+
 @router.get("/consultas/tablero_vencimientos", response_model=TableroVencimientosResponse)
 def tablero_vencimientos(
     dias: int = Query(30, ge=0, le=3650),
@@ -315,44 +540,6 @@ def tablero_vencimientos(
 ) -> TableroVencimientosResponse:
     with tenant_session(identidad.tenant_id) as s:
         return TableroVencimientosResponse(**servicio.tablero_vencimientos(s, identidad, dias, p))
-
-
-@router.get("/consultas/backlog_oc", response_model=BacklogOcResponse)
-def backlog_oc(
-    estado: str | None = Query("activo"),
-    identidad: Identidad = Depends(identidad_actual),
-    p: Pagina = Depends(pagina),
-) -> BacklogOcResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return BacklogOcResponse(**servicio.backlog_oc(s, identidad, estado or None, p))
-
-
-@router.get("/consultas/cobertura_oc", response_model=CoberturaOcResponse)
-def cobertura_oc(commitment_id: str = Query(...), identidad: Identidad = Depends(identidad_actual)) -> CoberturaOcResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return CoberturaOcResponse(**servicio.cobertura_oc(s, identidad, commitment_id))
-
-
-@router.get("/consultas/decisiones_oc", response_model=DecisionesOcResponse)
-def decisiones_oc(
-    commitment_id: str = Query(...), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)
-) -> DecisionesOcResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return DecisionesOcResponse(**servicio.decisiones_oc(s, identidad, commitment_id, p))
-
-
-@router.get("/consultas/decision", response_model=DecisionDetalle)
-def decision(referencia_evaluacion: str = Query(...), identidad: Identidad = Depends(identidad_actual)) -> DecisionDetalle:
-    with tenant_session(identidad.tenant_id) as s:
-        return DecisionDetalle(**servicio.decision(s, identidad, referencia_evaluacion))
-
-
-@router.get("/consultas/historial_supervision", response_model=HistorialSupervisionResponse)
-def historial_supervision(
-    sujeto_id: str = Query(...), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)
-) -> HistorialSupervisionResponse:
-    with tenant_session(identidad.tenant_id) as s:
-        return HistorialSupervisionResponse(**servicio.historial_supervision(s, identidad, sujeto_id, p))
 
 
 @router.get("/consultas/log_auditoria", response_model=LogAuditoriaResponse)
@@ -494,6 +681,7 @@ class RecursoCustodiado(BaseModel):
 
 class ResumenMiLegajo(BaseModel):
     vencidos: int
+    por_vencer: int = 0
     vigentes_hoy: int
 
 
@@ -514,6 +702,7 @@ class SujetoItem(BaseModel):
     sujeto_id: str
     tipo_sujeto: str
     identificador_natural: str
+    nombre_apellido: str | None = None
     dado_de_baja_en: datetime | None
     creado_en: datetime
 
@@ -563,11 +752,15 @@ class MatrizItem(BaseModel):
     cliente_id: str
     locacion_id: str
     tipo_servicio_id: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    tipo_servicio_nombre: str | None = None
     version: int
     vigente_desde: date
     vigente_hasta: date | None
     fuente: str | None
     autor: str | None
+    autor_nombre: str | None = None
     matriz_global_id: str | None
     copiada_de_version: int | None
     creado_en: datetime
@@ -582,9 +775,23 @@ class MatricesResponse(BaseModel):
 
 
 @router.get("/consultas/matrices", response_model=MatricesResponse)
-def matrices(cliente_id: UUID | None = Query(None), solo_vigentes: bool = Query(False),
-             identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> MatricesResponse:
-    return MatricesResponse(**_con(catalogos.matrices, identidad, p=p, cliente_id=str(cliente_id) if cliente_id else None, solo_vigentes=solo_vigentes))
+def matrices(
+    cliente_id: UUID | None = Query(None),
+    solo_vigentes: bool = Query(False),
+    q: str | None = Query(None, max_length=200),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> MatricesResponse:
+    return MatricesResponse(
+        **_con(
+            catalogos.matrices,
+            identidad,
+            p=p,
+            cliente_id=str(cliente_id) if cliente_id else None,
+            solo_vigentes=solo_vigentes,
+            q=q,
+        )
+    )
 
 
 class UsuarioItem(BaseModel):
@@ -664,12 +871,6 @@ class ExcepcionesResponse(BaseModel):
     limit: int
 
 
-@router.get("/consultas/excepciones", response_model=ExcepcionesResponse)
-def excepciones(sujeto_id: str | None = Query(None), estado: Literal["otorgada", "revocada", "regularizada", "vencida"] | None = Query("otorgada"),
-                commitment_id: str | None = Query(None), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> ExcepcionesResponse:
-    return ExcepcionesResponse(**_con(catalogos.excepciones, identidad, p=p, sujeto_id=sujeto_id, estado=estado, commitment_id=commitment_id))
-
-
 class ConstanciaItem(BaseModel):
     constancia_id: str
     sujeto_id: str
@@ -693,12 +894,6 @@ class ConstanciasResponse(BaseModel):
     limit: int
 
 
-@router.get("/consultas/constancias", response_model=ConstanciasResponse)
-def constancias(sujeto_id: str | None = Query(None), estado: Literal["vigente", "vencida", "revocada", "reemplazada"] | None = Query("vigente"),
-                cliente_id: UUID | None = Query(None), identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> ConstanciasResponse:
-    return ConstanciasResponse(**_con(catalogos.constancias, identidad, p=p, sujeto_id=sujeto_id, estado=estado, cliente_id=str(cliente_id) if cliente_id else None))
-
-
 class CustodiaItem(BaseModel):
     periodo_id: str
     custodia_id: str
@@ -717,12 +912,6 @@ class CustodiasResponse(BaseModel):
     total: int
     offset: int
     limit: int
-
-
-@router.get("/consultas/custodias", response_model=CustodiasResponse)
-def custodias(recurso_id: str | None = Query(None), custodio_id: str | None = Query(None), solo_vigentes: bool = Query(False),
-              identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> CustodiasResponse:
-    return CustodiasResponse(**_con(catalogos.custodias, identidad, p=p, recurso_id=recurso_id, custodio_id=custodio_id, solo_vigentes=solo_vigentes))
 
 
 class LoteItem(BaseModel):
@@ -769,8 +958,3 @@ class AsignacionesSupervisorResponse(BaseModel):
     limit: int
 
 
-@router.get("/consultas/asignaciones_supervisor", response_model=AsignacionesSupervisorResponse)
-def asignaciones_supervisor(supervisor_usuario_id: UUID | None = Query(None), sujeto_id: str | None = Query(None), solo_vigentes: bool = Query(True),
-                            identidad: Identidad = Depends(identidad_actual), p: Pagina = Depends(pagina)) -> AsignacionesSupervisorResponse:
-    return AsignacionesSupervisorResponse(**_con(catalogos.asignaciones_supervisor, identidad, p=p, supervisor_usuario_id=str(supervisor_usuario_id) if supervisor_usuario_id else None,
-                sujeto_id=sujeto_id, solo_vigentes=solo_vigentes))

@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.errores import registrar_handlers
-from app.config import describir_entorno
+from app.config import describir_entorno, settings
 from app.openapi_extra import enriquecer
 from app.version import VERSION
 
@@ -23,7 +23,13 @@ async def _ciclo_de_vida(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Módulo 1 — Documentación habilitante", version=VERSION, lifespan=_ciclo_de_vida)
+app = FastAPI(
+    title="Módulo 1 — Documentación habilitante",
+    version=VERSION,
+    lifespan=_ciclo_de_vida,
+    docs_url="/docs" if settings.api_docs_habilitada else None,
+    redoc_url="/redoc" if settings.api_docs_habilitada else None,
+)
 registrar_handlers(app)
 
 PREFIJO = "/v1"
@@ -33,13 +39,13 @@ ROUTERS = [
     "app.auth.router",
     "app.modules.legajos.router",
     "app.modules.requisitos.router",
-    "app.modules.operacion.router",
     "app.modules.alertas.router",
     "app.modules.paquete.router",
     "app.modules.capacidades_router",
     "app.modules.evidencia.router",
     "app.modules.oc.router",
     "app.modules.proyeccion.router",
+    "app.modules.operadoras.router",
     "app.modules.consultas.router",
     "app.storage.router",
 ]

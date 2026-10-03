@@ -1,0 +1,35 @@
+/* Sistema visual corporativo — ronda 1-e (única fuente de verdad de tokens). */
+:root {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-size-base: 14px;
+  --line-height-base: 1.5;
+
+  --color-topbar: #0d2137;
+  --color-topbar-text: #ffffff;
+  --color-topbar-muted: #9fb3c8;
+
+  --color-page-bg: #f2f4f7;
+  --color-panel: #ffffff;
+  --color-border: #d8dee6;
+  --color-separator: #eef1f4;
+
+  --color-text: #161b22;
+  --color-text-muted: #5b6878;
+
+  --color-action: #0b5cad;
+  --color-action-hover: #094d92;
+  --color-selected-bg: #eaf1fa;
+
+  --color-state-vencido: #b42318;
+  --color-state-por-vencer: #b54708;
+  --color-state-revision: #0b5cad;
+  --color-state-vigente: #157f3c;
+  --color-state-sin-respaldo: #b42318;
+
+  --radius: 4px;
+  --button-min-height: 38px;
+  --topbar-height: 48px;
+  --sidebar-width: 216px;
+  --list-detail-list-width: 300px;
+}

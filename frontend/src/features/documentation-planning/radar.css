@@ -1,0 +1,8 @@
+.projection-sin_alertas_documentales{background:#dceee8;color:#145c56}
+.projection-con_alertas_documentales{background:#fff0c9;color:#7b5605}
+.projection-informacion_incompleta{background:#dce7f7;color:#315b87}
+.detail-link{margin-left:8px}
+.backlog-legajo-detail .radar-requisitos-table td small{display:block;color:var(--muted,#5c6570);margin-top:4px}
+.backlog-legajo-detail .radar-motivo-sin-cobertura{display:block;margin-top:4px;color:var(--muted,#5c6570)}
+
+

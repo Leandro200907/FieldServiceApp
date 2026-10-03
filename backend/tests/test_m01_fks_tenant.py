@@ -32,8 +32,13 @@ def _ids(tenant, sufijo: str) -> dict:
                                  "VALUES (:t, :p, :r, '2026-01-01', '2026-12-31', 'carga_manual') RETURNING documento_id"), {"t": t, "r": req, "p": P}).scalar())
         req2 = str(s.execute(text("INSERT INTO modulo1.definicion_requisito (tenant_id, nombre, categoria, tipo_sujeto_aplicable) "
                                   "VALUES (:t, 'R2', 'documento', 'persona') RETURNING requisito_definicion_id"), {"t": t}).scalar())
-        lote = str(s.execute(text("INSERT INTO modulo1.lote_importacion (tenant_id, origen, entidad, filas_totales, filas_aceptadas, filas_rechazadas) "
-                                  "VALUES (:t, 'planilla', 'legajos', 0, 0, 0) RETURNING lote_id"), {"t": t}).scalar())
+        soporte = str(s.execute(text("INSERT INTO modulo1.documento (tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, origen) "
+                                     "VALUES (:t, :p, :r, '2026-01-01', '2026-12-31', 'carga_manual') RETURNING documento_id"),
+                                {"t": t, "r": req2, "p": P}).scalar())
+        lote_leg = str(s.execute(text("INSERT INTO modulo1.lote_importacion (tenant_id, origen, entidad, filas_totales, filas_aceptadas, filas_rechazadas) "
+                                      "VALUES (:t, 'planilla', 'legajos', 0, 0, 0) RETURNING lote_id"), {"t": t}).scalar())
+        lote_oc = str(s.execute(text("INSERT INTO modulo1.lote_importacion (tenant_id, origen, entidad, filas_totales, filas_aceptadas, filas_rechazadas) "
+                                     "VALUES (:t, 'planilla', 'oc', 0, 0, 0) RETURNING lote_id"), {"t": t}).scalar())
         matriz = str(s.execute(text("INSERT INTO modulo1.matriz_requisitos (tenant_id, cliente_id, locacion_id, tipo_servicio_id, version, vigente_desde) "
                                     "VALUES (:t, gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 1, '2026-01-01') RETURNING matriz_version_id"), {"t": t}).scalar())
         ref = apoyo.evaluacion(s, t, OC)
@@ -46,7 +51,7 @@ def _ids(tenant, sufijo: str) -> dict:
         evento = str(s.execute(text("INSERT INTO modulo1.event_log (tenant_id, tipo, payload) VALUES (:t, 'X', '{}') RETURNING evento_id"), {"t": t}).scalar())
         aviso = str(s.execute(text("INSERT INTO modulo1.aviso_revaluacion (tenant_id, referencia_evaluacion, commitment_id) VALUES (:t, :r, :oc) "
                                    "RETURNING aviso_id"), {"t": t, "r": ref, "oc": OC}).scalar())
-    return {"req": req, "req2": req2, "doc": doc, "lote": lote, "matriz": matriz, "ref": ref, "custodia": custodia, "periodo": periodo,
+    return {"req": req, "req2": req2, "doc": doc, "soporte": soporte, "lote": lote_leg, "lote_oc": lote_oc, "matriz": matriz, "ref": ref, "custodia": custodia, "periodo": periodo,
             "constancia": constancia, "evento": evento, "aviso": aviso, "usuario": tenant.usuarios["supervisor"], "sujeto": P,
             "vehiculo": f"vehiculo2_{sufijo}", "oc": OC, "persona": P, "ref_propia": ref}
 
@@ -58,17 +63,13 @@ RELACIONES = [
     ("fk_documento__sucede_a",
      "INSERT INTO modulo1.documento (tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen, sucede_a, estado_version) VALUES (:t, :persona, '2026-01-01', '2026-12-31', 'carga_manual', :p, 'sucedida')", "doc"),
     ("fk_documento__lote_id",
-     "INSERT INTO modulo1.documento (tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen, lote_id) VALUES (:t, :persona, '2026-01-01', '2026-12-31', 'planilla', :p)", "lote"),
+     "INSERT INTO modulo1.documento (tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen, lote_id, lote_entidad) VALUES (:t, :persona, '2026-01-01', '2026-12-31', 'planilla', :p, 'legajos')", "lote"),
     ("fk_documento__sujeto_id",
      "INSERT INTO modulo1.documento (tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen) VALUES (:t, :p, '2026-01-01', '2026-12-31', 'carga_manual')", "sujeto"),
-    ("fk_acreditacion_competencia__requisito_definicion_id",
-     "INSERT INTO modulo1.acreditacion_competencia (tenant_id, persona_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencias) VALUES (:t, :persona, :p, '2026-01-01', '2026-12-31', ARRAY[gen_random_uuid()])", "req"),
-    ("fk_acreditacion_competencia__persona_id",
-     "INSERT INTO modulo1.acreditacion_competencia (tenant_id, persona_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencias) VALUES (:t, :p, :req, '2026-01-01', '2026-12-31', ARRAY[gen_random_uuid()])", "sujeto"),
-    ("fk_induccion__evidencia",
-     "INSERT INTO modulo1.induccion (tenant_id, persona_id, locacion_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencia) VALUES (:t, :persona, gen_random_uuid(), :req, '2026-01-01', '2026-12-31', :p)", "doc"),
-    ("fk_induccion__persona_id",
-     "INSERT INTO modulo1.induccion (tenant_id, persona_id, locacion_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencia) VALUES (:t, :p, gen_random_uuid(), :req, '2026-01-01', '2026-12-31', :doc)", "sujeto"),
+    ("fk_documento_soporte__documento_id",
+     "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) VALUES (:t, :p, :soporte)", "doc"),
+    ("fk_documento_soporte__soporte_documento_id",
+     "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) VALUES (:t, :soporte, :p)", "doc"),
     ("fk_linea_requisito__matriz_version_id",
      "INSERT INTO modulo1.linea_requisito (tenant_id, matriz_version_id, requisito_definicion_id, clasificacion, bloqueante_durante_ejecucion) VALUES (:t, :p, :req2, 'excepcionable', true)", "matriz"),
     ("fk_requisito_particular__commitment_id",
@@ -100,7 +101,7 @@ RELACIONES = [
     ("fk_aviso_revaluacion_causa__evento_id",
      "INSERT INTO modulo1.aviso_revaluacion_causa (tenant_id, aviso_id, evento_id, tipo_evento, entidad_tipo, entidad_id) VALUES (:t, :aviso, :p, 'X', 'x', 'x')", "evento"),
     ("fk_oc__lote_id",
-     "INSERT INTO modulo1.oc (tenant_id, clave_origen, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id) VALUES (:t, 'OC-' || gen_random_uuid()::text, gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '2026-01-01', '2026-02-01', :p)", "lote"),
+     "INSERT INTO modulo1.oc (tenant_id, clave_origen, cliente_id, locacion_id, tipo_servicio_id, vigencia_desde, vigencia_hasta, lote_id, lote_entidad) VALUES (:t, 'OC-' || gen_random_uuid()::text, gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '2026-01-01', '2026-02-01', :p, 'oc')", "lote_oc"),
     ("fk_refresh_token__usuario_id",
      "INSERT INTO modulo1.refresh_token (token_hash, tenant_id, usuario_id, expira_en) VALUES (gen_random_uuid()::text, :t, :p, now() + interval '1 day')", "usuario"),
     ("fk_asignacion_supervisor__sujeto_id",
@@ -147,3 +148,4 @@ def test_pg_constraint_no_quedan_fks_simples_tenant_scoped():
                                        "('fk_periodo_custodia__custodia_id', 'fk_aviso_revaluacion_causa__evento_id', 'fk_linea_requisito__matriz_version_id')")).all())
     assert deltypes == {"fk_periodo_custodia__custodia_id": "a", "fk_aviso_revaluacion_causa__evento_id": "a",
                         "fk_linea_requisito__matriz_version_id": "c"}
+

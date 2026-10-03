@@ -1,0 +1,5 @@
+.proposal-actions{display:flex;gap:8px;flex-wrap:wrap}
+.proposal-reject{display:flex;flex-direction:column;gap:6px}
+.proposal-reject label{font-size:11px;font-weight:700;color:#536b7b}
+.proposal-reject input{padding:6px 8px;border:1px solid #c9d3db;border-radius:5px;font-size:12px}
+.projection-table td strong + small{display:block}

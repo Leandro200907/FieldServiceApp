@@ -5,8 +5,39 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0021_validacion_evidencia`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0030_legajo_nombre_apellido`.
+
+Internamente existe una sola entidad `documento` para certificados, competencias e
+inducciones. La categoría la define el tipo de requisito. Las rutas históricas de
+acreditación e inducción siguen disponibles, por compatibilidad del contrato, pero ya no
+escriben ni leen tablas paralelas.
 Prefijo de todas las rutas: `/v1`.
+
+### Espejo documental por operadora
+
+- `POST /v1/comandos/registrar_estado_documento_operadora` registra, desde una planilla
+  u otra fuente, si una versión fue exportada, enviada, aceptada o rechazada por una
+  operadora. Conserva archivo, hoja y fila de origen.
+- `POST /v1/comandos/importar_planilla_operadoras` recibe el XLSX; admite `hoja=Presentaciones`
+  como cuerpo binario (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`).
+  `X-Nombre-Archivo` conserva el nombre original e `Idempotency-Key` permite repetir el
+  envío con seguridad. Devuelve resultados y errores por fila; una fila rechazada no
+  revierte las correctas.
+- `GET /v1/consultas/alertas_actualizacion_operadora` devuelve las diferencias abiertas
+  entre la versión vigente del legajo y la versión conocida por cada operadora.
+- `GET /v1/consultas/espejo_operadora` lista el espejo con filtros combinables
+  (`operadora_id`, `requisito_definicion_id`, `tipo_sujeto`, `q`, `estado_operadora`,
+  rango o mes del último movimiento) y paginación; `Cache-Control: no-store`.
+- `GET /v1/consultas/historial_operadora` devuelve la línea de tiempo de movimientos
+  (`operadora_id`, `sujeto_id`, `requisito_definicion_id`); `Cache-Control: no-store`.
+- Una renovación no modifica automáticamente el estado externo: abre una alerta por
+  operadora. El envío la cambia a pendiente de aceptación; la aceptación de la versión
+  vigente la cierra.
+- El responsable de legajos y el supervisor vigente del sujeto reciben la notificación.
+  El alcance del supervisor también se aplica a la consulta.
+- La importación sólo resuelve datos del tenant autenticado; aunque una fila contenga ids
+  de otra empresa cliente, éstos se consideran inexistentes y no se escriben.
+- Esta capacidad es documental: no asigna recursos ni confirma disponibilidad.
 
 ## 0. Contrato OpenAPI versionado y tipos TypeScript
 
@@ -48,7 +79,7 @@ rutas protegidas declaran `security: bearerAuth`.
 | `POST /v1/auth/login` | `{tenant_slug, email, password}` | `{access_token, refresh_token, token_type:"bearer", expires_in}` |
 | `POST /v1/auth/refresh` | `{refresh_token}` | mismo par (rotación: el refresh viejo queda revocado) |
 | `POST /v1/auth/logout` | `{refresh_token}` (con Bearer) | `{revocado: bool}` |
-| `GET /v1/auth/yo` | — | `{tenant_id, usuario_id, roles[], sujeto_id}` |
+| `GET /v1/auth/yo` | — | `{tenant_id, tenant_nombre, usuario_id, usuario_nombre, usuario_email, roles[], sujeto_id, legajo_etiqueta?, zona_horaria}` |
 
 - Todo lo demás exige `Authorization: Bearer <access_token>`. Sin token o vencido: **401**
   `no_autenticado`. Rol insuficiente: **403** `prohibido` (`detalles.roles_requeridos`).
@@ -90,8 +121,8 @@ Todo error, de cualquier status, tiene esta forma exacta:
 - Misma clave + body distinto → **409** `clave_idempotencia_reutilizada`, siempre.
 - Misma clave mientras la primera ejecución todavía corre → **409** `operacion_en_proceso`
   (reintentar en unos segundos).
-- `importar_lote` deriva la clave del `lote_id` del body (`lote:<id>`); repetir el mismo
-  lote con otro contenido → **409** `lote_contenido_distinto`.
+- `importar_lote` deriva la clave del `lote_id` del body (`lote_doc:<id>`; OC usa
+  `lote_oc:<id>`); repetir el mismo lote con otro contenido → **409** `lote_contenido_distinto`.
 - Antes de reproducir un replay se vuelve a verificar la autorización actual (un
   supervisor que perdió a la persona de su universo recibe 403/404, no el replay).
 
@@ -106,7 +137,8 @@ Todo error, de cualquier status, tiene esta forma exacta:
 ### 4.2 Comandos de legajos y evidencia (`POST /v1/comandos/…`)
 | Ruta | Rol | Body (campos principales) |
 |---|---|---|
-| `POST /v1/comandos/alta_de_sujeto` | responsable_legajos | `{tipo_sujeto: empresa\|persona\|vehiculo\|equipo, identificador_natural, sujeto_id?}` |
+| `POST /v1/comandos/alta_de_sujeto` | responsable_legajos | `{tipo_sujeto: empresa\|persona\|vehiculo\|equipo, identificador_natural, nombre_apellido? (solo persona), sujeto_id?}` |
+| `POST /v1/comandos/corregir_nombre_legajo_persona` | responsable_legajos, configuracion | `{sujeto_id, nombre_apellido}` |
 | `POST /v1/comandos/baja_de_sujeto` | responsable_legajos | `{sujeto_id}` |
 | `POST /v1/comandos/cargar_documento` | responsable_legajos | `{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?, origen?, estado_confirmacion?}` → `{documento_id, eventos[]}` |
 | `POST /v1/comandos/proponer_documento` | tecnico (sobre su propio legajo) | `{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?}` |
@@ -128,7 +160,7 @@ archivo crudo y el mismo `Content-Type` (sin JWT: la URL firmada es el permiso; 
 `expira_en_seg`; `max_bytes` se exige) → `confirmar_subida` (mide el archivo real; 422
 `archivo_ausente` / `archivo_vacio` / `archivo_demasiado_grande` si no cierra; encola la
 validación técnica asincrónica, ver más abajo). Descarga:
-`GET /v1/storage/documentos/{documento_id}/url` (roles responsable/supervisor/técnico, según
+`POST /v1/storage/documentos/{documento_id}/url` (roles responsable/supervisor/técnico, según
 alcance) → `{url}` efímera → `GET <url>` — **sólo si la validación técnica ya dio
 `valido`** (ver 409 `archivo_pendiente_de_validacion` / 422 `archivo_invalido` abajo).
 
@@ -173,41 +205,13 @@ el documento cuando resulta inválido:
 Unicidad de definición: `(nombre, categoria, tipo_sujeto_aplicable, locacion_id)` por
 tenant, **incluyendo las dadas de baja** → repetir es 409 `conflicto` / `definicion_duplicada`.
 
-### 4.4 Comandos de operación
-| Ruta | Rol | Body |
-|---|---|---|
-| `POST /v1/comandos/cambiar_custodia` | supervisor | `{recurso_id, tipo_recurso: vehiculo\|equipo, custodio_id?, desde}` → `{custodia_id, periodo_id, periodo_cerrado_id, eventos[]}` |
-| `POST /v1/comandos/corregir_custodia` | supervisor | `{periodo_id, custodio_id?, desde?, hasta?, motivo?}` |
-| `POST /v1/comandos/otorgar_excepcion` | supervisor | `{referencia_evaluacion, sujeto_id, requisito_definicion_id, commitment_id, motivo, vigencia?, evidencia?}` |
-| `POST /v1/comandos/revocar_excepcion` | supervisor | `{excepcion_id, motivo?}` |
-| `POST /v1/comandos/registrar_constancia_del_cliente` | responsable_legajos | `{sujeto_id, requisito_definicion_id, cliente_id, evidencia, commitment_id?, emisor?, vigencia?}` → `{constancia_id, constancia_reemplazada_id, eventos[]}` |
-| `POST /v1/comandos/revocar_constancia_del_cliente` | responsable_legajos | `{constancia_id, motivo?}` |
-| `POST /v1/comandos/evaluar_habilitacion` | responsable_legajos | `{commitment_id, sujetos_propuestos[]}` (sin campos extra: `origen_sujetos` es 422) → decisión persistida con `referencia_evaluacion` |
+### 4.4 Frontera con Módulo 2
 
-Reglas que el frontend debe reflejar:
-- **Custodia**: sólo el Supervisor (el responsable recibe 403). El custodio tiene que ser
-  una persona activa **dentro del universo del supervisor** (403 si no); `custodio_id`
-  vacío sólo para equipos (`custodio_requerido` en vehículo). El nuevo período tiene que
-  empezar después del vigente (409 `conflicto`). Corregir nunca borra: el período viejo
-  queda `corregido` apuntando al nuevo.
-- **Excepción**: sólo sobre requisitos `excepcionable` (422 `requisito_no_excepcionable`),
-  nunca sobre la empresa (422 `excepcion_de_empresa_deshabilitada`), una sola `otorgada` por
-  (sujeto, requisito, compromiso) (409 `conflicto` / `excepcion_activa_duplicada`). El
-  supervisor sólo ve/toca decisiones cuyos sujetos propuestos están todos en su universo
-  (si no: 404 de la evaluación, 403 del sujeto).
-- **Constancia del cliente**: sólo sobre requisitos `bloqueante_duro` (422
-  `requisito_no_bloqueante_duro`). Registrar una nueva para la misma clave **reemplaza** a
-  la vigente (`constancia_reemplazada_id` en la respuesta; la vieja queda `reemplazada`).
-  General (`commitment_id` nulo) y específica (con `commitment_id`) son claves distintas:
-  no se reemplazan entre sí.
-- **Semántica concurrente de constancias (aceptada)**: si dos usuarios registran a la vez
-  la "primera" constancia de la misma clave, el backend las serializa: **las dos pueden
-  responder 200**, pero la segunda reemplaza a la primera y **sólo una queda vigente**. El
-  frontend no debe asumir que un 200 significa "sigue vigente": releé el legajo (o mirá
-  `constancia_reemplazada_id` de la otra respuesta). Para excepciones no hay reemplazo:
-  la segunda concurrente recibe 409.
-- **Evaluar habilitación** es modo decisión (persiste). El supervisor sólo consulta
-  (`GET /v1/consultas/cobertura_oc`, no persiste). `evaluar_habilitacion` por el supervisor → 403.
+Módulo 1 no publica comandos de asignación de supervisores, custodia de recursos,
+excepciones, constancias de cliente ni evaluación operativa. Tampoco publica sus
+historiales operativos. Las tablas y servicios heredados permanecen internos porque el
+alcance documental, las alertas y la transición futura hacia Módulo 2 todavía los leen.
+El frontend de Módulo 1 no debe ofrecer controles para modificar esos datos.
 
 ### 4.4 bis Alertas de vencimiento (flujo 3.4)
 | Ruta | Rol | Body / query |
@@ -220,9 +224,9 @@ Reglas que el frontend debe reflejar:
 
 Semántica que la UI debe reflejar: `etapa` avanza sola con el tiempo (T−plazo aviso,
 T−plazo/2 recordatorio, T+1 vencido, T+N escalado) y `estado` refleja la acción humana
-(`abierta`, `pausada_por_accion`, `resuelta`). Cargar/proponer un documento o registrar
-una excepción pausa los recordatorios; sólo un documento **verificado** que cubra el
-requisito resuelve; sobre `vencido` una excepción marca `bajo_excepcion` sin resolver.
+(`abierta`, `pausada_por_accion`, `resuelta`). Cargar/proponer un documento pausa los
+recordatorios; sólo un documento **verificado** que cubra el requisito resuelve. Una
+excepción ya existente puede marcar `bajo_excepcion`, pero no se gestiona desde Módulo 1.
 Las notificaciones salen agrupadas por destinatario (un mensaje con varias alertas). El
 override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_aviso_dias`
 (vía alta/edición de la definición; hoy sólo por base — pendiente comando propio).
@@ -240,7 +244,7 @@ override de plazo por tipo de requisito se fija en `definicion_requisito.plazo_a
 | `GET /v1/publico/paquete/{token}` | **público (sin JWT)** | → estado de cumplimiento del sujeto (requisitos con `vigente` / `vencido` / `declarado_sin_verificar`), sin archivos; 404 si vencido/revocado/token inválido; 422 `rate_limit` |
 | `GET /v1/publico/paquete/{token}/qr.png` | **público** | PNG del QR que apunta al link |
 | `GET /v1/consultas/score_documental` | configuracion, responsable_legajos, supervisor (alcance) | → `{score, exigidos, cubiertos, sujetos, sujetos_completos, por_tipo_sujeto{}, peores[], historial[]}` |
-| `GET /v1/consultas/exportar_legajo` | responsable_legajos | `sujeto_id`, `formato=json\|csv` → descarga (`Content-Disposition`), deja traza `LegajoExportado` |
+| `POST /v1/consultas/exportar_legajo` | responsable_legajos | `sujeto_id`, `formato=json\|csv` → descarga (`Content-Disposition`), deja traza `LegajoExportado` |
 | `POST /v1/comandos/configurar_drive` | configuracion | `{habilitado, carpeta_id, intervalo_horas?}` (intervalo → escaneo programado por el worker) |
 | `POST /v1/comandos/escanear_drive` | responsable_legajos, configuracion | `{motivo?}` → `{vistos, nuevos, importados, bandeja, ya_vistos}` |
 | `POST /v1/comandos/resolver_archivo_drive` | responsable_legajos | `{archivo_drive_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta}` → importa desde la bandeja |
@@ -281,11 +285,6 @@ Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}
 | `GET /v1/consultas/legajo` | todos (técnico: sólo el propio; supervisor: su universo) | `sujeto_id` |
 | `GET /v1/consultas/propuestas_pendientes` | responsable_legajos | paginado |
 | `GET /v1/consultas/tablero_vencimientos` | responsable_legajos, supervisor | `dias`, paginado |
-| `GET /v1/consultas/backlog_oc` | responsable_legajos, supervisor | `estado?`, paginado |
-| `GET /v1/consultas/cobertura_oc` | responsable_legajos, supervisor | `commitment_id` (modo consulta, no persiste) |
-| `GET /v1/consultas/decisiones_oc` | responsable_legajos, supervisor | `commitment_id`, paginado |
-| `GET /v1/consultas/decision` | responsable_legajos, supervisor | `referencia_evaluacion` |
-| `GET /v1/consultas/historial_supervision` | configuracion, responsable_legajos | `sujeto_id`, paginado |
 | `GET /v1/consultas/log_auditoria` | configuracion, responsable_legajos | `tipo?`, `desde?`, `hasta?`, paginado |
 | `GET /v1/consultas/matriz_vigente` | todos | `cliente_id`, `locacion_id`, `tipo_servicio_id`, `fecha?` |
 | `GET /v1/consultas/incumplimiento_empresa` | todos | — |
@@ -299,100 +298,59 @@ responsable; nada se actualiza solo. El frontend debe mostrar la comparación (p
 nueva vs. copia local) desde `plantillas_globales` y ofrecer `copiar_matriz_global` /
 `copiar_definicion_global`.
 
-### 4.5bis Proyección documental (docs/PROYECCION_DOCUMENTAL.md) — NUEVO, en revisión
+### 4.5bis Radar documental informativo del backlog
 
-**No integrar en pantallas todavía.** Implementado y probado contra PostgreSQL real, pero
-sin una segunda revisión del contrato cerrada. Antes de conectar cualquier pantalla:
-regenerar tipos TypeScript desde el `docs/openapi.json` de este commit (o el que
-finalmente se integre — los schemas de datos no cambian, pero el contrato tiene que
-corresponder al código exacto), y comparar contra el resultado de una revisión
-independiente si la hay.
+Estas rutas nuevas no usan asignaciones, custodia, candidatos, capacidad ni excepciones.
+Cruzan las fechas y requisitos de cada OC con **todos** los legajos activos y siempre
+incluyen la advertencia de que el resultado no representa planificación ni asignación.
 
-Los tres endpoints son de sólo lectura — nunca persisten, nunca crean tareas, nunca
-modifican una decisión histórica ni el estado de custodia. Ver `docs/PROYECCION_DOCUMENTAL.md`
-para el diseño completo (estados, precedencia, puntos de quiebre, ejemplos).
-
-| Ruta | Roles | Query |
+| Ruta | Roles | Uso |
 |---|---|---|
-| `GET /v1/consultas/calendario_vigencias` | responsable_legajos, supervisor (su universo), **técnico** (su propio legajo + custodia — amplía la matriz de `tablero_vencimientos`) | `desde?`, `hasta?` (default hoy→+30, máx. 366 días), `tipo_sujeto?`, `categoria?`, `estado?` (`vigente\|vencido\|todos`), `q?`, paginado |
-| `GET /v1/consultas/proyeccion_documental` | responsable_legajos, supervisor (alcance vía última decisión visible o candidatos del universo) | `commitment_id` (obligatorio), `desde?`, `hasta?`, `detalle?` (`resumen\|diario`) |
-| `GET /v1/consultas/proyeccion_documental_backlog` | responsable_legajos, supervisor (una OC entra sólo si al menos un candidato de su conjunto está en su universo) | `estado_oc?` (`activo` por defecto), `estado?` (repetible, uno de los 6 estados), `horizonte_dias?` (default 30, máx. 366), paginado |
-| `GET /v1/consultas/detalle_proyeccion_documental` | según la rama de `referencia` — `evidencia:…` usa los roles de `calendario_vigencias` (incluye técnico); `oc:…` usa los de `proyeccion_documental` (sin técnico) | `referencia` (obligatorio, string opaco — ver abajo) |
+| `GET /v1/consultas/calendario_vigencias` | responsable_legajos, supervisor y técnico dentro de su alcance documental | Calendario independiente de vencimientos; no cruza datos con OC. |
+| `GET /v1/consultas/radar_documental_backlog` | responsable_legajos, supervisor; configuración sólo ve este resumen agregado | Backlog activo; `desde?`, `hasta?` (default 60 días, máximo 366), filtros de OC, `estado?`, `q?` y paginación. |
+| `GET /v1/consultas/radar_documental_oc` | responsable_legajos, supervisor | Detalle por `oc_id`, matrices por tramo y todos los legajos agrupados por tipo. No devuelve archivos. |
+| `GET /v1/consultas/radar_documental_oc/{oc_id}/legajos/{sujeto_id}` | responsable_legajos, supervisor | Detalle documental de un legajo dentro de una OC. No concede permiso de descarga de evidencia. |
 
-**Q-DOC-03, `detalle_proyeccion_documental` (nuevo, diseño en `docs/PROYECCION_DOCUMENTAL.md`
-§15).** Detalle genérico por referencia opaca, para no tener que reconstruirla del lado del
-cliente: `calendario_vigencias`, `proyeccion_documental` y `proyeccion_documental_backlog`
-ahora suman un campo `referencia` a cada ítem/response (`evidencia:{categoria}:{id}` o
-`oc:{commitment_id}`) — reenviar ese valor tal cual como query param. Respuesta con `tipo`
-discriminador (`"evidencia" | "oc"`):
-- `tipo: "oc"` es literalmente el body de `proyeccion_documental?commitment_id=…` con
-  `tipo`/`referencia` agregados — ninguna diferencia de datos.
-- `tipo: "evidencia"` es nuevo: además de los campos crudos que ya trae
-  `calendario_vigencias`, agrega `aplicabilidad` (`"exigida_por_oc" | "informativa"`) y
-  `matrices_aplicables[]` (`commitment_id`, `matriz_version_id`, `version`,
-  `origen_calculo`) — el "contexto de aplicabilidad" que pedía Q-DOC-01, calculado a
-  demanda para ESE ítem puntual, nunca para la lista completa (`calendario_vigencias`
-  sigue sin cruzar matriz/OC fila por fila, por diseño — ver §2.1 del documento de diseño).
-- `referencia` malformada o `categoria` inválida → 422; evidencia inexistente o fuera del
-  alcance de quien consulta → 404 (nunca 403, nunca revela su existencia); rama equivocada
-  para el rol (p. ej. técnico + `oc:…`) → 403, igual que llamando el endpoint directo.
+El frontend debe consumir sólo estas rutas para el cruce OC-legajos. Los contratos
+anteriores de proyección fueron retirados: no existe una capa de compatibilidad paralela.
+El calendario de vigencias continúa siendo una consulta documental independiente.
 
-- Las tres respuestas llevan `advertencia` con el texto exacto fijo — `capacidad_documental_potencial` **nunca** es una promesa de disponibilidad, ver el documento de diseño §5.
-- Vocabulario cerrado de 6 estados (`sin_matriz`, `pendiente_de_planificacion`,
-  `bloqueo_confirmado`, `requiere_revision`, `riesgo_documental`, `sin_riesgos_detectados`):
-  sólo aplica al **resumen** de una OC; cada `intervalos[].estado` usa un subconjunto de 3
-  (documento §6) — no confundir los dos al construir la UI.
-  `calendario_vigencias` no usa este vocabulario en absoluto (es un hecho suelto, no una
-  conclusión sobre una OC).
-- `capacidad_documental_potencial`/`capacidad_documental_potencial_hoy`: un tipo AUSENTE en
-  el objeto significa "esta OC no lo exige"; un tipo presente en `0` significa "lo exige y
-  hoy nadie lo cubre" — nunca hay un valor `null` para ningún tipo.
-- **Alcance y permisos, sin presumir nada por el rol**: ningún rol habilita documentalmente
-  por sí solo — el motor evalúa documentos, nunca roles. `alcance_de_sujetos`
-  (`app/auth/alcance.py`, única fuente de verdad) es el mismo filtro en los tres endpoints
-  nuevos, en `mi_legajo` y en toda consulta existente:
-  - **Técnico**: su propia persona + los recursos bajo su custodia EFECTIVA hoy (nunca la
-    de una transferencia futura todavía no iniciada — hallazgo A-01, ver `CONDICION_
-    CUSTODIA_EFECTIVA_HOY`). No ve a nadie más, aunque comparta OC con otros.
-  - **Supervisor**: "Mi legajo" (`GET /v1/consultas/mi_legajo`, ya existente — su propia
-    persona + custodia, igual que un técnico) es un endpoint DISTINTO de "Equipo
-    supervisado" (lo que `calendario_vigencias`/`proyeccion_documental_backlog` traen para
-    su rol, vía `alcance_de_sujetos`: propio + universo de supervisión asignado, sin
-    transitividad — si un supervisado es a su vez supervisor de terceros, esos terceros no
-    entran). El frontend no debería fusionar ambas vistas en una sola lista sin dejar claro
-    cuál es cuál.
-  - **Responsable de legajos**: ve TODO el tenant en los tres endpoints (`alcance_de_
-    sujetos` devuelve `None` para este rol — sin filtro).
-  - **Configuración NO tiene acceso a ninguno de los tres** (403) — mismo criterio que ya
-    rige `backlog_oc`/`cobertura_oc`/`tablero_vencimientos`: son consultas operativas de
-    cobertura documental, no de auditoría/configuración. El rol de Configuración sigue
-    viendo `log_auditoria` y administrando canales/alertas, pero no este flujo.
-  - **Aislamiento entre tenants**: RLS (regla dura, `app.current_tenant`) — un
-    `commitment_id`/`sujeto_id` de otro tenant es 404/vacío, nunca 403 (no se confirma su
-    existencia). Mismo alcance en listas (`calendario_vigencias`, backlog) y en el detalle
-    puntual (`proyeccion_documental`) — nunca una OC visible en el backlog y 404/403 al
-    pedir su detalle, o viceversa.
+### 4.4 Backlog de OC sin veredicto de cobertura (D-E)
 
-### 4.6 Catálogos para operar los comandos sin tipear ids (H-06)
+Consultas de **solo lectura** (no sustituyen al radar ni a Módulo 2):
+
+| Ruta | Roles | Uso |
+|---|---|---|
+| `GET /v1/consultas/backlog_oc` | responsable_legajos, supervisor | OCs con **alertas ciertas** y disponibilidad documental (sin `estado_cobertura`); filtros `mes`, `operadora_id`, `solo_con_alertas`, `solo_reprogramadas`, `q`; paginación; `Cache-Control: no-store`. |
+| `GET /v1/consultas/cobertura_oc` | responsable_legajos, supervisor | Detalle de una OC: alertas, impacto en días, disponibilidad por tipo, historial `CompromisoModificado`. |
+| `GET /v1/consultas/acciones_pendientes` | responsable_legajos, supervisor | Renovaciones/regularizaciones con `accion_sugerida` y OCs afectadas; mismos filtros temporales. |
+| `GET /v1/consultas/timeline_recursos` | responsable_legajos, configuración, supervisor, técnico | Tramos de vigencia por recurso y requisito; OC superpuestas; quiebres dentro de cada ventana de OC. Paginación por recurso. |
+| `GET /v1/consultas/catalogos_oc` | responsable_legajos, configuración, supervisor | Operadoras, locaciones y tipos de servicio con nombre. |
+| `POST /v1/comandos/alta_operadora_oc` | responsable_legajos, configuración | Alta de operadora (cliente OC). |
+| `POST /v1/comandos/alta_locacion_oc` | responsable_legajos, configuración | Alta de locación asociada a operadora. |
+| `POST /v1/comandos/alta_tipo_servicio_oc` | responsable_legajos, configuración | Alta de tipo de servicio. |
+| `POST /v1/comandos/reprogramar_oc` | responsable_legajos, configuración | Cambio de ventana con motivo e idempotencia; bloqueado si `origen_oc=modulo2`. |
+| `POST /v1/comandos/importar_planilla_oc` | responsable_legajos | XLSX con columnas **Operadora, Locación, Tipo de servicio** (o UUIDs legacy); `lote_id` UUID del cliente. |
+
+Por tipo exigido, si el supervisor no ve legajos porque están fuera de su universo, la API
+devuelve `fuera_de_alcance` (mensaje: recursos de ese tipo fuera de tu alcance), no
+"falta información". Misma regla en radar documental.
+
+### 4.6 Catálogos documentales (H-06)
 Todos paginados (`offset/limit`, máx. 500) → `{items[], total, offset, limit}`; el alcance
 del supervisor/técnico se aplica siempre (un filtro nunca amplía lo visible); otro tenant no
 ve nada.
 
 | Ruta | Roles | Query | Alimenta a |
 |---|---|---|---|
-| `GET /v1/consultas/sujetos` | todos (alcance) | `q` (sujeto_id / identificador), `tipo_sujeto`, `activos` (true por defecto; false = dados de baja) | alta/baja, cargar/proponer documento, custodia, excepción, constancia, asignar supervisor |
-| `GET /v1/consultas/definiciones_requisito` | todos | `q`, `categoria`, `tipo_sujeto_aplicable`, `activas` | cargar documento, líneas de matriz, requisito particular, excepción, constancia |
+| `GET /v1/consultas/sujetos` | todos (alcance) | `q` (sujeto_id / identificador), `tipo_sujeto`, `activos` (true por defecto; false = dados de baja) | alta/baja y evidencia documental |
+| `GET /v1/consultas/definiciones_requisito` | todos | `q`, `categoria`, `tipo_sujeto_aplicable`, `activas` | documentos, matrices y requisitos particulares |
 | `GET /v1/consultas/matrices` | configuracion, responsable_legajos, supervisor | `cliente_id`, `solo_vigentes` | publicar versión (claves existentes), matriz_vigente |
-| `GET /v1/consultas/usuarios` | configuracion, responsable_legajos | `q` (email/nombre), `rol`, `activos` (sin hashes) | asignar/reasignar supervisor |
+| `GET /v1/consultas/usuarios` | configuracion, responsable_legajos | `q` (email/nombre), `rol`, `activos` (sin hashes) | consulta administrativa |
 | `GET /v1/consultas/documentos` | todos (alcance) | `sujeto_id`, `estado_version` (vigente por defecto; `todas`), `estado_confirmacion`, `archivo_estado` | confirmar/rechazar, preparar/confirmar subida, descarga |
-| `GET /v1/consultas/excepciones` | configuracion, responsable_legajos, supervisor (alcance) | `sujeto_id`, `estado` (otorgada por defecto), `commitment_id` | revocar excepción |
-| `GET /v1/consultas/constancias` | configuracion, responsable_legajos, supervisor (alcance) | `sujeto_id`, `estado` (vigente por defecto), `cliente_id` | revocar constancia |
-| `GET /v1/consultas/custodias` | todos (alcance por recurso) | `recurso_id`, `custodio_id`, `solo_vigentes` | corregir custodia, cambiar custodia |
 | `GET /v1/consultas/lotes` | configuracion, responsable_legajos | `estado`, `entidad` | revertir lote |
-| `GET /v1/consultas/asignaciones_supervisor` | configuracion, responsable_legajos, supervisor (alcance) | `supervisor_usuario_id`, `sujeto_id`, `solo_vigentes` | reasignar supervisor |
 
-Ya existentes que también dan ids: `backlog_oc` (commitment_id / oc_id), `decisiones_oc` y
-`decision` (referencia_evaluacion), `propuestas_pendientes` (documento_id), `alertas_abiertas`
+Ya existentes que también dan ids: `propuestas_pendientes` (documento_id), `alertas_abiertas`
 (alerta_id), `plantillas_globales` (ids globales).
 
 **Alcance del técnico (H-05)**: se ve a sí mismo y a los vehículos/equipos bajo su custodia
@@ -426,7 +384,7 @@ independiente del alcance:
   custodia (otro supervisor con alcance real también puede).
 
 ## 5. Storage
-- `GET /v1/storage/documentos/{documento_id}/url` — URL firmada de descarga (efímera; no persistirla).
+- `POST /v1/storage/documentos/{documento_id}/url` — URL firmada de descarga (efímera; no persistirla).
 - `PUT /v1/storage/{firma}` — subida con URL firmada (sin JWT; `Content-Type` y tamaño verificados; si va un Bearer, su tenant debe coincidir).
 - `GET /v1/storage/{firma}` — descarga con URL firmada.
 

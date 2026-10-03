@@ -279,8 +279,9 @@ Implementación declarativa de la tabla 7.2 en `app/core/revaluacion.py::EVENTOS
 los avisos abiertos de decisiones anteriores del mismo commitment (`AvisoDeRevaluacionCerrado`
 por la vía interna), nunca de otra OC.
 
-Ambigüedad registrada: acreditaciones e inducciones también son entradas del snapshot pero
-la tabla 7.2 no les asigna HRR; se respeta la tabla.
+Las competencias e inducciones también son entradas del snapshot pero la tabla 7.2 no les
+asigna HRR; se respeta la tabla. Desde la migración 0023 son categorías de la entidad
+canónica `documento`, no tablas de evidencia paralelas.
 
 ## 9. Semántica del borrado físico (A-05)
 
@@ -300,8 +301,7 @@ borran por arrastre). Ningún CASCADE nuevo. Las migraciones que agregan FKs sus
 existentes sea un escaneo real y no "cero filas visibles".
 
 **Excepciones intencionales (sin FK):** `usuario.sujeto_id` (el usuario técnico puede
-existir antes de importar su legajo; se valida en servicio), `acreditacion.evidencias[]`
-(array; `_exigir_documentos_del_sujeto`), `*_por` (texto de auditoría), `cliente_id` /
+existir antes de importar su legajo; se valida en servicio), `*_por` (texto de auditoría), `cliente_id` /
 `locacion_id` / `tipo_servicio_id` (maestros externos no modelados en Módulo 1),
 `aviso_revaluacion_causa.entidad_id` (polimórfico), `idempotency_keys.actor_id`,
 `job_queue.tenant_id` nullable (jobs de sistema).
@@ -562,7 +562,8 @@ construcción existente) — `True` SOLO cuando hay archivo real adjunto
 (`archivo_estado='confirmado'`) y su validación no llegó a `valido`; en ese caso
 `evaluar_documento_en_periodo` devuelve `Veredicto.REQUIERE_REVISION` (ya existía el
 enum, sin usar — reservado exactamente para esto, mismo patrón que el `declarado` sin
-confirmar). Acreditación/inducción no tienen archivo: nunca activan el gate.
+confirmar). Una competencia o inducción puede referenciar sus archivos probatorios por
+`documento_soporte`; si su propia fila no tiene archivo adjunto, no activa el gate.
 
 Descarga (`firmar_descarga`) exige `archivo_validacion = 'valido'` — 409 si `pendiente`
 (reintentar), 422 si `invalido`. Documentos legado (confirmados antes de esta migración)
@@ -573,3 +574,422 @@ Recuperación manual: `preparar_subida` reabre el ciclo SOLO sobre un archivo `i
 verificado que el chequeo automático no haya cubierto — ambos regeneran el token de
 fencing. Dead-letter del job: nunca silencioso, notifica a `configuracion`
 (`app/worker/main.py`, hook específico de esta cola, no genérico).
+
+## Auditoría 2026-09-29 — Cierre de tres decisiones pendientes
+
+### D-A. Superficie HTTP operativa (`aa62dbe`) — **parcialmente corregida por D-A bis**
+
+**Decisión original:** Retirar de la API pública los comandos/consultas de custodia,
+excepciones, constancias, evaluación de habilitación, **decisiones** (historial) y
+asignación de supervisores (`test_superficie_modulo1.py::RUTAS_OPERATIVAS_RETIRADAS`).
+
+**Motivo:** Frontera Módulo 1 (documentación habilitante + consultas de solo lectura) vs.
+Módulo 2 (operación/asignación/decisión persistida).
+
+**Qué se conserva retirado:** `evaluar_habilitacion`, `decisiones_oc`, `decision`,
+excepciones, constancias, custodia, `historial_supervision`, asignación de supervisores.
+Toda la lógica persiste en servicios internos para Módulo 2.
+
+### D-A bis (corrige D-A). Backlog de OC con cobertura y timeline de vigencias — **Módulo 1**
+
+**Decisión:** `GET /v1/consultas/backlog_oc`, `GET /v1/consultas/cobertura_oc` y
+`GET /v1/consultas/timeline_recursos` vuelven a la API pública de Módulo 1 como **modo
+consulta** (modelo-dominio 2.1): no persisten decisiones, no asignan recursos, no crean
+tareas ni emiten eventos.
+
+**Citas.** documentacion-habilitante 1.12 (planilla OC standalone, cobertura en dos pasos,
+formato de motivo); wireframes-api 9.4 (`cobertura-backlog`, `vigencias-por-tecnico`).
+
+**Alcance:** Cobertura en vivo con `cobertura_de_oc` (empresa primero; un legajo por tipo que
+cumpla todos sus requisitos en la ventana; nunca componer entre legajos). El backlog **no**
+expone `ultima_decision` (historial de evaluación = Módulo 2). Supervisor: candidatos de su
+universo vía `alcance_de_sujetos`; empresa siempre evaluada (D-B). Si falta un tipo solo
+porque los legajos están fuera del universo → estado `fuera_de_alcance`, no
+"información incompleta".
+
+**Límite:** Módulo 2 conserva asignar, decidir (`decidir_habilitacion` vía HTTP interno futuro)
+y trabajo planificado/real. La asignación de supervisores sigue pendiente de otra decisión.
+
+### D-B. Empresa en el radar para supervisor — **siempre visible en radar documental**
+
+**Decisión:** En `radar.py`, al filtrar legajos por `alcance_de_sujetos`, el legajo
+`tipo_sujeto = 'empresa'` **no se filtra**: entra en backlog, detalle de OC y detalle de legajo
+empresa aunque el supervisor no tenga asignaciones.
+
+**Motivo:** A-04 acota **decisiones** y sujetos **propuestos**; la empresa nunca es propuesta
+(`DECISIONES §7`, `filtro_decisiones_visibles`). En habilitante 1.8 la empresa es única y
+**siempre evaluada** en el motor. Ocultarla en el radar haría que una OC parezca documentalmente
+completa cuando faltan requisitos de empresa — falso verde informativo.
+
+**Límite:** No ensancha excepciones ni custodia sobre empresa; `excepcion_de_empresa_deshabilitada`
+sigue vigente.
+
+### D-C. B-5 — Handlers de `CargarDocumento` (`_insertar_version_documento`)
+
+**Decisión para savepoints (`begin_nested`) solo en secundarios:**
+
+| Handler | Líneas ~ | Rol |
+|---|---|---|
+| `DocumentoCargado` | 186–194 | **Obligatorio** — evento canónico del comando |
+| `DocumentoSucedido` | 207–213 | **Obligatorio** — invariante de cadena de versiones |
+| `_al_verificar` (evento `DocumentoVerificado`, regularización de excepciones `otorgada`) | 202–206 → 335+ | **Obligatorio** — semántica de carga ya verificada / confirmación |
+| `registrar_accion` (alertas vencimiento) | 198–201 | **Secundario** — pausa recordatorios; no debe abortar la carga |
+| `resolver_por_verificacion` (dentro de `_al_verificar`) | 347–352 | **Secundario** — cierre de alertas; best-effort |
+| `al_registrar_nueva_version` (operadoras) | 218–222 | **Secundario** — espejo operadoras; best-effort |
+
+Los obligatorios comparten commit con el INSERT/UPDATE de `documento`. Los secundarios se
+envuelven en savepoint en la fase B-5 (fallo → rollback parcial, la versión documental queda).
+
+### D-E. Backlog sin veredicto de cobertura — **Módulo 1 (2026-09-30)**
+
+**Principio:** El Módulo 1 **no afirma “OC cubierta”**. No conoce la dotación que necesita
+cada OC: eso lo define la planificación del supervisor (Módulo 2). El Módulo 1 solo marca en
+rojo **certezas** (verdaderas para cualquier dotación) y muestra la **disponibilidad
+documental** como información. Nunca asigna personas, vehículos ni equipos.
+
+**Vocabulario:** *habilitado / no habilitado* (estado documental en la ventana de la OC).
+Prohibido en UI y contratos de backlog: *asignable*, *cubierta*, *no cubierta*.
+
+**Alertas ciertas por OC** (modo consulta, sin persistir):
+
+| Código | Significado |
+|---|---|
+| `empresa_no_habilitada` | La empresa no cumple en algún tramo de la ventana (con fechas). |
+| `tipo_sin_habilitados` | Un tipo de recurso exigido por la matriz tiene **cero** legajos habilitados en algún tramo de la ventana (con fechas). |
+| `sin_matriz` | La OC no tiene matriz aplicable en algún tramo de su ventana. |
+
+**Disponibilidad por tipo exigido** (informativo, sin veredicto): conteos de legajos
+habilitados toda la ventana; habilitados que se caen dentro de la ventana (cada uno con fecha
+y requisito); no habilitados. Ejemplo: «Técnicos: 4 habilitados toda la ventana · 2 se caen
+el 18/11 (apto médico) · 3 no habilitados».
+
+**Impacto cierto:** por tipo exigido, cantidad de días de la ventana **sin ningún** legajo
+habilitado, más los tramos exactos. `vigente_hasta` es **inclusivo**: si el único habilitado
+vence el 18/11 y la ventana termina el 25/11, el impacto es 19/11–25/11 = 7 días.
+
+**Supervisor (D-B):** universo propio + empresa. Si un tipo tiene cero habilitados **solo**
+porque los legajos están fuera de su universo → `fuera_de_alcance`; **nunca**
+`tipo_sin_habilitados` ni “falta información”.
+
+**Reprogramación de OC:** comando auditado con motivo; historial desde `event_log`
+(`CompromisoModificado`); efecto documental antes/después de la ventana.
+
+**Catálogo único de operadoras:** la operadora de la OC es la misma entidad que
+`operadora_documental` (`cliente_id` = `operadora_id`). Locaciones y tipos de servicio tienen
+catálogo con nombre; planilla de OC y pantallas usan nombres, no UUIDs crudos.
+
+**Evolución futura (Módulo 2):** cuando informe la dotación requerida por OC (evento con
+versión), el Módulo 1 podrá mostrar «X de N» recursos; **hoy no** — no hay N conocido en M1.
+
+**Modo consulta:** `GET backlog_oc`, `cobertura_oc`, `timeline_recursos`, `acciones_pendientes`
+no persisten evaluaciones ni emiten eventos.
+
+**Código / tests:** `app/modules/consultas/backlog_documental.py`, `tests/test_backlog_m1_de.py`.
+
+## Decisiones de producto — Ronda de pruebas 1 (2026-10-02)
+
+Decisiones tomadas o abiertas durante la primera ronda de pruebas con usuarios. No
+sustituyen las reglas de dominio cerradas en implementación anteriores; cuando entren en
+conflicto con una sección previa, esta sección prevalece para el alcance del Módulo 1
+hasta que el código y la spec se alineen.
+
+### Bloqueantes para clientes reales
+
+#### D1. Vista previa de evidencia antes de confirmar o rechazar
+
+**Decisión.** El responsable debe poder ver el archivo de evidencia antes de confirmar o
+rechazar. G-03 pasa a requisito de salida.
+
+**Motivo.** Sin vista previa, la revisión es ciega y no cumple el flujo operativo real de
+los responsables de legajos.
+
+**Estado.** Decidida.
+
+#### D2. Gestión de contraseña
+
+**Decisión.** Cambio obligatorio en el primer ingreso y opción «Cambiar contraseña» en Mi
+sesión; reseteo por el responsable desde la app; recuperación por mail cuando exista canal
+de mail.
+
+**Motivo.** Credenciales iniciales compartidas y ausencia de autogestión bloquean el uso en
+producción con clientes reales.
+
+**Estado.** Decidida.
+
+#### D3. Bandeja de revisión como inicio del responsable
+
+**Decisión.** Se unifica la revisión en una «Bandeja de revisión» (propuestas + evidencias
+con archivo pendiente de revisar). Esa bandeja pasa a ser la pantalla de inicio del
+responsable de legajos.
+
+**Motivo.** Fragmentar la revisión en varias pantallas retrasa el trabajo diario del rol
+principal del Módulo 1.
+
+**Estado.** Decidida.
+
+### Comportamiento del producto
+
+#### D4. Módulo 1 sin rol supervisor
+
+**Decisión.** El Módulo 1 sale sin rol supervisor; el supervisor llega con el Módulo 2.
+Reemplaza la decisión anterior «supervisor: solo su universo» para el Módulo 1. Alinear
+HANDOFF §4.2 con §4.4 (asignar/reasignar supervisor no se publican en el Módulo 1) y cerrar
+la deuda en BITACORA del 2026-10-01.
+
+**Motivo.** El supervisor opera custodia, excepciones y dotación en Módulo 2; exponerlo en
+M1 generaba alcance y pantallas inconsistentes con la frontera de módulos.
+
+**Estado.** Decidida.
+
+#### D5. OC como compromiso del cliente y cambio informado
+
+**Decisión.** La OC es un compromiso del cliente. «Reprogramar» se renombra a «Registrar
+cambio informado por el cliente» y exige fuente (quién informó y por qué medio). Hoy un
+import de planilla de OC pisa en silencio una reprogramación manual (`oc/servicio.py`
+186–198): debe detectarse el conflicto cuando `origen_oc='manual'` y la planilla trae
+otras fechas, y quedar pendiente de resolución del responsable. La planificación de OT es
+del Módulo 2. La franja «Sin modificar fechas» pasa a decir «Sin planificar OT».
+
+**Motivo.** Las fechas de la OC reflejan lo que el cliente comunicó; un cambio manual auditado
+no puede perderse ante un import; la planilla y la operación humana deben reconciliarse de
+forma visible.
+
+**Estado.** Decidida.
+
+#### D6. Fuente de cada matriz
+
+**Decisión.** Toda matriz debe registrar su fuente (contrato, pliego o procedimiento de la
+operadora), con documento adjunto opcional.
+
+**Motivo.** Sin trazabilidad de origen no se puede auditar ni discutir qué reglas aplican
+a una operadora.
+
+**Estado.** Decidida.
+
+#### D7. Catálogos solo desde Configuración
+
+**Decisión.** Solo el rol Configuración modifica catálogos. Los elementos de catálogo se
+pueden corregir y dar de baja, nunca borrar físicamente.
+
+**Motivo.** Evita divergencia de maestros entre roles y preserva historial referencial.
+
+**Estado.** Decidida.
+
+#### D8. Historial de versiones por documento
+
+**Decisión.** Cada documento muestra su historial de versiones (fechas y quién cargó cada
+una).
+
+**Motivo.** La cadena de versiones es central en dominio; el usuario debe verla sin depender
+de auditoría técnica.
+
+**Estado.** Decidida.
+
+#### D9. Legajos de baja y OC canceladas
+
+**Decisión.** Legajos dados de baja y OC canceladas quedan ocultos por defecto, visibles con
+un filtro, en solo lectura.
+
+**Motivo.** Reduce ruido en el día a día sin perder consulta histórica.
+
+**Estado.** Decidida.
+
+#### D14. Nombre y apellido en el legajo de persona
+
+**Decisión.** El legajo de persona tiene un campo «nombre y apellido» propio.
+`identificador_natural` sigue siendo el DNI (lo usan las importaciones de planillas para
+encontrar a la persona). Las pantallas muestran el nombre como título y el DNI como dato
+secundario.
+
+**Motivo.** El DNI es estable para integraciones masivas pero insuficiente como etiqueta
+humana en listados, revisiones y notificaciones.
+
+**Estado.** Decidida.
+
+#### D15. Puesta en marcha asistida
+
+**Decisión.** Para los primeros clientes, la configuración de requisitos, matrices, alertas
+y catálogos la realiza el equipo de implementación mediante importaciones y plantillas
+globales. Las pantallas de configuración de esos elementos se posponen hasta conocer el uso
+real. Excepción: la gestión de usuarios (alta, baja, asignación de roles y reseteo de
+contraseña) se incluye en la app desde la primera versión, operada por el rol Configuración.
+
+**Motivo.** Salir antes con el uso diario (legajos, revisión, radar), validar la
+configuración real con clientes y no depender de la consola para la rotación de personal.
+
+**Estado.** Decidida.
+
+#### D16. Confirmación para habilitar (propuesta vs. versión confirmada)
+
+**Decisión.** Un documento sin confirmar (`estado_confirmacion = declarado`, incluida una
+propuesta del técnico) **nunca** habilita ni cuenta como requisito cumplido. Si existe una
+versión **confirmada** anterior (típicamente en `sucedida` enlazada por `sucede_a`), todas
+las evaluaciones de la app —Radar documental, vencimientos, acciones pendientes, motor de
+habilitación (`cargar_evidencias` / `evaluar_compromiso` / `decidir_habilitacion`) y
+consultas de cobertura— usan esa versión confirmada para el período que cubra. Si **solo**
+hay propuesta sin predecesor confirmado, el requisito queda en *pendiente de revisión* /
+*requiere revisión* y no figura como vigente cumplido.
+
+**Motivo.** Evitar que una renovación propuesta sustituya visual o operativamente la
+evidencia verificada vigente, y unificar criterio entre consultas informativas y decisión
+de habilitación.
+
+**Código.** `app/core/resolucion_evidencia.py` (`fila_para_evaluacion`),
+`app/core/orquestacion.py` (`cargar_evidencias`), `app/modules/proyeccion/radar.py`
+(`_evidencias`), `app/modules/consultas/presentacion_evidencia.py` (listados de legajo).
+
+**Estado.** Decidida.
+
+#### D17. Renovación desde el legajo
+
+**Decisión.** El técnico propone un documento desde Mi legajo, con el requisito preseleccionado
+(botón «Renovar» o «Cargar nueva» junto a cada documento; primero los vencidos y por vencer).
+Solo sube el archivo (cámara directa en el celular) y elige la fecha de vencimiento con un
+selector; la fecha «desde» es opcional. La app valida antes de enviar: vencimiento posterior a
+hoy y a la versión vigente, plazo razonable, archivo presente y de tipo y tamaño válidos. El
+responsable verifica lo declarado contra el archivo (control por oposición).
+
+**Motivo.** Simplificar la carga en el campo sin perder trazabilidad.
+
+**Estado.** Decidida; se implementa en la rama C.
+
+#### D18. Documentación en el bolsillo
+
+**Decisión.** El técnico ve en el celular sus documentos verificados (solo versiones
+confirmadas, por D16), disponibles sin conexión, con la fecha de última actualización. Los
+documentos con datos de salud muestran solo estado, vigencia y emisor, sin el archivo
+completo. Incluye un QR que abre su paquete de entrega vigente para que la operadora lo
+verifique en el portón. Resuelve la P2 (cola `evidencia_qr`).
+
+**Motivo.** Valor directo en el campo y verificación oficial ante la operadora.
+
+**Estado.** Decidida; se implementa en una rama propia después de la C.
+
+#### D19. Respaldo válido para habilitar
+
+**Decisión.** Un requisito solo habilita si la evidencia evaluable está **confirmada**
+(`estado_confirmacion = verificado`) y tiene **respaldo válido**: archivo del documento con
+`archivo_estado = confirmado` y `archivo_validacion = valido`, salvo competencias e
+inducciones, donde el respaldo es el documento soporte asociado (`documento_soporte`) con
+archivo válido. Sin respaldo válido (sin archivo, purgado o archivo inválido/pendiente) el
+requisito figura como *requiere revisión* en el motor de habilitación, el Radar documental,
+acciones pendientes y el paquete de entrega público. La regla se centraliza en
+`app/core/resolucion_evidencia.py` y se aplica desde `cargar_evidencias`, el radar y el
+paquete.
+
+**Escrituras nuevas.** `cargar_documento` ingresa como `declarado`; la verificación pasa por
+`confirmar_documento`, que rechaza la confirmación sin respaldo válido. La importación por
+planilla (D15) sigue entrando como `declarado` por defecto.
+
+**Datos existentes.** No se modifica `estado_confirmacion` en silencio; en consultas se
+muestra «Sin archivo de respaldo» y, por esta decisión, no habilitan.
+
+**Precedencia del estado documental.** Si un requisito cumple varias condiciones a la vez,
+se exponen todas en el detalle, pero el estado general del requisito y del legajo lo define
+la más grave:
+
+1. **Vencido** (vencido antes del período o deja de cubrirlo) → alerta documental; no
+   habilita, haya o no respaldo válido.
+2. **Sin respaldo válido** (sin archivo, purgado o archivo inválido) en evidencia verificada
+   aún aplicable al período → *pendiente de revisión*; no habilita.
+3. **Archivo pendiente de revisión** (`archivo_validacion` pendiente) → *pendiente de
+   revisión*; no habilita.
+
+La regla de calendario se aplica en `evaluar_requisito_documental`; la de respaldo en
+`resolucion_evidencia.py` (habilitación y archivo efectivo para el radar).
+
+**Motivo.** Alinear habilitación operativa con evidencia respaldada y evitar documentos
+“verificados” sin archivo en producción, sin ocultar vencimientos reales.
+
+**Estado.** Decidida.
+
+### Diseño
+
+#### D10. Documentos de empresa para el técnico
+
+**Decisión.** El técnico ve solo los documentos de empresa que afectan su habilitación,
+marcados «Lo gestiona tu empresa», sin acciones.
+
+**Motivo.** El técnico no opera documentación de empresa pero necesita entender por qué su
+habilitación depende de requisitos corporativos.
+
+**Estado.** Decidida.
+
+#### D11. Calendario documental
+
+**Decisión.** Se elimina el Calendario documental o se convierte en una vista del Timeline
+de recursos.
+
+**Motivo.** Dos vistas temporales duplicadas confunden; el Timeline de recursos concentra la
+planificación documental relevante en M1.
+
+**Estado.** Decidida.
+
+#### D12. Sesión e inactividad
+
+**Decisión.** La sesión se mantiene al recargar y se cierra tras 30 minutos de inactividad.
+
+**Motivo.** Equilibrio entre continuidad de trabajo en campo y cierre por seguridad en
+terminales compartidos.
+
+**Estado.** Decidida.
+
+#### D13. «Excepcionable» informativo en Módulo 1
+
+**Decisión.** En el Módulo 1, «Excepcionable» es solo informativo, con el texto «Este
+requisito puede exceptuarse desde Operación (Módulo 2)».
+
+**Motivo.** Las excepciones son competencia del supervisor en M2; mostrar acciones en M1
+generaba expectativa incorrecta.
+
+**Estado.** Decidida.
+
+### Pendientes
+
+#### P1. Plazo de aviso por requisito
+
+**Decisión.** Plazo de aviso por requisito (`definicion_requisito.plazo_aviso_dias`): se
+decide según validación con usuarios. Si no se usa, se elimina la columna.
+
+**Motivo.** El override por tipo de requisito (§15) puede no aportar valor operativo; hay
+que confirmarlo antes de mantener complejidad en modelo y UI.
+
+**Estado.** Pendiente.
+
+#### P4. Carga masiva de archivos de respaldo
+
+**Decisión.** Para la puesta en marcha asistida (D15), cuando los metadatos ya están en el
+sistema como `declarado` vía planilla, hace falta un flujo de **carga masiva de archivos de
+respaldo** (asociar PDFs a documentos importados y dejarlos listos para confirmación).
+Queda fuera del corte actual de comandos unitarios.
+
+**Motivo.** D19 exige respaldo para verificar; sin esta pieza el onboarding masivo depende de
+subidas documento por documento.
+
+**Estado.** Pendiente.
+
+#### P2. Cola `evidencia_qr`
+
+**Decisión.** Se posterga como cola de jobs. El alcance de QR y documentación offline del
+técnico queda definido en **D18** (paquete de entrega vigente y verificación en portón, sin
+depender de `evidencia_qr`). Mientras no se implemente D18, no debe generar jobs que vayan
+a dead-letter.
+
+**Motivo.** La funcionalidad QR no entra en el corte de M1; jobs huérfanos generan ruido
+operativo y alertas falsas. D18 concentra la solución acordada.
+
+**Estado.** Pendiente de implementación; ver **D18**.
+
+### Resueltas en el diagnóstico
+
+#### P3. Barras de OC en el Timeline
+
+**Decisión.** Las barras de OC en el Timeline son las OC vigentes evaluadas (no asignaciones;
+no provienen del Módulo 2). Se mantienen, con el rótulo «OC vigentes evaluadas» y una
+leyenda.
+
+**Motivo.** El diagnóstico (pregunta 24) aclaró que la visualización refleja compromisos
+documentales evaluados en M1, no dotación planificada en M2.
+
+**Estado.** Resuelta.
+

@@ -695,9 +695,10 @@ def revocar_constancia_del_cliente(
 def evaluar_habilitacion(
     session: Session, identidad: Identidad, *, commitment_id: str, sujetos_propuestos: list[str]
 ) -> dict[str, Any]:
-    """MODO DECISIÓN (regla A-04): solo el responsable de legajos (y, cuando se integre, la
-    identidad técnica de Módulo 2). El supervisor tiene únicamente modo consulta —matriz
-    2.2 dice "modo consulta" expresamente— vía GET /consultas/cobertura_oc."""
+    """Servicio interno de decisión, no publicado por la API de Módulo 1.
+
+    Se conserva para revaluación y para una futura integración autenticada desde Módulo 2.
+    """
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
     resultado = decidir_habilitacion(
         session, identidad.tenant_id, commitment_id, sujetos_propuestos, ahora_utc(), identidad.usuario_id

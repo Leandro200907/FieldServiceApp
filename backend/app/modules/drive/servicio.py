@@ -242,16 +242,19 @@ def _importar(session: Session, identidad: Identidad, archivo: ArchivoRemoto, ex
               eventos: list[str]) -> str:
     """Documento declarado + archivo adjunto (misma transacción; el byte se escribe antes
     del commit y, si la transacción cae, queda huérfano pero nunca referenciado)."""
-    from app.modules.legajos import esquemas as e
-    from app.modules.legajos.servicio import _insertar_version_documento
+    from app.modules.legajos.servicio import _definicion_activa, _exigir_categoria_documento, _insertar_version_documento
     from app.storage.servicio import confirmar_subida, preparar_subida
 
+    definicion = _definicion_activa(session, identidad.tenant_id, ext["requisito_definicion_id"])
+    _exigir_categoria_documento(definicion)
+    contenido = proveedor.descargar(archivo.id_externo, settings.storage_max_bytes)
+    if len(contenido) == 0:
+        raise ErrorDeDominio("El archivo no tiene contenido", codigo="archivo_vacio")
     r = _insertar_version_documento(
         session, identidad, sujeto_id=ext["sujeto_id"], requisito_definicion_id=ext["requisito_definicion_id"],
         vigente_desde=date.fromisoformat(ext["vigente_desde"]), vigente_hasta=date.fromisoformat(ext["vigente_hasta"]), numero=None,
         origen="drive", estado_confirmacion="declarado", origen_propuesta=True, confianza_extraccion="alta", eventos=eventos,
     )
-    contenido = proveedor.descargar(archivo.id_externo, settings.storage_max_bytes)
     ct = archivo.mime or "application/pdf"
     prep = preparar_subida(session, identidad, r["documento_id"], archivo.nombre, ct, storage=storage)
     storage.escribir(storage.clave_para(identidad.tenant_id, r["documento_id"], archivo.nombre), contenido)
@@ -285,7 +288,8 @@ def escanear(session: Session, identidad: Identidad, proveedor: ProveedorDeCarpe
         estado = "pendiente_revision"
         if confianza == "alta":
             try:
-                documento_id = _importar(session, identidad, a, ext, proveedor, storage, eventos)
+                with session.begin_nested():
+                    documento_id = _importar(session, identidad, a, ext, proveedor, storage, eventos)
                 estado = "importado"
                 r["importados"] += 1
             except ErrorDeDominio as err:      # p. ej. contradice un dato verificado, archivo grande: a la bandeja

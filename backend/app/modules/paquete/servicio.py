@@ -22,13 +22,19 @@ import hashlib
 import hmac
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
+from app.core.resolucion_evidencia import (
+    agrupar_soportes_por_documento,
+    archivo_requiere_revision,
+    es_propuesta_pendiente,
+    filas_evidencia_para_evaluacion,
+)
 from app.auth.alcance import sujeto_en_alcance
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
@@ -120,6 +126,26 @@ def paquetes(session: Session, identidad: Identidad, sujeto_id: str | None = Non
 # --------------------------------------------------------------------------- vista pública
 
 
+def _estado_requisito_paquete(
+    fila: dict[str, Any],
+    hoy: date,
+    *,
+    categoria: str,
+    soportes: list[dict[str, Any]] | None = None,
+) -> str:
+    """Estado público del requisito (D16/D19)."""
+    if es_propuesta_pendiente(fila):
+        return "pendiente_de_revision"
+    if archivo_requiere_revision(fila, categoria=categoria, soportes=soportes):
+        return "pendiente_de_revision"
+    hasta = fila.get("vigente_hasta")
+    if hasta is not None and hasta < hoy:
+        return "vencido"
+    if fila.get("estado_confirmacion") == "declarado":
+        return "declarado_sin_verificar"
+    return "vigente"
+
+
 def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str | None) -> dict[str, Any]:
     """Contenido del paquete para quien tiene el link: estado de cumplimiento del sujeto,
     sin archivos. Registra el acceso."""
@@ -131,23 +157,63 @@ def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str
     legajo = session.execute(text("SELECT sujeto_id, tipo_sujeto, identificador_natural FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s"),
                              {"t": tenant_id, "s": p["sujeto_id"]}).mappings().one()
     tenant = session.execute(text("SELECT nombre FROM modulo1.tenant WHERE tenant_id = :t"), {"t": tenant_id}).scalar()
-    filas = session.execute(text(
-        "SELECT r.nombre AS requisito, r.categoria, x.vigente_hasta, x.estado_confirmacion FROM ("
-        "  SELECT requisito_definicion_id, vigente_hasta, estado_confirmacion FROM modulo1.documento WHERE tenant_id = :t AND sujeto_id = :s AND estado_version = 'vigente' "
-        "  UNION ALL SELECT requisito_definicion_id, vigente_hasta, estado_confirmacion FROM modulo1.acreditacion_competencia WHERE tenant_id = :t AND persona_id = :s "
-        "  UNION ALL SELECT requisito_definicion_id, vigente_hasta, estado_confirmacion FROM modulo1.induccion WHERE tenant_id = :t AND persona_id = :s) x "
-        "JOIN modulo1.definicion_requisito r ON r.tenant_id = :t AND r.requisito_definicion_id = x.requisito_definicion_id ORDER BY r.nombre"),
-        {"t": tenant_id, "s": p["sujeto_id"]}).mappings().all()
-    requisitos = [{"requisito": f["requisito"], "categoria": f["categoria"], "vigente_hasta": f["vigente_hasta"].isoformat(),
-                   "estado": "vencido" if f["vigente_hasta"] < hoy else ("vigente" if f["estado_confirmacion"] != "declarado" else "declarado_sin_verificar")} for f in filas]
+    filas = session.execute(
+        text(
+            "SELECT r.nombre AS requisito, r.categoria, d.documento_id, d.sujeto_id, d.requisito_definicion_id, "
+            "d.vigente_hasta, d.estado_confirmacion, d.estado_version, d.origen_propuesta, d.sucede_a, "
+            "d.archivo_estado, d.archivo_validacion, d.clave_storage "
+            "FROM modulo1.documento d JOIN modulo1.definicion_requisito r "
+            "ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id "
+            "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.estado_version IN ('vigente', 'sucedida') "
+            "ORDER BY r.nombre"
+        ),
+        {"t": tenant_id, "s": p["sujeto_id"]},
+    ).mappings().all()
+    meta_por_req: dict[str, dict[str, str]] = {}
+    for f in filas:
+        rid = str(f["requisito_definicion_id"])
+        meta_por_req[rid] = {"requisito": f["requisito"], "categoria": f["categoria"]}
+    elegidas = filas_evidencia_para_evaluacion([dict(f) for f in filas])
+    ids_doc = [str(f["documento_id"]) for f in elegidas.values()]
+    soportes_por_doc: dict[str, list[dict[str, Any]]] = {}
+    if ids_doc:
+        sop_filas = session.execute(
+            text(
+                "SELECT ds.documento_id::text AS documento_padre_id, "
+                "s.archivo_estado, s.archivo_validacion, s.clave_storage "
+                "FROM modulo1.documento_soporte ds "
+                "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+                "WHERE ds.tenant_id = :t AND ds.documento_id = ANY(CAST(:ids AS uuid[]))"
+            ),
+            {"t": tenant_id, "ids": ids_doc},
+        ).mappings()
+        soportes_por_doc = agrupar_soportes_por_documento(sop_filas)
+    requisitos: list[dict[str, Any]] = []
+    for (_sujeto, rid), fila in sorted(elegidas.items(), key=lambda item: meta_por_req.get(item[0][1], {}).get("requisito", "")):
+        meta = meta_por_req[str(rid)]
+        hasta = fila.get("vigente_hasta")
+        cat = meta["categoria"]
+        soportes = soportes_por_doc.get(str(fila["documento_id"]), [])
+        requisitos.append(
+            {
+                "requisito": meta["requisito"],
+                "categoria": cat,
+                "vigente_hasta": hasta.isoformat() if hasta else None,
+                "estado": _estado_requisito_paquete(fila, hoy, categoria=cat, soportes=soportes),
+            }
+        )
     session.execute(text("UPDATE modulo1.paquete_entrega SET accesos = accesos + 1, ultimo_acceso_en = now() WHERE tenant_id = :t AND paquete_id = :p"),
                     {"t": tenant_id, "p": str(p["paquete_id"])})
     session.execute(text("INSERT INTO modulo1.paquete_acceso (tenant_id, paquete_id, origen_hash) VALUES (:t, :p, :o)"),
                     {"t": tenant_id, "p": str(p["paquete_id"]), "o": hashlib.sha256(origen.encode()).hexdigest()[:16] if origen else None})
     return {"empresa": tenant, "sujeto": {"sujeto_id": legajo["sujeto_id"], "tipo_sujeto": legajo["tipo_sujeto"], "identificador": legajo["identificador_natural"]},
             "fecha": hoy.isoformat(), "expira_en": p["expira_en"].isoformat(), "requisitos": requisitos,
-            "resumen": {"vigentes": sum(1 for r in requisitos if r["estado"] == "vigente"), "vencidos": sum(1 for r in requisitos if r["estado"] == "vencido"),
-                        "sin_verificar": sum(1 for r in requisitos if r["estado"] == "declarado_sin_verificar")}}
+            "resumen": {
+                "vigentes": sum(1 for r in requisitos if r["estado"] == "vigente"),
+                "vencidos": sum(1 for r in requisitos if r["estado"] == "vencido"),
+                "sin_verificar": sum(1 for r in requisitos if r["estado"] == "declarado_sin_verificar"),
+                "pendiente_revision": sum(1 for r in requisitos if r["estado"] == "pendiente_de_revision"),
+            }}
 
 
 def qr_png(url: str) -> bytes:
@@ -158,3 +224,4 @@ def qr_png(url: str) -> bytes:
     buf = io.BytesIO()
     segno.make(url, error="m").save(buf, kind="png", scale=6, border=2)
     return buf.getvalue()
+

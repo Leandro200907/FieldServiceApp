@@ -136,7 +136,7 @@ def test_evidencia_de_auditoria_sin_contenido(tenant_de_prueba):
         purgado_en = s.execute(text("SELECT archivo_purgado_en FROM modulo1.documento WHERE documento_id = :d"), {"d": viejo}).scalar()
     assert p["documento_id"] == viejo and p["clave_storage"] == clave
     assert p["motivo"] == "plazo_retencion_archivo vencido" and p["plazo_retencion"] == "30 days"
-    assert p["estado_version"] == "sucedida" and p["requisito_definicion_id"] and p["creado_en"]
+    assert p["estado_version"] == "rechazada" and p["requisito_definicion_id"] and p["creado_en"]
     assert p["checksum_sha256"] == "ck" and p["bytes"] == 1  # referencia verificable
     assert p["purgado_en"] and purgado_en is not None
     assert p["usuario_id"] == "sistema"

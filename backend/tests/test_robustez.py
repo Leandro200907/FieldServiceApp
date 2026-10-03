@@ -70,7 +70,7 @@ def test_cadena_rechazo_de_C_con_B_sucedida_restaura_B(cliente_api, tenant_de_pr
     b = _cargar(cliente_api, t, p, req, desde="2026-06-01", hasta="2026-12-31")["documento_id"]
     c = _proponer(cliente_api, t, p, req, "2026-12-01", "2027-12-01")
     assert _estados(t, p, req) == {a: "sucedida", b: "sucedida", c: "vigente"}
-    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c}))
+    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c, "motivo": "no aplica"}))
     assert r["restaurado_documento_id"] == b
     assert _estados(t, p, req) == {a: "sucedida", b: "vigente", c: "rechazada"}
 
@@ -116,7 +116,7 @@ def test_cadena_rechazo_no_resucita_una_terminal_ni_deja_dos_vigentes(cliente_ap
     _ok(_post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": lote}))
     assert _estados(t, p, req) == {a: "revertida_por_lote", b: "vigente"}
     c = _cargar(cliente_api, t, p, req, desde="2026-07-01", hasta="2027-06-30")["documento_id"]
-    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b}).status_code == 409
+    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b, "motivo": "tarde"}).status_code == 409
     assert _estados(t, p, req) == {a: "revertida_por_lote", b: "sucedida", c: "vigente"}
 
 
@@ -127,7 +127,7 @@ def test_cadena_sin_antecesor_restaurable_deja_sin_vigente(cliente_api, tenant_d
     req = _alta_def(cliente_api, t, "Apto")
     p = _alta_persona(cliente_api, t, "C-5", t.sujeto_tecnico)
     b = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-12-31")
-    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b}))
+    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b, "motivo": "rechazo"}))
     assert r["restaurado_documento_id"] is None
     assert _vigentes(_docs(t, p, req)) == []
 
@@ -141,7 +141,7 @@ def test_cadena_larga_todas_las_combinaciones_mantienen_a_lo_sumo_un_vigente(cli
     a = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2026-03-31")["documento_id"]; _assert_a_lo_sumo_un_vigente(t, p, req)
     l1, (b,) = _lote(cliente_api, t, p, req, [("2026-03-01", "2026-06-30")]); _assert_a_lo_sumo_un_vigente(t, p, req)
     c = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-09-30"); _assert_a_lo_sumo_un_vigente(t, p, req)
-    _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c})); _assert_a_lo_sumo_un_vigente(t, p, req)
+    _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c, "motivo": "rechazo"})); _assert_a_lo_sumo_un_vigente(t, p, req)
     assert _estados(t, p, req)[b] == "vigente"
     l2, (d,) = _lote(cliente_api, t, p, req, [("2026-09-01", "2026-12-31")]); _assert_a_lo_sumo_un_vigente(t, p, req)
     _ok(_post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": l1})); _assert_a_lo_sumo_un_vigente(t, p, req)
@@ -287,19 +287,24 @@ def test_oc_anterior_a_toda_matriz_no_se_evalua(tenant_de_prueba, sesion):
 
 
 def _armar_tenant(c, t) -> dict:
+    from app.storage.local import StorageLocal
+
     req = _alta_def(c, t, "Apto")
     persona = _alta_persona(c, t, f"DNI-{t.slug}", t.sujeto_tecnico)
     doc = _cargar(c, t, persona, req, hasta="2026-12-31")["documento_id"]
-    clave = {"cliente_id": str(uuid.uuid4()), "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4())}
-    _ok(_post(c, t, "configuracion", "publicar_version_de_matriz", {**clave, "vigente_desde": "2026-01-01", "lineas": [
+    contenido = b"evidencia apto tenant"
+    clave_storage = f"{t.tenant_id}/{doc}/apto.pdf"
+    checksum = StorageLocal().escribir(clave_storage, contenido)
+    clave_matriz = {"cliente_id": str(uuid.uuid4()), "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4())}
+    _ok(_post(c, t, "configuracion", "publicar_version_de_matriz", {**clave_matriz, "vigente_desde": "2026-01-01", "lineas": [
         {"requisito_definicion_id": req, "clasificacion": "excepcionable", "bloqueante_durante_ejecucion": True}]}))
     _ok(_post(c, t, "responsable_legajos", "importar_lote_oc", {"lote_id": str(uuid.uuid4()), "origen": "planilla", "filas": [
-        {"clave_origen": f"OC-{t.slug}", **clave, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
+        {"clave_origen": f"OC-{t.slug}", **clave_matriz, "vigencia_desde": "2026-10-01", "vigencia_hasta": "2026-10-05"}]}))
     with tenant_session(t.tenant_id) as s:
         s.execute(text("UPDATE modulo1.documento SET clave_storage = :k, archivo_estado = 'confirmado', "
-                       "checksum_archivo = 'ck', archivo_bytes = 1, archivo_validacion = 'valido', "
+                       "checksum_archivo = :ck, archivo_bytes = :b, archivo_validacion = 'valido', "
                        "archivo_validacion_en = now() WHERE documento_id = :d"),
-                  {"k": f"{t.tenant_id}/{doc}/apto.pdf", "d": doc})
+                  {"k": clave_storage, "ck": checksum, "b": len(contenido), "d": doc})
         s.execute(text("INSERT INTO modulo1.asignacion_supervisor (tenant_id, sujeto_id, supervisor_usuario_id, desde, asignada_por) "
                        "VALUES (:t, :sj, :u, '2026-01-01', 'test')"), {"t": t.tenant_id, "sj": persona, "u": t.usuarios["supervisor"]})
     return {"req": req, "persona": persona, "doc": doc, "oc": f"OC-{t.slug}"}
@@ -311,18 +316,17 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
     a, b = _armar_tenant(c, ta), _armar_tenant(c, tb)
 
     # --- HTTP: el tenant B intenta leer/escribir cosas del tenant A con sus propios tokens
-    assert c.get("/v1/consultas/legajo", params={"sujeto_id": a["persona"]}, headers=tb.headers("responsable_legajos")).status_code == 404
-    assert c.get("/v1/consultas/cobertura_oc", params={"commitment_id": a["oc"]}, headers=tb.headers("supervisor")).status_code == 404
-    assert c.post("/v1/comandos/evaluar_habilitacion", json={"commitment_id": a["oc"], "sujetos_propuestos": [a["persona"]]}, headers=tb.headers("responsable_legajos")).status_code == 404
+    sujetos_b = _ok(c.get("/v1/consultas/sujetos", params={"q": a["persona"]}, headers=tb.headers("responsable_legajos")))
+    assert sujetos_b["total"] == 0
     assert c.post("/v1/comandos/confirmar_documento", json={"documento_id": a["doc"]}, headers=tb.headers("responsable_legajos")).status_code == 404
     assert c.post("/v1/comandos/cargar_documento", json={"sujeto_id": a["persona"], "requisito_definicion_id": a["req"],
                   "vigente_desde": "2026-01-01", "vigente_hasta": "2026-12-31"}, headers=tb.headers("responsable_legajos")).status_code == 404
-    assert c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("responsable_legajos")).status_code == 404
+    assert c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("responsable_legajos")).status_code == 404
     # listados: B ve solo lo suyo
     tab = _ok(c.get("/v1/consultas/tablero_vencimientos", params={"dias": 365}, headers=tb.headers("responsable_legajos")))
     assert {i["sujeto_id"] for i in tab["items"]} == {b["persona"]}
-    back = _ok(c.get("/v1/consultas/backlog_oc", headers=tb.headers("responsable_legajos")))
-    assert {i["clave_origen"] for i in back["items"]} == {b["oc"]}
+    radar = _ok(c.get("/v1/consultas/radar_documental_backlog", headers=tb.headers("responsable_legajos")))
+    assert {i["clave_origen"] for i in radar["items"]} == {b["oc"]}
     log = _ok(c.get("/v1/consultas/log_auditoria", params={"limit": 500}, headers=tb.headers("configuracion")))
     assert all(a["persona"] not in str(e) and a["doc"] not in str(e) for e in log["items"])
     # el sujeto de A existe para A
@@ -360,10 +364,10 @@ def test_aislamiento_por_http_e_interno_entre_dos_tenants(cliente_api, dos_tenan
         assert alcance_de_sujetos(s, sup_b, date(2026, 9, 18)) == [b["persona"]]
         assert not sujeto_en_alcance(s, sup_b, "persona_extra_de_A", date(2026, 9, 18), ROLES_CON_TODO_DESCARGA)
         assert not sujeto_en_alcance(s, sup_b, a["persona"], date(2026, 9, 18), ROLES_CON_TODO_DESCARGA)
-    assert c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("supervisor")).status_code == 404
+    assert c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=tb.headers("supervisor")).status_code == 404
 
     # --- storage: una URL firmada del tenant A no la puede usar B (firma atada al tenant)
-    url_a = _ok(c.get(f"/v1/storage/documentos/{a['doc']}/url", headers=ta.headers("responsable_legajos")))["url"]
+    url_a = _ok(c.post(f"/v1/storage/documentos/{a['doc']}/url", headers=ta.headers("responsable_legajos")))["url"]
     assert c.get(url_a, headers=tb.headers("responsable_legajos")).status_code == 403
 
     # --- token de A con tenant_id manipulado hacia B: la firma no valida → 401
@@ -430,6 +434,8 @@ def test_concurrencia_confirmar_y_rechazar_la_misma_propuesta(cliente_api, tenan
     p = _alta_persona(cliente_api, t, "K-2", t.sujeto_tecnico)
     _cargar(cliente_api, t, p, req, hasta="2026-06-30")
     prop = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-12-31")
+    with tenant_session(t.tenant_id) as s:
+        apoyo.respaldo_valido_en_documento(s, t.tenant_id, prop)
 
     def confirmar():
         with tenant_session(t.tenant_id) as s:
@@ -437,7 +443,7 @@ def test_concurrencia_confirmar_y_rechazar_la_misma_propuesta(cliente_api, tenan
 
     def rechazar():
         with tenant_session(t.tenant_id) as s:
-            return legajos.rechazar_propuesta(s, _ident(t, "responsable_legajos"), esq.RechazarPropuesta(documento_id=prop))
+            return legajos.rechazar_propuesta(s, _ident(t, "responsable_legajos"), esq.RechazarPropuesta(documento_id=prop, motivo="carrera"))
 
     salidas = _en_paralelo([confirmar, rechazar])
     exitos = [r for r, e in salidas if e is None]
@@ -520,10 +526,12 @@ def test_contrato_http_codigos_y_serializacion(cliente_api, tenant_de_prueba):
     # 401 sin token / 403 rol incorrecto / 422 validación / 404 no encontrado / 409 conflicto — mismo envelope
     casos = [
         (c.post("/v1/comandos/alta_de_sujeto", json={}), 401, "no_autenticado"),
-        (c.post("/v1/comandos/otorgar_excepcion", json={"referencia_evaluacion": str(uuid.uuid4()), "sujeto_id": "x",
-                "requisito_definicion_id": str(uuid.uuid4()), "commitment_id": "x", "motivo": "x"}, headers=h), 403, "prohibido"),
+        (c.post("/v1/comandos/publicar_version_de_matriz", json={"cliente_id": str(uuid.uuid4()),
+                "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4()),
+                "vigente_desde": "2026-01-01", "lineas": [{"requisito_definicion_id": str(uuid.uuid4()),
+                "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": True}]}, headers=h), 403, "prohibido"),
         # la validación del body corre antes que la autorización: body inválido + rol incorrecto = 422
-        (c.post("/v1/comandos/otorgar_excepcion", json={}, headers=h), 422, "validacion"),
+        (c.post("/v1/comandos/alta_de_sujeto", json={}, headers=h), 422, "validacion"),
         (c.post("/v1/comandos/alta_de_sujeto", json={"tipo_sujeto": "marciano", "identificador_natural": "x"}, headers=h), 422, "validacion"),
         (c.post("/v1/comandos/confirmar_documento", json={"documento_id": str(uuid.uuid4())}, headers=h), 404, "no_encontrado"),
         (c.get("/v1/consultas/legajo", params={"sujeto_id": "nadie"}, headers=h), 404, "no_encontrado"),
@@ -558,7 +566,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}",
                 "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
-    assert len(paths) == 88
+    assert len(paths) == 86
     for path, ops in paths.items():
         if path in publicas:
             continue
@@ -567,3 +575,4 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
             r = cliente_api.post(url, json={}) if metodo == "post" else getattr(cliente_api, metodo)(url)
             assert r.status_code == 401, (metodo, path, r.status_code)
             assert r.json()["error"]["codigo"] == "no_autenticado"
+

@@ -125,7 +125,7 @@ class ReasignarSupervisorResponse(BaseModel):
 
 def _ruta(nombre: str, body_cls: type, fn, roles: tuple[Rol, ...], response_model_cls: type, clave_de_body=None) -> None:
     """`clave_de_body`: para comandos naturalmente idempotentes por un id del body
-    (ImportarLote → `lote:<lote_id>`, regla 6 del brief) esa clave prevalece sobre el
+    (ImportarLote → `lote_doc:<lote_id>`, regla 6 del brief) esa clave prevalece sobre el
     header Idempotency-Key."""
 
     def endpoint(
@@ -151,6 +151,13 @@ def _ruta(nombre: str, body_cls: type, fn, roles: tuple[Rol, ...], response_mode
 
 
 _ruta("alta_de_sujeto", e.AltaDeSujeto, servicio.alta_de_sujeto, RESPONSABLE, LegajoResponse)
+_ruta(
+    "corregir_nombre_legajo_persona",
+    e.CorregirNombreLegajoPersona,
+    servicio.corregir_nombre_legajo_persona,
+    CONFIG_O_RESPONSABLE,
+    LegajoResponse,
+)
 _ruta("baja_de_sujeto", e.BajaDeSujeto, servicio.baja_de_sujeto, RESPONSABLE, LegajoResponse)
 _ruta("cargar_documento", e.CargarDocumento, servicio.cargar_documento, RESPONSABLE, DocumentoCargadoResponse)
 _ruta("proponer_documento", e.ProponerDocumento, servicio.proponer_documento, TECNICO, DocumentoCargadoResponse)
@@ -166,11 +173,6 @@ _ruta(
 _ruta("registrar_induccion", e.RegistrarInduccion, servicio.registrar_induccion, RESPONSABLE, RegistrarInduccionResponse)
 _ruta(
     "importar_lote", e.ImportarLote, servicio.importar_lote, RESPONSABLE, ImportarLoteResponse,
-    clave_de_body=lambda b: f"lote:{b.lote_id}",
+    clave_de_body=lambda b: f"lote_doc:{b.lote_id}",
 )
 _ruta("revertir_lote", e.RevertirLote, servicio.revertir_lote, RESPONSABLE, RevertirLoteResponse)
-_ruta("asignar_supervisor", e.AsignarSupervisor, servicio.asignar_supervisor, CONFIG_O_RESPONSABLE, AsignarSupervisorResponse)
-_ruta(
-    "reasignar_supervisor", e.ReasignarSupervisor, servicio.reasignar_supervisor, CONFIG_O_RESPONSABLE,
-    ReasignarSupervisorResponse,
-)

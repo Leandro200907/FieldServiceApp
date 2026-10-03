@@ -107,6 +107,13 @@ def render(payload: dict[str, Any]) -> tuple[str, str]:
                 f"El archivo del documento {payload.get('documento_id')} (sujeto {payload.get('sujeto_id')}) no pasó la "
                 f"validación técnica: {payload.get('motivo')}. El dato sigue marcado como verificado, pero la evidencia "
                 f"no se puede descargar hasta reemplazar el archivo o resolverlo.")
+    if tipo == "DocumentoOperadoraDesactualizado":
+        return (
+            f"Actualización documental pendiente — {payload.get('operadora')}",
+            f"El documento '{payload.get('requisito')}' del legajo {payload.get('sujeto_id')} "
+            f"no coincide con el estado registrado ante {payload.get('operadora')}. "
+            f"Estado: {payload.get('estado')}. {payload.get('motivo')}",
+        )
     if tipo == "ValidacionEvidenciaEstancada":
         return (f"URGENTE — validación de evidencia estancada (documento {payload.get('documento_id')})",
                 f"El job de validación técnica del documento {payload.get('documento_id')} agotó {payload.get('intentos')} "

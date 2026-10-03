@@ -41,7 +41,8 @@ def _definicion(s, tenant_id: str, retencion: str | None = None, categoria: str 
     return rid
 
 
-def _documento(s, tenant_id: str, requisito_id: str, vigente_hasta, estado_version="vigente", clave=None, creado_en=None) -> str:
+def _documento(s, tenant_id: str, requisito_id: str, vigente_hasta, estado_version="vigente", clave=None,
+               creado_en=None, dejo_de_ser_vigente_en=None) -> str:
     # Un sujeto distinto por documento: uq_documento_vigente admite un solo vigente por (sujeto, requisito).
     did = str(uuid.uuid4())
     apoyo.legajo(s, tenant_id, f"persona_{did[:8]}")
@@ -55,8 +56,14 @@ def _documento(s, tenant_id: str, requisito_id: str, vigente_hasta, estado_versi
             "COALESCE(:creado, now()))"
         ),
         {"d": did, "t": tenant_id, "sj": f"persona_{did[:8]}", "r": requisito_id, "desde": vigente_hasta - timedelta(days=365), "hasta": vigente_hasta,
-         "ev": estado_version, "clave": (clave.replace("{doc}", did) if clave else None), "creado": creado_en},
+         "ev": "vigente", "clave": (clave.replace("{doc}", did) if clave else None), "creado": creado_en},
     )
+    if estado_version != "vigente":
+        s.execute(text("UPDATE modulo1.documento SET estado_version=:ev WHERE documento_id=:d"),
+                  {"ev": estado_version, "d": did})
+        if dejo_de_ser_vigente_en is not None:
+            s.execute(text("UPDATE modulo1.documento SET dejo_de_ser_vigente_en=:fecha WHERE documento_id=:d"),
+                      {"fecha": dejo_de_ser_vigente_en, "d": did})
     return did
 
 
@@ -102,6 +109,19 @@ def test_lease_vencido_permite_retomar_y_lease_obligatorio(tenant_de_prueba):
         completar(s, jid, job.lease_token)
     with tenant_session(t) as s:
         assert s.execute(text("SELECT estado FROM modulo1.job_queue WHERE id = :id"), {"id": jid}).scalar() == "completado"
+
+
+def test_lease_vencido_respeta_max_intentos_y_dead_letter(tenant_de_prueba):
+    t = tenant_de_prueba.tenant_id
+    max_i = 3
+    with tenant_session(t) as s:
+        jid = encolar(s, "score_documental", {}, tenant_id=t)
+        for _ in range(max_i):
+            job = tomar(s, "score_documental", lease_seg=30, max_intentos=max_i)
+            assert job is not None and job.id == jid
+            s.execute(text("UPDATE modulo1.job_queue SET lease_hasta = now() - interval '1 minute' WHERE id = :id"), {"id": jid})
+        assert tomar(s, "score_documental", lease_seg=30, max_intentos=max_i) is None
+        assert s.execute(text("SELECT estado, intentos FROM modulo1.job_queue WHERE id = :id"), {"id": jid}).one() == ("fallido", max_i)
 
 
 def test_fallar_reintenta_con_backoff_y_pasa_a_fallido(tenant_de_prueba):
@@ -291,7 +311,10 @@ def _preparar_retencion(s, t):
     req = _definicion(s, t, retencion="30 days")
     hace_60 = ahora_utc() - timedelta(days=60)
     hoy = ahora_utc().date()
-    viejo = _documento(s, t, req, hoy, estado_version="sucedida", clave=f"{t}/{{doc}}/viejo.pdf", creado_en=hace_60)
+    viejo = _documento(s, t, req, hoy, estado_version="rechazada", clave=f"{t}/{{doc}}/viejo.pdf",
+                       creado_en=hace_60, dejo_de_ser_vigente_en=hace_60)
+    _documento(s, t, req, hoy, estado_version="sucedida", clave=f"{t}/{{doc}}/restaurable.pdf",
+               creado_en=hace_60, dejo_de_ser_vigente_en=hace_60)
     _documento(s, t, req, hoy, estado_version="vigente", clave=f"{t}/{{doc}}/vigente.pdf", creado_en=hace_60)  # vigente: no
     _documento(s, t, req, hoy, estado_version="rechazada", clave=f"{t}/{{doc}}/reciente.pdf")  # dentro del plazo: no
     return viejo
@@ -333,7 +356,8 @@ def test_control_retencion_purga_si_borrado_confirmado(tenant_de_prueba):
     assert _estado_archivo(t, viejo) == ("purgado", None)
     with tenant_session(t) as s:
         assert _contar_eventos(s, "ArchivoPurgado") == 1
-        assert s.execute(text("SELECT count(*) FROM modulo1.documento WHERE clave_storage IS NOT NULL")).scalar() == 2
+        assert s.execute(text("SELECT count(*) FROM modulo1.documento WHERE clave_storage IS NOT NULL")).scalar() == 3
+        assert s.execute(text("SELECT archivo_estado FROM modulo1.documento WHERE estado_version='sucedida'")).scalar() == "confirmado"
     assert control_retencion(t, storage, ahora_utc())["candidatos"] == 0
 
 
@@ -404,6 +428,25 @@ def test_correr_una_vuelta_procesa_colas_outbox_y_reloj(tenant_de_prueba):
         assert {"drenaje_outbox", "control_vencimientos", "vencer_excepciones_y_constancias", "control_retencion"} <= nombres
     with platform_session() as s:
         assert s.execute(text("SELECT ultimo_ok FROM modulo1.latido_proceso WHERE nombre = 'worker' AND tenant_id IS NULL")).scalar() is not None
+
+
+def test_vuelta_sin_transporte_no_consume_el_outbox(tenant_de_prueba):
+    t = tenant_de_prueba.tenant_id
+    pub = PublicadorEnMemoria()
+    with tenant_session(t) as s:
+        encolar_outbox(s, t, "CumplimientoEmpresaAfectado", {"empresa": "x"})
+
+    resumen = worker_main.correr_una_vuelta(
+        _StorageFalso(confirma=True), pub, drenar_outbox_habilitado=False,
+    )
+
+    assert resumen["outbox_deshabilitado"] is True
+    assert resumen["outbox_publicados"] == 0
+    assert pub.eventos == []
+    with tenant_session(t) as s:
+        assert s.execute(
+            text("SELECT count(*) FROM modulo1.outbox_events WHERE procesado_en IS NULL")
+        ).scalar() == 1
 
 
 def test_vuelta_registra_latido_de_error_sin_frenar(tenant_de_prueba, monkeypatch):

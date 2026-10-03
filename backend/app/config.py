@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from urllib.parse import urlsplit
 
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.entorno import archivo_de_entorno
@@ -46,6 +47,9 @@ class Settings(BaseSettings):
     # global del worker más reciente que este umbral).
     worker_poll_seg: float = 5
     worker_latido_max_seg: int = 120
+    # Hasta que exista un transporte real, el outbox se conserva sin drenar.
+    outbox_transport: str = "disabled"
+    api_docs_habilitada: bool = False
 
     # Zona horaria por defecto del tenant (0.3 de especificacion.md) — se sobreescribe
     # por tenant en la tabla de configuración, esto es solo el fallback de arranque.
@@ -61,6 +65,30 @@ class Settings(BaseSettings):
     # configurado, `X-Forwarded-For` NUNCA se usa (ver app/comun/red.py); no hay proxy que
     # confiar en un despliegue de instancia única expuesta directo.
     proxies_confiables: str = ""
+
+    @field_validator("jwt_secret", "storage_secret")
+    @classmethod
+    def _secreto_fuerte(cls, valor: str) -> str:
+        limpio = valor.strip()
+        if len(limpio) < 32:
+            raise ValueError("el secreto debe tener al menos 32 caracteres")
+        if "cambiar" in limpio.lower():
+            raise ValueError("el secreto conserva el placeholder CAMBIAR")
+        return limpio
+
+    @field_validator("outbox_transport")
+    @classmethod
+    def _transporte_outbox_soportado(cls, valor: str) -> str:
+        normalizado = valor.strip().lower()
+        if normalizado != "disabled":
+            raise ValueError("no hay un transporte real de outbox disponible; use 'disabled'")
+        return normalizado
+
+    @model_validator(mode="after")
+    def _secretos_separados(self):
+        if self.jwt_secret == self.storage_secret:
+            raise ValueError("JWT_SECRET y STORAGE_SECRET deben ser distintos")
+        return self
 
 
 settings = Settings()

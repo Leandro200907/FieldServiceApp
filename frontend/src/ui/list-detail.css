@@ -1,0 +1,189 @@
+.estado-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.legajo-doc-table .estado-tags .status-dot + .status-dot {
+  margin-left: 0;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+}
+
+.filter-checkboxes legend {
+  margin-bottom: 6px;
+}
+
+.form-success {
+  color: var(--color-success, #0d6b3a);
+  margin-top: 8px;
+}
+
+.config-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.config-dashboard-card {
+  text-decoration: none;
+  color: inherit;
+}
+
+.config-dashboard-card--soon {
+  opacity: 0.75;
+}
+
+.vencimientos-import-toggle {
+  margin-left: auto;
+}
+
+.espejo-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+
+.legajo-historial-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.radar-requisitos-table--nowrap td {
+  white-space: nowrap;
+}
+
+.list-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, var(--list-detail-list-width)) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.list-detail-layout:not(.has-detail) {
+  grid-template-columns: 1fr;
+}
+.list-detail-title {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+.list-detail-list {
+  margin: 0;
+  padding: 16px;
+}
+.list-detail-detail {
+  position: relative;
+  margin: 0;
+  padding: 16px 20px 20px;
+  min-height: 320px;
+}
+.list-detail-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-panel);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+.list-item-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  margin: 0 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+}
+.list-item-button:hover { background: var(--color-separator); }
+.list-item-button.selected {
+  background: var(--color-selected-bg);
+  border-color: #c5d9ed;
+}
+.list-item-primary { font-weight: 600; display: block; }
+.list-item-secondary { font-size: 12px; color: var(--color-text-muted); display: block; }
+
+.ficha-encabezado { margin-bottom: 16px; padding-right: 40px; }
+.ficha-encabezado-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.ficha-breadcrumb { font-size: 12px; color: var(--color-text-muted); margin: 0 0 4px; }
+.ficha-titulo { margin: 0 0 4px; font-size: 20px; }
+.ficha-subtitulo { margin: 0; color: var(--color-text-muted); font-size: 13px; }
+.ficha-datos-clave {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px 16px;
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--color-separator);
+  font-size: 13px;
+}
+.ficha-datos-clave dt { color: var(--color-text-muted); font-weight: 500; }
+.ficha-datos-clave dd { margin: 2px 0 0; font-weight: 600; }
+
+.ficha-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin: 16px 0;
+}
+.ficha-tabs button {
+  border: none;
+  background: transparent;
+  padding: 10px 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.ficha-tabs button.active {
+  color: var(--color-action);
+  border-bottom-color: var(--color-action);
+}
+
+.resumen-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.resumen-tarjeta {
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-page-bg);
+}
+.resumen-tarjeta strong { display: block; font-size: 20px; }
+.resumen-tarjeta span { font-size: 12px; color: var(--color-text-muted); }
+
+.estado-referencia {
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.estado-referencia summary { cursor: pointer; font-weight: 600; color: var(--color-text); }
+
+@media (max-width: 900px) {
+  .list-detail-layout.has-detail { grid-template-columns: 1fr; }
+  .resumen-tarjetas { grid-template-columns: repeat(2, 1fr); }
+}
