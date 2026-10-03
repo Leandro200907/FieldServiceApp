@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0029_mov_operadora
+-- head: 0030_legajo_nombre_apellido
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -577,6 +577,7 @@ CREATE TABLE modulo1.legajo (
     sujeto_id text NOT NULL,
     tipo_sujeto text NOT NULL,
     identificador_natural text NOT NULL,
+    nombre_apellido text,
     dado_de_baja_en timestamp with time zone,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT legajo_tipo_sujeto_check CHECK ((tipo_sujeto = ANY (ARRAY['empresa'::text, 'persona'::text, 'vehiculo'::text, 'equipo'::text])))

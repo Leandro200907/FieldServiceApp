@@ -119,7 +119,7 @@ def test_caso_a_declarado_invalido_rechaza_como_rechazar_propuesta(cliente_api, 
     persona = t.sujeto_tecnico
     with tenant_session(t.tenant_id) as s:
         apoyo.legajo(s, t.tenant_id, persona)
-    original = _cargar(cliente_api, t, persona, req, hasta="2027-06-30")["documento_id"]
+    original = _cargar(cliente_api, t, persona, req, hasta="2027-06-30", solo_declarado=True)["documento_id"]
 
     r = _post(cliente_api, t, "tecnico", "proponer_documento",
               {"sujeto_id": persona, "requisito_definicion_id": req, "vigente_desde": "2026-01-01", "vigente_hasta": "2028-01-01"})
@@ -155,7 +155,12 @@ def escenario_caso_b(sesion, cliente_api, tenant_de_prueba):
     req_p = _alta_def(cliente_api, t, "Apto médico")
     with tenant_session(t.tenant_id) as s:
         apoyo.legajo(s, t.tenant_id, "persona_A")
-    doc = _cargar(cliente_api, t, "persona_A", req_p, hasta="2027-06-30")["documento_id"]
+    doc = _cargar(cliente_api, t, "persona_A", req_p, hasta="2027-06-30", solo_declarado=True)["documento_id"]
+    with tenant_session(t.tenant_id) as s:
+        s.execute(
+            text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE documento_id = CAST(:d AS uuid)"),
+            {"d": doc},
+        )
     clave = clave_de_matriz()
     with tenant_session(t.tenant_id) as s:
         insertar_matriz(s, t.tenant_id, clave, {req_p: "excepcionable"})

@@ -49,7 +49,7 @@ def _hook_secundario(session: Session, etiqueta: str, fn) -> None:
 def _legajo_activo(s: Session, tenant_id: str, sujeto_id: str, *, bloquear: bool = False) -> dict[str, Any]:
     fila = s.execute(
         text(
-            "SELECT legajo_id, sujeto_id, tipo_sujeto, dado_de_baja_en FROM modulo1.legajo "
+            "SELECT legajo_id, sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido, dado_de_baja_en FROM modulo1.legajo "
             "WHERE tenant_id = :t AND sujeto_id = :sj" + (" FOR UPDATE" if bloquear else "")
         ),
         {"t": tenant_id, "sj": sujeto_id},
@@ -272,12 +272,20 @@ def alta_de_sujeto(s: Session, identidad: Identidad, body: e.AltaDeSujeto) -> di
     legajo_id = str(uuid.uuid4())
     try:
         with s.begin_nested():
+            nombre = body.nombre_apellido if body.tipo_sujeto == "persona" else None
             s.execute(
                 text(
-                    "INSERT INTO modulo1.legajo (legajo_id, tenant_id, sujeto_id, tipo_sujeto, identificador_natural) "
-                    "VALUES (:l, :t, :sj, :tipo, :ident)"
+                    "INSERT INTO modulo1.legajo (legajo_id, tenant_id, sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido) "
+                    "VALUES (:l, :t, :sj, :tipo, :ident, :nom)"
                 ),
-                {"l": legajo_id, "t": t, "sj": sujeto_id, "tipo": body.tipo_sujeto, "ident": body.identificador_natural},
+                {
+                    "l": legajo_id,
+                    "t": t,
+                    "sj": sujeto_id,
+                    "tipo": body.tipo_sujeto,
+                    "ident": body.identificador_natural,
+                    "nom": nombre,
+                },
             )
     except IntegrityError as exc:
         restriccion = getattr(getattr(getattr(exc, "orig", None), "diag", None), "constraint_name", None)
@@ -287,12 +295,45 @@ def alta_de_sujeto(s: Session, identidad: Identidad, body: e.AltaDeSujeto) -> di
                 {"tipo_sujeto": body.tipo_sujeto, "identificador_natural": body.identificador_natural},
             ) from None
         raise
+    payload = {
+        "legajo_id": legajo_id,
+        "sujeto_id": sujeto_id,
+        "tipo_sujeto": body.tipo_sujeto,
+        "identificador_natural": body.identificador_natural,
+    }
+    if nombre:
+        payload["nombre_apellido"] = nombre
+    registrar_evento(s, t, "LegajoCreado", payload, identidad.usuario_id)
+    return {"legajo_id": legajo_id, "sujeto_id": sujeto_id, "eventos": ["LegajoCreado"]}
+
+
+def corregir_nombre_legajo_persona(s: Session, identidad: Identidad, body: e.CorregirNombreLegajoPersona) -> dict[str, Any]:
+    identidad.exigir_rol(Rol.CONFIGURACION, Rol.RESPONSABLE_LEGAJOS)
+    t = identidad.tenant_id
+    legajo = _legajo_activo(s, t, body.sujeto_id)
+    if legajo["tipo_sujeto"] != "persona":
+        raise ErrorDeDominio("Solo los legajos de persona admiten nombre y apellido", {"sujeto_id": body.sujeto_id})
+    anterior = legajo.get("nombre_apellido")
+    s.execute(
+        text(
+            "UPDATE modulo1.legajo SET nombre_apellido = :nom "
+            "WHERE tenant_id = :t AND legajo_id = :l"
+        ),
+        {"nom": body.nombre_apellido, "t": t, "l": str(legajo["legajo_id"])},
+    )
     registrar_evento(
-        s, t, "LegajoCreado",
-        {"legajo_id": legajo_id, "sujeto_id": sujeto_id, "tipo_sujeto": body.tipo_sujeto, "identificador_natural": body.identificador_natural},
+        s,
+        t,
+        "NombreLegajoPersonaCorregido",
+        {
+            "legajo_id": str(legajo["legajo_id"]),
+            "sujeto_id": body.sujeto_id,
+            "nombre_apellido_anterior": anterior,
+            "nombre_apellido": body.nombre_apellido,
+        },
         identidad.usuario_id,
     )
-    return {"legajo_id": legajo_id, "sujeto_id": sujeto_id, "eventos": ["LegajoCreado"]}
+    return {"legajo_id": str(legajo["legajo_id"]), "sujeto_id": body.sujeto_id, "eventos": ["NombreLegajoPersonaCorregido"]}
 
 
 def baja_de_sujeto(s: Session, identidad: Identidad, body: e.BajaDeSujeto) -> dict[str, Any]:
@@ -309,6 +350,44 @@ def baja_de_sujeto(s: Session, identidad: Identidad, body: e.BajaDeSujeto) -> di
 # --------------------------------------------------------------------------- documentos
 
 
+def _soportes_archivo(s: Session, tenant_id: str, documento_id: str) -> list[dict[str, Any]]:
+    filas = s.execute(
+        text(
+            "SELECT s.archivo_estado, s.archivo_validacion, s.clave_storage "
+            "FROM modulo1.documento_soporte ds "
+            "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+            "WHERE ds.tenant_id = :t AND ds.documento_id = :d"
+        ),
+        {"t": tenant_id, "d": documento_id},
+    ).mappings().all()
+    return [dict(f) for f in filas]
+
+
+def _exigir_respaldo_valido(s: Session, tenant_id: str, documento_id: str, requisito_definicion_id: str | None) -> None:
+    from app.core.resolucion_evidencia import respaldo_valido
+
+    archivo = s.execute(
+        text(
+            "SELECT archivo_estado, archivo_validacion, clave_storage FROM modulo1.documento "
+            "WHERE tenant_id = :t AND documento_id = :d"
+        ),
+        {"t": tenant_id, "d": documento_id},
+    ).mappings().first()
+    if archivo is None:
+        raise NoEncontrado("Documento inexistente", {"documento_id": documento_id})
+    categoria = "documento"
+    if requisito_definicion_id:
+        definicion = _definicion_activa(s, tenant_id, str(requisito_definicion_id))
+        categoria = definicion["categoria"]
+    soportes = _soportes_archivo(s, tenant_id, documento_id) if categoria in ("competencia", "induccion") else None
+    if not respaldo_valido(dict(archivo), categoria=categoria, soportes=soportes):
+        raise ErrorDeDominio(
+            "No hay respaldo válido para confirmar el documento",
+            {"documento_id": documento_id},
+            codigo="sin_respaldo_valido",
+        )
+
+
 def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) -> dict[str, Any]:
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.sujeto_id)
@@ -316,13 +395,19 @@ def cargar_documento(s: Session, identidad: Identidad, body: e.CargarDocumento) 
     _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
+    if body.estado_confirmacion != "declarado":
+        raise ErrorDeDominio(
+            "La carga manual ingresa como declarado; use confirmar_documento con respaldo válido",
+            {"estado_confirmacion": body.estado_confirmacion},
+            codigo="confirmacion_requiere_respaldo",
+        )
 
     eventos: list[str] = []
     r = _insertar_version_documento(
         s, identidad,
         sujeto_id=body.sujeto_id, requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, numero=body.numero,
-        origen=body.origen, estado_confirmacion=body.estado_confirmacion,
+        origen=body.origen, estado_confirmacion="declarado",
         confianza_extraccion=body.confianza_extraccion, eventos=eventos,
     )
     return {**r, "eventos": eventos}
@@ -402,6 +487,11 @@ def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocum
         raise Conflicto("Solo se confirma la versión vigente", {"estado_version": doc["estado_version"]})
     if doc["estado_confirmacion"] != "declarado":
         raise Conflicto("El documento no está en estado declarado", {"estado_confirmacion": doc["estado_confirmacion"]})
+
+    _exigir_respaldo_valido(
+        s, t, str(doc["documento_id"]),
+        str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None,
+    )
 
     s.execute(
         text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE tenant_id = :t AND documento_id = :d"),

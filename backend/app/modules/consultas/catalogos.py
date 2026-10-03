@@ -64,9 +64,16 @@ def mi_legajo(session: Session, identidad: Identidad) -> dict[str, Any]:
         periodo = periodo_custodia_efectivo(session, identidad.tenant_id, r, hoy)
         custodiados.append({"tipo_recurso": periodo["tipo_recurso"], "periodo_id": periodo["periodo_id"], "custodia_desde": periodo["desde"],
                             **legajo(session, identidad, r)})
-    return {"hoy": persona["hoy"], "persona": persona, "recursos_bajo_custodia": custodiados,
-            "resumen": {"vencidos": persona["resumen"]["vencidos"] + sum(c["resumen"]["vencidos"] for c in custodiados),
-                        "vigentes_hoy": persona["resumen"]["vigentes_hoy"] + sum(c["resumen"]["vigentes_hoy"] for c in custodiados)}}
+    return {
+        "hoy": persona["hoy"],
+        "persona": persona,
+        "recursos_bajo_custodia": custodiados,
+        "resumen": {
+            "vencidos": persona["resumen"]["vencidos"] + sum(c["resumen"]["vencidos"] for c in custodiados),
+            "por_vencer": persona["resumen"].get("por_vencer", 0) + sum(c["resumen"].get("por_vencer", 0) for c in custodiados),
+            "vigentes_hoy": persona["resumen"]["vigentes_hoy"] + sum(c["resumen"]["vigentes_hoy"] for c in custodiados),
+        },
+    }
 
 
 # --------------------------------------------------------------------------- H-06: catálogos
@@ -83,8 +90,11 @@ def sujetos(session: Session, identidad: Identidad, p: Pagina, q: str | None = N
         cond += " AND dado_de_baja_en IS NULL"
     elif activos is False:
         cond += " AND dado_de_baja_en IS NOT NULL"
-    cond += _q(q, params, "sujeto_id", "identificador_natural")
-    sql = "SELECT sujeto_id, tipo_sujeto, identificador_natural, dado_de_baja_en, creado_en FROM modulo1.legajo WHERE tenant_id = :t"
+    cond += _q(q, params, "sujeto_id", "identificador_natural", "nombre_apellido")
+    sql = (
+        "SELECT sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido, dado_de_baja_en, creado_en "
+        "FROM modulo1.legajo WHERE tenant_id = :t"
+    )
     return _paginar(session, sql, cond, "tipo_sujeto, sujeto_id", params, p)
 
 
@@ -108,21 +118,55 @@ def definiciones_requisito(session: Session, identidad: Identidad, p: Pagina, q:
     return _paginar(session, sql, cond, "tipo_sujeto_aplicable, nombre", params, p)
 
 
-def matrices(session: Session, identidad: Identidad, p: Pagina, cliente_id: str | None = None, solo_vigentes: bool = False) -> dict[str, Any]:
+def matrices(
+    session: Session,
+    identidad: Identidad,
+    p: Pagina,
+    cliente_id: str | None = None,
+    solo_vigentes: bool = False,
+    q: str | None = None,
+) -> dict[str, Any]:
     """Todas las versiones de matriz del tenant (clave + versión + vigencia + cantidad de líneas)."""
+    from app.modules.oc.catalogos_maestros import nombres_oc
+
     identidad.exigir_rol(*OPERATIVOS)
     params: dict[str, Any] = {"t": identidad.tenant_id, "hoy": hoy_del_tenant(session, identidad.tenant_id)}
     cond = ""
     if cliente_id:
-        cond += " AND cliente_id = :c"
+        cond += " AND m.cliente_id = :c"
         params["c"] = cliente_id
     if solo_vigentes:
-        cond += " AND vigente_desde <= :hoy AND (vigente_hasta IS NULL OR vigente_hasta >= :hoy)"
-    sql = ("SELECT m.matriz_version_id, m.cliente_id, m.locacion_id, m.tipo_servicio_id, m.version, m.vigente_desde, m.vigente_hasta, m.fuente, m.autor, "
-           "m.matriz_global_id, m.copiada_de_version, m.creado_en, "
-           "(SELECT count(*) FROM modulo1.linea_requisito l WHERE l.tenant_id = m.tenant_id AND l.matriz_version_id = m.matriz_version_id) AS lineas "
-           "FROM modulo1.matriz_requisitos m WHERE m.tenant_id = :t")
-    return _paginar(session, sql, cond, "m.cliente_id, m.locacion_id, m.tipo_servicio_id, m.version DESC", params, p)
+        cond += " AND m.vigente_desde <= :hoy AND (m.vigente_hasta IS NULL OR m.vigente_hasta >= :hoy)"
+    if q:
+        params["q"] = f"%{q.strip()}%"
+        cond += (
+            " AND (op.nombre ILIKE :q OR loc.nombre ILIKE :q OR ts.nombre ILIKE :q OR u.nombre ILIKE :q OR m.fuente ILIKE :q)"
+        )
+    sql = (
+        "SELECT m.matriz_version_id, m.cliente_id, m.locacion_id, m.tipo_servicio_id, m.version, m.vigente_desde, m.vigente_hasta, "
+        "m.fuente, m.autor, u.nombre AS autor_nombre, m.matriz_global_id, m.copiada_de_version, m.creado_en, "
+        "op.nombre AS operadora_nombre, loc.nombre AS locacion_nombre, ts.nombre AS tipo_servicio_nombre, "
+        "(SELECT count(*) FROM modulo1.linea_requisito l WHERE l.tenant_id = m.tenant_id AND l.matriz_version_id = m.matriz_version_id) AS lineas "
+        "FROM modulo1.matriz_requisitos m "
+        "LEFT JOIN modulo1.operadora_documental op ON op.tenant_id = m.tenant_id AND op.operadora_id = m.cliente_id "
+        "LEFT JOIN modulo1.locacion_oc loc ON loc.tenant_id = m.tenant_id AND loc.locacion_id = m.locacion_id "
+        "LEFT JOIN modulo1.tipo_servicio_oc ts ON ts.tenant_id = m.tenant_id AND ts.tipo_servicio_id = m.tipo_servicio_id "
+        "LEFT JOIN modulo1.usuario u ON u.tenant_id = m.tenant_id AND u.usuario_id::text = m.autor "
+        "WHERE m.tenant_id = :t"
+    )
+    pagina = _paginar(session, sql, cond, "m.cliente_id, m.locacion_id, m.tipo_servicio_id, m.version DESC", params, p)
+    for item in pagina["items"]:
+        if not item.get("operadora_nombre"):
+            item.update(
+                nombres_oc(
+                    session,
+                    identidad.tenant_id,
+                    str(item["cliente_id"]),
+                    str(item["locacion_id"]),
+                    str(item["tipo_servicio_id"]),
+                )
+            )
+    return pagina
 
 
 def usuarios(session: Session, identidad: Identidad, p: Pagina, q: str | None = None, rol: str | None = None, activos: bool | None = True) -> dict[str, Any]:

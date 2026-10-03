@@ -23,6 +23,13 @@ export function addDays(iso: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** Días de calendario inclusivos entre dos fechas ISO (YYYY-MM-DD). */
+export function diasInclusivos(desde: string, hasta: string): number {
+  const start = new Date(`${desde}T00:00:00Z`).getTime();
+  const end = new Date(`${hasta}T00:00:00Z`).getTime();
+  return Math.floor((end - start) / 86400000) + 1;
+}
+
 // F-01: posición proporcional de UNA fecha dentro de `[from, to]`, en porcentaje —
 // misma fórmula que ya usaba `trackPosition` para los tramos de evidencia, generalizada
 // para poder ubicar también la marca de "hoy" (antes fija al 40%, resto de un rango

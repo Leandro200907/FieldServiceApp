@@ -1,27 +1,16 @@
 import { useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
-import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
-import { deriveVisualState } from '../documentation-planning/contracts';
-import type { VisualCalendarState } from '../documentation-planning/contracts';
+import { EvidenciaRow } from '../../ui/EvidenciaRow';
+import { subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isLegajosIntegrated, legajosAccess } from './access';
-import type { EvidenciaVigente, SubjectKind } from './contracts';
+import type { SubjectKind } from './contracts';
 import '../documentation-planning/planning.css';
 import '../mi-legajo/mi-legajo.css';
 
-const visualStateLabels: Record<VisualCalendarState, string> = { verificada: 'Verificada', vencida: 'Vencida', declarada: 'Declarada' };
 const tipoLabels: Record<string, string> = { persona: 'Persona', vehiculo: 'Vehículo', equipo: 'Equipo', empresa: 'Empresa' };
 const TIPO_OPTIONS: SubjectKind[] = ['persona', 'vehiculo', 'equipo', 'empresa'];
-
-function EvidenceRow({ item }: { item: EvidenciaVigente }) {
-  const state = deriveVisualState(item);
-  return <li className="evidence-row">
-    <span className="evidence-name">{item.requisito || 'Requisito sin nombre'}</span>
-    <Badge tone={state === 'vencida' ? 'warning' : 'accent'}>{visualStateLabels[state]}</Badge>
-    <small>{item.vigente_hasta} · {formatDaysToExpiry(item.dias_para_vencer)}</small>
-  </li>;
-}
 
 export function LegajosScreen() {
   const [q, setQ] = useState('');
@@ -43,7 +32,10 @@ export function LegajosScreen() {
       {search.loading ? <LoadingState /> : search.error ? <ErrorState message={search.error.message} requestId={search.error instanceof ApiFailure && search.error.detail.referenceSource === 'server' ? search.error.detail.requestId : undefined} /> : <>
         <ul className="evidence-list">
           {search.data?.items.map(sujeto => <li key={sujeto.sujeto_id} className="evidence-row">
-            <button type="button" className="text-button" onClick={() => setSelected(sujeto.sujeto_id)}>{sujeto.identificador_natural}</button>
+            <button type="button" className="text-button" onClick={() => setSelected(sujeto.sujeto_id)}>
+              {tituloLegajoPersona(sujeto)}
+              {subtituloLegajoPersona(sujeto) && <small> · {subtituloLegajoPersona(sujeto)}</small>}
+            </button>
             <Badge>{tipoLabels[sujeto.tipo_sujeto] || sujeto.tipo_sujeto}</Badge>
             <small>{sujeto.dado_de_baja_en ? 'Dado de baja' : 'Activo'}</small>
           </li>)}
@@ -53,11 +45,12 @@ export function LegajosScreen() {
     </section>
     {selected && (legajo.loading ? <LoadingState /> : legajo.error ? <ErrorState message={legajo.error.message} requestId={legajo.error instanceof ApiFailure && legajo.error.detail.referenceSource === 'server' ? legajo.error.detail.requestId : undefined} /> : legajo.data && <section className="panel resource-panel">
       <div className="panel-top"><span className="section-number">{tipoLabels[legajo.data.legajo.tipo_sujeto] || legajo.data.legajo.tipo_sujeto}</span><Badge tone={legajo.data.resumen.vencidos > 0 ? 'warning' : 'accent'}>{legajo.data.resumen.vencidos > 0 ? `${legajo.data.resumen.vencidos} vencido${legajo.data.resumen.vencidos > 1 ? 's' : ''}` : 'Todo vigente'}</Badge></div>
-      <h3>{legajo.data.legajo.identificador_natural}</h3>
+      <h3>{tituloLegajoPersona(legajo.data.legajo)}</h3>
+      {subtituloLegajoPersona(legajo.data.legajo) && <p className="muted">{subtituloLegajoPersona(legajo.data.legajo)}</p>}
       <p className="muted">Hoy: {legajo.data.hoy} · {legajo.data.legajo.dado_de_baja_en ? 'Dado de baja' : 'Activo'}</p>
       {[...legajo.data.documentos, ...legajo.data.acreditaciones, ...legajo.data.inducciones].length === 0
         ? <p className="empty-inline">Sin documentación registrada.</p>
-        : <ul className="evidence-list">{[...legajo.data.documentos, ...legajo.data.acreditaciones, ...legajo.data.inducciones].map(item => <EvidenceRow key={item.id} item={item} />)}</ul>}
+        : <ul className="evidence-list">{[...legajo.data.documentos, ...legajo.data.acreditaciones, ...legajo.data.inducciones].map(item => <EvidenciaRow key={item.id} item={item} hoyIso={legajo.data!.hoy} />)}</ul>}
     </section>)}
     {selected && (espejoOperadora.loading ? <LoadingState /> : espejoOperadora.error ? <ErrorState message={espejoOperadora.error.message} requestId={espejoOperadora.error instanceof ApiFailure && espejoOperadora.error.detail.referenceSource === 'server' ? espejoOperadora.error.detail.requestId : undefined} /> : espejoOperadora.data && (() => {
       const items = espejoOperadora.data.items;

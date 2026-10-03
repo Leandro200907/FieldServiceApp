@@ -91,9 +91,11 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
     if alcance is not None and sujeto_id not in alcance:
         raise Prohibido("El sujeto está fuera del alcance del usuario", {"sujeto_id": sujeto_id})
 
+    from app.modules.consultas.presentacion_evidencia import filas_evidencia_para_legajo, resumen_desde_items
+
     datos = session.execute(
         text(
-            "SELECT legajo_id, sujeto_id, tipo_sujeto, identificador_natural, dado_de_baja_en, creado_en "
+            "SELECT legajo_id, sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido, dado_de_baja_en, creado_en "
             "FROM modulo1.legajo WHERE sujeto_id = :s"
         ),
         {"s": sujeto_id},
@@ -101,62 +103,91 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
     if datos is None:
         raise NoEncontrado("Legajo inexistente", {"sujeto_id": sujeto_id})
 
-    filas = session.execute(
-        text(_SQL_EVIDENCIA + " SELECT * FROM evidencia WHERE sujeto_id = :s ORDER BY vigente_hasta, tipo, requisito"),
-        {"s": sujeto_id},
-    ).mappings().all()
-    items = [_con_vigencia(dict(f), hoy) for f in filas]
+    items = filas_evidencia_para_legajo(session, identidad.tenant_id, sujeto_id, hoy)
+    from app.modules.consultas.ocs_afectadas import adjuntar_ocs_afectadas_evidencias
+
+    adjuntar_ocs_afectadas_evidencias(session, identidad, sujeto_id, items)
+    resumen = resumen_desde_items(items)
     return {
         "hoy": hoy.isoformat(),
         "legajo": _plano(datos),
         "documentos": [i for i in items if i["tipo"] == "documento"],
         "acreditaciones": [i for i in items if i["tipo"] == "acreditacion"],
         "inducciones": [i for i in items if i["tipo"] == "induccion"],
-        "resumen": {
-            "total": len(items),
-            "vigentes_hoy": sum(1 for i in items if i["vigente_hoy"]),
-            "vencidos": sum(1 for i in items if i["vencido"]),
-        },
+        "resumen": resumen,
     }
 
 
 def propuestas_pendientes(session: Session, identidad: Identidad, p: Pagina) -> dict[str, Any]:
     """Documentos propuestos por técnicos que esperan Confirmar/Rechazar."""
+    from app.modules.consultas.presentacion_evidencia import EXPLICACION_ESTADO, enriquecer_fila_evidencia, _cargar_plazo_tenant
+
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
+    plazo_tenant = _cargar_plazo_tenant(session, identidad.tenant_id)
     condicion = "WHERE d.origen_propuesta = true AND d.estado_confirmacion = 'declarado' AND d.estado_version = 'vigente'"
     total = session.execute(text(f"SELECT count(*) FROM modulo1.documento d {condicion}")).scalar()
     filas = session.execute(
         text(
-            "SELECT d.documento_id, d.sujeto_id, d.requisito_definicion_id, r.nombre AS requisito, d.numero, "
-            "d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, d.origen, d.confianza_extraccion, d.creado_en "
+            "SELECT d.documento_id, d.sujeto_id, l.tipo_sujeto, l.identificador_natural, l.nombre_apellido, "
+            "d.requisito_definicion_id, r.nombre AS requisito, d.numero, "
+            "d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, d.origen, d.confianza_extraccion, d.creado_en, "
+            "d.origen_propuesta, d.estado_version, d.archivo_estado, d.archivo_validacion, d.clave_storage, "
+            "r.plazo_aviso_dias "
             "FROM modulo1.documento d "
             "LEFT JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = d.requisito_definicion_id "
+            "LEFT JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id "
             f"{condicion} ORDER BY d.creado_en, d.documento_id OFFSET :off LIMIT :lim"
         ),
         {"off": p.offset, "lim": p.limit},
     ).mappings().all()
-    return envolver([_con_vigencia(dict(f), hoy) for f in filas], int(total or 0), p)
+    items: list[dict[str, Any]] = []
+    for f in filas:
+        base = _con_vigencia(dict(f), hoy)
+        fila_pres = {
+            **dict(f),
+            "estado_confirmacion": f["estado_confirmacion"],
+            "origen_propuesta": True,
+            "vencido": base["vencido"],
+        }
+        enriquecida = enriquecer_fila_evidencia(fila_pres, hoy, plazo_tenant)
+        base["estado_presentacion"] = "propuesta_en_revision"
+        base["estado_presentacion_explicacion"] = EXPLICACION_ESTADO["propuesta_en_revision"]
+        base["archivo_validacion"] = enriquecida.get("archivo_validacion")
+        items.append(base)
+    return envolver(items, int(total or 0), p)
 
 
 def tablero_vencimientos(session: Session, identidad: Identidad, dias: int, p: Pagina) -> dict[str, Any]:
     """Evidencia vigente que vence dentro de `dias` (inclusive) o ya venció, ordenada por
     `vigente_hasta`. responsable_legajos: toda la empresa; supervisor: su universo."""
+    from app.modules.consultas.presentacion_evidencia import filas_evidencia_para_legajo
+
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
     if dias < 0:
         raise ErrorDeDominio("dias debe ser >= 0", {"dias": dias})
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     alcance = alcance_de_sujetos(session, identidad, hoy)
-    params: dict[str, Any] = {"limite": hoy + timedelta(days=dias)}
-    condicion = "WHERE vigente_hasta <= :limite" + _filtro_alcance(alcance, params)
-    total = session.execute(text(_SQL_EVIDENCIA + f" SELECT count(*) FROM evidencia {condicion}"), params).scalar()
-    filas = session.execute(
-        text(_SQL_EVIDENCIA + f" SELECT * FROM evidencia {condicion} ORDER BY vigente_hasta, sujeto_id, tipo OFFSET :off LIMIT :lim"),
-        {**params, "off": p.offset, "lim": p.limit},
-    ).mappings().all()
-    salida = envolver([_con_vigencia(dict(f), hoy) for f in filas], int(total or 0), p)
+    limite = hoy + timedelta(days=dias)
+    params: dict[str, Any] = {"t": identidad.tenant_id}
+    cond = "WHERE tenant_id = :t AND dado_de_baja_en IS NULL"
+    if alcance is not None:
+        params["alcance"] = list(alcance)
+        cond += " AND sujeto_id = ANY(CAST(:alcance AS text[]))"
+    sujetos = session.execute(
+        text(f"SELECT sujeto_id FROM modulo1.legajo {cond}"),
+        params,
+    ).scalars().all()
+    items: list[dict[str, Any]] = []
+    for sid in sujetos:
+        items.extend(filas_evidencia_para_legajo(session, identidad.tenant_id, sid, hoy))
+    items = [i for i in items if i.get("vigente_hasta") and date.fromisoformat(i["vigente_hasta"]) <= limite]
+    items.sort(key=lambda i: (i["vigente_hasta"], i["sujeto_id"], i.get("tipo") or ""))
+    total = len(items)
+    paginados = items[p.offset : p.offset + p.limit]
+    salida = envolver(paginados, total, p)
     salida["hoy"] = hoy.isoformat()
-    salida["hasta"] = params["limite"].isoformat()
+    salida["hasta"] = limite.isoformat()
     return salida
 
 
@@ -424,6 +455,7 @@ def acciones_pendientes(
     tipo_recurso: str | None = None,
 ) -> dict[str, Any]:
     """Renovaciones/regularizaciones que afectan OCs activas (modo consulta)."""
+    from app.modules.consultas.ocs_afectadas import ordenar_ocs_afectadas, referencia_oc
     from app.modules.proyeccion import radar as radar_mod
 
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
@@ -462,7 +494,7 @@ def acciones_pendientes(
                 elif fecha_accion is not None:
                     fecha_accion = str(fecha_accion)
                 clave = (leg["sujeto_id"], str(req.get("nombre") or ""), str(req["accion_sugerida"]))
-                oc_ref = {"clave_origen": oc["clave_origen"], "oc_id": str(oc["oc_id"])}
+                oc_ref = referencia_oc(oc)
                 if clave in agrupadas:
                     item = agrupadas[clave]
                     if oc_ref not in item["ocs_afectadas"]:
@@ -485,6 +517,9 @@ def acciones_pendientes(
                     "efecto": req.get("motivo"),
                     "genera_alerta_cierta": genera_alerta,
                 }
+    hoy_acciones = hoy_del_tenant(session, identidad.tenant_id)
+    for item in agrupadas.values():
+        item["ocs_afectadas"] = ordenar_ocs_afectadas(item["ocs_afectadas"], hoy_acciones)
     acciones = list(agrupadas.values())
     acciones.sort(
         key=lambda a: (
@@ -585,24 +620,35 @@ def log_auditoria(
     condiciones: list[str] = []
     params: dict[str, Any] = {}
     if tipo:
-        condiciones.append("tipo = :tipo")
+        condiciones.append("e.tipo = :tipo")
         params["tipo"] = tipo
     if desde is not None:
-        condiciones.append("ocurrido_en >= :desde")
+        condiciones.append("e.ocurrido_en >= :desde")
         params["desde"] = desde
     if hasta is not None:
-        condiciones.append("ocurrido_en <= :hasta")
+        condiciones.append("e.ocurrido_en <= :hasta")
         params["hasta"] = hasta
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
-    total = session.execute(text(f"SELECT count(*) FROM modulo1.event_log {where}"), params).scalar()
+    total = session.execute(text(f"SELECT count(*) FROM modulo1.event_log e {where}"), params).scalar()
     filas = session.execute(
         text(
-            f"SELECT id, evento_id, tipo, payload, ocurrido_en FROM modulo1.event_log {where} "
-            "ORDER BY ocurrido_en DESC, id DESC OFFSET :off LIMIT :lim"
+            f"SELECT e.id, e.evento_id, e.tipo, e.payload, e.ocurrido_en, u.nombre AS usuario_nombre "
+            f"FROM modulo1.event_log e "
+            f"LEFT JOIN modulo1.usuario u ON u.tenant_id = e.tenant_id "
+            f"  AND u.usuario_id::text = e.payload->>'usuario_id' "
+            f"{where} "
+            "ORDER BY e.ocurrido_en DESC, e.id DESC OFFSET :off LIMIT :lim"
         ),
         {**params, "off": p.offset, "lim": p.limit},
     ).mappings().all()
-    return envolver([_plano(f) for f in filas], int(total or 0), p)
+    salida = []
+    for f in filas:
+        fila = _plano(f)
+        uid = (fila.get("payload") or {}).get("usuario_id")
+        if fila.get("usuario_nombre") is None and uid == "sistema":
+            fila["usuario_nombre"] = "Sistema"
+        salida.append(fila)
+    return envolver(salida, int(total or 0), p)
 
 
 def matriz_vigente(

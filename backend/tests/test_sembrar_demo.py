@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from app.db import tenant_session
+from app.db import platform_session, tenant_session
 
 RAIZ = Path(__file__).resolve().parents[1]
 
@@ -21,7 +21,7 @@ TENANTS_DEMO = ("patagonia-demo", "anelo-demo", "neuquen-demo")
 FALLAS_ESPERADAS_SEMBRADO: frozenset[str] = frozenset()
 
 # Objetivo del guion de demo (por tenant), una vez el sembrador esté corregido.
-EVIDENCIAS_PENDIENTES_BANDEJA_POR_TENANT = 2
+EVIDENCIAS_PENDIENTES_BANDEJA_POR_TENANT = 1
 EVIDENCIAS_INVALIDADAS_POR_TENANT = 1
 DOCUMENTOS_LOTE_IMPORTADO_POR_TENANT = 5
 DOCUMENTOS_LOTE_REVERTIDO_POR_TENANT = 1
@@ -130,6 +130,74 @@ def test_sembrado_sin_fallas_imprevistas(demo_sembrado):
     fallas = _seccion_pasos_saltados_o_fallas(demo_sembrado)
     inesperadas = [f for f in fallas if f not in FALLAS_ESPERADAS_SEMBRADO]
     assert not inesperadas, "Fallas imprevistas en sembrado:\n" + "\n".join(f"  - {x}" for x in inesperadas)
+
+
+def test_sembrado_demo_todos_los_legajos_consultables(demo_sembrado, cliente_api):
+    """Cada legajo del sembrado demo debe poder abrirse sin error de serialización."""
+    _exigir_base_demo_tests()
+    password = os.environ.get("DEMO_PASSWORD", "demo-secreto-12")
+    for slug in TENANTS_DEMO:
+        login = cliente_api.post(
+            "/v1/auth/login",
+            json={
+                "tenant_slug": slug,
+                "email": f"responsable_legajos1@{slug}.demo.test",
+                "password": password,
+            },
+        )
+        assert login.status_code == 200, login.text
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        with platform_session() as ps:
+            tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+        assert tid is not None
+        with tenant_session(str(tid)) as s:
+            sujetos = [row[0] for row in s.execute(text("SELECT sujeto_id FROM modulo1.legajo ORDER BY sujeto_id")).all()]
+        assert sujetos, f"{slug}: sin legajos en sembrado"
+        for sujeto_id in sujetos:
+            r = cliente_api.get(
+                "/v1/consultas/legajo",
+                params={"sujeto_id": sujeto_id},
+                headers=headers,
+            )
+            assert r.status_code == 200, f"{slug}/{sujeto_id}: {r.status_code} {r.text}"
+
+
+def test_tecnico1_licencia_por_vencer_y_propuesta_en_revision(demo_sembrado, cliente_api):
+    """María González (t1): licencia vigente verificada por vencer + renovación pendiente."""
+    _exigir_base_demo_tests()
+    from scripts.demo.config import dni_tecnico
+
+    slug = "patagonia-demo"
+    password = os.environ.get("DEMO_PASSWORD", "demo-secreto-12")
+    login = cliente_api.post(
+        "/v1/auth/login",
+        json={
+            "tenant_slug": slug,
+            "email": f"responsable_legajos1@{slug}.demo.test",
+            "password": password,
+        },
+    )
+    assert login.status_code == 200, login.text
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+        assert tid is not None
+        with tenant_session(str(tid)) as s:
+            suj = s.execute(
+                text(
+                    "SELECT sujeto_id FROM modulo1.legajo "
+                    "WHERE tenant_id = :t AND identificador_natural = :d"
+                ),
+                {"t": str(tid), "d": dni_tecnico(slug, 1)},
+            ).scalar()
+    assert suj
+    r = cliente_api.get("/v1/consultas/legajo", params={"sujeto_id": str(suj)}, headers=headers)
+    assert r.status_code == 200, r.text
+    lic = next(d for d in r.json()["documentos"] if d.get("requisito") == "Licencia de conducir")
+    assert lic["estado_presentacion"] == "por_vencer"
+    assert lic["estado_confirmacion"] == "verificado"
+    assert lic.get("propuesta_en_revision") is not None
+    assert "archivo_en_revision" not in (lic.get("estados_adicionales") or [])
 
 
 def test_sembrado_separa_notas_de_fallas(demo_sembrado):

@@ -117,6 +117,7 @@ class ResumenPaquete(BaseModel):
     vigentes: int
     vencidos: int
     sin_verificar: int
+    pendiente_revision: int = 0
 
 
 class VistaPublicaPaqueteResponse(BaseModel):

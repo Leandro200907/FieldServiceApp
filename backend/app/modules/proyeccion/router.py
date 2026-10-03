@@ -6,7 +6,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad
@@ -80,6 +80,9 @@ class ItemRadar(BaseModel):
     cliente_id: str
     locacion_id: str
     tipo_servicio_id: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    tipo_servicio_nombre: str | None = None
     vigencia_desde: date
     vigencia_hasta: date
     estado_documental: Literal[
@@ -92,6 +95,10 @@ class ItemRadar(BaseModel):
     primer_quiebre: date | None
     resumen: dict[str, ConteoTipo]
     motivos_resumidos: list[str]
+    disponibilidad_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    impacto_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    alertas_ciertas: list[dict[str, Any]] = Field(default_factory=list)
+    tiene_alertas: bool = False
 
 
 class RadarBacklogResponse(BaseModel):
@@ -112,6 +119,10 @@ class DetalleOcRadarResponse(BaseModel):
     requisitos_particulares: list[dict[str, Any]]
     huecos_matriz: list[dict[str, date]]
     grupos: list[dict[str, Any]]
+    disponibilidad_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    impacto_por_tipo: list[dict[str, Any]] = Field(default_factory=list)
+    alertas_ciertas: list[dict[str, Any]] = Field(default_factory=list)
+    tiene_alertas: bool = False
     total_legajos: int
     offset: int
     limit: int

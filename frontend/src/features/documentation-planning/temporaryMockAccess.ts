@@ -23,14 +23,56 @@ const calendarItems: ItemCalendario[] = [
 ];
 
 const radarItems: ItemRadar[] = [
-  { oc_id: '11111111-1111-1111-1111-111111111111', clave_origen: 'OC-45000218', referencia: 'Servicio Norte', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'mantenimiento', vigencia_desde: '2026-09-28', vigencia_hasta: '2026-10-02', estado_documental: 'sin_alertas_documentales', primer_quiebre: null, resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 8, con_alertas: 0, incompletos: 0 }, vehiculos: { total: 3, con_alertas: 0, incompletos: 0 }, equipos: { total: 5, con_alertas: 0, incompletos: 0 } }, motivos_resumidos: [] },
-  { oc_id: '22222222-2222-2222-2222-222222222222', clave_origen: 'OC-45000221', referencia: 'Parada programada', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'inspeccion', vigencia_desde: '2026-10-03', vigencia_hasta: '2026-10-09', estado_documental: 'con_alertas_documentales', primer_quiebre: '2026-10-05', resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 8, con_alertas: 2, incompletos: 0 }, vehiculos: { total: 3, con_alertas: 1, incompletos: 0 }, equipos: { total: 5, con_alertas: 0, incompletos: 0 } }, motivos_resumidos: ['2 personas con alertas documentales', '1 vehiculo con alertas documentales'] },
-  { oc_id: '33333333-3333-3333-3333-333333333333', clave_origen: 'OC-45000224', referencia: null, cliente_id: 'cliente-sur', locacion_id: 'locacion-sur-02', tipo_servicio_id: 'calibracion', vigencia_desde: '2026-10-12', vigencia_hasta: '2026-10-15', estado_documental: 'informacion_incompleta', primer_quiebre: null, resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 4, con_alertas: 0, incompletos: 1 }, vehiculos: { total: 1, con_alertas: 0, incompletos: 0 }, equipos: { total: 3, con_alertas: 0, incompletos: 1 } }, motivos_resumidos: [] },
-  { oc_id: '44444444-4444-4444-4444-444444444444', clave_origen: 'OC-45000236', referencia: 'Servicio nuevo', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-03', tipo_servicio_id: 'mantenimiento', vigencia_desde: '2026-10-20', vigencia_hasta: '2026-10-22', estado_documental: 'sin_matriz', primer_quiebre: null, resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 0, con_alertas: 0, incompletos: 0 }, vehiculos: { total: 0, con_alertas: 0, incompletos: 0 }, equipos: { total: 0, con_alertas: 0, incompletos: 0 } }, motivos_resumidos: [] },
+  { oc_id: '11111111-1111-1111-1111-111111111111', clave_origen: 'OC-45000218', referencia: 'Servicio Norte', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'mantenimiento', vigencia_desde: '2026-09-28', vigencia_hasta: '2026-10-02', estado_documental: 'sin_alertas_documentales', primer_quiebre: null, resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 8, con_alertas: 0, incompletos: 0 }, vehiculos: { total: 3, con_alertas: 0, incompletos: 0 }, equipos: { total: 5, con_alertas: 0, incompletos: 0 } }, motivos_resumidos: [], tiene_alertas: false },
+  { oc_id: '22222222-2222-2222-2222-222222222222', clave_origen: 'OC-45000221', referencia: 'Parada programada', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'inspeccion', vigencia_desde: '2026-10-03', vigencia_hasta: '2026-10-09', estado_documental: 'con_alertas_documentales', primer_quiebre: '2026-10-05', resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 8, con_alertas: 2, incompletos: 0 }, vehiculos: { total: 3, con_alertas: 1, incompletos: 0 }, equipos: { total: 5, con_alertas: 0, incompletos: 0 } }, motivos_resumidos: ['2 personas con alertas documentales', '1 vehiculo con alertas documentales'], tiene_alertas: true },
+  { oc_id: '33333333-3333-3333-3333-333333333333', clave_origen: 'OC-45000224', referencia: null, cliente_id: 'cliente-sur', locacion_id: 'locacion-sur-02', tipo_servicio_id: 'calibracion', vigencia_desde: '2026-10-12', vigencia_hasta: '2026-10-15', estado_documental: 'informacion_incompleta', primer_quiebre: null, resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 4, con_alertas: 0, incompletos: 1 }, vehiculos: { total: 1, con_alertas: 0, incompletos: 0 }, equipos: { total: 3, con_alertas: 0, incompletos: 1 } }, motivos_resumidos: [], tiene_alertas: false },
+  { oc_id: '44444444-4444-4444-4444-444444444444', clave_origen: 'OC-45000236', referencia: 'Servicio nuevo', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-03', tipo_servicio_id: 'mantenimiento', vigencia_desde: '2026-10-20', vigencia_hasta: '2026-10-22', estado_documental: 'sin_matriz', primer_quiebre: null, resumen: { empresa: { total: 1, con_alertas: 0, incompletos: 0 }, personas: { total: 0, con_alertas: 0, incompletos: 0 }, vehiculos: { total: 0, con_alertas: 0, incompletos: 0 }, equipos: { total: 0, con_alertas: 0, incompletos: 0 } }, motivos_resumidos: [], tiene_alertas: false },
 ];
 
 function radarDetail(item: ItemRadar, offset = 0, limit = 50): DetalleOcRadarResponse {
-  const mockLegajos = [{ sujeto_id: 'persona-marina', identificador_natural: 'Marina López', estado_documental: item.estado_documental, primer_quiebre: item.primer_quiebre, requisitos: [] }];
+  const mockLegajos = [{
+    sujeto_id: 'persona-marina',
+    tipo_sujeto: 'persona',
+    nombre_apellido: 'María González',
+    identificador_natural: '30.111.222',
+    estado_documental: item.estado_documental,
+    primer_quiebre: item.primer_quiebre,
+    requisitos: [
+      {
+        nombre: 'Apto médico',
+        estado: 'vigente_todo_el_periodo',
+        vigente_hasta: '2026-12-01',
+        motivo: 'Apto médico está vigente durante todo el período',
+        archivo_validacion: 'valido',
+        requerido: true,
+      },
+      {
+        nombre: 'Licencia de conducir',
+        estado: 'vence_durante_periodo',
+        vigente_hasta: '2026-10-23',
+        primer_quiebre: '2026-10-24',
+        motivo: 'Licencia de conducir deja un período sin cobertura documental',
+        archivo_validacion: 'valido',
+        requerido: true,
+      },
+      {
+        nombre: 'Constancia ART',
+        estado: 'pendiente_revision',
+        vigente_hasta: '2026-11-30',
+        motivo: 'Constancia ART tiene información pendiente de revisión',
+        archivo_validacion: 'pendiente',
+        requerido: true,
+      },
+      {
+        nombre: 'Inducción operadora',
+        estado: 'pendiente_revision',
+        vigente_hasta: '2026-11-15',
+        motivo: 'Inducción operadora tiene información pendiente de revisión',
+        archivo_validacion: 'sin_archivo',
+        requerido: true,
+      },
+    ],
+  }];
   return {
     oc: { oc_id: item.oc_id, clave_origen: item.clave_origen, referencia: item.referencia, vigencia_desde: item.vigencia_desde, vigencia_hasta: item.vigencia_hasta },
     estado_documental: item.estado_documental,
@@ -44,6 +86,7 @@ function radarDetail(item: ItemRadar, offset = 0, limit = 50): DetalleOcRadarRes
     offset,
     limit,
     advertencia: ADVERTENCIA,
+    tiene_alertas: item.estado_documental === 'con_alertas_documentales',
   };
 }
 

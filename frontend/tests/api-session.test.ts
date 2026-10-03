@@ -2,7 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSession } from '../src/api/session';
 import { parseApiError } from '../src/api/errors';
 import { createCommandIntent } from '../src/api/idempotency';
-const who = { tenant_id: 'tenant', usuario_id: 'user', roles: ['tecnico'], sujeto_id: null, zona_horaria: 'America/Argentina/Buenos_Aires' };
+const who = {
+  tenant_id: 'tenant',
+  tenant_nombre: 'Tenant prueba',
+  usuario_id: 'user',
+  usuario_nombre: 'Usuario',
+  usuario_email: 'user@test.local',
+  roles: ['tecnico'],
+  sujeto_id: null,
+  legajo_etiqueta: null,
+  zona_horaria: 'America/Argentina/Buenos_Aires',
+};
 const pair = { access_token: 'access', refresh_token: 'refresh', expires_in: 60, token_type: 'bearer' };
 const reply = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 const login = { tenant_slug: 'tenant', email: 'user@example.com', password: 'secret' };

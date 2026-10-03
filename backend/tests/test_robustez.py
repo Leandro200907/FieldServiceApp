@@ -434,6 +434,8 @@ def test_concurrencia_confirmar_y_rechazar_la_misma_propuesta(cliente_api, tenan
     p = _alta_persona(cliente_api, t, "K-2", t.sujeto_tecnico)
     _cargar(cliente_api, t, p, req, hasta="2026-06-30")
     prop = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-12-31")
+    with tenant_session(t.tenant_id) as s:
+        apoyo.respaldo_valido_en_documento(s, t.tenant_id, prop)
 
     def confirmar():
         with tenant_session(t.tenant_id) as s:
@@ -564,7 +566,7 @@ def test_contrato_http_todas_las_rutas_estan_protegidas(cliente_api):
     paths = cliente_api.get("/openapi.json").json()["paths"]
     publicas = {"/v1/salud/vivo", "/v1/salud/listo", "/v1/auth/login", "/v1/auth/refresh", "/v1/storage/{firma}",
                 "/v1/publico/paquete/{token}", "/v1/publico/paquete/{token}/qr.png"}
-    assert len(paths) == 85
+    assert len(paths) == 86
     for path, ops in paths.items():
         if path in publicas:
             continue

@@ -151,6 +151,13 @@ def _ruta(nombre: str, body_cls: type, fn, roles: tuple[Rol, ...], response_mode
 
 
 _ruta("alta_de_sujeto", e.AltaDeSujeto, servicio.alta_de_sujeto, RESPONSABLE, LegajoResponse)
+_ruta(
+    "corregir_nombre_legajo_persona",
+    e.CorregirNombreLegajoPersona,
+    servicio.corregir_nombre_legajo_persona,
+    CONFIG_O_RESPONSABLE,
+    LegajoResponse,
+)
 _ruta("baja_de_sujeto", e.BajaDeSujeto, servicio.baja_de_sujeto, RESPONSABLE, LegajoResponse)
 _ruta("cargar_documento", e.CargarDocumento, servicio.cargar_documento, RESPONSABLE, DocumentoCargadoResponse)
 _ruta("proponer_documento", e.ProponerDocumento, servicio.proponer_documento, TECNICO, DocumentoCargadoResponse)

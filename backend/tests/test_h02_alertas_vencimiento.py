@@ -18,7 +18,7 @@ from app.modules.alertas import servicio as alertas
 from app.modules.operacion import servicio as operacion
 from app.worker.procesos_reloj import control_vencimientos
 from tests import apoyo
-from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _ok, _post
+from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _confirmar_con_respaldo, _ok, _post
 
 # Fechas relativas al "hoy" real del tenant: el reloj de control se controla por parámetro,
 # pero los comandos (reconocer, verificar) usan el hoy real; VENCE queda a 40 días.
@@ -150,7 +150,7 @@ def test_carga_pausa_y_solo_verificacion_resuelve(cliente_api, esc):
     a = _alerta(t, doc)
     assert (a["etapa"], a["estado"]) == ("vencido", "abierta")
     # el responsable confirma la propuesta → DocumentoVerificado cubre la fuente → resuelta
-    assert _post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": nuevo}).status_code == 200
+    _confirmar_con_respaldo(cliente_api, t, nuevo)
     a = _alerta(t, doc)
     assert a["estado"] == "resuelta" and a["resuelta_motivo"] == "verificacion" and a["resuelta_ref"] == nuevo and a["resuelta_en"] is not None
     assert _eventos(t, "AlertaResuelta", str(a["alerta_id"])) == 1

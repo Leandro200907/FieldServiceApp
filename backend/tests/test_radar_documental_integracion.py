@@ -191,8 +191,15 @@ def test_cambio_documental_modifica_el_resultado_del_legajo(cliente_api, tenant_
     url = f"/v1/consultas/radar_documental_oc/{ids['oc']}/legajos/persona-1"
     assert cliente_api.get(url, headers=headers).json()["legajo"]["estado_documental"] == "con_alertas_documentales"
     with tenant_session(tenant_de_prueba.tenant_id) as s:
-        s.execute(text("INSERT INTO modulo1.documento (tenant_id,sujeto_id,requisito_definicion_id,vigente_desde,vigente_hasta,estado_confirmacion,origen) VALUES (:t,'persona-1',:r,'2026-01-01','2026-12-31','verificado','carga_manual')"),
-                  {"t": tenant_de_prueba.tenant_id, "r": ids["req_persona"]})
+        doc_id = s.execute(
+            text(
+                "INSERT INTO modulo1.documento (tenant_id,sujeto_id,requisito_definicion_id,vigente_desde,vigente_hasta,"
+                "estado_confirmacion,origen) VALUES (:t,'persona-1',:r,'2026-01-01','2026-12-31','verificado','carga_manual') "
+                "RETURNING documento_id::text"
+            ),
+            {"t": tenant_de_prueba.tenant_id, "r": ids["req_persona"]},
+        ).scalar()
+        apoyo.respaldo_valido_en_documento(s, tenant_de_prueba.tenant_id, doc_id)
     assert cliente_api.get(url, headers=headers).json()["legajo"]["estado_documental"] == "sin_alertas_documentales"
 
 

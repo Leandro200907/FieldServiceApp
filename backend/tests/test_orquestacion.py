@@ -126,7 +126,7 @@ def insertar_oc(s, tenant_id: str, commitment_id: str, clave: dict, desde: date,
 def insertar_documento(
     s, tenant_id: str, sujeto_id: str, req_id: str, desde: date, hasta: date, confirmacion: str = "verificado"
 ) -> str:
-    return str(
+    doc_id = str(
         s.execute(
             text(
                 "INSERT INTO modulo1.documento (tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, "
@@ -136,6 +136,15 @@ def insertar_documento(
             {"t": tenant_id, "s": sujeto_id, "r": req_id, "d": desde, "h": hasta, "ec": confirmacion},
         ).scalar()
     )
+    if confirmacion == "verificado":
+        s.execute(
+            text(
+                "UPDATE modulo1.documento SET archivo_estado = 'confirmado', archivo_validacion = 'valido', "
+                "clave_storage = :c, checksum_archivo = 'a', archivo_bytes = 1 WHERE documento_id = :d"
+            ),
+            {"d": doc_id, "c": f"{tenant_id}/{doc_id}/ev.pdf"},
+        )
+    return doc_id
 
 
 def insertar_constancia(
@@ -437,7 +446,14 @@ def test_competencia_se_lee_del_documento_unificado(tenant_de_prueba, sesion):
     insertar_matriz(sesion, t, clave, {req: "bloqueante_duro"})
     insertar_oc(sesion, t, "OC-comp", clave, date(2026, 10, 1), date(2026, 10, 5))
     evidencia = insertar_documento(sesion, t, "persona_0042", req, date(2026, 1, 1), date(2026, 1, 31))
-    sesion.execute(text("UPDATE modulo1.documento SET requisito_definicion_id = NULL WHERE documento_id = :d"), {"d": evidencia})
+    sesion.execute(
+        text(
+            "UPDATE modulo1.documento SET requisito_definicion_id = NULL, archivo_estado = 'confirmado', "
+            "archivo_validacion = 'valido', clave_storage = :c, checksum_archivo = 'a', archivo_bytes = 1 "
+            "WHERE documento_id = :d"
+        ),
+        {"d": evidencia, "c": f"{t}/{evidencia}/cert.pdf"},
+    )
     anterior = sesion.execute(
             text(
                 "INSERT INTO modulo1.documento (tenant_id, sujeto_id, requisito_definicion_id, vigente_desde, "

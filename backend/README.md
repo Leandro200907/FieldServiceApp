@@ -11,8 +11,8 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 86 operaciones sobre 85 paths bajo `/v1` (OpenAPI en `/docs`).
-- **Migraciones:** 32 archivos en `migrations/versions/`, un solo head: `0029_mov_operadora`.
+- **Rutas HTTP:** 87 operaciones sobre 86 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Migraciones:** 33 archivos en `migrations/versions/`, un solo head: `0030_legajo_nombre_apellido`.
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
   `scripts/generar_openapi.py`; `tests/test_openapi_versionado.py` lo compara con la app).

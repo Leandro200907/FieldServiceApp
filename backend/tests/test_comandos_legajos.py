@@ -28,15 +28,35 @@ def _alta_def(cliente_api, tenant, nombre: str, categoria: str = "documento", ti
     body = {"nombre": nombre, "categoria": categoria, "tipo_sujeto_aplicable": tipo, **extra}
     return _ok(_post(cliente_api, tenant, "configuracion", "dar_de_alta_definicion_de_requisito", body))["requisito_definicion_id"]
 
-def _alta_persona(cliente_api, tenant, ident: str, sujeto_id: str | None = None) -> str:
-    body = {"tipo_sujeto": "persona", "identificador_natural": ident}
+def _alta_persona(cliente_api, tenant, ident: str, sujeto_id: str | None = None, **extra) -> str:
+    body = {"tipo_sujeto": "persona", "identificador_natural": ident, **extra}
     if sujeto_id:
         body["sujeto_id"] = sujeto_id
     return _ok(_post(cliente_api, tenant, "responsable_legajos", "alta_de_sujeto", body))["sujeto_id"]
 
-def _cargar(cliente_api, tenant, sujeto_id: str, req: str, desde="2026-03-01", hasta="2026-09-15", **extra) -> dict:
+def _cargar(
+    cliente_api,
+    tenant,
+    sujeto_id: str,
+    req: str,
+    desde="2026-03-01",
+    hasta="2026-09-15",
+    *,
+    solo_declarado: bool = False,
+    **extra,
+) -> dict:
+    extra.pop("estado_confirmacion", None)  # D19: la carga manual es siempre declarada
     body = {"sujeto_id": sujeto_id, "requisito_definicion_id": req, "vigente_desde": desde, "vigente_hasta": hasta, **extra}
-    return _ok(_post(cliente_api, tenant, "responsable_legajos", "cargar_documento", body))
+    d = _ok(_post(cliente_api, tenant, "responsable_legajos", "cargar_documento", body))
+    if not solo_declarado:
+        _confirmar_con_respaldo(cliente_api, tenant, d["documento_id"])
+    return d
+
+
+def _confirmar_con_respaldo(cliente_api, tenant, documento_id: str, *, storage=None) -> dict:
+    with tenant_session(tenant.tenant_id) as s:
+        apoyo.respaldo_valido_en_documento(s, tenant.tenant_id, documento_id)
+    return _ok(_post(cliente_api, tenant, "responsable_legajos", "confirmar_documento", {"documento_id": documento_id}))
 
 def _docs(tenant, sujeto_id: str, req: str) -> list[dict]:
     with tenant_session(tenant.tenant_id) as s:
@@ -72,18 +92,19 @@ def test_alta_carga_y_sucesion_un_solo_vigente(cliente_api, tenant_de_prueba):
     assert repetido.status_code == 409 and repetido.json()["error"]["codigo"] == "conflicto"
     _ok(_post(cliente_api, t, "responsable_legajos", "alta_de_sujeto", {"tipo_sujeto": "vehiculo", "identificador_natural": "DNI 30111222"}))
 
-    d1 = _cargar(cliente_api, t, sujeto, req)
-    # carga ya verificada: además del evento de carga se emite el canónico DocumentoVerificado (7.2 / A-07)
-    assert d1["version"] == 1 and d1["sucede_a"] is None and d1["eventos"] == ["DocumentoCargado", "DocumentoVerificado"]
+    d1 = _cargar(cliente_api, t, sujeto, req, solo_declarado=True)
+    assert d1["version"] == 1 and d1["sucede_a"] is None and d1["eventos"] == ["DocumentoCargado"]
+    _confirmar_con_respaldo(cliente_api, t, d1["documento_id"])
 
-    d2 = _cargar(cliente_api, t, sujeto, req, desde="2026-09-01", hasta="2027-03-01", numero="AM-2")
+    d2 = _cargar(cliente_api, t, sujeto, req, desde="2026-09-01", hasta="2027-03-01", numero="AM-2", solo_declarado=True)
     assert d2["version"] == 2 and d2["sucede_a"] == d1["documento_id"]
-    assert d2["eventos"] == ["DocumentoCargado", "DocumentoVerificado", "DocumentoSucedido"]
+    assert d2["eventos"] == ["DocumentoCargado", "DocumentoSucedido"]
+    _confirmar_con_respaldo(cliente_api, t, d2["documento_id"])
 
     docs = _docs(t, sujeto, req)
     assert [d["estado_version"] for d in docs] == ["sucedida", "vigente"]
     assert _vigentes(docs) == [d2["documento_id"]]
-    assert docs[1]["estado_confirmacion"] == "verificado"  # default cuando carga el responsable
+    assert docs[1]["estado_confirmacion"] == "verificado"
     assert _eventos(t, "DocumentoSucedido") == 1
 
     # requisito que no aplica al tipo de sujeto → error de dominio
@@ -193,10 +214,10 @@ def test_confirmar_documento_regulariza_excepcion(cliente_api, tenant_de_prueba)
                 {"t": t.tenant_id, "ev": ref, "sj": sj, "r": r, "estado": estado},
             )
 
-    d = _cargar(cliente_api, t, sujeto, req, estado_confirmacion="declarado")
+    d = _cargar(cliente_api, t, sujeto, req, solo_declarado=True)
     assert _docs(t, sujeto, req)[0]["estado_confirmacion"] == "declarado"
 
-    conf = _ok(_post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": d["documento_id"]}))
+    conf = _confirmar_con_respaldo(cliente_api, t, d["documento_id"])
     assert conf["eventos"] == ["DocumentoVerificado", "ExcepcionRegularizada"]
     assert len(conf["excepciones_regularizadas"]) == 1
     assert _docs(t, sujeto, req)[0]["estado_confirmacion"] == "verificado"
@@ -221,7 +242,9 @@ def test_acreditacion_e_induccion(cliente_api, tenant_de_prueba):
     req_ind = _alta_def(cliente_api, t, "Inducción yacimiento", "induccion", locacion_id=loc)
     sujeto = _alta_persona(cliente_api, t, "DNI 7")
     otro = _alta_persona(cliente_api, t, "DNI 8")
-    evidencia = _cargar(cliente_api, t, sujeto, req_doc)["documento_id"]
+    evidencia = _cargar(cliente_api, t, sujeto, req_doc, solo_declarado=True)["documento_id"]
+    with tenant_session(t.tenant_id) as s:
+        apoyo.respaldo_valido_en_documento(s, t.tenant_id, evidencia)
 
     base = {"persona_id": sujeto, "vigente_desde": "2026-03-01", "vigente_hasta": "2027-03-01"}
     acr = _ok(_post(cliente_api, t, "responsable_legajos", "registrar_acreditacion_de_competencia",

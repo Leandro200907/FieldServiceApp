@@ -332,6 +332,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/comandos/corregir_nombre_legajo_persona": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Corregir Nombre Legajo Persona */
+        post: operations["corregir_nombre_legajo_persona_v1_comandos_corregir_nombre_legajo_persona_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comandos/dar_de_alta_definicion_de_requisito": {
         parameters: {
             query?: never;
@@ -1710,6 +1727,8 @@ export interface components {
         AltaDeSujeto: {
             /** Identificador Natural */
             identificador_natural: string;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
             /** Sujeto Id */
             sujeto_id?: string | null;
             /**
@@ -1879,7 +1898,7 @@ export interface components {
             confianza_extraccion?: ("alta" | "media" | "baja") | null;
             /**
              * Estado Confirmacion
-             * @default verificado
+             * @default declarado
              * @enum {string}
              */
             estado_confirmacion: "declarado" | "verificado" | "confirmado_en_fuente";
@@ -2315,6 +2334,13 @@ export interface components {
              */
             vigente_desde: string;
         };
+        /** CorregirNombreLegajoPersona */
+        CorregirNombreLegajoPersona: {
+            /** Nombre Apellido */
+            nombre_apellido: string;
+            /** Sujeto Id */
+            sujeto_id: string;
+        };
         /** CruceOcTimeline */
         CruceOcTimeline: {
             /** Clave Origen */
@@ -2469,6 +2495,14 @@ export interface components {
         DetalleOcRadarResponse: {
             /** Advertencia */
             advertencia: string;
+            /** Alertas Ciertas */
+            alertas_ciertas?: {
+                [key: string]: unknown;
+            }[];
+            /** Disponibilidad Por Tipo */
+            disponibilidad_por_tipo?: {
+                [key: string]: unknown;
+            }[];
             /** Estado Documental */
             estado_documental: string;
             /** Grupos */
@@ -2478,6 +2512,10 @@ export interface components {
             /** Huecos Matriz */
             huecos_matriz: {
                 [key: string]: string;
+            }[];
+            /** Impacto Por Tipo */
+            impacto_por_tipo?: {
+                [key: string]: unknown;
             }[];
             /** Limit */
             limit: number;
@@ -2495,6 +2533,11 @@ export interface components {
             requisitos_particulares: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Tiene Alertas
+             * @default false
+             */
+            tiene_alertas: boolean;
             /** Total Legajos */
             total_legajos: number;
         };
@@ -2612,6 +2655,8 @@ export interface components {
         };
         /** DocumentoPropuesto */
         DocumentoPropuesto: {
+            /** Archivo Validacion */
+            archivo_validacion?: string | null;
             /** Confianza Extraccion */
             confianza_extraccion: string | null;
             /** Creado En */
@@ -2622,6 +2667,14 @@ export interface components {
             documento_id: string;
             /** Estado Confirmacion */
             estado_confirmacion: string;
+            /** Estado Presentacion */
+            estado_presentacion?: string | null;
+            /** Estado Presentacion Explicacion */
+            estado_presentacion_explicacion?: string | null;
+            /** Identificador Natural */
+            identificador_natural?: string | null;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
             /** Numero */
             numero: string | null;
             /** Origen */
@@ -2632,6 +2685,8 @@ export interface components {
             requisito_definicion_id: string | null;
             /** Sujeto Id */
             sujeto_id: string;
+            /** Tipo Sujeto */
+            tipo_sujeto?: string | null;
             /** Vencido */
             vencido: boolean;
             /** Vigente Desde */
@@ -2808,23 +2863,40 @@ export interface components {
             };
             /** Tipo */
             tipo: string;
+            /** Usuario Nombre */
+            usuario_nombre?: string | null;
         };
         /** EvidenciaVigente */
         EvidenciaVigente: {
+            /** Archivo Validacion */
+            archivo_validacion?: string | null;
             /** Categoria */
             categoria: string | null;
             /** Dias Para Vencer */
-            dias_para_vencer: number;
+            dias_para_vencer: number | null;
             /** Estado Confirmacion */
             estado_confirmacion: string;
+            /** Estado Presentacion */
+            estado_presentacion: string;
+            /** Estado Presentacion Explicacion */
+            estado_presentacion_explicacion: string;
+            /** Estados Adicionales */
+            estados_adicionales?: string[] | null;
+            /** Estados Adicionales Explicacion */
+            estados_adicionales_explicacion?: {
+                [key: string]: string;
+            } | null;
             /** Id */
             id: string;
             /** Identificador Natural */
             identificador_natural?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
+            /** Ocs Afectadas */
+            ocs_afectadas?: components["schemas"]["OcAfectadaRef"][];
             /** Origen Propuesta */
             origen_propuesta: boolean;
+            propuesta_en_revision?: components["schemas"]["PropuestaEnRevision"] | null;
             /** Requisito */
             requisito: string | null;
             /** Requisito Definicion Id */
@@ -2937,14 +3009,22 @@ export interface components {
         };
         /** IdentidadResponse */
         IdentidadResponse: {
+            /** Legajo Etiqueta */
+            legajo_etiqueta?: string | null;
             /** Roles */
             roles: string[];
             /** Sujeto Id */
             sujeto_id: string | null;
             /** Tenant Id */
             tenant_id: string;
+            /** Tenant Nombre */
+            tenant_nombre: string;
+            /** Usuario Email */
+            usuario_email?: string | null;
             /** Usuario Id */
             usuario_id: string;
+            /** Usuario Nombre */
+            usuario_nombre?: string | null;
             /** Zona Horaria */
             zona_horaria: string;
         };
@@ -3143,21 +3223,37 @@ export interface components {
         };
         /** ItemRadar */
         ItemRadar: {
+            /** Alertas Ciertas */
+            alertas_ciertas?: {
+                [key: string]: unknown;
+            }[];
             /** Clave Origen */
             clave_origen: string;
             /** Cliente Id */
             cliente_id: string;
+            /** Disponibilidad Por Tipo */
+            disponibilidad_por_tipo?: {
+                [key: string]: unknown;
+            }[];
             /**
              * Estado Documental
              * @enum {string}
              */
             estado_documental: "sin_alertas_documentales" | "con_alertas_documentales" | "informacion_incompleta" | "sin_matriz" | "fuera_de_alcance";
+            /** Impacto Por Tipo */
+            impacto_por_tipo?: {
+                [key: string]: unknown;
+            }[];
             /** Locacion Id */
             locacion_id: string;
+            /** Locacion Nombre */
+            locacion_nombre?: string | null;
             /** Motivos Resumidos */
             motivos_resumidos: string[];
             /** Oc Id */
             oc_id: string;
+            /** Operadora Nombre */
+            operadora_nombre?: string | null;
             /** Primer Quiebre */
             primer_quiebre: string | null;
             /** Referencia */
@@ -3166,8 +3262,15 @@ export interface components {
             resumen: {
                 [key: string]: components["schemas"]["ConteoTipo"];
             };
+            /**
+             * Tiene Alertas
+             * @default false
+             */
+            tiene_alertas: boolean;
             /** Tipo Servicio Id */
             tipo_servicio_id: string;
+            /** Tipo Servicio Nombre */
+            tipo_servicio_nombre?: string | null;
             /**
              * Vigencia Desde
              * Format: date
@@ -3189,6 +3292,8 @@ export interface components {
             identificador_natural: string;
             /** Legajo Id */
             legajo_id: string;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
             /** Sujeto Id */
             sujeto_id: string;
             /** Tipo Sujeto */
@@ -3358,6 +3463,8 @@ export interface components {
         MatrizItem: {
             /** Autor */
             autor: string | null;
+            /** Autor Nombre */
+            autor_nombre?: string | null;
             /** Cliente Id */
             cliente_id: string;
             /** Copiada De Version */
@@ -3373,12 +3480,18 @@ export interface components {
             lineas: number;
             /** Locacion Id */
             locacion_id: string;
+            /** Locacion Nombre */
+            locacion_nombre?: string | null;
             /** Matriz Global Id */
             matriz_global_id: string | null;
             /** Matriz Version Id */
             matriz_version_id: string;
+            /** Operadora Nombre */
+            operadora_nombre?: string | null;
             /** Tipo Servicio Id */
             tipo_servicio_id: string;
+            /** Tipo Servicio Nombre */
+            tipo_servicio_nombre?: string | null;
             /** Version */
             version: number;
             /**
@@ -3426,6 +3539,17 @@ export interface components {
             /** Recursos Bajo Custodia */
             recursos_bajo_custodia: components["schemas"]["RecursoCustodiado"][];
             resumen: components["schemas"]["ResumenMiLegajo"];
+        };
+        /** OcAfectadaRef */
+        OcAfectadaRef: {
+            /** Clave Origen */
+            clave_origen: string;
+            /** Oc Id */
+            oc_id: string;
+            /** Vigencia Desde */
+            vigencia_desde: string;
+            /** Vigencia Hasta */
+            vigencia_hasta: string;
         };
         /** OcBacklogItem */
         OcBacklogItem: {
@@ -3647,6 +3771,23 @@ export interface components {
              */
             vigente_hasta: string;
         };
+        /** PropuestaEnRevision */
+        PropuestaEnRevision: {
+            /** Documento Id */
+            documento_id: string;
+            /**
+             * Estado Presentacion
+             * @default propuesta_en_revision
+             * @constant
+             */
+            estado_presentacion: "propuesta_en_revision";
+            /** Estado Presentacion Explicacion */
+            estado_presentacion_explicacion: string;
+            /** Vigente Desde */
+            vigente_desde: string | null;
+            /** Vigente Hasta */
+            vigente_hasta: string | null;
+        };
         /** PropuestasPendientesResponse */
         PropuestasPendientesResponse: {
             /** Items */
@@ -3804,6 +3945,8 @@ export interface components {
         RecursoTimeline: {
             /** Identificador */
             identificador: string;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
             /** Ocs */
             ocs: components["schemas"]["CruceOcTimeline"][];
             /** Sujeto Id */
@@ -4013,6 +4156,11 @@ export interface components {
         };
         /** ResumenLegajo */
         ResumenLegajo: {
+            /**
+             * Por Vencer
+             * @default 0
+             */
+            por_vencer: number;
             /** Total */
             total: number;
             /** Vencidos */
@@ -4022,6 +4170,11 @@ export interface components {
         };
         /** ResumenMiLegajo */
         ResumenMiLegajo: {
+            /**
+             * Por Vencer
+             * @default 0
+             */
+            por_vencer: number;
             /** Vencidos */
             vencidos: number;
             /** Vigentes Hoy */
@@ -4029,6 +4182,11 @@ export interface components {
         };
         /** ResumenPaquete */
         ResumenPaquete: {
+            /**
+             * Pendiente Revision
+             * @default 0
+             */
+            pendiente_revision: number;
             /** Sin Verificar */
             sin_verificar: number;
             /** Vencidos */
@@ -4108,6 +4266,8 @@ export interface components {
             dado_de_baja_en: string | null;
             /** Identificador Natural */
             identificador_natural: string;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
             /** Sujeto Id */
             sujeto_id: string;
             /** Tipo Sujeto */
@@ -5762,6 +5922,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CopiarMatrizGlobalResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    corregir_nombre_legajo_persona_v1_comandos_corregir_nombre_legajo_persona_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorregirNombreLegajoPersona"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__modules__legajos__router__LegajoResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
@@ -9477,6 +9717,7 @@ export interface operations {
             query?: {
                 cliente_id?: string | null;
                 solo_vigentes?: boolean;
+                q?: string | null;
                 offset?: number;
                 limit?: number;
             };

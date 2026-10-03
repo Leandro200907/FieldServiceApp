@@ -44,6 +44,27 @@ def supervisor_de(s, tenant, sujeto_id: str, desde: date = date(2026, 1, 1), sup
     )
 
 
+def respaldo_valido_en_documento(s, tenant_id: str, documento_id: str, clave: str | None = None) -> None:
+    """Marca archivo confirmado y válido (tests D19) y crea el objeto en storage local si aplica."""
+    from pathlib import Path
+
+    from app.config import settings
+
+    c = clave or f"{tenant_id}/{documento_id}/evidencia.pdf"
+    s.execute(
+        text(
+            "UPDATE modulo1.documento SET archivo_estado = 'confirmado', archivo_validacion = 'valido', "
+            "clave_storage = :c, checksum_archivo = 'deadbeef', archivo_bytes = 42 "
+            "WHERE tenant_id = :t AND documento_id = CAST(:d AS uuid)"
+        ),
+        {"t": tenant_id, "d": documento_id, "c": c},
+    )
+    if settings.storage_local_dir:
+        ruta = Path(settings.storage_local_dir) / tenant_id / documento_id / "evidencia.pdf"
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_bytes(b"%PDF-1.4 test")
+
+
 def conexion_owner():
     """Conexión psycopg con el rol owner (DATABASE_URL_MIGRATIONS del ENV_FILE) para plantar
     datos de `plataforma` (el rol de aplicación sólo lee ese schema). Autocommit off."""

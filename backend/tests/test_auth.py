@@ -67,9 +67,13 @@ def test_login_ok_devuelve_par_de_tokens(cliente_api, tenant_de_prueba):
     assert yo.status_code == 200
     assert yo.json() == {
         "tenant_id": tenant_de_prueba.tenant_id,
+        "tenant_nombre": f"Tenant de prueba {tenant_de_prueba.slug}",
         "usuario_id": tenant_de_prueba.usuarios["responsable_legajos"],
+        "usuario_nombre": "responsable_legajos",
+        "usuario_email": f"responsable_legajos@{tenant_de_prueba.slug}.test",
         "roles": ["responsable_legajos"],
         "sujeto_id": None,
+        "legajo_etiqueta": None,
         "zona_horaria": "America/Argentina/Buenos_Aires",
     }
     # El refresh quedó persistido como hash, vigente.
@@ -193,9 +197,13 @@ def test_yo_con_token_del_conftest(cliente_api, tenant_de_prueba):
     assert r.status_code == 200, r.text
     assert r.json() == {
         "tenant_id": tenant_de_prueba.tenant_id,
+        "tenant_nombre": f"Tenant de prueba {tenant_de_prueba.slug}",
         "usuario_id": tenant_de_prueba.usuarios["supervisor"],
+        "usuario_nombre": "supervisor",
+        "usuario_email": f"supervisor@{tenant_de_prueba.slug}.test",
         "roles": ["supervisor"],
         "sujeto_id": None,
+        "legajo_etiqueta": None,
         "zona_horaria": "America/Argentina/Buenos_Aires",
     }
 

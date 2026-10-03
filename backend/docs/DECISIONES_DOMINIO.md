@@ -819,6 +819,90 @@ configuración real con clientes y no depender de la consola para la rotación d
 
 **Estado.** Decidida.
 
+#### D16. Confirmación para habilitar (propuesta vs. versión confirmada)
+
+**Decisión.** Un documento sin confirmar (`estado_confirmacion = declarado`, incluida una
+propuesta del técnico) **nunca** habilita ni cuenta como requisito cumplido. Si existe una
+versión **confirmada** anterior (típicamente en `sucedida` enlazada por `sucede_a`), todas
+las evaluaciones de la app —Radar documental, vencimientos, acciones pendientes, motor de
+habilitación (`cargar_evidencias` / `evaluar_compromiso` / `decidir_habilitacion`) y
+consultas de cobertura— usan esa versión confirmada para el período que cubra. Si **solo**
+hay propuesta sin predecesor confirmado, el requisito queda en *pendiente de revisión* /
+*requiere revisión* y no figura como vigente cumplido.
+
+**Motivo.** Evitar que una renovación propuesta sustituya visual o operativamente la
+evidencia verificada vigente, y unificar criterio entre consultas informativas y decisión
+de habilitación.
+
+**Código.** `app/core/resolucion_evidencia.py` (`fila_para_evaluacion`),
+`app/core/orquestacion.py` (`cargar_evidencias`), `app/modules/proyeccion/radar.py`
+(`_evidencias`), `app/modules/consultas/presentacion_evidencia.py` (listados de legajo).
+
+**Estado.** Decidida.
+
+#### D17. Renovación desde el legajo
+
+**Decisión.** El técnico propone un documento desde Mi legajo, con el requisito preseleccionado
+(botón «Renovar» o «Cargar nueva» junto a cada documento; primero los vencidos y por vencer).
+Solo sube el archivo (cámara directa en el celular) y elige la fecha de vencimiento con un
+selector; la fecha «desde» es opcional. La app valida antes de enviar: vencimiento posterior a
+hoy y a la versión vigente, plazo razonable, archivo presente y de tipo y tamaño válidos. El
+responsable verifica lo declarado contra el archivo (control por oposición).
+
+**Motivo.** Simplificar la carga en el campo sin perder trazabilidad.
+
+**Estado.** Decidida; se implementa en la rama C.
+
+#### D18. Documentación en el bolsillo
+
+**Decisión.** El técnico ve en el celular sus documentos verificados (solo versiones
+confirmadas, por D16), disponibles sin conexión, con la fecha de última actualización. Los
+documentos con datos de salud muestran solo estado, vigencia y emisor, sin el archivo
+completo. Incluye un QR que abre su paquete de entrega vigente para que la operadora lo
+verifique en el portón. Resuelve la P2 (cola `evidencia_qr`).
+
+**Motivo.** Valor directo en el campo y verificación oficial ante la operadora.
+
+**Estado.** Decidida; se implementa en una rama propia después de la C.
+
+#### D19. Respaldo válido para habilitar
+
+**Decisión.** Un requisito solo habilita si la evidencia evaluable está **confirmada**
+(`estado_confirmacion = verificado`) y tiene **respaldo válido**: archivo del documento con
+`archivo_estado = confirmado` y `archivo_validacion = valido`, salvo competencias e
+inducciones, donde el respaldo es el documento soporte asociado (`documento_soporte`) con
+archivo válido. Sin respaldo válido (sin archivo, purgado o archivo inválido/pendiente) el
+requisito figura como *requiere revisión* en el motor de habilitación, el Radar documental,
+acciones pendientes y el paquete de entrega público. La regla se centraliza en
+`app/core/resolucion_evidencia.py` y se aplica desde `cargar_evidencias`, el radar y el
+paquete.
+
+**Escrituras nuevas.** `cargar_documento` ingresa como `declarado`; la verificación pasa por
+`confirmar_documento`, que rechaza la confirmación sin respaldo válido. La importación por
+planilla (D15) sigue entrando como `declarado` por defecto.
+
+**Datos existentes.** No se modifica `estado_confirmacion` en silencio; en consultas se
+muestra «Sin archivo de respaldo» y, por esta decisión, no habilitan.
+
+**Precedencia del estado documental.** Si un requisito cumple varias condiciones a la vez,
+se exponen todas en el detalle, pero el estado general del requisito y del legajo lo define
+la más grave:
+
+1. **Vencido** (vencido antes del período o deja de cubrirlo) → alerta documental; no
+   habilita, haya o no respaldo válido.
+2. **Sin respaldo válido** (sin archivo, purgado o archivo inválido) en evidencia verificada
+   aún aplicable al período → *pendiente de revisión*; no habilita.
+3. **Archivo pendiente de revisión** (`archivo_validacion` pendiente) → *pendiente de
+   revisión*; no habilita.
+
+La regla de calendario se aplica en `evaluar_requisito_documental`; la de respaldo en
+`resolucion_evidencia.py` (habilitación y archivo efectivo para el radar).
+
+**Motivo.** Alinear habilitación operativa con evidencia respaldada y evitar documentos
+“verificados” sin archivo en producción, sin ocultar vencimientos reales.
+
+**Estado.** Decidida.
+
 ### Diseño
 
 #### D10. Documentos de empresa para el técnico
@@ -872,14 +956,29 @@ que confirmarlo antes de mantener complejidad en modelo y UI.
 
 **Estado.** Pendiente.
 
-#### P2. Cola `evidencia_qr`
+#### P4. Carga masiva de archivos de respaldo
 
-**Decisión.** Se posterga. Mientras tanto no debe generar jobs que vayan a dead-letter.
+**Decisión.** Para la puesta en marcha asistida (D15), cuando los metadatos ya están en el
+sistema como `declarado` vía planilla, hace falta un flujo de **carga masiva de archivos de
+respaldo** (asociar PDFs a documentos importados y dejarlos listos para confirmación).
+Queda fuera del corte actual de comandos unitarios.
 
-**Motivo.** La funcionalidad QR no entra en el corte de M1; jobs huérfanos generan ruido
-operativo y alertas falsas.
+**Motivo.** D19 exige respaldo para verificar; sin esta pieza el onboarding masivo depende de
+subidas documento por documento.
 
 **Estado.** Pendiente.
+
+#### P2. Cola `evidencia_qr`
+
+**Decisión.** Se posterga como cola de jobs. El alcance de QR y documentación offline del
+técnico queda definido en **D18** (paquete de entrega vigente y verificación en portón, sin
+depender de `evidencia_qr`). Mientras no se implemente D18, no debe generar jobs que vayan
+a dead-letter.
+
+**Motivo.** La funcionalidad QR no entra en el corte de M1; jobs huérfanos generan ruido
+operativo y alertas falsas. D18 concentra la solución acordada.
+
+**Estado.** Pendiente de implementación; ver **D18**.
 
 ### Resueltas en el diagnóstico
 
