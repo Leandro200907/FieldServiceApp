@@ -723,8 +723,12 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
             (doc_t2, est.sujetos["tecnico2"], "Apto médico t2"),
             (doc_t3, est.sujetos["tecnico3"], "Apto médico t3"),
         ):
-            if doc_id:
-                _subir_y_verificar(storage, s, idn, doc_id, suj, etiqueta)
+            if not doc_id:
+                continue
+            if _exigir_archivo_confirmado(s, est.tenant_id, doc_id):
+                _marcar_archivo_valido(s, doc_id)
+                continue
+            _subir_y_verificar(storage, s, idn, doc_id, suj, etiqueta)
         if doc_t1:
             acr_t1 = legajos.registrar_acreditacion_de_competencia(
                 s,
