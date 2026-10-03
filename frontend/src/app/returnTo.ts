@@ -1,4 +1,5 @@
 import { canOpen, entryFor, knownRoles, pages, type Role } from './capabilities';
+import { pageFromPath } from './navigationGroups';
 
 /** Rutas internas seguras para redirigir después del login (sin open redirect). */
 export function isInternalReturn(path: string): boolean {
@@ -22,7 +23,7 @@ export function resolvePostLoginPath(returnTo: string | null | undefined, roles:
   const known = knownRoles(roles);
   if (returnTo && isInternalReturn(returnTo)) {
     const pathOnly = returnTo.split('?')[0];
-    const page = pages.find(item => `/${item.id}` === pathOnly);
+    const page = pageFromPath(pathOnly);
     if (page && canOpen(page, known)) return returnTo;
   }
   if (known.length === 1) return `/${entryFor(known[0] as Role)}`;

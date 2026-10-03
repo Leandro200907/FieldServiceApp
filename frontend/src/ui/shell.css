@@ -25,6 +25,15 @@ code,
 
 a { color: var(--color-action); }
 
+.app-topbar-user {
+  color: inherit;
+  text-decoration: none;
+  font-size: var(--font-size-sm, 14px);
+}
+.app-topbar-user:hover {
+  text-decoration: underline;
+}
+
 h1 { font-size: 22px; letter-spacing: -0.3px; }
 h2 { font-size: 18px; }
 h3 { font-size: 15px; }

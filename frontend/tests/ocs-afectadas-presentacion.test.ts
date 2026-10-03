@@ -14,7 +14,7 @@ describe('ocsAfectadasPresentacion', () => {
     expect(ordenadas.map(o => o.clave_origen)).toEqual(['OC-CURSO', 'OC-REP', 'OC-FUT']);
   });
 
-  it('resume hasta tres OCs con situación y el resto como “y N más”', () => {
+  it('resume como enlace “Afecta N OC” y detalle completo en título', () => {
     const ocs = [
       { clave_origen: 'OC-patagonia-demo-CURSO', vigencia_desde: '2026-09-28', vigencia_hasta: '2026-11-02' },
       { clave_origen: 'OC-patagonia-demo-REP', vigencia_desde: '2026-10-16', vigencia_hasta: '2026-10-22' },
@@ -22,9 +22,8 @@ describe('ocsAfectadasPresentacion', () => {
       { clave_origen: 'OC-patagonia-demo-4', vigencia_desde: '2026-11-08', vigencia_hasta: '2026-11-12' },
     ];
     const { resumen, tituloCompleto } = resumenOcsAfectadas(ocs, '2026-10-03', TZ)!;
-    expect(resumen).toContain('OC-patagonia-demo-CURSO (en curso)');
-    expect(resumen).toContain('OC-patagonia-demo-REP (desde 16/10/2026)');
-    expect(resumen).toContain('y 1 más');
+    expect(resumen).toBe('Afecta 4 OCs');
+    expect(tituloCompleto).toContain('OC-patagonia-demo-CURSO (en curso)');
     expect(tituloCompleto.split(', ').length).toBe(4);
   });
 });

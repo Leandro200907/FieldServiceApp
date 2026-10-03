@@ -38,8 +38,6 @@ export function textoListaCompletaOcsAfectadas(
   return ordenarOcsAfectadas(ocs, hoyIso).map(oc => etiquetaOc(oc, hoyIso, format)).join(', ');
 }
 
-const MAX_VISIBLE = 3;
-
 /** Resumen visible y título con la lista completa (hover / foco). */
 export function resumenOcsAfectadas(
   ocs: OcAfectadaRef[],
@@ -50,9 +48,7 @@ export function resumenOcsAfectadas(
   const format = (iso: string) => formatFecha(iso, timeZone);
   const ordenadas = ordenarOcsAfectadas(ocs, hoyIso);
   const etiquetas = ordenadas.map(oc => etiquetaOc(oc, hoyIso, format));
-  const visibles = etiquetas.slice(0, MAX_VISIBLE);
-  let resumen = `Afecta a ${visibles.join(', ')}`;
-  const restantes = etiquetas.length - visibles.length;
-  if (restantes > 0) resumen += ` y ${restantes} más`;
+  const n = ordenadas.length;
+  const resumen = `Afecta ${n} OC${n === 1 ? '' : 's'}`;
   return { resumen, tituloCompleto: etiquetas.join(', ') };
 }

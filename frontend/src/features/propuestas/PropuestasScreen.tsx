@@ -5,6 +5,8 @@ import { PAGE_SIZE, PaginationControls } from '../documentation-planning/Paginat
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { propuestasAccess } from './access';
 import { subtituloLegajoPersona, tituloLegajoPersona } from '../legajos/legajoDisplay';
+import { session } from '../../api';
+import { formatFecha, formatFechaHora } from '../../ui/fechas';
 import type { DocumentoPropuesto } from './contracts';
 import type { PropuestasAccess } from './contracts';
 import '../documentation-planning/planning.css';
@@ -43,6 +45,7 @@ function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPro
     finally { setBusy(false); }
   }
 
+  const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const sujeto = {
     tipo_sujeto: item.tipo_sujeto ?? 'persona',
     nombre_apellido: item.nombre_apellido ?? null,
@@ -51,10 +54,10 @@ function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPro
   return <tr>
     <td><strong>{tituloLegajoPersona(sujeto)}</strong>{subtituloLegajoPersona(sujeto) && <small> · {subtituloLegajoPersona(sujeto)}</small>}<small>{origenLabels[item.origen] || item.origen}{item.confianza_extraccion ? ` · confianza ${item.confianza_extraccion}` : ''}</small></td>
     <td>{item.requisito || 'Requisito sin nombre'}{item.numero ? <small> · N° {item.numero}</small> : null}</td>
-    <td>{item.vigente_desde} — {item.vigente_hasta}</td>
-    <td>{item.creado_en.slice(0, 10)}</td>
+    <td>{formatFecha(item.vigente_desde, tz)} — {formatFecha(item.vigente_hasta, tz)}</td>
+    <td>{formatFechaHora(item.creado_en, tz)}</td>
     <td>
-      {error && <ErrorState message={error.message} requestId={error instanceof ApiFailure && error.detail.referenceSource === 'server' ? error.detail.requestId : undefined} />}
+      {error && <p className="field-error" role="alert">{error.message}</p>}
       {!rejecting
         ? <div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || readOnly} onClick={() => void confirmar()}>Confirmar</button><button type="button" className="button button-secondary" disabled={busy || readOnly} onClick={() => setRejecting(true)}>Rechazar</button></div>
         : <div className="proposal-reject"><label htmlFor={`motivo-${item.documento_id}`}>Motivo del rechazo</label><input id={`motivo-${item.documento_id}`} value={motivo} onChange={event => setMotivo(event.target.value)} disabled={busy || readOnly} required /><div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || readOnly || !motivo.trim()} onClick={() => void rechazar()}>Confirmar rechazo</button><button type="button" className="button button-secondary" disabled={busy} onClick={() => setRejecting(false)}>Cancelar</button></div></div>}

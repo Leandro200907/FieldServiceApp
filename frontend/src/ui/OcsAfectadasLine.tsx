@@ -12,7 +12,6 @@ export function OcsAfectadasLine({ ocs, hoyIso, timeZone }: Props) {
   const [expandido, setExpandido] = useState(false);
   const datos = resumenOcsAfectadas(ocs, hoyIso, timeZone);
   if (!datos) return null;
-  const tieneMas = datos.tituloCompleto.length > datos.resumen.length;
   return (
     <small className="ocs-afectadas-line">
       <button
@@ -22,7 +21,7 @@ export function OcsAfectadasLine({ ocs, hoyIso, timeZone }: Props) {
         aria-expanded={expandido}
         onClick={() => setExpandido(v => !v)}
       >
-        {expandido && tieneMas ? datos.tituloCompleto : datos.resumen}
+        {expandido ? datos.tituloCompleto : datos.resumen}
       </button>
     </small>
   );

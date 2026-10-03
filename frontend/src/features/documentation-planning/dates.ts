@@ -73,6 +73,21 @@ export function formatFecha(value: string, timeZone: string): string {
   return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone }).format(date);
 }
 
+/** Fecha y hora en la zona del tenant (`dd/mm/aaaa hh:mm`). */
+export function formatFechaHora(value: string, timeZone: string): string {
+  const date = FECHA_SOLA.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone,
+  }).format(date);
+}
+
 export function formatTick(iso: string, previousIso?: string | null, timeZone = 'UTC'): string {
   const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', timeZone };
   if (previousIso && previousIso.slice(0, 4) !== iso.slice(0, 4)) opts.year = 'numeric';

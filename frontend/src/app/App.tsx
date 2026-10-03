@@ -87,22 +87,23 @@ function Login() {
 }
 
 function Profile() {
-  const { identity, status, error } = useSession();
+  const { identity, error } = useSession();
   if (!identity) return null;
-  const usuarioEtiqueta = identity.usuario_nombre || identity.usuario_id;
-  const legajoAsociado = identity.legajo_etiqueta || (identity.sujeto_id ? identity.sujeto_id : 'Sin legajo asociado');
+  const usuarioEtiqueta = identity.usuario_nombre || identity.usuario_email || identity.usuario_id;
+  const rolesTexto = identity.roles.map(role => roleLabels[role as Role] || 'Rol no reconocido').join(' · ') || 'Sin roles disponibles';
   return (
     <>
       <section className="panel">
-        <h3>Identidad de la sesión</h3>
+        <h2>Mi sesión</h2>
         <dl className="identity-list">
+          <dt>Nombre</dt><dd>{usuarioEtiqueta}</dd>
+          <dt>Rol</dt><dd>{rolesTexto}</dd>
           <dt>Empresa</dt><dd>{identity.tenant_nombre}</dd>
-          <dt>Usuario</dt><dd>{usuarioEtiqueta}{identity.usuario_email ? <><br /><small>{identity.usuario_email}</small></> : null}</dd>
-          <dt>Roles</dt><dd>{identity.roles.map(role => roleLabels[role as Role] || 'Rol no reconocido').join(' · ') || 'Sin roles disponibles'}</dd>
-          <dt>Legajo asociado</dt><dd className="font-mono">{legajoAsociado}</dd>
-          <dt>Zona horaria</dt><dd>{identity.zona_horaria}</dd>
         </dl>
-        <button className="button button-secondary" disabled={status === 'refreshing'} onClick={() => { void session.refresh().catch(() => {}); }}>{status === 'refreshing' ? 'Renovando sesión…' : 'Renovar sesión y actualizar permisos'}</button>
+        <div className="form-actions">
+          <button type="button" className="button button-secondary" disabled title="Disponible en una próxima versión">Cambiar contraseña</button>
+          <button className="button button-primary" type="button" onClick={() => { void session.logout(); }}>Salir</button>
+        </div>
       </section>
       {error && <ErrorState message={error.message} requestId={error.referenceSource === 'server' ? error.requestId : undefined} />}
     </>
@@ -145,7 +146,6 @@ function Workspace() {
 
   const menu = (
     <>
-      <p className="nav-section-label">Navegación</p>
       {navGroups.map(group => (
         <div key={group.title}>
           <p className="nav-section-label">{group.title}</p>
@@ -176,8 +176,7 @@ function Workspace() {
         <Link className="brand" to="/perfil"><span className="brand-mark">F</span><span>FieldServiceApp</span></Link>
         <div className="app-topbar-meta">
           <span className="app-topbar-empresa">Empresa: <strong>{snapshot.identity.tenant_nombre}</strong></span>
-          <span className="app-topbar-user">{usuarioNombre} · {rolEtiqueta}</span>
-          <button className="button button-secondary" type="button" onClick={() => { void session.logout(); }}>Salir</button>
+          <Link className="app-topbar-user" to="/perfil">{usuarioNombre} · {rolEtiqueta}</Link>
         </div>
       </header>
       <div className="workspace-shell">
