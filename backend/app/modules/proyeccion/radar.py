@@ -27,6 +27,8 @@ from app.core.estado_documental import (
     evaluar_requisito_documental,
 )
 from app.core.radar_documental import ResumenDocumental, resumir_oc, resumir_resultados
+from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+from app.modules.oc.catalogos_maestros import nombres_oc
 
 
 ADVERTENCIA = (
@@ -89,7 +91,7 @@ def _ocs(session: Session, tenant_id: str, desde: date, hasta: date, filtros: di
 
 def _legajos(session: Session, tenant_id: str) -> list[dict[str, Any]]:
     filas = session.execute(text(
-        "SELECT sujeto_id, tipo_sujeto, identificador_natural FROM modulo1.legajo "
+        "SELECT sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido FROM modulo1.legajo "
         "WHERE tenant_id = :t AND dado_de_baja_en IS NULL ORDER BY tipo_sujeto, identificador_natural, sujeto_id"
     ), {"t": tenant_id}).mappings().all()
     return [dict(f) for f in filas]
@@ -198,18 +200,42 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
     filas = session.execute(text("""
         SELECT d.documento_id::text AS evidencia_id, d.sujeto_id, d.requisito_definicion_id::text,
                d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, d.estado_version,
+               d.origen_propuesta, d.sucede_a::text AS sucede_a,
                CASE WHEN d.archivo_estado = 'confirmado' THEN d.archivo_validacion
                     WHEN d.clave_storage IS NULL THEN 'sin_archivo' ELSE 'pendiente' END AS archivo_validacion
         FROM modulo1.documento d WHERE d.tenant_id = :t AND d.vigente_hasta IS NOT NULL
+          AND d.estado_version IN ('vigente', 'sucedida')
     """ + condicion_sujeto), params).mappings().all()
-    salida: dict[tuple[str, str], list[EvidenciaDocumental]] = defaultdict(list)
+    por_clave: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for f in filas:
         d = dict(f)
-        salida[(d["sujeto_id"], d["requisito_definicion_id"])].append(EvidenciaDocumental(
-            d["evidencia_id"], d["requisito_definicion_id"], d["vigente_desde"], d["vigente_hasta"],
-            EstadoConfirmacionDocumental(d["estado_confirmacion"]), EstadoVersionEvidencia(d["estado_version"]),
-            EstadoValidacionArchivo(d["archivo_validacion"]),
-        ))
+        por_clave[(d["sujeto_id"], d["requisito_definicion_id"])].append(d)
+    salida: dict[tuple[str, str], list[EvidenciaDocumental]] = defaultdict(list)
+    for clave, grupo in por_clave.items():
+        vigente = next((g for g in grupo if g["estado_version"] == "vigente"), None)
+        promover_sucedida: str | None = None
+        if (
+            vigente
+            and vigente.get("origen_propuesta")
+            and vigente["estado_confirmacion"] == "declarado"
+            and vigente.get("sucede_a")
+        ):
+            promover_sucedida = str(vigente["sucede_a"])
+            grupo = [g for g in grupo if g["estado_version"] != "vigente" or not g.get("origen_propuesta")]
+        for d in grupo:
+            if promover_sucedida and d["estado_version"] == "sucedida" and str(d["evidencia_id"]) == promover_sucedida:
+                d = {**d, "estado_version": "vigente"}
+            salida[clave].append(
+                EvidenciaDocumental(
+                    d["evidencia_id"],
+                    d["requisito_definicion_id"],
+                    d["vigente_desde"],
+                    d["vigente_hasta"],
+                    EstadoConfirmacionDocumental(d["estado_confirmacion"]),
+                    EstadoVersionEvidencia(d["estado_version"]),
+                    EstadoValidacionArchivo(d["archivo_validacion"]),
+                )
+            )
     return salida
 
 
@@ -277,6 +303,7 @@ def _evaluar_oc(
                     "vigente_hasta": evidencia.vigente_hasta if evidencia else None,
                     "estado_confirmacion": evidencia.estado_confirmacion.value if evidencia else None,
                     "archivo_validacion": evidencia.archivo_validacion.value if evidencia else None,
+                    "requerido": resultado.estado.value != "no_aplica",
                 })
         resumen = resumir_resultados(_resultado_desde_dict(r) for r in resultados)
         detalle_legajos.append({**legajo, "estado_documental": resumen.estado,
@@ -334,6 +361,34 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
     evidencias = _evidencias(session, identidad.tenant_id)
     items: list[dict[str, Any]] = []
 
+    def _adjuntar_habilitacion(item: dict[str, Any], oc: dict[str, Any], inicio: date, fin: date) -> None:
+        eval_doc = evaluar_oc_backlog(
+            session,
+            identidad,
+            {
+                "clave_origen": oc["clave_origen"],
+                "cliente_id": str(oc["cliente_id"]),
+                "locacion_id": str(oc["locacion_id"]),
+                "tipo_servicio_id": str(oc["tipo_servicio_id"]),
+                "vigencia_desde": inicio,
+                "vigencia_hasta": fin,
+            },
+        )
+        item.update(
+            {
+                "disponibilidad_por_tipo": eval_doc.get("disponibilidad_por_tipo") or [],
+                "impacto_por_tipo": eval_doc.get("impacto_por_tipo") or [],
+                "alertas_ciertas": eval_doc.get("alertas_ciertas") or [],
+                "tiene_alertas": bool(eval_doc.get("tiene_alertas")),
+            }
+        )
+        alertas = item.get("alertas_ciertas") or []
+        for disp in item.get("disponibilidad_por_tipo") or []:
+            tipo = disp.get("tipo_sujeto")
+            disp["tipo_sin_habilitados"] = any(
+                a.get("codigo") == "tipo_sin_habilitados" and a.get("tipo_sujeto") == tipo for a in alertas
+            )
+
     def evaluar_item(oc: dict[str, Any]) -> dict[str, Any] | None:
         inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
         tramos, _, _ = _matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
@@ -358,9 +413,24 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
         )
         if calculo["huecos_matriz"]:
             motivos.append("Hay períodos sin matriz de requisitos aplicable")
-        return {**{k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()},
-                "estado_documental": estado.estado, "primer_quiebre": estado.primer_quiebre,
-                "resumen": resumen, "motivos_resumidos": motivos}
+        item = {
+            **{k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()},
+            "estado_documental": estado.estado,
+            "primer_quiebre": estado.primer_quiebre,
+            "resumen": resumen,
+            "motivos_resumidos": motivos,
+        }
+        item.update(
+            nombres_oc(
+                session,
+                identidad.tenant_id,
+                str(oc["cliente_id"]),
+                str(oc["locacion_id"]),
+                str(oc["tipo_servicio_id"]),
+            )
+        )
+        _adjuntar_habilitacion(item, oc, inicio, fin)
+        return item
 
     if not estados:
         total = _contar_ocs(session, identidad.tenant_id, desde, hasta, filtros)
@@ -425,14 +495,55 @@ def detalle_oc(session: Session, identidad: Identidad, oc_id: str, p: Pagina | N
                "sin_legajos_requeridos": tipo in calculo["tipos_sin_legajos"],
                "legajos": [l for l in legajos_pagina if l["tipo_sujeto"] == tipo], "total": len(legajos_tipo),
                "offset": p.offset, "limit": p.limit})
-    return {"oc": {k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()},
-            "estado_documental": calculo["estado"].estado, "matrices_utilizadas": matrices,
-            "requisitos_particulares": [
-                {**p, "requisito_definicion_id": str(p["requisito_definicion_id"])}
-                for p in calculo["requisitos_particulares"]
-            ], "huecos_matriz": calculo["huecos_matriz"], "grupos": grupos,
-            "total_legajos": len(legajos), "offset": p.offset, "limit": p.limit,
-            "advertencia": ADVERTENCIA}
+    inicio, fin = oc["vigencia_desde"], oc["vigencia_hasta"]
+    eval_doc = evaluar_oc_backlog(
+        session,
+        identidad,
+        {
+            "clave_origen": oc["clave_origen"],
+            "cliente_id": str(oc["cliente_id"]),
+            "locacion_id": str(oc["locacion_id"]),
+            "tipo_servicio_id": str(oc["tipo_servicio_id"]),
+            "vigencia_desde": inicio,
+            "vigencia_hasta": fin,
+        },
+    )
+    alertas = eval_doc.get("alertas_ciertas") or []
+    disponibilidad = list(eval_doc.get("disponibilidad_por_tipo") or [])
+    for disp in disponibilidad:
+        tipo = disp.get("tipo_sujeto")
+        disp["tipo_sin_habilitados"] = any(
+            a.get("codigo") == "tipo_sin_habilitados" and a.get("tipo_sujeto") == tipo for a in alertas
+        )
+    oc_con_nombres = {k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()}
+    oc_con_nombres.update(
+        nombres_oc(
+            session,
+            identidad.tenant_id,
+            str(oc["cliente_id"]),
+            str(oc["locacion_id"]),
+            str(oc["tipo_servicio_id"]),
+        )
+    )
+    return {
+        "oc": oc_con_nombres,
+        "estado_documental": calculo["estado"].estado,
+        "matrices_utilizadas": matrices,
+        "requisitos_particulares": [
+            {**p, "requisito_definicion_id": str(p["requisito_definicion_id"])}
+            for p in calculo["requisitos_particulares"]
+        ],
+        "huecos_matriz": calculo["huecos_matriz"],
+        "grupos": grupos,
+        "disponibilidad_por_tipo": disponibilidad,
+        "impacto_por_tipo": eval_doc.get("impacto_por_tipo") or [],
+        "alertas_ciertas": alertas,
+        "tiene_alertas": bool(eval_doc.get("tiene_alertas")),
+        "total_legajos": len(legajos),
+        "offset": p.offset,
+        "limit": p.limit,
+        "advertencia": ADVERTENCIA,
+    }
 
 
 def detalle_legajo(session: Session, identidad: Identidad, oc_id: str, sujeto_id: str) -> dict[str, Any]:
@@ -440,7 +551,7 @@ def detalle_legajo(session: Session, identidad: Identidad, oc_id: str, sujeto_id
     oc = _oc_por_id(session, identidad.tenant_id, oc_id)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     fila = session.execute(text(
-        "SELECT sujeto_id, tipo_sujeto, identificador_natural FROM modulo1.legajo "
+        "SELECT sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido FROM modulo1.legajo "
         "WHERE tenant_id=:t AND sujeto_id=:s AND dado_de_baja_en IS NULL"
     ), {"t": identidad.tenant_id, "s": sujeto_id}).mappings().first()
     if fila is None:

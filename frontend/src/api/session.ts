@@ -17,8 +17,18 @@ function tokens(value: unknown): Tokens {
   return value as Tokens;
 }
 function identity(value: unknown): Identity {
-  if (!object(value) || typeof value.tenant_id !== 'string' || typeof value.usuario_id !== 'string' || !Array.isArray(value.roles) || !value.roles.every(role => typeof role === 'string') || !(value.sujeto_id === null || typeof value.sujeto_id === 'string') || typeof value.zona_horaria !== 'string' || !value.zona_horaria) throw new Error('Invalid identity');
-  return { tenant_id: value.tenant_id, usuario_id: value.usuario_id, roles: [...value.roles], sujeto_id: value.sujeto_id, zona_horaria: value.zona_horaria };
+  if (!object(value) || typeof value.tenant_id !== 'string' || typeof value.tenant_nombre !== 'string' || typeof value.usuario_id !== 'string' || !Array.isArray(value.roles) || !value.roles.every(role => typeof role === 'string') || !(value.sujeto_id === null || typeof value.sujeto_id === 'string') || typeof value.zona_horaria !== 'string' || !value.zona_horaria) throw new Error('Invalid identity');
+  return {
+    tenant_id: value.tenant_id,
+    tenant_nombre: value.tenant_nombre,
+    usuario_id: value.usuario_id,
+    usuario_nombre: typeof value.usuario_nombre === 'string' ? value.usuario_nombre : null,
+    usuario_email: typeof value.usuario_email === 'string' ? value.usuario_email : null,
+    roles: [...value.roles],
+    sujeto_id: value.sujeto_id,
+    legajo_etiqueta: value.legajo_etiqueta === null || typeof value.legajo_etiqueta === 'string' ? value.legajo_etiqueta : null,
+    zona_horaria: value.zona_horaria,
+  };
 }
 export function createSession(options: Options = {}) {
   const origin = options.baseUrl || (typeof location === 'undefined' ? 'http://localhost' : location.origin);

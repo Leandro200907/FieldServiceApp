@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0029_mov_operadora`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0030_legajo_nombre_apellido`.
 
 Internamente existe una sola entidad `documento` para certificados, competencias e
 inducciones. La categoría la define el tipo de requisito. Las rutas históricas de
@@ -79,7 +79,7 @@ rutas protegidas declaran `security: bearerAuth`.
 | `POST /v1/auth/login` | `{tenant_slug, email, password}` | `{access_token, refresh_token, token_type:"bearer", expires_in}` |
 | `POST /v1/auth/refresh` | `{refresh_token}` | mismo par (rotación: el refresh viejo queda revocado) |
 | `POST /v1/auth/logout` | `{refresh_token}` (con Bearer) | `{revocado: bool}` |
-| `GET /v1/auth/yo` | — | `{tenant_id, usuario_id, roles[], sujeto_id}` |
+| `GET /v1/auth/yo` | — | `{tenant_id, tenant_nombre, usuario_id, usuario_nombre, usuario_email, roles[], sujeto_id, legajo_etiqueta?, zona_horaria}` |
 
 - Todo lo demás exige `Authorization: Bearer <access_token>`. Sin token o vencido: **401**
   `no_autenticado`. Rol insuficiente: **403** `prohibido` (`detalles.roles_requeridos`).
@@ -137,7 +137,8 @@ Todo error, de cualquier status, tiene esta forma exacta:
 ### 4.2 Comandos de legajos y evidencia (`POST /v1/comandos/…`)
 | Ruta | Rol | Body (campos principales) |
 |---|---|---|
-| `POST /v1/comandos/alta_de_sujeto` | responsable_legajos | `{tipo_sujeto: empresa\|persona\|vehiculo\|equipo, identificador_natural, sujeto_id?}` |
+| `POST /v1/comandos/alta_de_sujeto` | responsable_legajos | `{tipo_sujeto: empresa\|persona\|vehiculo\|equipo, identificador_natural, nombre_apellido? (solo persona), sujeto_id?}` |
+| `POST /v1/comandos/corregir_nombre_legajo_persona` | responsable_legajos, configuracion | `{sujeto_id, nombre_apellido}` |
 | `POST /v1/comandos/baja_de_sujeto` | responsable_legajos | `{sujeto_id}` |
 | `POST /v1/comandos/cargar_documento` | responsable_legajos | `{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?, origen?, estado_confirmacion?}` → `{documento_id, eventos[]}` |
 | `POST /v1/comandos/proponer_documento` | tecnico (sobre su propio legajo) | `{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?}` |

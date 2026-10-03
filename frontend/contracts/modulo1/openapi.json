@@ -746,6 +746,18 @@
             "title": "Identificador Natural",
             "type": "string"
           },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
           "sujeto_id": {
             "anyOf": [
               {
@@ -2418,6 +2430,27 @@
         "title": "CopiarMatrizGlobalResponse",
         "type": "object"
       },
+      "CorregirNombreLegajoPersona": {
+        "properties": {
+          "nombre_apellido": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nombre Apellido",
+            "type": "string"
+          },
+          "sujeto_id": {
+            "minLength": 1,
+            "title": "Sujeto Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sujeto_id",
+          "nombre_apellido"
+        ],
+        "title": "CorregirNombreLegajoPersona",
+        "type": "object"
+      },
       "CruceOcTimeline": {
         "properties": {
           "clave_origen": {
@@ -2861,6 +2894,22 @@
             "title": "Advertencia",
             "type": "string"
           },
+          "alertas_ciertas": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Alertas Ciertas",
+            "type": "array"
+          },
+          "disponibilidad_por_tipo": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Disponibilidad Por Tipo",
+            "type": "array"
+          },
           "estado_documental": {
             "title": "Estado Documental",
             "type": "string"
@@ -2882,6 +2931,14 @@
               "type": "object"
             },
             "title": "Huecos Matriz",
+            "type": "array"
+          },
+          "impacto_por_tipo": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Impacto Por Tipo",
             "type": "array"
           },
           "limit": {
@@ -2912,6 +2969,11 @@
             },
             "title": "Requisitos Particulares",
             "type": "array"
+          },
+          "tiene_alertas": {
+            "default": false,
+            "title": "Tiene Alertas",
+            "type": "boolean"
           },
           "total_legajos": {
             "title": "Total Legajos",
@@ -3249,6 +3311,17 @@
       },
       "DocumentoPropuesto": {
         "properties": {
+          "archivo_validacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion"
+          },
           "confianza_extraccion": {
             "anyOf": [
               {
@@ -3275,6 +3348,50 @@
           "estado_confirmacion": {
             "title": "Estado Confirmacion",
             "type": "string"
+          },
+          "estado_presentacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Presentacion"
+          },
+          "estado_presentacion_explicacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Presentacion Explicacion"
+          },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
+          },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
           },
           "numero": {
             "anyOf": [
@@ -3316,6 +3433,17 @@
           "sujeto_id": {
             "title": "Sujeto Id",
             "type": "string"
+          },
+          "tipo_sujeto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Sujeto"
           },
           "vencido": {
             "title": "Vencido",
@@ -3816,6 +3944,17 @@
           "tipo": {
             "title": "Tipo",
             "type": "string"
+          },
+          "usuario_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Nombre"
           }
         },
         "required": [
@@ -3830,6 +3969,17 @@
       },
       "EvidenciaVigente": {
         "properties": {
+          "archivo_validacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion"
+          },
           "categoria": {
             "anyOf": [
               {
@@ -3842,12 +3992,55 @@
             "title": "Categoria"
           },
           "dias_para_vencer": {
-            "title": "Dias Para Vencer",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dias Para Vencer"
           },
           "estado_confirmacion": {
             "title": "Estado Confirmacion",
             "type": "string"
+          },
+          "estado_presentacion": {
+            "title": "Estado Presentacion",
+            "type": "string"
+          },
+          "estado_presentacion_explicacion": {
+            "title": "Estado Presentacion Explicacion",
+            "type": "string"
+          },
+          "estados_adicionales": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estados Adicionales"
+          },
+          "estados_adicionales_explicacion": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estados Adicionales Explicacion"
           },
           "id": {
             "title": "Id",
@@ -3878,6 +4071,16 @@
           "origen_propuesta": {
             "title": "Origen Propuesta",
             "type": "boolean"
+          },
+          "propuesta_en_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PropuestaEnRevision"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "requisito": {
             "anyOf": [
@@ -3933,7 +4136,9 @@
           "locacion_id",
           "vigente_hoy",
           "dias_para_vencer",
-          "vencido"
+          "vencido",
+          "estado_presentacion",
+          "estado_presentacion_explicacion"
         ],
         "title": "EvidenciaVigente",
         "type": "object"
@@ -4200,6 +4405,17 @@
       },
       "IdentidadResponse": {
         "properties": {
+          "legajo_etiqueta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legajo Etiqueta"
+          },
           "roles": {
             "items": {
               "type": "string"
@@ -4222,9 +4438,35 @@
             "title": "Tenant Id",
             "type": "string"
           },
+          "tenant_nombre": {
+            "title": "Tenant Nombre",
+            "type": "string"
+          },
+          "usuario_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Email"
+          },
           "usuario_id": {
             "title": "Usuario Id",
             "type": "string"
+          },
+          "usuario_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Nombre"
           },
           "zona_horaria": {
             "title": "Zona Horaria",
@@ -4233,6 +4475,7 @@
         },
         "required": [
           "tenant_id",
+          "tenant_nombre",
           "usuario_id",
           "roles",
           "sujeto_id",
@@ -4808,6 +5051,14 @@
       },
       "ItemRadar": {
         "properties": {
+          "alertas_ciertas": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Alertas Ciertas",
+            "type": "array"
+          },
           "clave_origen": {
             "title": "Clave Origen",
             "type": "string"
@@ -4815,6 +5066,14 @@
           "cliente_id": {
             "title": "Cliente Id",
             "type": "string"
+          },
+          "disponibilidad_por_tipo": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Disponibilidad Por Tipo",
+            "type": "array"
           },
           "estado_documental": {
             "enum": [
@@ -4827,9 +5086,28 @@
             "title": "Estado Documental",
             "type": "string"
           },
+          "impacto_por_tipo": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Impacto Por Tipo",
+            "type": "array"
+          },
           "locacion_id": {
             "title": "Locacion Id",
             "type": "string"
+          },
+          "locacion_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Nombre"
           },
           "motivos_resumidos": {
             "items": {
@@ -4841,6 +5119,17 @@
           "oc_id": {
             "title": "Oc Id",
             "type": "string"
+          },
+          "operadora_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operadora Nombre"
           },
           "primer_quiebre": {
             "anyOf": [
@@ -4872,9 +5161,25 @@
             "title": "Resumen",
             "type": "object"
           },
+          "tiene_alertas": {
+            "default": false,
+            "title": "Tiene Alertas",
+            "type": "boolean"
+          },
           "tipo_servicio_id": {
             "title": "Tipo Servicio Id",
             "type": "string"
+          },
+          "tipo_servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Servicio Nombre"
           },
           "vigencia_desde": {
             "format": "date",
@@ -4928,6 +5233,17 @@
           "legajo_id": {
             "title": "Legajo Id",
             "type": "string"
+          },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
           },
           "sujeto_id": {
             "title": "Sujeto Id",
@@ -5408,6 +5724,17 @@
             ],
             "title": "Autor"
           },
+          "autor_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autor Nombre"
+          },
           "cliente_id": {
             "title": "Cliente Id",
             "type": "string"
@@ -5447,6 +5774,17 @@
             "title": "Locacion Id",
             "type": "string"
           },
+          "locacion_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Nombre"
+          },
           "matriz_global_id": {
             "anyOf": [
               {
@@ -5462,9 +5800,31 @@
             "title": "Matriz Version Id",
             "type": "string"
           },
+          "operadora_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operadora Nombre"
+          },
           "tipo_servicio_id": {
             "title": "Tipo Servicio Id",
             "type": "string"
+          },
+          "tipo_servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Servicio Nombre"
           },
           "version": {
             "title": "Version",
@@ -6263,6 +6623,54 @@
         "title": "ProponerDocumento",
         "type": "object"
       },
+      "PropuestaEnRevision": {
+        "properties": {
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "estado_presentacion": {
+            "const": "propuesta_en_revision",
+            "default": "propuesta_en_revision",
+            "title": "Estado Presentacion",
+            "type": "string"
+          },
+          "estado_presentacion_explicacion": {
+            "title": "Estado Presentacion Explicacion",
+            "type": "string"
+          },
+          "vigente_desde": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Desde"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "documento_id",
+          "vigente_desde",
+          "vigente_hasta",
+          "estado_presentacion_explicacion"
+        ],
+        "title": "PropuestaEnRevision",
+        "type": "object"
+      },
       "PropuestasPendientesResponse": {
         "properties": {
           "items": {
@@ -6681,6 +7089,17 @@
           "identificador": {
             "title": "Identificador",
             "type": "string"
+          },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
           },
           "ocs": {
             "items": {
@@ -7207,6 +7626,11 @@
       },
       "ResumenLegajo": {
         "properties": {
+          "por_vencer": {
+            "default": 0,
+            "title": "Por Vencer",
+            "type": "integer"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -7230,6 +7654,11 @@
       },
       "ResumenMiLegajo": {
         "properties": {
+          "por_vencer": {
+            "default": 0,
+            "title": "Por Vencer",
+            "type": "integer"
+          },
           "vencidos": {
             "title": "Vencidos",
             "type": "integer"
@@ -7456,6 +7885,17 @@
           "identificador_natural": {
             "title": "Identificador Natural",
             "type": "string"
+          },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
           },
           "sujeto_id": {
             "title": "Sujeto Id",
@@ -8058,7 +8498,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0029_mov_operadora"
+    "x-migracion-head": "0030_legajo_nombre_apellido"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10076,6 +10516,120 @@
         "summary": "Copiar Matriz Global",
         "tags": [
           "requisitos"
+        ]
+      }
+    },
+    "/v1/comandos/corregir_nombre_legajo_persona": {
+      "post": {
+        "operationId": "corregir_nombre_legajo_persona_v1_comandos_corregir_nombre_legajo_persona_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorregirNombreLegajoPersona"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__modules__legajos__router__LegajoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Corregir Nombre Legajo Persona",
+        "tags": [
+          "legajos"
         ]
       }
     },
@@ -16105,6 +16659,23 @@
               "default": false,
               "title": "Solo Vigentes",
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {
