@@ -45,9 +45,9 @@ def _linea_no_bloqueante_en_ejecucion(s, req_id: str) -> None:
 # es como si nunca hubiera llegado a ser candidata".
 
 
-def test_propuesta_sucede_al_vigente_y_el_motor_la_ve_como_requiere_revision(cliente_api, tenant_de_prueba, sesion):
-    """Mientras la propuesta está pendiente, el sujeto NO prueba habilitación (1.10:
-    lo declarado nunca prueba; el motor filtra por vigente y recién ahí mira confianza)."""
+def test_propuesta_sucede_al_vigente_y_el_motor_evalua_la_confirmada_si_cubre(cliente_api, tenant_de_prueba, sesion):
+    """D16: la propuesta declarada no habilita; si hay versión confirmada sucedida que cubre
+    el período de la OC, el motor evalúa esa."""
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto médico")
     persona = _alta_persona(cliente_api, t, "DNI-1", t.sujeto_tecnico)
@@ -58,14 +58,12 @@ def test_propuesta_sucede_al_vigente_y_el_motor_la_ve_como_requiere_revision(cli
     assert _vigentes(docs) == [prop["documento_id"]]
     assert next(d for d in docs if d["documento_id"] == v1)["estado_version"] == "sucedida"
 
-    # Motor: con la propuesta declarada vigente, el veredicto es requiere_revision.
     clave = clave_de_matriz()
     insertar_legajo(sesion, t.tenant_id, "empresa_x", "empresa")
     insertar_matriz(sesion, t.tenant_id, clave, {req: "bloqueante_duro"})
     insertar_oc(sesion, t.tenant_id, "OC-prop", clave, date(2026, 10, 1), date(2026, 10, 5))
     r = evaluar_compromiso(sesion, t.tenant_id, "OC-prop", AHORA, None)
-    assert requisitos_de(r, persona)[req]["veredicto"] == "requiere_revision"
-    assert r["resultado_de_decision"] == "no_puede_asignarse"
+    assert requisitos_de(r, persona)[req]["veredicto"] == "habilitado"
 
 
 def test_rechazar_propuesta_restaura_el_anterior_y_es_terminal(cliente_api, tenant_de_prueba):
