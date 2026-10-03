@@ -84,6 +84,11 @@ def test_archivo_pendiente_de_validacion_requiere_revision():
     assert resultado.estado == EstadoRequisitoDocumental.PENDIENTE_REVISION
 
 
+def test_verificado_sin_archivo_requiere_revision():
+    resultado = evaluar(evidencia(validacion=EstadoValidacionArchivo.SIN_ARCHIVO))
+    assert resultado.estado == EstadoRequisitoDocumental.PENDIENTE_REVISION
+
+
 def test_archivo_invalido_se_informa_expresamente():
     resultado = evaluar(evidencia(validacion=EstadoValidacionArchivo.INVALIDO))
     assert resultado.estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA

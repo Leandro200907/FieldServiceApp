@@ -224,20 +224,41 @@ def cargar_evidencias(
         )
 
     if requisito_ids:
-        from app.core.resolucion_evidencia import filas_evidencia_para_evaluacion
+        from app.core.resolucion_evidencia import (
+            agrupar_soportes_por_documento,
+            archivo_requiere_revision,
+            filas_evidencia_para_evaluacion,
+        )
 
         filas = session.execute(
             text(
                 "SELECT documento_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, "
                 "estado_confirmacion, estado_version, origen_propuesta, sucede_a, "
-                "archivo_estado, archivo_validacion FROM modulo1.documento "
+                "archivo_estado, archivo_validacion, clave_storage FROM modulo1.documento "
                 "WHERE tenant_id = :t AND estado_version IN ('vigente', 'sucedida') "
                 "  AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_sujeto
             ),
             {"t": tenant_id, "ids": requisito_ids, "sids": sujeto_ids},
         ).mappings()
-        for clave, fila in filas_evidencia_para_evaluacion(filas).items():
-            requiere = fila["archivo_estado"] == "confirmado" and fila["archivo_validacion"] != "valido"
+        elegidas = filas_evidencia_para_evaluacion(filas)
+        ids_acred = [str(f["documento_id"]) for f in elegidas.values()]
+        soportes_por_doc: dict[str, list[dict[str, Any]]] = {}
+        if ids_acred:
+            sop_filas = session.execute(
+                text(
+                    "SELECT ds.documento_id::text AS documento_padre_id, "
+                    "s.archivo_estado, s.archivo_validacion, s.clave_storage "
+                    "FROM modulo1.documento_soporte ds "
+                    "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
+                    "WHERE ds.tenant_id = :t AND ds.documento_id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"t": tenant_id, "ids": ids_acred},
+            ).mappings()
+            soportes_por_doc = agrupar_soportes_por_documento(sop_filas)
+        for clave, fila in elegidas.items():
+            cat = definiciones.get(str(fila["requisito_definicion_id"]), {}).get("categoria")
+            soportes = soportes_por_doc.get(str(fila["documento_id"]), [])
+            requiere = archivo_requiere_revision(fila, categoria=cat, soportes=soportes)
             evidencias[clave] = _doc(fila, requiere)
     return evidencias
 

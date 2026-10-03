@@ -173,7 +173,11 @@ def evaluar_requisito_documental(
             continue
         if (
             evidencia.estado_confirmacion == EstadoConfirmacionDocumental.DECLARADO
-            or evidencia.archivo_validacion == EstadoValidacionArchivo.PENDIENTE
+            or evidencia.archivo_validacion
+            in (
+                EstadoValidacionArchivo.PENDIENTE,
+                EstadoValidacionArchivo.SIN_ARCHIVO,
+            )
         ):
             pendientes.append(evidencia)
             continue
