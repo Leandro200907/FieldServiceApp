@@ -33,10 +33,10 @@ export const realPropuestasAccess: PropuestasAccess = {
       headers: { ...intent.headers, ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     }));
   },
-  async rechazarPropuesta(documentoId: string, motivo?: string, idempotencyKey?: string) {
-    const intent = createCommandIntent('/v1/comandos/rechazar_propuesta', { documento_id: documentoId, motivo: motivo ?? null });
+  async rechazarPropuesta(documentoId: string, motivo: string, idempotencyKey?: string) {
+    const intent = createCommandIntent('/v1/comandos/rechazar_propuesta', { documento_id: documentoId, motivo });
     return unwrap(session.client.POST('/v1/comandos/rechazar_propuesta', {
-      body: { documento_id: documentoId, motivo: motivo ?? null },
+      body: { documento_id: documentoId, motivo },
       headers: { ...intent.headers, ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     }));
   },

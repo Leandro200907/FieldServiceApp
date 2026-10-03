@@ -13,7 +13,7 @@ def test_normalizar_clave_ignora_puntos_acentos_y_mayusculas():
 
 def test_alta_operadora_oc_duplicada_como_locacion_y_tipo(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
-    headers = t.headers("responsable_legajos")
+    headers = t.headers("configuracion")
     r1 = cliente_api.post("/v1/comandos/alta_operadora_oc", json={"nombre": "YPF"}, headers=headers)
     assert r1.status_code == 200, r1.text
     for nombre in ("ypf", " YPF ", "Y.P.F."):
@@ -24,7 +24,7 @@ def test_alta_operadora_oc_duplicada_como_locacion_y_tipo(cliente_api, tenant_de
 
 def test_sugerencia_operadora_por_similitud_no_alfabetica(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
-    headers = t.headers("responsable_legajos")
+    headers = t.headers("configuracion")
     for nombre in ("Pluspetrol", "YPF"):
         r = cliente_api.post("/v1/comandos/alta_operadora_oc", json={"nombre": nombre}, headers=headers)
         assert r.status_code == 200, r.text

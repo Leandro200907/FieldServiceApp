@@ -55,7 +55,15 @@ class ConfirmarDocumento(BaseModel):
 
 class RechazarPropuesta(BaseModel):
     documento_id: UUID
-    motivo: str | None = None
+    motivo: str = Field(min_length=1)
+
+    @field_validator("motivo")
+    @classmethod
+    def _motivo_sin_bordes(cls, valor: str) -> str:
+        texto = valor.strip()
+        if not texto:
+            raise ValueError("El motivo de rechazo es obligatorio")
+        return texto
 
 
 class RegistrarAcreditacionDeCompetencia(BaseModel):

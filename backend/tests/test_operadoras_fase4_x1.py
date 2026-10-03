@@ -103,14 +103,16 @@ def _xlsx_fecha_serial_enorme() -> bytes:
     )
 
 
-def test_indice_shared_string_inexistente_devuelve_422(cliente_api, tenant_de_prueba):
+def test_indice_shared_string_inexistente_rechaza_fila_sin_abortar_planilla(cliente_api, tenant_de_prueba):
     r = cliente_api.post(
         "/v1/comandos/importar_planilla_operadoras",
         content=_xlsx_shared_string_indice_invalido(),
         headers=_headers(tenant_de_prueba),
     )
-    assert r.status_code == 422, r.text
-    assert r.json()["error"]["detalles"]["errores"][0]["fila"] == 6
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["filas_rechazadas"] == 1 and body["filas_aceptadas"] == 0
+    assert body["errores"][0]["fila"] == 6
 
 
 def test_numero_fila_xml_invalido_registra_fila_util(cliente_api, tenant_de_prueba):
@@ -216,11 +218,11 @@ def test_fallo_al_validar_respuesta_hace_rollback(cliente_api, tenant_de_prueba,
     assert r2.json()["filas_aceptadas"] == 1
 
 
-def test_fecha_serial_desbordada_devuelve_422(cliente_api, tenant_de_prueba):
+def test_fecha_serial_desbordada_rechaza_fila(cliente_api, tenant_de_prueba):
     r = cliente_api.post(
         "/v1/comandos/importar_planilla_operadoras",
         content=_xlsx_fecha_serial_enorme(),
         headers=_headers(tenant_de_prueba),
     )
-    assert r.status_code == 422, r.text
-    assert any(e.get("fila") == 6 for e in r.json()["error"]["detalles"]["errores"])
+    assert r.status_code == 200, r.text
+    assert any(e.get("fila") == 6 for e in r.json()["errores"])

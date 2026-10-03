@@ -10,7 +10,8 @@ from datetime import date, datetime
 from typing import Any
 
 from app.api.errores import ErrorDeDominio
-from app.modules.operadoras.lector_xlsx import _fecha, _normalizar, leer_celdas_hoja
+from app.comun.importacion_filas import mensaje_fecha_invalida
+from app.modules.operadoras.lector_xlsx import _celda_con_contenido, _fecha, _normalizar, leer_celdas_hoja
 
 _COLUMNAS = {
     "clave oc": "clave_origen",
@@ -33,6 +34,7 @@ _COLUMNAS = {
 _REQUERIDAS_NOMBRE = {"clave_origen", "operadora", "locacion", "tipo_servicio", "vigencia_desde", "vigencia_hasta"}
 _REQUERIDAS_UUID = {"clave_origen", "cliente_id", "locacion_id", "tipo_servicio_id", "vigencia_desde", "vigencia_hasta"}
 _FECHAS = ("vigencia_desde", "vigencia_hasta")
+_ETIQUETAS_FECHA = {"vigencia_desde": "Vigencia desde", "vigencia_hasta": "Vigencia hasta"}
 
 
 def _iso_fecha(valor: object) -> str:
@@ -71,9 +73,9 @@ def leer_planilla_oc(contenido: bytes, *, hoja: str = "OC") -> tuple[list[dict[s
     for numero, valores in celdas:
         if numero <= fila_encabezado:
             continue
-        registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
-        if not any(str(v).strip() for v in registro.values() if v is not None):
+        if not any(_celda_con_contenido(valores.get(col)) for col in columnas):
             continue
+        registro = {nombre: valores.get(col) for col, nombre in columnas.items()}
         item: dict[str, Any] = {"fila": numero}
         for campo, val in registro.items():
             if val is None or str(val).strip() == "":
@@ -83,7 +85,7 @@ def leer_planilla_oc(contenido: bytes, *, hoja: str = "OC") -> tuple[list[dict[s
                 try:
                     item[campo] = _iso_fecha(val)
                 except ErrorDeDominio:
-                    errores.append(f"fila {numero}: fecha inválida en {campo}")
+                    errores.append(mensaje_fecha_invalida(numero, _ETIQUETAS_FECHA[campo], val))
                     item = {}
                     break
             else:
@@ -91,7 +93,10 @@ def leer_planilla_oc(contenido: bytes, *, hoja: str = "OC") -> tuple[list[dict[s
         if not item:
             continue
         if not item.get("clave_origen"):
-            errores.append(f"fila {numero}: Clave OC obligatoria")
+            errores.append(f"Fila {numero}, Clave OC: falta el valor obligatorio")
+            continue
+        if not str(item.get("operadora") or "").strip():
+            errores.append(f"Fila {numero}: Falta la operadora")
             continue
         if item.get("estado") and item["estado"].lower() == "cancelado":
             item["estado"] = "cancelado"

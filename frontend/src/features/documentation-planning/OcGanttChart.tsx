@@ -74,6 +74,7 @@ export function OcGanttChart({ filas, vistaDesde, vistaHasta, hoy, onSelect, sel
                 type="button"
                 key={f.id}
                 className={`oc-gantt-track${selectedId === f.id ? ' selected' : ''}`}
+                onMouseDown={event => event.preventDefault()}
                 onClick={() => onSelect?.(f.id)}
               >
                 {(f.bandasOc || []).map((b, i) => {

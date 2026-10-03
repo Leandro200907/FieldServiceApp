@@ -29,7 +29,7 @@ export function LegajosScreen() {
   const [selected, setSelected] = useState<string | null>(null);
   const search = usePrototypeRead(() => legajosAccess().searchSujetos({ q: q || undefined, tipoSujeto: tipoSujeto || undefined, limit: 20 }), [q, tipoSujeto]);
   const legajo = usePrototypeRead(() => selected ? legajosAccess().readLegajo(selected) : Promise.resolve(null), [selected]);
-  const alertasOperadora = usePrototypeRead(() => selected ? legajosAccess().readAlertasOperadora(selected) : Promise.resolve(null), [selected]);
+  const espejoOperadora = usePrototypeRead(() => selected ? legajosAccess().readEspejoOperadora(selected) : Promise.resolve(null), [selected]);
   const integrated = isLegajosIntegrated();
   return <>
     {integrated
@@ -59,14 +59,27 @@ export function LegajosScreen() {
         ? <p className="empty-inline">Sin documentación registrada.</p>
         : <ul className="evidence-list">{[...legajo.data.documentos, ...legajo.data.acreditaciones, ...legajo.data.inducciones].map(item => <EvidenceRow key={item.id} item={item} />)}</ul>}
     </section>)}
-    {selected && (alertasOperadora.loading ? <LoadingState /> : alertasOperadora.error ? <ErrorState message={alertasOperadora.error.message} requestId={alertasOperadora.error instanceof ApiFailure && alertasOperadora.error.detail.referenceSource === 'server' ? alertasOperadora.error.detail.requestId : undefined} /> : alertasOperadora.data && <section className="panel">
-      <div className="panel-top"><div><p className="eyebrow">Espejo por operadora</p><h3>Estado externo del legajo</h3></div><Badge tone={alertasOperadora.data.total > 0 ? 'warning' : 'accent'}>{alertasOperadora.data.total > 0 ? `${alertasOperadora.data.total} actualización${alertasOperadora.data.total === 1 ? '' : 'es'} pendiente${alertasOperadora.data.total === 1 ? '' : 's'}` : 'Operadoras actualizadas'}</Badge></div>
-      {alertasOperadora.data.items.length ? <ul className="evidence-list">{alertasOperadora.data.items.map(item => <li className="evidence-row" key={item.alerta_id}>
+    {selected && (espejoOperadora.loading ? <LoadingState /> : espejoOperadora.error ? <ErrorState message={espejoOperadora.error.message} requestId={espejoOperadora.error instanceof ApiFailure && espejoOperadora.error.detail.referenceSource === 'server' ? espejoOperadora.error.detail.requestId : undefined} /> : espejoOperadora.data && (() => {
+      const items = espejoOperadora.data.items;
+      const sinPresentaciones = (espejoOperadora.data.total ?? 0) === 0;
+      const conDiferencias = items.some(item => item.estado_operadora !== 'al_dia');
+      const badgeLabel = sinPresentaciones ? 'Sin presentaciones registradas' : conDiferencias ? 'Con diferencias' : 'Al día';
+      const badgeTone = sinPresentaciones ? 'accent' : conDiferencias ? 'warning' : 'accent';
+      const estadoLabels: Record<string, string> = {
+        pendiente_envio: 'Pendiente de envío',
+        pendiente_aceptacion: 'Pendiente de aceptación',
+        rechazado: 'Rechazado',
+        al_dia: 'Al día',
+      };
+      return <section className="panel">
+      <div className="panel-top"><div><p className="eyebrow">Espejo por operadora</p><h3>Estado externo del legajo</h3></div><Badge tone={badgeTone}>{badgeLabel}</Badge></div>
+      {items.length ? <ul className="evidence-list">{items.map(item => <li className="evidence-row" key={`${item.operadora_id}-${item.requisito_definicion_id}-${item.sujeto_id}`}>
         <span className="evidence-name">{item.requisito} · {item.operadora}</span>
-        <Badge tone="warning">{{ pendiente_envio: 'Pendiente de envío', pendiente_aceptacion: 'Pendiente de aceptación', rechazado: 'Rechazado' }[item.estado] || item.estado}</Badge>
-        <small>{item.motivo}</small>
-      </li>)}</ul> : <p className="empty-inline">No hay diferencias abiertas entre el legajo interno y las operadoras registradas.</p>}
-    </section>)}
+        <Badge tone={item.estado_operadora === 'al_dia' ? 'accent' : 'warning'}>{estadoLabels[item.estado_operadora as string] || item.estado_operadora}</Badge>
+        <small>{item.motivo || '—'}</small>
+      </li>)}</ul> : <p className="empty-inline">Sin filas en el espejo para este sujeto.</p>}
+    </section>;
+    })())}
   </>;
 }
 

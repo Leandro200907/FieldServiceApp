@@ -33,10 +33,11 @@ function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPro
   async function rechazar() {
     setBusy(true); setError(null);
     const motivoNormalizado = motivo.trim();
+    if (!motivoNormalizado) { setBusy(false); return; }
     if (!rechazarIntent.current || rechazarIntent.current.motivo !== motivoNormalizado) {
       rechazarIntent.current = { motivo: motivoNormalizado, key: crypto.randomUUID() };
     }
-    try { await access.rechazarPropuesta(item.documento_id, motivoNormalizado || undefined, rechazarIntent.current.key); rechazarIntent.current = null; onChanged(); }
+    try { await access.rechazarPropuesta(item.documento_id, motivoNormalizado, rechazarIntent.current.key); rechazarIntent.current = null; onChanged(); }
     catch (caught) { if (respuestaDefinitiva(caught)) rechazarIntent.current = null; setError(caught instanceof Error ? caught : new Error('Error desconocido')); }
     finally { setBusy(false); }
   }
@@ -50,7 +51,7 @@ function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPro
       {error && <ErrorState message={error.message} requestId={error instanceof ApiFailure && error.detail.referenceSource === 'server' ? error.detail.requestId : undefined} />}
       {!rejecting
         ? <div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || readOnly} onClick={() => void confirmar()}>Confirmar</button><button type="button" className="button button-secondary" disabled={busy || readOnly} onClick={() => setRejecting(true)}>Rechazar</button></div>
-        : <div className="proposal-reject"><label htmlFor={`motivo-${item.documento_id}`}>Motivo (opcional)</label><input id={`motivo-${item.documento_id}`} value={motivo} onChange={event => setMotivo(event.target.value)} disabled={busy || readOnly} /><div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || readOnly} onClick={() => void rechazar()}>Confirmar rechazo</button><button type="button" className="button button-secondary" disabled={busy} onClick={() => setRejecting(false)}>Cancelar</button></div></div>}
+        : <div className="proposal-reject"><label htmlFor={`motivo-${item.documento_id}`}>Motivo del rechazo</label><input id={`motivo-${item.documento_id}`} value={motivo} onChange={event => setMotivo(event.target.value)} disabled={busy || readOnly} required /><div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || readOnly || !motivo.trim()} onClick={() => void rechazar()}>Confirmar rechazo</button><button type="button" className="button button-secondary" disabled={busy} onClick={() => setRejecting(false)}>Cancelar</button></div></div>}
     </td>
   </tr>;
 }

@@ -16,6 +16,6 @@ export interface PropuestasQuery {
 export interface PropuestasAccess {
   readPropuestasPendientes(query: PropuestasQuery): Promise<PropuestasPendientesResponse>;
   confirmarDocumento(documentoId: string, idempotencyKey?: string): Promise<ConfirmarDocumentoResponse>;
-  rechazarPropuesta(documentoId: string, motivo?: string, idempotencyKey?: string): Promise<RechazarPropuestaResponse>;
+  rechazarPropuesta(documentoId: string, motivo: string, idempotencyKey?: string): Promise<RechazarPropuestaResponse>;
 }
 

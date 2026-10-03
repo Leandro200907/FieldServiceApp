@@ -159,16 +159,16 @@ def test_propuesta_y_rechazo_restaura_el_anterior(cliente_api, tenant_de_prueba)
     assert {d["documento_id"]: d["estado_version"] for d in docs} == {d1["documento_id"]: "vigente", prop["documento_id"]: "rechazada"}
 
     # terminal: no se vuelve a rechazar ni a confirmar
-    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": prop["documento_id"]}).status_code == 409
+    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": prop["documento_id"], "motivo": "ya rechazada"}).status_code == 409
     assert _post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": prop["documento_id"]}).status_code == 409
     # un documento cargado (no propuesta) no se rechaza
-    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": d1["documento_id"]}).status_code == 409
+    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": d1["documento_id"], "motivo": "no es propuesta"}).status_code == 409
 
     # propuesta sobre un requisito sin documento previo: queda vigente sin sucesión
     req2 = _alta_def(cliente_api, t, "Carnet de conducir")
     sola = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {**body, "requisito_definicion_id": req2}))
     assert sola["sucede_a"] is None and sola["eventos"] == ["DocumentoCargado"]  # propuesta: declarada, sin verificación
-    rech2 = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": sola["documento_id"]}))
+    rech2 = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": sola["documento_id"], "motivo": "no corresponde"}))
     assert rech2["restaurado_documento_id"] is None
     assert _vigentes(_docs(t, propio, req2)) == []
 

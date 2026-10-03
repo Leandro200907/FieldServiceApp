@@ -3,7 +3,13 @@ import type { components, paths } from './generated/modulo1';
 import { ApiFailure, parseApiError, safeFailure, type SafeApiError } from './errors';
 type Identity = components['schemas']['IdentidadResponse'];
 type Tokens = components['schemas']['ParDeTokens'];
-export type SessionSnapshot = Readonly<{ status: 'anonymous' | 'authenticating' | 'authenticated' | 'refreshing'; identity: Identity | null; error: SafeApiError | null }>;
+export type SessionSnapshot = Readonly<{
+  status: 'anonymous' | 'authenticating' | 'authenticated' | 'refreshing';
+  identity: Identity | null;
+  error: SafeApiError | null;
+  /** Tras cerrar sesión explícita, no propagar ?return= al login. */
+  suppressLoginReturn?: boolean;
+}>;
 interface Options { baseUrl?: string; fetch?: typeof fetch; now?: () => number; timeoutMs?: number }
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 function tokens(value: unknown): Tokens {
@@ -21,7 +27,7 @@ export function createSession(options: Options = {}) {
   const transport = options.fetch ?? globalThis.fetch.bind(globalThis);
   const now = options.now ?? Date.now;
   const timeoutMs = options.timeoutMs ?? 20000;
-  let snapshot: SessionSnapshot = { status: 'anonymous', identity: null, error: null };
+  let snapshot: SessionSnapshot = { status: 'anonymous', identity: null, error: null, suppressLoginReturn: false };
   let pair: Tokens | null = null;
   let deadline = 0;
   let generation = 0;
@@ -29,10 +35,15 @@ export function createSession(options: Options = {}) {
   const listeners = new Set<() => void>();
   const controllers = new Set<AbortController>();
   function publish(value: SessionSnapshot) { snapshot = Object.freeze(value); listeners.forEach(listener => listener()); }
-  function clear(error: SafeApiError | null = null) {
+  function clear(error: SafeApiError | null = null, opts?: { suppressLoginReturn?: boolean }) {
     generation++; pair = null; deadline = 0; refreshFlight = null;
     controllers.forEach(controller => controller.abort()); controllers.clear();
-    publish({ status: 'anonymous', identity: null, error });
+    publish({
+      status: 'anonymous',
+      identity: null,
+      error,
+      suppressLoginReturn: Boolean(opts?.suppressLoginReturn),
+    });
   }
   function check(version: number) { if (version !== generation) throw new DOMException('Session changed', 'AbortError'); }
   async function raw(path: '/v1/auth/login' | '/v1/auth/refresh' | '/v1/auth/logout' | '/v1/auth/yo', body?: unknown, bearer?: string): Promise<unknown> {
@@ -47,7 +58,7 @@ export function createSession(options: Options = {}) {
     } finally { clearTimeout(timer); controllers.delete(controller); }
   }
   async function login(body: components['schemas']['LoginRequest']) {
-    clear(); const version = generation;
+    clear(null, { suppressLoginReturn: false }); const version = generation;
     publish({ status: 'authenticating', identity: null, error: null });
     try {
       const next = tokens(await raw('/v1/auth/login', body)); check(version);
@@ -108,10 +119,26 @@ export function createSession(options: Options = {}) {
     } finally { clearTimeout(timer); controllers.delete(controller); request.signal.removeEventListener('abort', abort); }
   }
   async function logout() {
-    const current = pair; clear(); const version = generation;
+    const current = pair; clear(null, { suppressLoginReturn: true }); const version = generation;
     if (!current) return;
     try { await raw('/v1/auth/logout', { refresh_token: current.refresh_token }, current.access_token); }
-    catch { if (version === generation) publish({ status: 'anonymous', identity: null, error: { message: 'Sesión cerrada en este dispositivo; no se pudo confirmar la revocación.', code: 'LOGOUT_UNCONFIRMED', status: 0, requestId: crypto.randomUUID(), referenceSource: 'local', details: null } }); }
+    catch {
+      if (version === generation) {
+        publish({
+          status: 'anonymous',
+          identity: null,
+          suppressLoginReturn: true,
+          error: {
+            message: 'Sesión cerrada en este dispositivo; no se pudo confirmar la revocación.',
+            code: 'LOGOUT_UNCONFIRMED',
+            status: 0,
+            requestId: crypto.randomUUID(),
+            referenceSource: 'local',
+            details: null,
+          },
+        });
+      }
+    }
   }
   return { subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, getSnapshot: () => snapshot, login, logout, refresh, client: createClient<paths>({ baseUrl: url.origin, fetch: authorizedFetch }) };
 }

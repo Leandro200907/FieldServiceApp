@@ -6520,19 +6520,14 @@
             "type": "string"
           },
           "motivo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Motivo"
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
           }
         },
         "required": [
-          "documento_id"
+          "documento_id",
+          "motivo"
         ],
         "title": "RechazarPropuesta",
         "type": "object"

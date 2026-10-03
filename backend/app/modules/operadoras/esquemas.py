@@ -32,8 +32,12 @@ def validar_campos_planilla(fila: dict) -> None:
     except ValidationError as err:
         detalle = err.errors()[0]
         campo = ".".join(str(x) for x in detalle["loc"])
+        if campo == "operadora" and detalle["type"] in {"string_too_short", "missing"}:
+            mensaje = "Falta la operadora"
+        else:
+            mensaje = "Fila con formato inválido"
         raise ErrorDeDominio(
-            "Fila con formato inválido",
+            mensaje,
             {"campo": campo, "tipo": detalle["type"], "mensaje": detalle["msg"]},
             codigo="fila_invalida",
         ) from err

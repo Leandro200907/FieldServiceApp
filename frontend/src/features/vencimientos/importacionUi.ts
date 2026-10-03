@@ -6,6 +6,14 @@ export function etiquetaFilaImportacion(fila: number | null | undefined): string
   return fila == null ? 'Fila sin número' : `Fila ${fila}`;
 }
 
+export function ordenarErroresImportacion<T extends { fila?: number | null }>(errores: T[]): T[] {
+  return [...errores].sort((a, b) => {
+    const fa = a.fila ?? Number.MAX_SAFE_INTEGER;
+    const fb = b.fila ?? Number.MAX_SAFE_INTEGER;
+    return fa - fb;
+  });
+}
+
 export function erroresDesdeImportacion(error: SafeApiError | null): FilaImportError[] {
   if (!error?.details || typeof error.details !== 'object' || Array.isArray(error.details)) return [];
   const errores = (error.details as { errores?: unknown }).errores;

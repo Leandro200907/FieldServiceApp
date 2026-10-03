@@ -70,7 +70,7 @@ def test_cadena_rechazo_de_C_con_B_sucedida_restaura_B(cliente_api, tenant_de_pr
     b = _cargar(cliente_api, t, p, req, desde="2026-06-01", hasta="2026-12-31")["documento_id"]
     c = _proponer(cliente_api, t, p, req, "2026-12-01", "2027-12-01")
     assert _estados(t, p, req) == {a: "sucedida", b: "sucedida", c: "vigente"}
-    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c}))
+    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c, "motivo": "no aplica"}))
     assert r["restaurado_documento_id"] == b
     assert _estados(t, p, req) == {a: "sucedida", b: "vigente", c: "rechazada"}
 
@@ -116,7 +116,7 @@ def test_cadena_rechazo_no_resucita_una_terminal_ni_deja_dos_vigentes(cliente_ap
     _ok(_post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": lote}))
     assert _estados(t, p, req) == {a: "revertida_por_lote", b: "vigente"}
     c = _cargar(cliente_api, t, p, req, desde="2026-07-01", hasta="2027-06-30")["documento_id"]
-    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b}).status_code == 409
+    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b, "motivo": "tarde"}).status_code == 409
     assert _estados(t, p, req) == {a: "revertida_por_lote", b: "sucedida", c: "vigente"}
 
 
@@ -127,7 +127,7 @@ def test_cadena_sin_antecesor_restaurable_deja_sin_vigente(cliente_api, tenant_d
     req = _alta_def(cliente_api, t, "Apto")
     p = _alta_persona(cliente_api, t, "C-5", t.sujeto_tecnico)
     b = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-12-31")
-    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b}))
+    r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b, "motivo": "rechazo"}))
     assert r["restaurado_documento_id"] is None
     assert _vigentes(_docs(t, p, req)) == []
 
@@ -141,7 +141,7 @@ def test_cadena_larga_todas_las_combinaciones_mantienen_a_lo_sumo_un_vigente(cli
     a = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2026-03-31")["documento_id"]; _assert_a_lo_sumo_un_vigente(t, p, req)
     l1, (b,) = _lote(cliente_api, t, p, req, [("2026-03-01", "2026-06-30")]); _assert_a_lo_sumo_un_vigente(t, p, req)
     c = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-09-30"); _assert_a_lo_sumo_un_vigente(t, p, req)
-    _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c})); _assert_a_lo_sumo_un_vigente(t, p, req)
+    _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c, "motivo": "rechazo"})); _assert_a_lo_sumo_un_vigente(t, p, req)
     assert _estados(t, p, req)[b] == "vigente"
     l2, (d,) = _lote(cliente_api, t, p, req, [("2026-09-01", "2026-12-31")]); _assert_a_lo_sumo_un_vigente(t, p, req)
     _ok(_post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": l1})); _assert_a_lo_sumo_un_vigente(t, p, req)
@@ -441,7 +441,7 @@ def test_concurrencia_confirmar_y_rechazar_la_misma_propuesta(cliente_api, tenan
 
     def rechazar():
         with tenant_session(t.tenant_id) as s:
-            return legajos.rechazar_propuesta(s, _ident(t, "responsable_legajos"), esq.RechazarPropuesta(documento_id=prop))
+            return legajos.rechazar_propuesta(s, _ident(t, "responsable_legajos"), esq.RechazarPropuesta(documento_id=prop, motivo="carrera"))
 
     salidas = _en_paralelo([confirmar, rechazar])
     exitos = [r for r, e in salidas if e is None]
