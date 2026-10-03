@@ -4,8 +4,9 @@ import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import type { ItemCalendario, SubjectKind, VisualCalendarState } from './contracts';
 import { deriveVisualState } from './contracts';
-import { calendarAccess, isCalendarIntegrated } from './access';
-import { addDays, dayPosition, todayIso } from './dates';
+import { calendarAccess } from './access';
+import { addDays, dayPosition, formatFecha, todayIso } from './dates';
+import { session } from '../../api';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
@@ -46,44 +47,42 @@ function TimelineRow({ item, from, to, todayLeft, selected, onSelect }: { item: 
   </div>;
 }
 
-export function CalendarDocumentalScreen({ roles }: { roles: readonly string[] }) {
+export function CalendarDocumentalScreen({ roles, embedded = false }: { roles: readonly string[]; embedded?: boolean }) {
   const scope = documentationScopeFor(roles);
   const [kind, setKind] = useState<SubjectKind | 'all'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
-  const from = useMemo(() => todayIso(), []);
-  const to = useMemo(() => addDays(from, 40), [from]);
+  const from = useMemo(() => addDays(todayIso(), -30), []);
+  const to = useMemo(() => addDays(todayIso(), 40), []);
+  const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  const fmt = (iso: string) => formatFecha(iso, tz);
   const calendar = usePrototypeRead(() => calendarAccess().readCalendar({ from, to, subjectKind: kind === 'all' ? undefined : kind, offset, limit: PAGE_SIZE }), [from, to, kind, offset]);
   const setKindAndResetPage = (value: SubjectKind | 'all') => { setKind(value); setOffset(0); };
   const companyAllowed = scope === 'responsible';
-  const integrated = isCalendarIntegrated();
-  if (!scope) return <Pending title="Sin rol reconocido para esta vista">Tu sesión no tiene un rol habilitado para el calendario documental.</Pending>;
+  if (!scope) return <Pending title="Sin rol reconocido para esta vista">Tu sesión no tiene un rol habilitado para esta vista.</Pending>;
   const selected = calendar.data?.items.find(item => item.id === selectedId) ?? null;
   // F-01: la marca de "hoy" se ubica con el `hoy` que devuelve el backend (autoridad real
   // sobre la fecha del tenant — F-03), nunca con una posición fija.
   const todayLeft = dayPosition(calendar.data?.hoy ?? from, from, to);
   return <>
-    {integrated
-      ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Calendario general de vencimientos</strong><p>No cruza contra matriz ni OC. El radar documental realiza ese cruce informativo.</p></div></div>
-      : <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Las fechas, sujetos y motivos son ejemplos temporales. El contrato de forma ya es el real (`docs/openapi.json`); el dato todavía no viene del backend.</p></div></div>}
     <section className="panel planning-toolbar">
-      <div><p className="eyebrow">Rango consultado</p><strong>{from} — {to}</strong></div>
+      <div><p className="eyebrow">Rango consultado</p><strong>{fmt(from)} — {fmt(to)}</strong></div>
       <div className="orientation-tabs" aria-label="Orientación del calendario">
         <button className={kind === 'all' ? 'active' : ''} onClick={() => setKindAndResetPage('all')}>Todos</button>
         {(Object.keys(kindLabels) as SubjectKind[]).map(item => <button key={item} disabled={item === 'empresa' && !companyAllowed} title={item === 'empresa' && !companyAllowed ? 'Fuera del alcance de este rol' : undefined} className={kind === item ? 'active' : ''} onClick={() => setKindAndResetPage(item)}>{kindLabels[item]}</button>)}
       </div>
     </section>
-    <div className="planning-legend">{(Object.keys(visualStateLabels) as VisualCalendarState[]).map(state => <span key={state}><i className={`legend-dot status-${state}`} />{visualStateLabels[state]}</span>)}{calendar.data && <span className="today-key"><i />Hoy · {calendar.data.hoy}</span>}</div>
+    <div className="planning-legend">{(Object.keys(visualStateLabels) as VisualCalendarState[]).map(state => <span key={state}><i className={`legend-dot status-${state}`} />{visualStateLabels[state]}</span>)}{calendar.data && <span className="today-key"><i />Hoy · {fmt(calendar.data.hoy)}</span>}</div>
     {calendar.loading ? <LoadingState /> : calendar.error ? <ErrorState message={calendar.error.message} requestId={calendar.error instanceof ApiFailure && calendar.error.detail.referenceSource === 'server' ? calendar.error.detail.requestId : undefined} /> : <div className="calendar-layout">
       <section className="timeline-card" aria-label="Calendario documental">
-        <div className="timeline-scale"><span>{from}</span><span>{to}</span></div>
+        <div className="timeline-scale"><span>{fmt(from)}</span><span>{fmt(to)}</span></div>
         {calendar.data?.items.map(item => <TimelineRow key={item.id} item={item} from={from} to={to} todayLeft={todayLeft} selected={selectedId === item.id} onSelect={() => setSelectedId(item.id)} />)}
         {calendar.data?.items.length === 0 && <p className="empty-inline">No hay vencimientos registrados en este rango para la orientación elegida.</p>}
         {calendar.data && <PaginationControls offset={calendar.data.offset} limit={calendar.data.limit} total={calendar.data.total} onOffsetChange={setOffset} />}
       </section>
       {selected && <Detail item={selected} />}
     </div>}
-    <section className="module-boundary"><strong>Límite con Módulo 2</strong><span>Sin arrastrar ni asignar recursos</span><span>Sin modificar fechas</span><span>Sin crear OT</span><span>Sin ejecución, tiempos reales, firma ni certificados</span></section>
+    {!embedded && <p className="nota-pie-informativa" role="note">Las vigencias mostradas no confirman exigibilidad para una OC concreta.</p>}
   </>;
 }
 
