@@ -106,10 +106,6 @@ export function VencimientosScreen() {
   }
 
   return <>
-    {integrated
-      ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Tablero de vencimientos</strong><p>Evidencia vigente que vence dentro de la ventana elegida, o ya vencida.</p></div></div>
-      : <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Ítems de ejemplo temporales. El contrato de forma ya es el real; el dato todavía no viene del backend.</p></div></div>}
-    <div className="availability-warning" role="note"><strong>Solo consulta de vencimientos</strong><span>Sin agregado, políticas, recordatorios ni escalamiento — eso es el ciclo de alertas (H-02), una capacidad distinta.</span></div>
     {puedeImportar && <section className="panel">
       <div className="panel-top"><div><p className="eyebrow">Fuente controlada</p><h3>Importar presentaciones de operadoras</h3></div><Badge>Excel estándar</Badge></div>
       <p className="muted">Carga la hoja <strong>Presentaciones</strong>. Cada fila actualiza sólo el espejo de una operadora; no crea ni reemplaza documentos del legajo.</p>

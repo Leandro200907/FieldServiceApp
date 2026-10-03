@@ -3,7 +3,7 @@ import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from '../documentation-planning/PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
-import { isAuditoriaIntegrated, auditoriaAccess } from './access';
+import { auditoriaAccess } from './access';
 import '../documentation-planning/planning.css';
 import './auditoria.css';
 
@@ -18,11 +18,7 @@ export function AuditoriaScreen() {
   const log = usePrototypeRead(() => auditoriaAccess().readLogAuditoria({
     tipo: tipo || undefined, desde: toIsoStart(desde), hasta: toIsoEnd(hasta), offset, limit: PAGE_SIZE,
   }), [tipo, desde, hasta, offset]);
-  const integrated = isAuditoriaIntegrated();
   return <>
-    {integrated
-      ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Eventos registrados</strong><p>Trazabilidad del tenant, más reciente primero.</p></div></div>
-      : <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Eventos de ejemplo temporales. El contrato de forma ya es el real; el dato todavía no viene del backend.</p></div></div>}
     <section className="panel">
       <div className="form-grid">
         <div className="form-field"><label htmlFor="audit-tipo">Tipo de evento</label><input id="audit-tipo" value={tipo} onChange={event => { setTipo(event.target.value); setOffset(0); }} placeholder="Ej: DocumentoConfirmado" /></div>

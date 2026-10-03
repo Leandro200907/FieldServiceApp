@@ -3,14 +3,14 @@ import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from '../documentation-planning/PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
-import { isPropuestasIntegrated, propuestasAccess } from './access';
+import { propuestasAccess } from './access';
 import { subtituloLegajoPersona, tituloLegajoPersona } from '../legajos/legajoDisplay';
 import type { DocumentoPropuesto } from './contracts';
 import type { PropuestasAccess } from './contracts';
 import '../documentation-planning/planning.css';
 import './propuestas.css';
 
-const origenLabels: Record<string, string> = { planilla: 'Planilla', carga_manual: 'Carga manual', drive: 'Drive' };
+const origenLabels: Record<string, string> = { planilla: 'Planilla', carga_manual: 'Propuesta del técnico', drive: 'Drive' };
 
 function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPropuesto; onChanged: () => void; access: PropuestasAccess; readOnly: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -67,13 +67,8 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
   const [offset, setOffset] = useState(0);
   const [refreshToken, setRefreshToken] = useState(0);
   const bandeja = usePrototypeRead(() => access.readPropuestasPendientes({ offset, limit: PAGE_SIZE }), [access, offset, refreshToken]);
-  const integrated = !accessOverride && isPropuestasIntegrated();
   function onChanged() { setRefreshToken(token => token + 1); }
   return <>
-    {integrated
-      ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Revisión documental</strong><p>Documentos propuestos por técnicos, esperando confirmación o rechazo.</p></div></div>
-      : <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Propuestas de ejemplo temporales. El contrato de forma ya es el real; el dato todavía no viene del backend.</p></div></div>}
-    <div className="availability-warning" role="note"><strong>Sin descarga de evidencia todavía</strong><span>La confirmación/rechazo se decide con los datos declarados; ver el archivo adjunto (G-03) sigue sin integrar.</span></div>
     {readOnly && <div className="availability-warning" role="note"><strong>Vista de diseño no interactiva</strong><span>Los botones están deshabilitados y no ejecutan comandos reales.</span></div>}
     {bandeja.loading ? <LoadingState /> : bandeja.error ? <ErrorState message={bandeja.error.message} requestId={bandeja.error instanceof ApiFailure && bandeja.error.detail.referenceSource === 'server' ? bandeja.error.detail.requestId : undefined} /> : <>
       <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Sujeto / origen</th><th>Requisito</th><th>Vigencia propuesta</th><th>Propuesto el</th><th>Acción</th></tr></thead><tbody>
