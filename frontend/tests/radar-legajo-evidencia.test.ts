@@ -17,10 +17,36 @@ describe('radar legajo evidencia', () => {
   });
 
   it('aplica precedencia de estados del motor documental', () => {
-    expect(etiquetaEstadoRequisitoRadar({ estado: 'vence_durante_periodo', archivo_validacion: 'valido' })).toBe('Vencido');
     expect(etiquetaEstadoRequisitoRadar({ estado: 'pendiente_revision', archivo_validacion: 'sin_archivo' })).toBe('Sin respaldo');
     expect(etiquetaEstadoRequisitoRadar({ estado: 'pendiente_revision', archivo_validacion: 'pendiente' })).toBe('En revisión');
     expect(etiquetaEstadoRequisitoRadar({ estado: 'vigente_todo_el_periodo', archivo_validacion: 'valido' })).toBe('Vigente');
+  });
+
+  it('Constancia ART vencida con evidencia inválida muestra Vencido (D19)', () => {
+    expect(etiquetaEstadoRequisitoRadar({
+      estado: 'vencido_antes_inicio',
+      archivo_validacion: 'invalido',
+      motivo: 'Constancia ART está vencido antes del inicio del período',
+    })).toBe('Vencido');
+    expect(motivoFalloRequisitoRadar({
+      estado: 'vencido_antes_inicio',
+      archivo_validacion: 'invalido',
+      motivo: 'Constancia ART está vencido antes del inicio del período',
+    })).toContain('vencido antes del inicio');
+  });
+
+  it('licencia que vence durante la OC no se etiqueta como Vencido', () => {
+    expect(etiquetaEstadoRequisitoRadar({
+      estado: 'vence_durante_periodo',
+      archivo_validacion: 'valido',
+      vigente_hasta: '2026-10-23',
+      motivo: 'Licencia de conducir deja un período sin cobertura documental',
+    })).toBe('Vence durante la OC');
+    expect(motivoFalloRequisitoRadar({
+      estado: 'vence_durante_periodo',
+      archivo_validacion: 'valido',
+      motivo: 'Licencia de conducir deja un período sin cobertura documental',
+    })).toContain('sin cobertura documental');
   });
 
   it('expone motivo solo cuando el requisito no está vigente', () => {

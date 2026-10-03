@@ -295,6 +295,11 @@ def evaluar_requisito_documental(
             accion="Revisar y confirmar la evidencia",
         )
     if invalidas:
+        alerta = _alerta_temporal_sin_respaldo(
+            invalidas, desde, hasta, requisito, hay_vigente_no_probada=hay_vigente_no_probada
+        )
+        if alerta is not None:
+            return alerta
         elegida = max(invalidas, key=lambda e: e.evidencia_id)
         return _resultado(
             EstadoRequisitoDocumental.EVIDENCIA_INVALIDA,

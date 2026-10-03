@@ -106,6 +106,18 @@ def test_archivo_invalido_se_informa_expresamente():
     assert resultado.estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA
 
 
+def test_vencido_con_archivo_invalido_es_alerta_no_evidencia_invalida():
+    """D19 precedencia: vencimiento alerta aunque la evidencia sea inválida."""
+    resultado = evaluar(
+        evidencia(
+            hasta=date(2026, 10, 17),
+            validacion=EstadoValidacionArchivo.INVALIDO,
+        )
+    )
+    assert resultado.estado == EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO
+    assert resultado.primer_quiebre == DESDE
+
+
 def test_version_rechazada_no_cubre_el_requisito():
     resultado = evaluar(evidencia(version=EstadoVersionEvidencia.RECHAZADA))
     assert resultado.estado == EstadoRequisitoDocumental.FALTANTE
