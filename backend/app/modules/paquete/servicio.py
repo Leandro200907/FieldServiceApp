@@ -22,13 +22,14 @@ import hashlib
 import hmac
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
+from app.core.resolucion_evidencia import es_propuesta_pendiente, filas_evidencia_para_evaluacion
 from app.auth.alcance import sujeto_en_alcance
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
@@ -120,6 +121,18 @@ def paquetes(session: Session, identidad: Identidad, sujeto_id: str | None = Non
 # --------------------------------------------------------------------------- vista pública
 
 
+def _estado_requisito_paquete(fila: dict[str, Any], hoy: date) -> str:
+    """Estado público del requisito (D16: propuesta sin confirmar → pendiente de revisión)."""
+    if es_propuesta_pendiente(fila):
+        return "pendiente_de_revision"
+    hasta = fila.get("vigente_hasta")
+    if hasta is not None and hasta < hoy:
+        return "vencido"
+    if fila.get("estado_confirmacion") == "declarado":
+        return "declarado_sin_verificar"
+    return "vigente"
+
+
 def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str | None) -> dict[str, Any]:
     """Contenido del paquete para quien tiene el link: estado de cumplimiento del sujeto,
     sin archivos. Registra el acceso."""
@@ -131,23 +144,46 @@ def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str
     legajo = session.execute(text("SELECT sujeto_id, tipo_sujeto, identificador_natural FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s"),
                              {"t": tenant_id, "s": p["sujeto_id"]}).mappings().one()
     tenant = session.execute(text("SELECT nombre FROM modulo1.tenant WHERE tenant_id = :t"), {"t": tenant_id}).scalar()
-    filas = session.execute(text(
-        "SELECT r.nombre AS requisito, r.categoria, d.vigente_hasta, d.estado_confirmacion "
-        "FROM modulo1.documento d JOIN modulo1.definicion_requisito r "
-        "ON r.tenant_id=d.tenant_id AND r.requisito_definicion_id=d.requisito_definicion_id "
-        "WHERE d.tenant_id=:t AND d.sujeto_id=:s AND d.estado_version='vigente' ORDER BY r.nombre"),
-        {"t": tenant_id, "s": p["sujeto_id"]}).mappings().all()
-    requisitos = [{"requisito": f["requisito"], "categoria": f["categoria"],
-                   "vigente_hasta": f["vigente_hasta"].isoformat() if f["vigente_hasta"] else None,
-                   "estado": "vencido" if f["vigente_hasta"] is not None and f["vigente_hasta"] < hoy else ("vigente" if f["estado_confirmacion"] != "declarado" else "declarado_sin_verificar")} for f in filas]
+    filas = session.execute(
+        text(
+            "SELECT r.nombre AS requisito, r.categoria, d.documento_id, d.sujeto_id, d.requisito_definicion_id, "
+            "d.vigente_hasta, d.estado_confirmacion, d.estado_version, d.origen_propuesta, d.sucede_a "
+            "FROM modulo1.documento d JOIN modulo1.definicion_requisito r "
+            "ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id "
+            "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.estado_version IN ('vigente', 'sucedida') "
+            "ORDER BY r.nombre"
+        ),
+        {"t": tenant_id, "s": p["sujeto_id"]},
+    ).mappings().all()
+    meta_por_req: dict[str, dict[str, str]] = {}
+    for f in filas:
+        rid = str(f["requisito_definicion_id"])
+        meta_por_req[rid] = {"requisito": f["requisito"], "categoria": f["categoria"]}
+    elegidas = filas_evidencia_para_evaluacion([dict(f) for f in filas])
+    requisitos: list[dict[str, Any]] = []
+    for (_sujeto, rid), fila in sorted(elegidas.items(), key=lambda item: meta_por_req.get(item[0][1], {}).get("requisito", "")):
+        meta = meta_por_req[str(rid)]
+        hasta = fila.get("vigente_hasta")
+        requisitos.append(
+            {
+                "requisito": meta["requisito"],
+                "categoria": meta["categoria"],
+                "vigente_hasta": hasta.isoformat() if hasta else None,
+                "estado": _estado_requisito_paquete(fila, hoy),
+            }
+        )
     session.execute(text("UPDATE modulo1.paquete_entrega SET accesos = accesos + 1, ultimo_acceso_en = now() WHERE tenant_id = :t AND paquete_id = :p"),
                     {"t": tenant_id, "p": str(p["paquete_id"])})
     session.execute(text("INSERT INTO modulo1.paquete_acceso (tenant_id, paquete_id, origen_hash) VALUES (:t, :p, :o)"),
                     {"t": tenant_id, "p": str(p["paquete_id"]), "o": hashlib.sha256(origen.encode()).hexdigest()[:16] if origen else None})
     return {"empresa": tenant, "sujeto": {"sujeto_id": legajo["sujeto_id"], "tipo_sujeto": legajo["tipo_sujeto"], "identificador": legajo["identificador_natural"]},
             "fecha": hoy.isoformat(), "expira_en": p["expira_en"].isoformat(), "requisitos": requisitos,
-            "resumen": {"vigentes": sum(1 for r in requisitos if r["estado"] == "vigente"), "vencidos": sum(1 for r in requisitos if r["estado"] == "vencido"),
-                        "sin_verificar": sum(1 for r in requisitos if r["estado"] == "declarado_sin_verificar")}}
+            "resumen": {
+                "vigentes": sum(1 for r in requisitos if r["estado"] == "vigente"),
+                "vencidos": sum(1 for r in requisitos if r["estado"] == "vencido"),
+                "sin_verificar": sum(1 for r in requisitos if r["estado"] == "declarado_sin_verificar"),
+                "pendiente_revision": sum(1 for r in requisitos if r["estado"] == "pendiente_de_revision"),
+            }}
 
 
 def qr_png(url: str) -> bytes:
