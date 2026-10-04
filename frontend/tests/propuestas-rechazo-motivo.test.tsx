@@ -13,4 +13,10 @@ describe('PropuestasScreen rechazo', () => {
     expect(src).toContain('bandeja-aviso');
     expect(src).toContain('onAccionExitosa');
   });
+
+  it('propuesta sin archivo no ofrece Ver archivo', () => {
+    const src = readFileSync(join(process.cwd(), 'src/features/propuestas/PropuestasScreen.tsx'), 'utf8');
+    expect(src).toContain('Sin archivo adjunto');
+    expect(src).toContain('propuestaSinArchivoAdjunto');
+  });
 });
