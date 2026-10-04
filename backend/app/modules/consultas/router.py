@@ -64,6 +64,7 @@ class EvidenciaVigente(BaseModel):
     estados_adicionales_explicacion: dict[str, str] | None = None
     propuesta_en_revision: PropuestaEnRevision | None = None
     ultimo_rechazo_propuesta: UltimoRechazoPropuesta | None = None
+    motivo_archivo_invalido: str | None = None
     observacion_operadora: str | None = None
     ocs_afectadas: list[OcAfectadaRef] = Field(default_factory=list)
 

@@ -4324,6 +4324,17 @@
             ],
             "title": "Locacion Id"
           },
+          "motivo_archivo_invalido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Archivo Invalido"
+          },
           "nombre_apellido": {
             "anyOf": [
               {

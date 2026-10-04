@@ -201,8 +201,9 @@ Tras `confirmar_subida_de_evidencia`, la API encola un job `validacion_evidencia
    rechazo automático tipo Caso A).
 
 Hasta que termina, las consultas muestran el estado de presentación **archivo en verificación
-técnica** (no es un error de usuario). El escaneo antivirus está reservado (`scan_estado =
-no_configurado`); no bloquea la validación hoy.
+técnica** (no es un error de usuario). El escaneo antivirus está **pendiente de
+implementación** (`scan_estado = no_configurado`); no bloquea la validación hoy ni afirma
+«limpio» sin escanear.
 
 ## Correr
 

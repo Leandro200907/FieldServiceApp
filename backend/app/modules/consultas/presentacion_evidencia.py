@@ -104,6 +104,11 @@ def enriquecer_fila_evidencia(
     )
     respaldo = estado_respaldo_presentacion(archivo)
     adicionales: list[str] = [respaldo] if respaldo else []
+    motivo_archivo: str | None = None
+    if respaldo == "evidencia_invalida":
+        from app.modules.evidencia.motivos_usuario import motivo_validacion_para_usuario
+
+        motivo_archivo = motivo_validacion_para_usuario(fila.get("archivo_validacion_motivo"))
     if str(fila.get("estado_confirmacion") or "") == "declarado":
         adicionales.append("declarada")
     salida = dict(fila)
@@ -112,7 +117,12 @@ def enriquecer_fila_evidencia(
     salida["estado_presentacion_explicacion"] = EXPLICACION_ESTADO[estado]
     if adicionales:
         salida["estados_adicionales"] = adicionales
-        salida["estados_adicionales_explicacion"] = {e: EXPLICACION_ESTADO[e] for e in adicionales}
+        explicaciones = {e: EXPLICACION_ESTADO[e] for e in adicionales}
+        if motivo_archivo and "evidencia_invalida" in explicaciones:
+            explicaciones["evidencia_invalida"] = motivo_archivo
+        salida["estados_adicionales_explicacion"] = explicaciones
+    if motivo_archivo:
+        salida["motivo_archivo_invalido"] = motivo_archivo
     return salida
 
 
@@ -195,7 +205,8 @@ def filas_evidencia_para_legajo(
                    d.documento_id AS id, d.sujeto_id, d.requisito_definicion_id,
                    r.nombre AS requisito, r.categoria, d.vigente_desde, d.vigente_hasta,
                    d.estado_confirmacion, d.origen_propuesta, d.locacion_id,
-                   d.estado_version, d.archivo_estado, d.archivo_validacion, d.clave_storage,
+                   d.estado_version, d.archivo_estado, d.archivo_validacion, d.archivo_validacion_motivo,
+                   d.clave_storage,
                    d.sucede_a, r.plazo_aviso_dias,
                    l.identificador_natural, l.nombre_apellido, l.tipo_sujeto
             FROM modulo1.documento d
