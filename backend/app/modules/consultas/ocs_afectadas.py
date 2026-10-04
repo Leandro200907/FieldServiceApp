@@ -14,10 +14,14 @@ _ESTADOS_SIN_COBERTURA_PERIODO = frozenset({
     "vence_durante_periodo",
     "vencido_antes_inicio",
     "faltante",
+    "evidencia_invalida",
+    "pendiente_revision",
 })
 
 
 def requisito_sin_cobertura_en_periodo(req: dict[str, Any]) -> bool:
+    if req.get("es_rechazo_operadora"):
+        return True
     return req.get("estado") in _ESTADOS_SIN_COBERTURA_PERIODO
 
 

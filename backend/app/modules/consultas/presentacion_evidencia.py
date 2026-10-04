@@ -226,13 +226,33 @@ def _cuenta_como_en_regla_hoy(item: dict[str, Any]) -> bool:
     return True
 
 
+def adjuntar_rechazos_operadora(session: Session, tenant_id: str, items: list[dict[str, Any]]) -> None:
+    """E-10: rechazo en ficha / mi legajo (texto corto por operadora)."""
+    from app.core.consulta_documental import cargar_entregas_operadora
+
+    entregas = cargar_entregas_operadora(session, tenant_id)
+    for item in items:
+        doc_id = str(item.get("id") or "")
+        if not doc_id:
+            continue
+        rechazos = [
+            entrega
+            for (_op, did), entrega in entregas.items()
+            if did == doc_id and str(entrega.get("estado") or "") == "rechazado"
+        ]
+        if not rechazos:
+            continue
+        nombre = str(rechazos[0].get("operadora_nombre") or "la operadora")
+        item["observacion_operadora"] = f"Rechazado por {nombre}"
+
+
 def resumen_desde_items(items: list[dict[str, Any]]) -> dict[str, int]:
     vigentes = por_vencer = vencidos = 0
     for i in items:
         est = i.get("estado_presentacion")
         if est == "vencida" or i.get("vencido"):
             vencidos += 1
-        elif est == "por_vencer" and _cuenta_como_en_regla_hoy(i):
+        elif est == "por_vencer":
             por_vencer += 1
         elif est in ("verificada", "declarada"):
             if _cuenta_como_en_regla_hoy(i):
