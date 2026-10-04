@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE } from '../documentation-planning/PaginationControls';
@@ -9,17 +9,20 @@ import { session } from '../../api';
 import { formatFecha, formatFechaHora } from '../../ui/fechas';
 import type { ItemBandejaRevision, PestanaBandeja, PropuestasAccess } from './contracts';
 import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
+import { abrirUrlDescargaAbsoluta, tipoPreviewDesdeUrl } from './archivoPreview';
+import {
+  itemPermiteAbrirArchivo,
+  mensajeConfirmacionBandeja,
+  mensajeRechazoBandeja,
+  propuestaSinArchivoAdjunto,
+} from './bandejaMensajes';
+import { notifyBandejaRevisionChanged } from './bandejaRevisionRefresh';
 import '../documentation-planning/planning.css';
 import './propuestas.css';
 
 function etiquetaTipoItem(tipo: ItemBandejaRevision['tipo_item']): string {
   if (tipo === 'propuesta') return 'Propuesta';
   return 'Archivo a validar';
-}
-
-function abrirUrlDescarga(url: string) {
-  const absolute = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
-  window.open(absolute, '_blank', 'noopener,noreferrer');
 }
 
 function DetalleBandeja({
@@ -29,6 +32,7 @@ function DetalleBandeja({
   archivoAbierto,
   onArchivoAbierto,
   onChanged,
+  onAccionExitosa,
   onSiguiente,
   haySiguiente,
 }: {
@@ -38,6 +42,7 @@ function DetalleBandeja({
   archivoAbierto: boolean;
   onArchivoAbierto: () => void;
   onChanged: () => void;
+  onAccionExitosa: (mensaje: string) => void;
   onSiguiente: () => void;
   haySiguiente: boolean;
 }) {
@@ -54,16 +59,24 @@ function DetalleBandeja({
     identificador_natural: item.identificador_natural ?? item.sujeto_id,
   };
   const esPropuesta = item.tipo_item === 'propuesta';
-  const sinArchivoValido = item.archivo_validacion !== 'valido' && item.tipo_item === 'propuesta';
+  const sinArchivoAdjunto = propuestaSinArchivoAdjunto(item);
+  const puedeAbrirArchivo = itemPermiteAbrirArchivo(item);
+  const sinArchivoValido = esPropuesta && !puedeAbrirArchivo;
 
-  async function abrirArchivo() {
+  useEffect(() => {
+    setPreviewUrl(null);
+    setRejecting(false);
+    setMotivo('');
+    setError(null);
+  }, [item.documento_id]);
+
+  async function cargarVistaPrevia() {
     setBusy(true);
     setError(null);
     try {
       const r = await access.abrirArchivo(item.documento_id);
-      setPreviewUrl(r.url);
+      setPreviewUrl(abrirUrlDescargaAbsoluta(r.url));
       onArchivoAbierto();
-      abrirUrlDescarga(r.url);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo abrir el archivo.');
     } finally {
@@ -78,6 +91,7 @@ function DetalleBandeja({
     try {
       await access.confirmarDocumento(item.documento_id, confirmarKey.current);
       confirmarKey.current = null;
+      onAccionExitosa(mensajeConfirmacionBandeja(item));
       onChanged();
       if (haySiguiente) onSiguiente();
     } catch (caught) {
@@ -97,6 +111,7 @@ function DetalleBandeja({
       await access.rechazarPropuesta(item.documento_id, motivoNormalizado, crypto.randomUUID());
       setRejecting(false);
       setMotivo('');
+      onAccionExitosa(mensajeRechazoBandeja(item));
       onChanged();
       if (haySiguiente) onSiguiente();
     } catch (caught) {
@@ -107,6 +122,8 @@ function DetalleBandeja({
   }
 
   const puedeConfirmarPropuesta = esPropuesta && archivoAbierto && !sinArchivoValido;
+  const previewAbsoluta = previewUrl ? abrirUrlDescargaAbsoluta(previewUrl) : null;
+  const previewTipo = previewAbsoluta ? tipoPreviewDesdeUrl(previewAbsoluta) : null;
 
   return (
     <section className="bandeja-detalle panel">
@@ -115,20 +132,32 @@ function DetalleBandeja({
       <p><strong>{item.requisito}</strong> · <Badge tone="accent">{etiquetaTipoItem(item.tipo_item)}</Badge></p>
       <p className="muted">{item.estado_presentacion_explicacion}</p>
 
-      <div className="bandeja-comparacion">
-        <div>
-          <h4>Vigente</h4>
-          {item.vigente_comparacion ? (
-            <p>{formatFecha(item.vigente_comparacion.vigente_desde ?? '', tz)} — {formatFecha(item.vigente_comparacion.vigente_hasta ?? '', tz)}</p>
-          ) : <p className="muted">Sin versión vigente previa</p>}
-        </div>
-        {esPropuesta && item.propuesta && (
+      <div className="bandeja-detalle-grid">
+        <div className="bandeja-comparacion">
           <div>
-            <h4>Propuesta</h4>
-            <p>{formatFecha(item.propuesta.vigente_desde ?? '', tz)} — {formatFecha(item.propuesta.vigente_hasta ?? '', tz)}</p>
-            {item.propuesta.cargado_por?.nombre && <small className="muted">Cargado por {item.propuesta.cargado_por.nombre}</small>}
+            <h4>Vigente</h4>
+            {item.vigente_comparacion ? (
+              <p>{formatFecha(item.vigente_comparacion.vigente_desde ?? '', tz)} — {formatFecha(item.vigente_comparacion.vigente_hasta ?? '', tz)}</p>
+            ) : <p className="muted">Sin versión vigente previa</p>}
           </div>
-        )}
+          {esPropuesta && item.propuesta && (
+            <div>
+              <h4>Propuesta</h4>
+              <p>{formatFecha(item.propuesta.vigente_desde ?? '', tz)} — {formatFecha(item.propuesta.vigente_hasta ?? '', tz)}</p>
+              {item.propuesta.cargado_por?.nombre && <small className="muted">Cargado por {item.propuesta.cargado_por.nombre}</small>}
+            </div>
+          )}
+        </div>
+
+        <div className="bandeja-preview" aria-label="Vista previa del archivo">
+          {previewAbsoluta ? (
+            previewTipo === 'pdf'
+              ? <iframe title="Vista previa del documento" src={previewAbsoluta} className="bandeja-preview-media" />
+              : <img src={previewAbsoluta} alt="Vista previa del documento" className="bandeja-preview-media" />
+          ) : (
+            <p className="muted bandeja-preview-placeholder">La vista previa aparece acá después de ver el archivo.</p>
+          )}
+        </div>
       </div>
 
       {(item.ocs_afectadas?.length ?? 0) > 0 && (
@@ -136,11 +165,26 @@ function DetalleBandeja({
       )}
 
       <div className="bandeja-archivo">
-        <button type="button" className="button button-secondary" disabled={busy || readOnly || sinArchivoValido} onClick={() => void abrirArchivo()}>
-          Ver archivo
-        </button>
-        {previewUrl && <p className="muted">Archivo abierto en una pestaña nueva.</p>}
-        {esPropuesta && !archivoAbierto && !sinArchivoValido && <p className="muted" role="note">Abrí el archivo antes de confirmar.</p>}
+        {sinArchivoAdjunto ? (
+          <p className="bandeja-sin-archivo"><strong>Sin archivo adjunto</strong></p>
+        ) : puedeAbrirArchivo ? (
+          <>
+            <button type="button" className="button button-secondary" disabled={busy || readOnly} onClick={() => void cargarVistaPrevia()}>
+              Ver archivo
+            </button>
+            {previewAbsoluta && (
+              <button type="button" className="button button-small button-secondary" disabled={busy || readOnly} onClick={() => window.open(previewAbsoluta, '_blank', 'noopener,noreferrer')}>
+                Abrir en pestaña nueva
+              </button>
+            )}
+          </>
+        ) : null}
+        {esPropuesta && sinArchivoAdjunto && (
+          <p className="muted" role="note">No se puede confirmar una propuesta sin archivo adjunto.</p>
+        )}
+        {esPropuesta && !sinArchivoAdjunto && !archivoAbierto && puedeAbrirArchivo && (
+          <p className="muted" role="note">Abrí el archivo antes de confirmar.</p>
+        )}
         {!esPropuesta && item.estado_presentacion_explicacion && <p className="muted">{item.estado_presentacion_explicacion}</p>}
       </div>
 
@@ -177,6 +221,13 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
   const [refreshToken, setRefreshToken] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [archivosAbiertos, setArchivosAbiertos] = useState<Record<string, boolean>>({});
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!aviso) return;
+    const timer = window.setTimeout(() => setAviso(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [aviso]);
 
   const bandeja = usePrototypeRead(
     () => access.readBandejaRevision({ offset, limit: PAGE_SIZE, pestana }),
@@ -189,6 +240,7 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
 
   function onChanged() {
     setRefreshToken(t => t + 1);
+    notifyBandejaRevisionChanged();
   }
 
   function onSiguiente() {
@@ -201,6 +253,7 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
 
   return (
     <>
+      {aviso && <p className="bandeja-aviso" role="status">{aviso}</p>}
       <header className="bandeja-header">
         <div className="bandeja-tabs" role="tablist">
           {(['todos', 'propuestas', 'archivos'] as const).map(p => (
@@ -247,6 +300,7 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
               archivoAbierto={Boolean(archivosAbiertos[selected.documento_id])}
               onArchivoAbierto={() => setArchivosAbiertos(prev => ({ ...prev, [selected.documento_id]: true }))}
               onChanged={onChanged}
+              onAccionExitosa={setAviso}
               onSiguiente={onSiguiente}
               haySiguiente={selectedIndex >= 0 && selectedIndex < items.length - 1}
             />

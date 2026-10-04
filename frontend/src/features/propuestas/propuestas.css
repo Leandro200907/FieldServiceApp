@@ -13,7 +13,13 @@
 .bandeja-item.active{border-color:#1f6feb;box-shadow:0 0 0 1px #1f6feb}
 .bandeja-item-tipo{font-weight:700;color:#1f6feb;text-transform:none}
 .evidence-list-item{list-style:none;margin-bottom:.75rem}
-.bandeja-comparacion{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
-.bandeja-archivo{margin:1rem 0}
+.bandeja-detalle-grid{display:grid;grid-template-columns:1fr minmax(200px,38%);gap:1rem;margin:1rem 0;align-items:start}
+.bandeja-comparacion{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.bandeja-preview{border:1px solid #c9d3db;border-radius:5px;background:#f6f9fb;min-height:12rem;padding:.5rem;display:flex;align-items:center;justify-content:center}
+.bandeja-preview-placeholder{margin:0;text-align:center;font-size:12px;padding:.5rem}
+.bandeja-preview-media{width:100%;max-height:min(50vh,420px);border:0;object-fit:contain;background:#fff}
+.bandeja-archivo{margin:1rem 0;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.bandeja-sin-archivo{margin:0;color:#536b7b}
+.bandeja-aviso{margin:0 0 1rem;padding:.65rem .85rem;border-radius:5px;background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;font-weight:600}
 .button-small{font-size:11px;padding:.25rem .5rem;margin-top:.35rem}
 .renovar-panel{margin-top:1rem}
