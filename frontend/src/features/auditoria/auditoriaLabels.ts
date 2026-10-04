@@ -18,6 +18,9 @@ export const tipoEventoAuditoriaLabels: Record<string, string> = {
   LegajoCreado: 'Legajo creado',
   LegajoDadoDeBaja: 'Legajo dado de baja',
   PlanillaOperadorasImportada: 'Planilla de operadoras importada',
+  EvidenciaAdjuntada: 'Evidencia adjuntada',
+  CumplimientoEmpresaAfectado: 'Cumplimiento de empresa afectado',
+  OcSinMatriz: 'OC sin matriz',
 };
 
 export function labelTipoEventoAuditoria(tipo: string): string {
