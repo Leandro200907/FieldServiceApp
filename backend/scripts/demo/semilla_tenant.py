@@ -605,8 +605,8 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             leg_esq.ProponerDocumento(
                 sujeto_id=est.sujetos["tecnico3"],
                 requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
-                vigente_desde=v1,
-                vigente_hasta=v2,
+                vigente_desde=hoy,
+                vigente_hasta=v2 + timedelta(days=400),
             ),
         )
         est.documentos["t3_propuesta_Licencia de conducir"] = pr_t3_lic["documento_id"]
