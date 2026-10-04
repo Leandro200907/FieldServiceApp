@@ -1,14 +1,22 @@
 import { session } from '../api';
 import type { EvidenciaVigente } from '../features/mi-legajo/contracts';
 import { todayIso } from '../features/documentation-planning/dates';
-import { etiquetasEvidencia, textoPropuestaEnRevision } from './evidenciaPresentacion';
+import { etiquetasEvidencia } from './evidenciaPresentacion';
 import { StatusDot, variantFromEtiquetaVigencia } from './StatusDot';
 import { formatFecha } from '../features/documentation-planning/dates';
 import { formatDaysToExpiry } from './formatDaysToExpiry';
 import { OcsAfectadasLine } from './OcsAfectadasLine';
 import type { OcAfectadaRef } from './ocsAfectadasPresentacion';
 
-export function EvidenciaRow({ item, hoyIso }: { item: EvidenciaVigente; hoyIso?: string }) {
+export function EvidenciaRow({
+  item,
+  hoyIso,
+  onRenovar,
+}: {
+  item: EvidenciaVigente;
+  hoyIso?: string;
+  onRenovar?: (item: EvidenciaVigente) => void;
+}) {
   const etiquetas = etiquetasEvidencia(item);
   const hoy = hoyIso ?? todayIso();
   const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
@@ -27,7 +35,13 @@ export function EvidenciaRow({ item, hoyIso }: { item: EvidenciaVigente; hoyIso?
           <> · <em>{(item as { observacion_operadora?: string }).observacion_operadora}</em></>
         )}
         {item.propuesta_en_revision && (
-          <> · <em>{textoPropuestaEnRevision(item.propuesta_en_revision)}</em></>
+          <> · <em>Renovación enviada · en revisión</em></>
+        )}
+        {item.ultimo_rechazo_propuesta?.motivo && (
+          <> · <em className="rechazo-motivo">Rechazada: {item.ultimo_rechazo_propuesta.motivo}</em></>
+        )}
+        {item.motivo_archivo_invalido && (
+          <> · <em className="rechazo-motivo">{item.motivo_archivo_invalido}</em></>
         )}
         {ocs.length > 0 && (
           <>
@@ -36,6 +50,14 @@ export function EvidenciaRow({ item, hoyIso }: { item: EvidenciaVigente; hoyIso?
           </>
         )}
       </small>
+      {onRenovar
+        && !item.propuesta_en_revision
+        && (item.estado_presentacion === 'por_vencer' || item.vencido)
+        && (
+          <button type="button" className="button button-secondary button-small" onClick={() => onRenovar(item)}>
+            Renovar
+          </button>
+        )}
     </li>
   );
 }
