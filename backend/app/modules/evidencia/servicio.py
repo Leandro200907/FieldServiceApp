@@ -110,18 +110,14 @@ def verificar_archivo(contenido: bytes, content_type_declarado: str | None) -> t
 
 
 def _rechazar_por_validacion_fallida(session: Session, tenant_id: str, documento_id: str, motivo: str, doc: dict[str, Any]) -> None:
-    """Caso A: reutiliza EXACTAMENTE el camino de RechazarPropuesta (arquitectura-tecnica.md
-    §8.5: "no se inventa un estado nuevo del Documento")."""
-    from app.modules.legajos.servicio import _restaurar_sucedido
-
+    """Caso A: misma semántica que RechazarPropuesta (propuesta → rechazada; vigente intacto)."""
     session.execute(text("UPDATE modulo1.documento SET estado_version = 'rechazada' WHERE tenant_id = :t AND documento_id = :d"),
                     {"t": tenant_id, "d": documento_id})
-    restaurado = _restaurar_sucedido(session, tenant_id, doc["sucede_a"])
     registrar_evento(
         session, tenant_id, "DocumentoRechazado",
         {"documento_id": documento_id, "sujeto_id": doc["sujeto_id"],
          "requisito_definicion_id": str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None,
-         "motivo": f"validación técnica del archivo: {motivo}", "restaurado_documento_id": restaurado},
+         "motivo": f"validación técnica del archivo: {motivo}", "restaurado_documento_id": None},
         None,
     )
 
@@ -145,7 +141,7 @@ def _notificar_y_revaluar(session: Session, tenant_id: str, documento_id: str, m
 
 
 def _despachar_invalidez(session: Session, tenant_id: str, documento_id: str, motivo: str, doc: dict[str, Any], usuario_id: str | None = None) -> None:
-    if doc["estado_confirmacion"] == "declarado" and doc["origen_propuesta"] and doc["estado_version"] == "vigente":
+    if doc["estado_confirmacion"] == "declarado" and doc["origen_propuesta"] and doc["estado_version"] == "propuesta":
         _rechazar_por_validacion_fallida(session, tenant_id, documento_id, motivo, doc)
     elif doc["estado_confirmacion"] in ESTADOS_VERIFICADOS:
         _notificar_y_revaluar(session, tenant_id, documento_id, motivo, doc, usuario_id)

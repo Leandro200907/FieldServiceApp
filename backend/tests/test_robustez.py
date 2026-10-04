@@ -69,9 +69,9 @@ def test_cadena_rechazo_de_C_con_B_sucedida_restaura_B(cliente_api, tenant_de_pr
     a = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2026-06-30")["documento_id"]
     b = _cargar(cliente_api, t, p, req, desde="2026-06-01", hasta="2026-12-31")["documento_id"]
     c = _proponer(cliente_api, t, p, req, "2026-12-01", "2027-12-01")
-    assert _estados(t, p, req) == {a: "sucedida", b: "sucedida", c: "vigente"}
+    assert _estados(t, p, req) == {a: "sucedida", b: "vigente", c: "propuesta"}
     r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": c, "motivo": "no aplica"}))
-    assert r["restaurado_documento_id"] == b
+    assert r["restaurado_documento_id"] is None
     assert _estados(t, p, req) == {a: "sucedida", b: "vigente", c: "rechazada"}
 
 
@@ -114,10 +114,10 @@ def test_cadena_rechazo_no_resucita_una_terminal_ni_deja_dos_vigentes(cliente_ap
     lote, (a,) = _lote(cliente_api, t, p, req, [("2026-01-01", "2026-06-30")])
     b = _proponer(cliente_api, t, p, req, "2026-06-01", "2026-12-31")
     _ok(_post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": lote}))
-    assert _estados(t, p, req) == {a: "revertida_por_lote", b: "vigente"}
+    assert _estados(t, p, req) == {a: "revertida_por_lote", b: "propuesta"}
     c = _cargar(cliente_api, t, p, req, desde="2026-07-01", hasta="2027-06-30")["documento_id"]
-    assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b, "motivo": "tarde"}).status_code == 409
-    assert _estados(t, p, req) == {a: "revertida_por_lote", b: "sucedida", c: "vigente"}
+    _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": b, "motivo": "tarde"}))
+    assert _estados(t, p, req) == {a: "revertida_por_lote", b: "rechazada", c: "vigente"}
 
 
 def test_cadena_sin_antecesor_restaurable_deja_sin_vigente(cliente_api, tenant_de_prueba):

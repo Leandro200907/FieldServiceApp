@@ -32,7 +32,7 @@ def test_rechazar_propuesta_no_restaura_sucedido_sin_archivo_en_storage(cliente_
             "SELECT documento_id::text FROM modulo1.documento WHERE tenant_id = :t AND sujeto_id = :s "
             "AND requisito_definicion_id = :r AND estado_version = 'vigente'"
         ), {"t": t.tenant_id, "s": p, "r": req}).scalar()
-        assert vigente is None
+        assert vigente == did_v1
 
 
 def test_reconciliar_reporta_confirmado_sin_objeto(tenant_de_prueba):

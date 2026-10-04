@@ -82,8 +82,8 @@ def _documento(tenant_id: str, sujeto_id: str = "persona_1", propuesta: bool = F
         s.execute(
             text(
                 "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, vigente_desde, vigente_hasta, origen, "
-                "origen_propuesta, estado_confirmacion) VALUES (:d, :t, :sj, '2026-01-01', '2027-01-01', 'carga_manual', :p, "
-                "CASE WHEN :p THEN 'declarado' ELSE 'verificado' END)"
+                "origen_propuesta, estado_confirmacion, estado_version) VALUES (:d, :t, :sj, '2026-01-01', '2027-01-01', 'carga_manual', :p, "
+                "CASE WHEN :p THEN 'declarado' ELSE 'verificado' END, CASE WHEN :p THEN 'propuesta' ELSE 'vigente' END)"
             ),
             {"d": did, "t": tenant_id, "sj": sujeto_id, "p": propuesta},
         )

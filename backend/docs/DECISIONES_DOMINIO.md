@@ -7,30 +7,30 @@ estas reglas exige releer la cita y justificar contra ella.
 
 ## 1. Propuesta del técnico (`ProponerDocumento` / `RechazarPropuesta`)
 
-**Cita.** especificacion.md 2.2, invariantes de Documento: *"Al **declarar** o confirmar
-una versión nueva del mismo requisito+sujeto, la anterior pasa a `sucedida` en la misma
-operación"*; *"`rechazada` es terminal … ni participa de la invariante de 'a lo sumo un
-vigente' — es como si nunca hubiera llegado a ser candidata"*; *"El motor siempre filtra
-primero por `estado_version = vigente` y recién ahí mira `estado_confirmacion`"*.
-documentacion-habilitante.md 1.10 / modelo-dominio.md 2.4: lo declarado nunca prueba la
-habilitación; *"una renovación propuesta y no confirmada no cierra nada, solo pausa"*.
+**Actualización 2026-10-04 (E-20 / E-37).** La regla anterior (propuesta como única fila
+`vigente` que sucedía al confirmado) hacía que lectores que filtran `estado_version =
+'vigente'` — Línea de tiempo, calendario, etc. — tomaran la renovación sin aprobar como
+cobertura. Se reemplaza por un estado de versión dedicado.
+
+**Cita.** especificacion.md 2.2 (sucesión al confirmar); documentacion-habilitante.md
+1.10 / modelo-dominio.md 2.4: lo declarado no prueba habilitación hasta confirmación del
+responsable.
 
 **Regla definitiva.**
-- La propuesta entra como versión `vigente` + `declarado` + `origen_propuesta=true` y
-  sucede al vigente anterior (guardando `sucede_a`). Mientras está pendiente, el motor
-  ve esa versión y devuelve `requiere_revision` para ese requisito: el sujeto no prueba
-  habilitación hasta que el Responsable confirme. **Consecuencia deliberada de la spec**:
-  proponer una renovación temprano degrada el veredicto del sujeto hasta la revisión —
-  por eso existe la alerta "propuesta pendiente hace más de N días" (habilitante 2.x).
-- `RechazarPropuesta` → `rechazada` (terminal) y se restaura el **antecesor no terminal
-  más cercano** siguiendo la cadena `sucede_a` (una `sucedida`). Si la antecesora
-  inmediata ya es terminal (p. ej. un lote revertido después de la propuesta) se sigue
-  subiendo; una versión terminal nunca se resucita.
-- Solo se rechaza una propuesta `vigente`; una propuesta ya sucedida por otra versión
-  devuelve 409 (la sucesión ya la dejó fuera de juego, y "rechazarla" no cambiaría nada).
+- `ProponerDocumento` inserta `estado_version = propuesta`, `estado_confirmacion =
+  declarado`, `origen_propuesta = true`. Guarda `sucede_a` apuntando al vigente confirmado
+  (si existe). **No** modifica el vigente confirmado.
+- A lo sumo **una** propuesta pendiente por (sujeto, requisito) (`uq_documento_propuesta_pendiente`).
+  Una nueva propuesta **rechaza** la anterior con motivo fijo *"Reemplazada por nueva
+  propuesta del técnico"*.
+- `ConfirmarDocumento` sobre la propuesta: la propuesta pasa a `vigente` + `verificado`; el
+  vigente confirmado previo (si hay) pasa a `sucedida` en la misma operación.
+- `RechazarPropuesta`: la propuesta pasa a `rechazada` (terminal). El vigente confirmado **no
+  cambia** (no se usa `_restaurar_sucedido` en este flujo).
+- Solo se rechaza/confirma una fila en `propuesta`; terminales (`rechazada`, etc.) devuelven 409.
 
-**Código.** `app/modules/legajos/servicio.py::_insertar_version_documento`,
-`rechazar_propuesta`, `_restaurar_sucedido`. Migración `0003_legajos_documento_sucede_a`.
+**Código.** `app/modules/legajos/servicio.py::_insertar_propuesta_documento`,
+`confirmar_documento`, `rechazar_propuesta`. Migración `0031_documento_estado_propuesta`.
 
 ## 2. Agregación del veredicto de la OC (`evaluar_compromiso`)
 
