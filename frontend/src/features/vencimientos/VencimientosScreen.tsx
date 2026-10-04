@@ -5,6 +5,7 @@ import { formatFecha } from '../documentation-planning/dates';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { StatusDot, variantFromEtiquetaVigencia } from '../../ui/StatusDot';
 import { etiquetaCategoria } from '../../ui/categoriaLabels';
+import { espejoLegajoLabel } from './espejoLegajoLabel';
 import { lineaPersonaConDni } from '../legajos/legajoDisplay';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import { etiquetasEvidencia } from '../../ui/evidenciaPresentacion';
@@ -174,7 +175,7 @@ export function VencimientosScreen() {
       {espejo.loading ? <LoadingState /> : espejo.error ? <ErrorState message={espejo.error.message} requestId={espejo.error instanceof ApiFailure && espejo.error.detail.referenceSource === 'server' ? espejo.error.detail.requestId : undefined} /> : espejo.data?.items.length ?
         <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Legajo</th><th>Documento</th><th>Operadora</th><th>Estado</th><th>Acción requerida</th><th></th></tr></thead><tbody>
           {espejo.data.items.map(item => <tr key={`${item.sujeto_id}-${item.requisito_definicion_id}-${item.operadora_id}`}>
-            <td><strong>{lineaPersonaConDni({ tipo_sujeto: 'persona', nombre_apellido: null, identificador_natural: item.identificador_natural, sujeto_id: item.sujeto_id })}</strong></td>
+            <td><strong>{espejoLegajoLabel(item)}</strong></td>
             <td>{item.requisito}</td><td>{item.operadora}</td>
             <td><StatusDot variant={item.estado_operadora === 'al_dia' ? 'vigente' : item.estado_operadora === 'rechazado' ? 'vencido' : 'revision'}>{ESTADO_ESPEJO_LABELS[item.estado_operadora] || item.estado_operadora}</StatusDot></td>
             <td>{item.motivo}</td>
