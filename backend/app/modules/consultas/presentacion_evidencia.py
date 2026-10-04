@@ -29,7 +29,7 @@ EXPLICACION_ESTADO: dict[str, str] = {
     "declarada": "Hay datos cargados que aún no fueron verificados por un responsable.",
     "por_vencer": "La evidencia sigue vigente pero vence dentro del plazo de aviso configurado.",
     "vencida": "La fecha de vigencia ya pasó; hace falta renovar o reemplazar la evidencia.",
-    "archivo_en_revision": "El archivo adjunto está pendiente de validación técnica.",
+    "archivo_en_revision": "Archivo en verificación técnica; el worker está validando formato e integridad.",
     "evidencia_invalida": "El archivo fue rechazado en la validación; hay que subir una evidencia nueva.",
     "sin_archivo_respaldo": "No hay archivo de respaldo cargado para esta evidencia.",
     "propuesta_en_revision": "Un técnico propuso una renovación que espera confirmación; no reemplaza la versión vigente.",

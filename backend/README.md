@@ -161,10 +161,48 @@ Base dedicada **`fsm_demo`** (el nombre debe terminar en `_demo`). El script abo
 ENV_FILE=.env .venv/Scripts/python scripts/sembrar_demo.py --reset --importar-planillas
 ```
 
-4. Levantar API, frontend y storage local; ingresar con un mail `*@<slug>.demo.test` del
-   listado que imprime el script (contraseña: la de `DEMO_PASSWORD`).
+4. Levantar **tres procesos** en pestañas separadas (mismo `ENV_FILE=.env` que la API):
+
+   **PowerShell — API**
+
+   ```powershell
+   cd backend
+   $env:ENV_FILE = ".env"
+   .\.venv\Scripts\uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
+
+   **PowerShell — worker** (obligatorio para validar archivos subidos; sin él, `archivo_validacion`
+   queda `pendiente` y no se puede confirmar ni descargar)
+
+   ```powershell
+   cd backend
+   $env:ENV_FILE = ".env"
+   .\.venv\Scripts\python -m app.worker.main
+   ```
+
+   **Frontend** (desde `frontend/`, según el README del cliente).
+
+5. Ingresar con un mail `*@<slug>.demo.test` del listado que imprime el script (contraseña:
+   la de `DEMO_PASSWORD`).
 
 Las planillas generadas viven en `scripts/demo_planillas/<slug>/` (gitignored).
+
+### Qué hace el worker `validacion_evidencia`
+
+Tras `confirmar_subida_de_evidencia`, la API encola un job `validacion_evidencia`. El worker:
+
+1. Lee el archivo desde el storage y comprueba que el **checksum SHA-256** coincida con el
+   registrado en `confirmar_subida` (integridad).
+2. Ejecuta `verificar_archivo` (`app/modules/evidencia/servicio.py`): formato reconocible
+   **PDF / JPEG / PNG / WEBP**, coincidencia con el `Content-Type` declarado, y parseo básico
+   de PDF (no corrupto). El **tamaño máximo** ya se aplicó al subir (`STORAGE_MAX_BYTES`,
+   25 MiB por defecto).
+3. Marca `archivo_validacion` en `valido` o `invalido` (propuesta `declarado` inválida →
+   rechazo automático tipo Caso A).
+
+Hasta que termina, las consultas muestran el estado de presentación **archivo en verificación
+técnica** (no es un error de usuario). El escaneo antivirus está reservado (`scan_estado =
+no_configurado`); no bloquea la validación hoy.
 
 ## Correr
 
@@ -175,7 +213,7 @@ Las planillas generadas viven en `scripts/demo_planillas/<slug>/` (gitignored).
 
 ```bash
 # Worker (polling cada WORKER_POLL_SEG; --una-vuelta para cron/CLI). Se pueden correr varias instancias.
-.venv/Scripts/python -m app.worker.main
+ENV_FILE=.env .venv/Scripts/python -m app.worker.main
 ```
 
 ```bash
