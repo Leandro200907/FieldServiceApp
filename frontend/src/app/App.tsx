@@ -25,8 +25,8 @@ function usePropuestasPendientesCount(enabled: boolean) {
     }
     let cancelled = false;
     void propuestasAccess()
-      .readPropuestasPendientes({ offset: 0, limit: 1 })
-      .then(data => { if (!cancelled) setCount(data.total ?? data.items.length); })
+      .readBandejaRevision({ offset: 0, limit: 1, pestana: 'todos' })
+      .then(data => { if (!cancelled) setCount(data.conteos?.todos ?? data.total ?? data.items.length); })
       .catch(() => { if (!cancelled) setCount(null); });
     return () => { cancelled = true; };
   }, [enabled]);

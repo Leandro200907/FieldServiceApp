@@ -16,7 +16,7 @@ export interface Page { id: PageId; label: string; description: string; roles: r
 
 export const pages: Page[] = [
   { id: 'configuracion', label: 'Configuración', description: 'Definiciones locales y administración documental.', roles: ['configuracion'], gaps: ['G-01', 'G-02'] },
-  { id: 'propuestas', label: 'Propuestas', description: 'Revisión de documentación presentada.', roles: ['responsable_legajos'], gaps: ['G-03'] },
+  { id: 'propuestas', label: 'Bandeja de revisión', description: 'Propuestas y archivos pendientes de revisión (D3).', roles: ['responsable_legajos'], gaps: [] },
   { id: 'legajos', label: 'Legajos', description: 'Documentación de personas, vehículos, equipos y empresa.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
   { id: 'mi-legajo', label: 'Mi legajo', description: 'Tu documentación personal registrada.', roles: ['tecnico'], gaps: [] },
   { id: 'vencimientos', label: 'Vencimientos', description: 'Evidencia vencida o próxima a vencer dentro de tu alcance documental.', roles: ['responsable_legajos', 'supervisor'], gaps: ['H-02'] },

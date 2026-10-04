@@ -3,3 +3,15 @@
 .proposal-reject label{font-size:11px;font-weight:700;color:#536b7b}
 .proposal-reject input{padding:6px 8px;border:1px solid #c9d3db;border-radius:5px;font-size:12px}
 .projection-table td strong + small{display:block}
+.bandeja-header{margin-bottom:1rem}
+.bandeja-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+.bandeja-tabs .tab{border:1px solid #c9d3db;background:#fff;padding:.35rem .75rem;border-radius:5px;cursor:pointer;font-size:12px}
+.bandeja-tabs .tab.active{font-weight:700;background:#eef4f8}
+.bandeja-layout{display:grid;grid-template-columns:minmax(220px,32%) 1fr;gap:1rem;align-items:start}
+.bandeja-lista{list-style:none;margin:0;padding:0;max-height:70vh;overflow:auto}
+.bandeja-item{width:100%;text-align:left;display:flex;flex-direction:column;gap:.15rem;padding:.65rem;border:1px solid #c9d3db;border-radius:5px;margin-bottom:.35rem;background:#fff;cursor:pointer}
+.bandeja-item.active{border-color:#1f6feb;box-shadow:0 0 0 1px #1f6feb}
+.bandeja-comparacion{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.bandeja-archivo{margin:1rem 0}
+.button-small{font-size:11px;padding:.25rem .5rem;margin-top:.35rem}
+.renovar-panel{margin-top:1rem}
