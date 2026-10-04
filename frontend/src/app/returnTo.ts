@@ -1,6 +1,17 @@
 import { canOpen, entryFor, knownRoles, pages, type Role } from './capabilities';
 import { pageFromPath } from './navigationGroups';
 
+const HOME_ROLE_PRIORITY: Role[] = ['configuracion', 'responsable_legajos', 'supervisor', 'tecnico'];
+
+/** Pantalla de inicio según rol (misma lógica que post-login sin `return`). */
+export function defaultHomePath(roles: readonly string[]): string {
+  const known = knownRoles(roles);
+  if (known.length === 0) return '/perfil';
+  if (known.length === 1) return `/${entryFor(known[0])}`;
+  const picked = HOME_ROLE_PRIORITY.find(role => known.includes(role)) ?? known[0];
+  return `/${entryFor(picked)}`;
+}
+
 /** Rutas internas seguras para redirigir después del login (sin open redirect). */
 export function isInternalReturn(path: string): boolean {
   if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/login')) return false;
@@ -26,6 +37,5 @@ export function resolvePostLoginPath(returnTo: string | null | undefined, roles:
     const page = pageFromPath(pathOnly);
     if (page && canOpen(page, known)) return returnTo;
   }
-  if (known.length === 1) return `/${entryFor(known[0] as Role)}`;
-  return '/perfil';
+  return defaultHomePath(known);
 }
