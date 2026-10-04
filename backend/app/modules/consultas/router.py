@@ -385,6 +385,78 @@ def propuestas_pendientes(identidad: Identidad = Depends(identidad_actual), p: P
         return PropuestasPendientesResponse(**servicio.propuestas_pendientes(s, identidad, p))
 
 
+class CargadoPorBandeja(BaseModel):
+    usuario_id: str | None = None
+    nombre: str | None = None
+    cargado_en: str | None = None
+
+
+class ComparacionVigenteBandeja(BaseModel):
+    documento_id: str
+    vigente_desde: str | None = None
+    vigente_hasta: str | None = None
+    numero: str | None = None
+    cargado_por: CargadoPorBandeja | None = None
+
+
+class PropuestaBandeja(BaseModel):
+    vigente_desde: str | None = None
+    vigente_hasta: str | None = None
+    cargado_por: CargadoPorBandeja | None = None
+
+
+class ItemBandejaRevision(BaseModel):
+    tipo_item: Literal["propuesta", "archivo"]
+    documento_id: str
+    sujeto_id: str
+    identificador_natural: str | None = None
+    nombre_apellido: str | None = None
+    tipo_sujeto: str | None = None
+    requisito_definicion_id: str | None = None
+    requisito: str | None = None
+    numero: str | None = None
+    vigente_desde: str | None = None
+    vigente_hasta: str | None = None
+    creado_en: str | None = None
+    origen: str | None = None
+    archivo_validacion: str | None = None
+    archivo_validacion_motivo: str | None = None
+    estado_presentacion: str | None = None
+    estado_presentacion_explicacion: str | None = None
+    propuesta: PropuestaBandeja | None = None
+    vigente_comparacion: ComparacionVigenteBandeja | None = None
+    cargado_por: CargadoPorBandeja | None = None
+    ocs_afectadas: list[dict[str, Any]] = Field(default_factory=list)
+    orden_en: str | None = None
+
+
+class ConteosBandejaRevision(BaseModel):
+    todos: int
+    propuestas: int
+    archivos: int
+
+
+class BandejaRevisionResponse(BaseModel):
+    items: list[ItemBandejaRevision]
+    total: int
+    offset: int
+    limit: int
+    pestana: Literal["todos", "propuestas", "archivos"]
+    conteos: ConteosBandejaRevision
+
+
+@router.get("/consultas/bandeja_revision", response_model=BandejaRevisionResponse)
+def bandeja_revision(
+    pestana: Literal["todos", "propuestas", "archivos"] = Query("todos"),
+    identidad: Identidad = Depends(identidad_actual),
+    p: Pagina = Depends(pagina),
+) -> BandejaRevisionResponse:
+    from app.modules.consultas.bandeja_revision import bandeja_revision as bandeja_revision_svc
+
+    with tenant_session(identidad.tenant_id) as s:
+        return BandejaRevisionResponse(**bandeja_revision_svc(s, identidad, p, pestana))
+
+
 @router.get("/consultas/backlog_oc", response_model=BacklogOcResponse)
 def backlog_oc(
     response: Response,

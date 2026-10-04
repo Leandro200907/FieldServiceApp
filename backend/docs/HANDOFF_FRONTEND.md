@@ -283,7 +283,8 @@ Paginadas: `?offset=0&limit=50` (máx. 500) → `{items[], total, offset, limit}
 | Ruta | Roles | Query |
 |---|---|---|
 | `GET /v1/consultas/legajo` | todos (técnico: sólo el propio; supervisor: su universo) | `sujeto_id` |
-| `GET /v1/consultas/propuestas_pendientes` | responsable_legajos | paginado |
+| `GET /v1/consultas/propuestas_pendientes` | responsable_legajos | paginado (legado; preferir bandeja_revision) |
+| `GET /v1/consultas/bandeja_revision` | responsable_legajos | `pestana` = `todos` \| `propuestas` \| `archivos`; propuestas + archivos con validación pendiente; comparación vigente/propuesta, OC afectadas |
 | `GET /v1/consultas/tablero_vencimientos` | responsable_legajos, supervisor | `dias`, paginado |
 | `GET /v1/consultas/log_auditoria` | configuracion, responsable_legajos | `tipo?`, `desde?`, `hasta?`, paginado |
 | `GET /v1/consultas/matriz_vigente` | todos | `cliente_id`, `locacion_id`, `tipo_servicio_id`, `fecha?` |

@@ -1112,6 +1112,51 @@
         "title": "BandejaDriveResponse",
         "type": "object"
       },
+      "BandejaRevisionResponse": {
+        "properties": {
+          "conteos": {
+            "$ref": "#/components/schemas/ConteosBandejaRevision"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemBandejaRevision"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "pestana": {
+            "enum": [
+              "todos",
+              "propuestas",
+              "archivos"
+            ],
+            "title": "Pestana",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "pestana",
+          "conteos"
+        ],
+        "title": "BandejaRevisionResponse",
+        "type": "object"
+      },
       "BandejaValidacionEvidenciaResponse": {
         "properties": {
           "items": {
@@ -1255,6 +1300,45 @@
           "eventos"
         ],
         "title": "CancelarOCResponse",
+        "type": "object"
+      },
+      "CargadoPorBandeja": {
+        "properties": {
+          "cargado_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cargado En"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "usuario_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Id"
+          }
+        },
+        "title": "CargadoPorBandeja",
         "type": "object"
       },
       "CargarDocumento": {
@@ -1559,6 +1643,62 @@
           "tipos_fuera_de_alcance"
         ],
         "title": "CoberturaOcResponse",
+        "type": "object"
+      },
+      "ComparacionVigenteBandeja": {
+        "properties": {
+          "cargado_por": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CargadoPorBandeja"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "numero": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero"
+          },
+          "vigente_desde": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Desde"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "documento_id"
+        ],
+        "title": "ComparacionVigenteBandeja",
         "type": "object"
       },
       "ConfiguracionAlertasResponse": {
@@ -2146,6 +2286,29 @@
           "incompletos"
         ],
         "title": "ConteoTipo",
+        "type": "object"
+      },
+      "ConteosBandejaRevision": {
+        "properties": {
+          "archivos": {
+            "title": "Archivos",
+            "type": "integer"
+          },
+          "propuestas": {
+            "title": "Propuestas",
+            "type": "integer"
+          },
+          "todos": {
+            "title": "Todos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "todos",
+          "propuestas",
+          "archivos"
+        ],
+        "title": "ConteosBandejaRevision",
         "type": "object"
       },
       "CopiaLocalDefinicion": {
@@ -4238,6 +4401,16 @@
             ],
             "title": "Tipo Sujeto"
           },
+          "ultimo_rechazo_propuesta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UltimoRechazoPropuesta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "vencido": {
             "title": "Vencido",
             "type": "boolean"
@@ -5077,6 +5250,236 @@
           "eventos"
         ],
         "title": "InvalidarEvidenciaResponse",
+        "type": "object"
+      },
+      "ItemBandejaRevision": {
+        "properties": {
+          "archivo_validacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion"
+          },
+          "archivo_validacion_motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivo Validacion Motivo"
+          },
+          "cargado_por": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CargadoPorBandeja"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "creado_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creado En"
+          },
+          "documento_id": {
+            "title": "Documento Id",
+            "type": "string"
+          },
+          "estado_presentacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Presentacion"
+          },
+          "estado_presentacion_explicacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Presentacion Explicacion"
+          },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
+          },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
+          "numero": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero"
+          },
+          "ocs_afectadas": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Ocs Afectadas",
+            "type": "array"
+          },
+          "orden_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden En"
+          },
+          "origen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origen"
+          },
+          "propuesta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PropuestaBandeja"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requisito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "sujeto_id": {
+            "title": "Sujeto Id",
+            "type": "string"
+          },
+          "tipo_item": {
+            "enum": [
+              "propuesta",
+              "archivo"
+            ],
+            "title": "Tipo Item",
+            "type": "string"
+          },
+          "tipo_sujeto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Sujeto"
+          },
+          "vigente_comparacion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComparacionVigenteBandeja"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vigente_desde": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Desde"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "tipo_item",
+          "documento_id",
+          "sujeto_id"
+        ],
+        "title": "ItemBandejaRevision",
         "type": "object"
       },
       "ItemCalendario": {
@@ -6806,6 +7209,44 @@
         "title": "ProponerDocumento",
         "type": "object"
       },
+      "PropuestaBandeja": {
+        "properties": {
+          "cargado_por": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CargadoPorBandeja"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vigente_desde": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Desde"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "title": "PropuestaBandeja",
+        "type": "object"
+      },
       "PropuestaEnRevision": {
         "properties": {
           "documento_id": {
@@ -8317,6 +8758,24 @@
           "estado_visual"
         ],
         "title": "TramoTimeline",
+        "type": "object"
+      },
+      "UltimoRechazoPropuesta": {
+        "properties": {
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "rechazado_en": {
+            "title": "Rechazado En",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo",
+          "rechazado_en"
+        ],
+        "title": "UltimoRechazoPropuesta",
         "type": "object"
       },
       "UrlDeDescargaResponse": {
@@ -14399,6 +14858,129 @@
         "tags": [
           "capacidades"
         ]
+      }
+    },
+    "/v1/consultas/bandeja_revision": {
+      "get": {
+        "operationId": "bandeja_revision_v1_consultas_bandeja_revision_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pestana",
+            "required": false,
+            "schema": {
+              "default": "todos",
+              "enum": [
+                "todos",
+                "propuestas",
+                "archivos"
+              ],
+              "title": "Pestana",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BandejaRevisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Bandeja Revision"
       }
     },
     "/v1/consultas/bandeja_validacion_evidencia": {
