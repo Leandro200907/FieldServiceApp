@@ -529,7 +529,7 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             if key == "t2_por_vencer_Licencia de conducir":
                 ctx.notas.append(
                     "evidencias: licencia técnico 2 sin archivo en carga; post-worker queda «archivo en revisión» "
-                    "(técnico 1: licencia vigente verificada por vencer + propuesta de renovación pendiente)"
+                    "(técnicos 1 y 2: licencia por vencer sin propuesta propia; bandeja con propuestas de otros)"
                 )
             else:
                 ctx.notas.append(
@@ -598,32 +598,30 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 ),
             )
             legajos.rechazar_propuesta(s, idn, leg_esq.RechazarPropuesta(documento_id=uuid.UUID(pr["documento_id"]), motivo="Rechazo demo"))
-        for n in (1, 2):
-            pr = legajos.proponer_documento(
-                s,
-                est.idn("tecnico", n),
-                leg_esq.ProponerDocumento(
-                    sujeto_id=est.sujetos[f"tecnico{n}"],
-                    requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
-                    vigente_desde=v1,
-                    vigente_hasta=v2,
-                ),
-            )
-            est.documentos[f"t{n}_propuesta_Licencia de conducir"] = pr["documento_id"]
-        pr_t1 = est.documentos.get("t1_propuesta_Licencia de conducir")
-        if pr_t1:
-            _subir(storage, s, idn, pr_t1, est.sujetos["tecnico1"], "Licencia propuesta t1")
-        pr_extra = legajos.proponer_documento(
+        # Flujo C demo: María y Juan con licencia por vencer SIN propuesta; bandeja con otros técnicos.
+        pr_t3_lic = legajos.proponer_documento(
             s,
-            est.idn("tecnico", 2),
+            est.idn("tecnico", 3),
             leg_esq.ProponerDocumento(
-                sujeto_id=est.sujetos["tecnico2"],
+                sujeto_id=est.sujetos["tecnico3"],
+                requisito_definicion_id=uuid.UUID(est.requisitos["Licencia de conducir"]),
+                vigente_desde=v1,
+                vigente_hasta=v2,
+            ),
+        )
+        est.documentos["t3_propuesta_Licencia de conducir"] = pr_t3_lic["documento_id"]
+        _subir(storage, s, idn, pr_t3_lic["documento_id"], est.sujetos["tecnico3"], "Licencia propuesta t3")
+        pr_t3_art = legajos.proponer_documento(
+            s,
+            est.idn("tecnico", 3),
+            leg_esq.ProponerDocumento(
+                sujeto_id=est.sujetos["tecnico3"],
                 requisito_definicion_id=uuid.UUID(est.requisitos["Constancia ART"]),
                 vigente_desde=hoy,
                 vigente_hasta=hoy + timedelta(days=200),
             ),
         )
-        est.documentos["t2_propuesta_Constancia ART"] = pr_extra["documento_id"]
+        est.documentos["t3_propuesta_Constancia ART"] = pr_t3_art["documento_id"]
 
 
 def subir_evidencias_competencia_induccion(est: EstadoTenant, storage) -> None:

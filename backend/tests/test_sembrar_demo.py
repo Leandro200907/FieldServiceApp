@@ -196,7 +196,7 @@ def test_tecnico1_licencia_por_vencer_y_propuesta_en_revision(demo_sembrado, cli
     lic = next(d for d in r.json()["documentos"] if d.get("requisito") == "Licencia de conducir")
     assert lic["estado_presentacion"] == "por_vencer"
     assert lic["estado_confirmacion"] == "verificado"
-    assert lic.get("propuesta_en_revision") is not None
+    assert lic.get("propuesta_en_revision") is None
     assert "archivo_en_revision" not in (lic.get("estados_adicionales") or [])
 
 
