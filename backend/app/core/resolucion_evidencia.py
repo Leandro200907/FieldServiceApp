@@ -1,8 +1,8 @@
 """Resolución de qué versión de documento cuenta para evaluar habilitación (D16, D19).
 
-Un documento sin confirmar nunca habilita. Si hay propuesta vigente declarada y una versión
-confirmada sucedida enlazada por `sucede_a`, la evaluación usa la confirmada. Si solo existe
-la propuesta, el requisito queda en pendiente de revisión / requiere revisión.
+E-20: la propuesta vive en `estado_version = 'propuesta'`; el vigente confirmado no se sucede
+hasta que el responsable aprueba. Para habilitación y vistas públicas se usa la fila `vigente`;
+si solo hay propuesta pendiente, no hay cobertura confirmada (pendiente de revisión).
 
 D19: además debe estar verificado y tener respaldo válido (archivo del documento o, en
 competencia/inducción, al menos un documento soporte con archivo válido).
@@ -19,7 +19,10 @@ from typing import Any, Iterable, Mapping
 
 
 def es_propuesta_pendiente(fila: dict[str, Any]) -> bool:
-    return bool(fila.get("origen_propuesta")) and fila.get("estado_confirmacion") == "declarado"
+    return (
+        fila.get("estado_version") == "propuesta"
+        and fila.get("estado_confirmacion") == "declarado"
+    )
 
 
 def _id_documento(fila: dict[str, Any]) -> str:
@@ -67,10 +70,10 @@ def archivo_requiere_revision(
     soportes: Iterable[Mapping[str, Any]] | None = None,
 ) -> bool:
     """True si el dato está verificado pero no alcanza respaldo válido para habilitar (D19)."""
-    if fila.get("estado_confirmacion") != "verificado":
-        return False
     if es_propuesta_pendiente(dict(fila)):
         return True
+    if fila.get("estado_confirmacion") != "verificado":
+        return False
     return not respaldo_valido(fila, categoria=categoria, soportes=soportes)
 
 
@@ -105,28 +108,12 @@ def archivo_validacion_para_evaluacion_documental(
 def fila_para_evaluacion(grupo: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Fila única que representa la evidencia evaluable para un (sujeto, requisito)."""
     vigente = next((g for g in grupo if g.get("estado_version") == "vigente"), None)
-    if vigente is None:
-        # Sin versión vigente no hay evidencia activa; las sucedidas solas no habilitan (D16).
-        return None
-
-    if es_propuesta_pendiente(vigente) and vigente.get("sucede_a"):
-        objetivo = str(vigente["sucede_a"])
-        confirmada = next(
-            (
-                g
-                for g in grupo
-                if g.get("estado_version") == "sucedida" and _id_documento(g) == objetivo
-            ),
-            None,
-        )
-        if confirmada is not None:
-            return {**confirmada, "estado_version": "vigente"}
+    if vigente is not None:
         return vigente
-
-    if es_propuesta_pendiente(vigente):
-        return vigente
-
-    return vigente
+    propuesta = next((g for g in grupo if g.get("estado_version") == "propuesta"), None)
+    if propuesta is not None:
+        return propuesta
+    return None
 
 
 def agrupar_filas_documento(filas: Iterable[dict[str, Any]]) -> dict[tuple[str, str], list[dict[str, Any]]]:

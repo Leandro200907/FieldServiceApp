@@ -206,7 +206,7 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
         LEFT JOIN modulo1.definicion_requisito r
           ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
         WHERE d.tenant_id = :t AND d.vigente_hasta IS NOT NULL
-          AND d.estado_version IN ('vigente', 'sucedida')
+          AND d.estado_version IN ('vigente', 'sucedida', 'propuesta')
     """ + condicion_sujeto), params).mappings().all()
     from app.core.resolucion_evidencia import (
         agrupar_filas_documento,
@@ -233,15 +233,10 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
 
     salida: dict[tuple[str, str], list[EvidenciaDocumental]] = defaultdict(list)
     for clave, grupo in agrupar_filas_documento(filas).items():
-        vigente = next((g for g in grupo if g["estado_version"] == "vigente"), None)
-        if vigente and es_propuesta_pendiente(vigente) and vigente.get("sucede_a"):
-            elegida = fila_para_evaluacion(grupo)
-            filas_eval = [elegida] if elegida else []
-        elif vigente and es_propuesta_pendiente(vigente):
-            filas_eval = [vigente]
-        else:
-            filas_eval = [g for g in grupo if g["estado_version"] in ("vigente", "sucedida")]
-        for d in filas_eval:
+        elegida = fila_para_evaluacion(grupo)
+        if elegida is None:
+            continue
+        for d in (elegida,):
             arch = archivo_validacion_para_evaluacion_documental(
                 d,
                 categoria=d.get("categoria"),

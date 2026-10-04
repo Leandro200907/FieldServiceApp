@@ -334,7 +334,7 @@ def test_drive_configuracion_y_escaneo_con_bandeja(cliente_api, drive, monkeypat
         docs = s.execute(text("SELECT origen, estado_confirmacion, origen_propuesta, archivo_estado, archivo_bytes, estado_version FROM modulo1.documento "
                               "WHERE tenant_id = :t AND sujeto_id = 'persona_0042' ORDER BY version"), {"t": t.tenant_id}).all()
     assert [d[0] for d in docs] == ["drive", "drive"] and all(d[1] == "declarado" and d[2] is True and d[3] == "confirmado" and d[4] > 0 for d in docs)
-    assert [d[5] for d in docs] == ["sucedida", "vigente"]
+    assert [d[5] for d in docs] == ["rechazada", "propuesta"]
     # a1/a2: importados (nivel 1). b1/m1: PDFs que no llegaron a "alta" por nombre — nivel 2
     # los baja igual para intentar leer el texto (acá, contenido falso, sin capa de texto:
     # se queda en bandeja con el mismo motivo + el aviso de "requiere OCR"). b2 (jpg) y

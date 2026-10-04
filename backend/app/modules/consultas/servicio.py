@@ -125,7 +125,7 @@ def propuestas_pendientes(session: Session, identidad: Identidad, p: Pagina) -> 
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     plazo_tenant = _cargar_plazo_tenant(session, identidad.tenant_id)
-    condicion = "WHERE d.origen_propuesta = true AND d.estado_confirmacion = 'declarado' AND d.estado_version = 'vigente'"
+    condicion = "WHERE d.estado_version = 'propuesta' AND d.estado_confirmacion = 'declarado'"
     total = session.execute(text(f"SELECT count(*) FROM modulo1.documento d {condicion}")).scalar()
     filas = session.execute(
         text(

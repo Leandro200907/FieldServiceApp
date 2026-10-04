@@ -45,6 +45,12 @@ def evaluar_documento_en_periodo(
     periodo_hasta = periodo_hasta or periodo_desde
     req_id = documento.requisito_definicion_id
 
+    if documento.estado_version == EstadoVersionDocumento.PROPUESTA:
+        return VeredictoRequisito(
+            requisito_definicion_id=req_id,
+            veredicto=Veredicto.REQUIERE_REVISION,
+            motivo=f"{req_id}: propuesta del técnico pendiente de confirmación — no habilita (E-20)",
+        )
     if documento.estado_version != EstadoVersionDocumento.VIGENTE:
         return VeredictoRequisito(
             requisito_definicion_id=req_id,
