@@ -273,6 +273,9 @@ def _enriquecer_backlog(
         "vigencia_hasta": fila["vigencia_hasta"],
     }
     evaluacion = evaluar_oc_backlog(session, identidad, oc_datos, hasta_filtro=hasta_eval)
+    pq = evaluacion.get("primer_quiebre_documental")
+    if pq is not None and hasattr(pq, "isoformat"):
+        evaluacion = {**evaluacion, "primer_quiebre_documental": pq.isoformat()}
     d.update(nombres_oc(session, identidad.tenant_id, d["cliente_id"], d["locacion_id"], d["tipo_servicio_id"]))
     d.update(evaluacion)
     d["modo"] = "consulta"
