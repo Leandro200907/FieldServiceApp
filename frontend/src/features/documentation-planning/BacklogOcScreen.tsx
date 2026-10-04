@@ -464,8 +464,8 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
                   <span className="list-item-secondary">{contarAlertasBacklog(row)} alerta{contarAlertasBacklog(row) === 1 ? '' : 's'}</span>
                 )}
               </span>
-              <StatusDot variant={variantEstadoDocumentalOc(row.estado_documental || '')}>
-                {labelEstadoDocumentalOcConMatriz(row.estado_documental || '', row)}
+              <StatusDot variant={variantEstadoDocumentalOc((row as BacklogItem).estado_documental || '')}>
+                {labelEstadoDocumentalOcConMatriz((row as BacklogItem).estado_documental || '', row)}
               </StatusDot>
             </button>
           ))}
