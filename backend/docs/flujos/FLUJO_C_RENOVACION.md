@@ -19,3 +19,17 @@ Decisiones de referencia: **D1**, **D3**, **D17**, **D19**, **E-20** (ver `backe
    - **6b. RECHAZA** con motivo **obligatorio** → el técnico ve el motivo en su legajo y puede volver a enviar (la nueva propuesta reemplaza a la rechazada según E-20).
 
 7. **Confirmar y seguir** / **Siguiente** lleva a la próxima propuesta de la bandeja sin volver a la lista.
+
+## Terminado cuando
+
+Verificable en pantalla con datos demo:
+
+- Como **María González** (`tecnico1`): renovar la licencia con un archivo y una fecha.
+- Como **responsable**: verla en la bandeja, abrir el archivo, confirmar, y comprobar que Radar y Acciones pendientes cambian solos.
+- Como **Juan Pérez** (`tecnico2`): renovar; como responsable: rechazar con motivo; como Juan: ver el motivo.
+
+## Fuera de alcance
+
+- Detección de conflictos de OC (D5).
+- Carga masiva (P4).
+- Notificaciones por mail.
