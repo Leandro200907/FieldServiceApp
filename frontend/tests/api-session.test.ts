@@ -117,4 +117,18 @@ it('keeps signed storage outside the bearer client', async () => {
   await expect(session.client.GET('/v1/storage/{firma}', { params: { path: { firma: 'signed-value' } } })).rejects.toThrow('dedicated transport');
   expect(mock).toHaveBeenCalledTimes(2);
 });
+it('allows document download URL signing through the bearer client', async () => {
+  const { session, mock } = fixture();
+  await session.login(login);
+  mock.mockImplementation(async (input) => {
+    const path = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+    if (path.includes('/storage/documentos/') && path.includes('/url')) {
+      return reply({ documento_id: 'd1', url: '/v1/storage/signed', eventos: [] });
+    }
+    return reply(path.endsWith('/yo') ? who : pair);
+  });
+  const r = await session.client.POST('/v1/storage/documentos/{documento_id}/url', { params: { path: { documento_id: 'd1' } } });
+  expect(r.response.ok).toBe(true);
+  expect(r.data?.url).toBe('/v1/storage/signed');
+});
 

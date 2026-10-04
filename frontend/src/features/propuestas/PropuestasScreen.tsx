@@ -12,6 +12,11 @@ import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
 import '../documentation-planning/planning.css';
 import './propuestas.css';
 
+function abrirUrlDescarga(url: string) {
+  const absolute = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  window.open(absolute, '_blank', 'noopener,noreferrer');
+}
+
 function DetalleBandeja({
   item,
   access,
@@ -53,7 +58,7 @@ function DetalleBandeja({
       const r = await access.abrirArchivo(item.documento_id);
       setPreviewUrl(r.url);
       onArchivoAbierto();
-      window.open(r.url, '_blank', 'noopener,noreferrer');
+      abrirUrlDescarga(r.url);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se pudo abrir el archivo.');
     } finally {
