@@ -22,7 +22,7 @@ export function EvidenciaRow({
   const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const ocs = (item.ocs_afectadas ?? []) as OcAfectadaRef[];
   return (
-    <li className="evidence-row">
+    <div className="evidence-row">
       <span className="evidence-name">{item.requisito || 'Requisito sin nombre'}</span>
       <span className="evidence-badges estado-tags">
         {etiquetas.map(label => (
@@ -58,6 +58,6 @@ export function EvidenciaRow({
             Renovar
           </button>
         )}
-    </li>
+    </div>
   );
 }

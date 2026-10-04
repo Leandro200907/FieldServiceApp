@@ -20,15 +20,20 @@ function LegajoCard({ title, legajoNombre, sujetoId, documentos, acreditaciones,
   onRenovado: () => void;
 }) {
   const items = [...documentos, ...acreditaciones, ...inducciones];
-  const renovarItem = renovarId ? items.find(i => i.id === renovarId) : null;
   return <section className="panel resource-panel">
     <div className="panel-top"><Badge tone={resumen.vencidos > 0 ? 'warning' : 'accent'}>{resumen.vencidos > 0 ? `${resumen.vencidos} vencido${resumen.vencidos > 1 ? 's' : ''}` : 'Todo vigente'}</Badge></div>
     <h3 className="mi-legajo-card-title">{title}</h3>
     <p className="muted">{legajoNombre}</p>
     {items.length === 0
       ? <p className="empty-inline">Sin documentación registrada.</p>
-      : <ul className="evidence-list">{items.map(item => <EvidenciaRow key={item.id} item={item} hoyIso={hoyIso} onRenovar={() => onRenovar(item.id)} />)}</ul>}
-    {renovarItem && <RenovarDocumentoForm item={renovarItem} sujetoId={sujetoId} hoyIso={hoyIso} onDone={onRenovado} onCancel={() => onRenovar('')} />}
+      : <ul className="evidence-list">{items.map(item => (
+        <li key={item.id} className="evidence-list-item">
+          <EvidenciaRow item={item} hoyIso={hoyIso} onRenovar={() => onRenovar(item.id)} />
+          {renovarId === item.id && (
+            <RenovarDocumentoForm item={item} sujetoId={sujetoId} hoyIso={hoyIso} onDone={onRenovado} onCancel={() => onRenovar('')} />
+          )}
+        </li>
+      ))}</ul>}
   </section>;
 }
 
