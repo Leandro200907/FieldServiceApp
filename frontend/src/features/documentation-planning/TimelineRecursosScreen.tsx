@@ -74,12 +74,28 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
         sujeto_id: sid,
       });
       const isOpen = expanded[sid] ?? true;
-      const bandasOc = recurso.ocs.map(oc => ({
-        desde: oc.vigencia_desde,
-        hasta: oc.vigencia_hasta,
-        label: `${oc.clave_origen} · ${fmtDate(oc.vigencia_desde, tz)} – ${fmtDate(oc.vigencia_hasta, tz)}`,
-        filtrada: Boolean(ocId && oc.oc_id === ocId),
-      }));
+      const bandasOc = recurso.ocs.map(oc => {
+        const ext = oc as {
+          operadora_nombre?: string | null;
+          locacion_nombre?: string | null;
+          servicio_nombre?: string | null;
+          estado_oc?: string | null;
+        };
+        const partes = [
+          oc.clave_origen,
+          ext.operadora_nombre,
+          ext.locacion_nombre,
+          ext.servicio_nombre,
+          `${fmtDate(oc.vigencia_desde, tz)} – ${fmtDate(oc.vigencia_hasta, tz)}`,
+          ext.estado_oc,
+        ].filter(Boolean);
+        return {
+          desde: oc.vigencia_desde,
+          hasta: oc.vigencia_hasta,
+          label: partes.join(' · '),
+          filtrada: Boolean(ocId && oc.oc_id === ocId),
+        };
+      });
       if (bandasOc.length > 0) {
         out.push({
           id: `${sid}-ocs`,
@@ -117,9 +133,7 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
         for (const tramo of recurso.tramos) {
           const enRango = tramo.vigente_hasta >= desde && tramo.vigente_desde <= hasta;
           if (!enRango && tramo.vigente_hasta < desde) continue;
-          const toneVigencia = tramo.estado_visual === 'vencido'
-            ? (tramo.estado_confirmacion === 'declarado' ? 'declarado_sin_verificar' : 'vigente')
-            : (TONE[tramo.estado_visual] || 'default');
+          const toneVigencia = TONE[tramo.estado_visual] ?? (tramo.estado_visual === 'vencido' ? 'vencido' : 'default');
           const confirmado = tramo.estado_confirmacion === 'verificado' || tramo.estado_confirmacion === 'confirmado_en_fuente';
           const tooltipVigente = `${tramo.requisito || 'Requisito'} · ${tramo.estado_visual} · ${fmtDate(tramo.vigente_desde, tz)} – ${fmtDate(tramo.vigente_hasta, tz)} · ${confirmado ? 'Confirmado' : 'Propuesta sin confirmar'}`;
           const sinCoberturaDesde = addDays(tramo.vigente_hasta, 1);
