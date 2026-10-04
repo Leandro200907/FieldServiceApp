@@ -37,7 +37,7 @@ const persona: LegajoCompuesto = {
   inducciones: [
     evidencia({ tipo: 'induccion', id: 'ind-locacion', sujeto_id: 'persona-mock', requisito: 'Inducción de locación', vigente_hasta: '2026-11-01', estado_confirmacion: 'verificado', dias_para_vencer: 40, vencido: false }),
   ],
-  resumen: { total: 4, vigentes_hoy: 3, por_vencer: 0, vencidos: 1 },
+  resumen: { total: 4, vigentes_hoy: 3, por_vencer: 0, vencidos: 1, en_regla: 2, ocs_afectadas: 0 },
 };
 
 const recursosBajoCustodia: RecursoCustodiado[] = [
@@ -46,7 +46,7 @@ const recursosBajoCustodia: RecursoCustodiado[] = [
     legajo: legajoDatos('vehiculo-mock', 'vehiculo', 'Unidad de ejemplo VX-23'),
     documentos: [evidencia({ tipo: 'documento', id: 'doc-vtv', sujeto_id: 'vehiculo-mock', requisito: 'VTV', vigente_hasta: '2026-10-05', estado_confirmacion: 'verificado', dias_para_vencer: 13, vencido: false })],
     acreditaciones: [], inducciones: [],
-    resumen: { total: 1, vigentes_hoy: 1, por_vencer: 0, vencidos: 0 },
+    resumen: { total: 1, vigentes_hoy: 1, por_vencer: 0, vencidos: 0, en_regla: 1, ocs_afectadas: 0 },
   },
 ];
 

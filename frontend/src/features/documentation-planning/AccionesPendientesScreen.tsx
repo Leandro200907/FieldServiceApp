@@ -3,7 +3,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
-import { textoQueHacerAccion } from './copy';
 import { formatFecha, todayIso } from './dates';
 import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
 import type { OcAfectadaRef } from '../../ui/ocsAfectadasPresentacion';
@@ -115,8 +114,8 @@ export function AccionesPendientesScreen() {
               <tbody>
                 {items.map((a: Accion, i) => (
                   <tr key={`${a.legajo_id}-${a.requisito}-${i}`}>
-                    <td>{lineaPersonaConDni({ tipo_sujeto: a.tipo_sujeto, nombre_apellido: a.nombre_apellido ?? a.legajo_nombre, identificador_natural: a.identificador_natural ?? a.legajo_id, sujeto_id: a.legajo_id })}</td>
-                    <td>{textoQueHacerAccion(a.accion_sugerida, a.fecha_limite, hoy, tz)}</td>
+                    <td>{lineaPersonaConDni({ tipo_sujeto: a.tipo_sujeto, nombre_apellido: a.legajo_nombre, identificador_natural: a.legajo_id, sujeto_id: a.legajo_id })}</td>
+                    <td>{a.accion_sugerida}</td>
                     <td>{a.requisito || '—'}</td>
                     <td>{formatFecha(a.fecha_limite, tz)}</td>
                     <td>
