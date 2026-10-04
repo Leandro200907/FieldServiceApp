@@ -7732,6 +7732,16 @@
       },
       "ResumenLegajo": {
         "properties": {
+          "en_regla": {
+            "default": 0,
+            "title": "En Regla",
+            "type": "integer"
+          },
+          "ocs_afectadas": {
+            "default": 0,
+            "title": "Ocs Afectadas",
+            "type": "integer"
+          },
           "por_vencer": {
             "default": 0,
             "title": "Por Vencer",

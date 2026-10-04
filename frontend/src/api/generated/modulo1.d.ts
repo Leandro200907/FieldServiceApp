@@ -1515,10 +1515,6 @@ export interface components {
             legajo_id: string;
             /** Legajo Nombre */
             legajo_nombre: string;
-            /** Nombre Apellido */
-            nombre_apellido?: string | null;
-            /** Identificador Natural */
-            identificador_natural?: string | null;
             /** Ocs Afectadas */
             ocs_afectadas: {
                 [key: string]: unknown;
@@ -2808,8 +2804,6 @@ export interface components {
             estado_operadora: string;
             /** Identificador Natural */
             identificador_natural: string;
-            /** Nombre Apellido */
-            nombre_apellido?: string | null;
             /** Motivo */
             motivo: string;
             /** Operadora */
@@ -2871,8 +2865,6 @@ export interface components {
             tipo: string;
             /** Usuario Nombre */
             usuario_nombre?: string | null;
-            /** Legajo Requisito Etiqueta */
-            legajo_requisito_etiqueta?: string | null;
         };
         /** EvidenciaVigente */
         EvidenciaVigente: {
@@ -2898,8 +2890,6 @@ export interface components {
             id: string;
             /** Identificador Natural */
             identificador_natural?: string | null;
-            /** Nombre Apellido */
-            nombre_apellido?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
             /** Ocs Afectadas */
@@ -2915,8 +2905,6 @@ export interface components {
             sujeto_id: string;
             /** Tipo */
             tipo: string;
-            /** Tipo Sujeto */
-            tipo_sujeto?: string | null;
             /** Vencido */
             vencido: boolean;
             /** Vigente Desde */
@@ -4168,6 +4156,16 @@ export interface components {
         };
         /** ResumenLegajo */
         ResumenLegajo: {
+            /**
+             * En Regla
+             * @default 0
+             */
+            en_regla: number;
+            /**
+             * Ocs Afectadas
+             * @default 0
+             */
+            ocs_afectadas: number;
             /**
              * Por Vencer
              * @default 0

@@ -438,7 +438,7 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
                 "estado": estado,
                 "legajos": [],
                 "tipos_sin_legajos": [],
-                "tipos_fuera_de_alcance": sorted(fuera & tipos_req),
+                "tipos_fuera_de_alcance": sorted(set(fuera) & tipos_req),
                 "huecos_matriz": huecos,
             }
         else:
