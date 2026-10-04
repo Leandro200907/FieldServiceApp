@@ -20,6 +20,6 @@
 .bandeja-preview-media{width:100%;max-height:min(50vh,420px);border:0;object-fit:contain;background:#fff}
 .bandeja-archivo{margin:1rem 0;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 .bandeja-sin-archivo{margin:0;color:#536b7b}
-.bandeja-aviso{margin:0 0 1rem;padding:.65rem .85rem;border-radius:5px;background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;font-weight:600}
+.bandeja-aviso{position:sticky;top:0;z-index:2;margin:0 0 1rem;padding:.65rem .85rem;border-radius:5px;background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,.06)}
 .button-small{font-size:11px;padding:.25rem .5rem;margin-top:.35rem}
 .renovar-panel{margin-top:1rem}

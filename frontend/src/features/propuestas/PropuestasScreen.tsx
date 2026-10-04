@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState } from '../../ui/States';
+import { esCargaInicial } from '../../hooks/usePrototypeRead';
 import { PAGE_SIZE } from '../documentation-planning/PaginationControls';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { propuestasAccess } from './access';
@@ -16,6 +17,7 @@ import {
   mensajeRechazoBandeja,
   propuestaSinArchivoAdjunto,
 } from './bandejaMensajes';
+import { ejecutarAccionBandejaExitosa } from './bandejaAccionExitosa';
 import { notifyBandejaRevisionChanged } from './bandejaRevisionRefresh';
 import '../documentation-planning/planning.css';
 import './propuestas.css';
@@ -31,9 +33,7 @@ function DetalleBandeja({
   readOnly,
   archivoAbierto,
   onArchivoAbierto,
-  onChanged,
   onAccionExitosa,
-  onSiguiente,
   haySiguiente,
 }: {
   item: ItemBandejaRevision;
@@ -41,9 +41,7 @@ function DetalleBandeja({
   readOnly: boolean;
   archivoAbierto: boolean;
   onArchivoAbierto: () => void;
-  onChanged: () => void;
-  onAccionExitosa: (mensaje: string) => void;
-  onSiguiente: () => void;
+  onAccionExitosa: (mensaje: string, avanzar: boolean) => void;
   haySiguiente: boolean;
 }) {
   const [busy, setBusy] = useState(false);
@@ -91,9 +89,7 @@ function DetalleBandeja({
     try {
       await access.confirmarDocumento(item.documento_id, confirmarKey.current);
       confirmarKey.current = null;
-      onAccionExitosa(mensajeConfirmacionBandeja(item));
-      onChanged();
-      if (haySiguiente) onSiguiente();
+      onAccionExitosa(mensajeConfirmacionBandeja(item), haySiguiente);
     } catch (caught) {
       if (caught instanceof ApiFailure && caught.detail.status > 0) confirmarKey.current = null;
       setError(caught instanceof Error ? caught.message : 'Error al confirmar');
@@ -111,9 +107,7 @@ function DetalleBandeja({
       await access.rechazarPropuesta(item.documento_id, motivoNormalizado, crypto.randomUUID());
       setRejecting(false);
       setMotivo('');
-      onAccionExitosa(mensajeRechazoBandeja(item));
-      onChanged();
-      if (haySiguiente) onSiguiente();
+      onAccionExitosa(mensajeRechazoBandeja(item), haySiguiente);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Error al rechazar');
     } finally {
@@ -243,12 +237,21 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
     notifyBandejaRevisionChanged();
   }
 
-  function onSiguiente() {
+  function avanzarSeleccion() {
     if (selectedIndex >= 0 && selectedIndex < items.length - 1) {
       setSelectedId(items[selectedIndex + 1].documento_id);
     } else {
       setSelectedId(null);
     }
+  }
+
+  function onAccionExitosa(mensaje: string, avanzar: boolean) {
+    ejecutarAccionBandejaExitosa({
+      mensaje,
+      setAviso,
+      refresh: onChanged,
+      avanzar: avanzar ? avanzarSeleccion : undefined,
+    });
   }
 
   return (
@@ -272,7 +275,7 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
         </div>
       </header>
       {readOnly && <div className="availability-warning" role="note"><strong>Vista de diseño no interactiva</strong></div>}
-      {bandeja.loading ? <LoadingState /> : bandeja.error ? (
+      {esCargaInicial(bandeja) ? <LoadingState /> : bandeja.error ? (
         <ErrorState message={bandeja.error.message} requestId={bandeja.error instanceof ApiFailure && bandeja.error.detail.referenceSource === 'server' ? bandeja.error.detail.requestId : undefined} />
       ) : (
         <div className="bandeja-layout">
@@ -299,9 +302,7 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
               readOnly={readOnly}
               archivoAbierto={Boolean(archivosAbiertos[selected.documento_id])}
               onArchivoAbierto={() => setArchivosAbiertos(prev => ({ ...prev, [selected.documento_id]: true }))}
-              onChanged={onChanged}
-              onAccionExitosa={setAviso}
-              onSiguiente={onSiguiente}
+              onAccionExitosa={onAccionExitosa}
               haySiguiente={selectedIndex >= 0 && selectedIndex < items.length - 1}
             />
           ) : (
