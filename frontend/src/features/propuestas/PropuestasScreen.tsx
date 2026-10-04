@@ -12,6 +12,11 @@ import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
 import '../documentation-planning/planning.css';
 import './propuestas.css';
 
+function etiquetaTipoItem(tipo: ItemBandejaRevision['tipo_item']): string {
+  if (tipo === 'propuesta') return 'Propuesta';
+  return 'Archivo a validar';
+}
+
 function abrirUrlDescarga(url: string) {
   const absolute = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
   window.open(absolute, '_blank', 'noopener,noreferrer');
@@ -107,7 +112,7 @@ function DetalleBandeja({
     <section className="bandeja-detalle panel">
       <h2>{tituloLegajoPersona(sujeto)}</h2>
       {subtituloLegajoPersona(sujeto) && <p className="muted">{subtituloLegajoPersona(sujeto)}</p>}
-      <p><strong>{item.requisito}</strong> · <Badge tone="accent">{item.tipo_item === 'propuesta' ? 'Propuesta' : 'Archivo'}</Badge></p>
+      <p><strong>{item.requisito}</strong> · <Badge tone="accent">{etiquetaTipoItem(item.tipo_item)}</Badge></p>
       <p className="muted">{item.estado_presentacion_explicacion}</p>
 
       <div className="bandeja-comparacion">
@@ -135,8 +140,8 @@ function DetalleBandeja({
           Ver archivo
         </button>
         {previewUrl && <p className="muted">Archivo abierto en una pestaña nueva.</p>}
-        {esPropuesta && !archivoAbierto && !sinArchivoValido && <p className="muted" role="note">Abrí el archivo antes de confirmar (E-78).</p>}
-        {item.archivo_validacion_motivo && <p className="field-error">{item.archivo_validacion_motivo}</p>}
+        {esPropuesta && !archivoAbierto && !sinArchivoValido && <p className="muted" role="note">Abrí el archivo antes de confirmar.</p>}
+        {!esPropuesta && item.estado_presentacion_explicacion && <p className="muted">{item.estado_presentacion_explicacion}</p>}
       </div>
 
       {error && <p className="field-error" role="alert">{error}</p>}
@@ -197,7 +202,6 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
   return (
     <>
       <header className="bandeja-header">
-        <h1 className="page-title">Bandeja de revisión</h1>
         <div className="bandeja-tabs" role="tablist">
           {(['todos', 'propuestas', 'archivos'] as const).map(p => (
             <button
@@ -229,7 +233,7 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
                 >
                   <strong>{item.nombre_apellido || item.identificador_natural}</strong>
                   <span>{item.requisito}</span>
-                  <small>{item.tipo_item}</small>
+                  <small className="bandeja-item-tipo">{etiquetaTipoItem(item.tipo_item)}</small>
                 </button>
               </li>
             ))}
