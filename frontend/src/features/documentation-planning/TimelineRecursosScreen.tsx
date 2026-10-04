@@ -22,6 +22,9 @@ const TONE: Record<string, GanttOcRow['barTone']> = {
   por_vencer: 'por_vencer',
   vencido: 'vencido',
   declarado_sin_verificar: 'declarado_sin_verificar',
+  sin_archivo_respaldo: 'declarado_sin_verificar',
+  archivo_en_revision: 'declarado_sin_verificar',
+  evidencia_invalida: 'vencido',
 };
 
 function fmtDate(value: string, timeZone?: string) {
@@ -74,7 +77,7 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
       const bandasOc = recurso.ocs.map(oc => ({
         desde: oc.vigencia_desde,
         hasta: oc.vigencia_hasta,
-        label: oc.clave_origen,
+        label: `${oc.clave_origen} · ${fmtDate(oc.vigencia_desde, tz)} – ${fmtDate(oc.vigencia_hasta, tz)}`,
         filtrada: Boolean(ocId && oc.oc_id === ocId),
       }));
       if (bandasOc.length > 0) {

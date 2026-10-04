@@ -14,6 +14,17 @@ export function labelEstadoDocumentalOc(codigo: string): string {
   return estadoDocumentalOcLabels[codigo as RadarState] ?? codigo.replaceAll('_', ' ');
 }
 
+export function labelEstadoDocumentalOcConMatriz(
+  codigo: string,
+  ctx?: { operadora_nombre?: string | null; locacion_nombre?: string | null },
+): string {
+  if (codigo === 'sin_matriz') {
+    const parte = [ctx?.operadora_nombre, ctx?.locacion_nombre].filter(Boolean).join(' · ');
+    if (parte) return `Sin matriz aplicable. Falta cargar la matriz de ${parte}`;
+  }
+  return labelEstadoDocumentalOc(codigo);
+}
+
 /** Colores de estado documental de OC unificados en toda la app (E-18 / E-19). */
 export function variantEstadoDocumentalOc(codigo: string): StatusVariant {
   if (codigo === 'sin_alertas_documentales') return 'vigente';

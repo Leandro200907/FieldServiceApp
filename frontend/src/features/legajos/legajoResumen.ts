@@ -17,11 +17,15 @@ function enRevision(item: EvidenciaVigente): boolean {
 }
 
 function bucketDeItem(item: EvidenciaVigente): BucketDocumento {
-  if (enRevision(item)) return 'en_revision';
   const labels = etiquetasEvidencia(item).map(l => l.toLowerCase());
   if (labels.some(l => l.includes('vencid'))) return 'vencidos';
   if (labels.some(l => l.includes('por vencer'))) return 'por_vencer';
+  if (enRevision(item)) return 'en_revision';
   return 'vigentes';
+}
+
+export function contarPendientesRevision(items: EvidenciaVigente[]): number {
+  return items.filter(enRevision).length;
 }
 
 export function contarBuckets(items: EvidenciaVigente[]): Record<BucketDocumento, number> {

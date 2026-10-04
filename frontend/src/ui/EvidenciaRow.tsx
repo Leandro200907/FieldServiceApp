@@ -1,8 +1,8 @@
 import { session } from '../api';
 import type { EvidenciaVigente } from '../features/mi-legajo/contracts';
 import { todayIso } from '../features/documentation-planning/dates';
-import { Badge } from './States';
-import { etiquetasEvidencia, textoPropuestaEnRevision, tonoEvidencia } from './evidenciaPresentacion';
+import { etiquetasEvidencia, textoPropuestaEnRevision } from './evidenciaPresentacion';
+import { StatusDot, variantFromEtiquetaVigencia } from './StatusDot';
 import { formatFecha } from '../features/documentation-planning/dates';
 import { formatDaysToExpiry } from './formatDaysToExpiry';
 import { OcsAfectadasLine } from './OcsAfectadasLine';
@@ -16,13 +16,16 @@ export function EvidenciaRow({ item, hoyIso }: { item: EvidenciaVigente; hoyIso?
   return (
     <li className="evidence-row">
       <span className="evidence-name">{item.requisito || 'Requisito sin nombre'}</span>
-      <span className="evidence-badges">
+      <span className="evidence-badges estado-tags">
         {etiquetas.map(label => (
-          <Badge key={label} tone={tonoEvidencia(item)}>{label}</Badge>
+          <StatusDot key={label} variant={variantFromEtiquetaVigencia(label)}>{label}</StatusDot>
         ))}
       </span>
       <small>
         {formatFecha(item.vigente_hasta, timeZone)} · {formatDaysToExpiry(item.dias_para_vencer)}
+        {(item as { observacion_operadora?: string }).observacion_operadora && (
+          <> · <em>{(item as { observacion_operadora?: string }).observacion_operadora}</em></>
+        )}
         {item.propuesta_en_revision && (
           <> · <em>{textoPropuestaEnRevision(item.propuesta_en_revision)}</em></>
         )}
