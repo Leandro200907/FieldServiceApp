@@ -163,8 +163,10 @@ def mapa_ultimos_rechazos_propuesta(session: Session, tenant_id: str, sujeto_id:
         if rid in salida:
             continue
         rechazado_en = f["ocurrido_en"]
+        from app.modules.evidencia.motivos_usuario import motivo_rechazo_propuesta_para_usuario
+
         salida[rid] = {
-            "motivo": f["motivo"],
+            "motivo": motivo_rechazo_propuesta_para_usuario(f["motivo"]) or f["motivo"],
             "rechazado_en": rechazado_en.isoformat() if hasattr(rechazado_en, "isoformat") else str(rechazado_en),
         }
     return salida

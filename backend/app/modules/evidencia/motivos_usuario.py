@@ -16,6 +16,18 @@ def motivo_validacion_para_usuario(motivo_tecnico: str | None) -> str:
         return "El archivo se corrompió al subirlo. Volvé a adjuntarlo."
     if motivo_tecnico.startswith("validación técnica del archivo:"):
         return motivo_validacion_para_usuario(motivo_tecnico.split(":", 1)[1].strip())
-    if motivo_tecnico.startswith("invalidado manualmente"):
-        return motivo_tecnico
+    if motivo_tecnico.lower().startswith("invalidado manualmente"):
+        if ":" in motivo_tecnico:
+            humano = motivo_tecnico.split(":", 1)[1].strip()
+            return humano or "La evidencia fue rechazada. Subí una nueva."
+        return "La evidencia fue rechazada. Subí una nueva."
     return _MENSAJE_ARCHIVO_INVALIDO
+
+
+def motivo_rechazo_propuesta_para_usuario(motivo: str | None) -> str | None:
+    if not motivo:
+        return None
+    bajo = motivo.lower()
+    if bajo.startswith("invalidado manualmente") or bajo.startswith("validación técnica del archivo:"):
+        return motivo_validacion_para_usuario(motivo)
+    return motivo
