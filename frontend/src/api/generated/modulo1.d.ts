@@ -825,6 +825,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/consultas/bandeja_revision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bandeja Revision */
+        get: operations["bandeja_revision_v1_consultas_bandeja_revision_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/consultas/bandeja_validacion_evidencia": {
         parameters: {
             query?: never;
@@ -1839,6 +1856,23 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** BandejaRevisionResponse */
+        BandejaRevisionResponse: {
+            conteos: components["schemas"]["ConteosBandejaRevision"];
+            /** Items */
+            items: components["schemas"]["ItemBandejaRevision"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /**
+             * Pestana
+             * @enum {string}
+             */
+            pestana: "todos" | "propuestas" | "archivos";
+            /** Total */
+            total: number;
+        };
         /** BandejaValidacionEvidenciaResponse */
         BandejaValidacionEvidenciaResponse: {
             /** Items */
@@ -1895,6 +1929,15 @@ export interface components {
             eventos: string[];
             /** Oc Id */
             oc_id: string;
+        };
+        /** CargadoPorBandeja */
+        CargadoPorBandeja: {
+            /** Cargado En */
+            cargado_en?: string | null;
+            /** Nombre */
+            nombre?: string | null;
+            /** Usuario Id */
+            usuario_id?: string | null;
         };
         /** CargarDocumento */
         CargarDocumento: {
@@ -2025,6 +2068,18 @@ export interface components {
             tiene_alertas: boolean;
             /** Tipos Fuera De Alcance */
             tipos_fuera_de_alcance: string[];
+        };
+        /** ComparacionVigenteBandeja */
+        ComparacionVigenteBandeja: {
+            cargado_por?: components["schemas"]["CargadoPorBandeja"] | null;
+            /** Documento Id */
+            documento_id: string;
+            /** Numero */
+            numero?: string | null;
+            /** Vigente Desde */
+            vigente_desde?: string | null;
+            /** Vigente Hasta */
+            vigente_hasta?: string | null;
         };
         /** ConfiguracionAlertasResponse */
         ConfiguracionAlertasResponse: {
@@ -2224,6 +2279,15 @@ export interface components {
             incompletos: number;
             /** Total */
             total: number;
+        };
+        /** ConteosBandejaRevision */
+        ConteosBandejaRevision: {
+            /** Archivos */
+            archivos: number;
+            /** Propuestas */
+            propuestas: number;
+            /** Todos */
+            todos: number;
         };
         /** CopiaLocalDefinicion */
         CopiaLocalDefinicion: {
@@ -2910,6 +2974,8 @@ export interface components {
             identificador_natural?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
+            /** Motivo Archivo Invalido */
+            motivo_archivo_invalido?: string | null;
             /** Nombre Apellido */
             nombre_apellido?: string | null;
             /** Observacion Operadora */
@@ -2929,6 +2995,7 @@ export interface components {
             tipo: string;
             /** Tipo Sujeto */
             tipo_sujeto?: string | null;
+            ultimo_rechazo_propuesta?: components["schemas"]["UltimoRechazoPropuesta"] | null;
             /** Vencido */
             vencido: boolean;
             /** Vigente Desde */
@@ -3209,6 +3276,55 @@ export interface components {
             documento_id: string;
             /** Eventos */
             eventos: string[];
+        };
+        /** ItemBandejaRevision */
+        ItemBandejaRevision: {
+            /** Archivo Validacion */
+            archivo_validacion?: string | null;
+            /** Archivo Validacion Motivo */
+            archivo_validacion_motivo?: string | null;
+            cargado_por?: components["schemas"]["CargadoPorBandeja"] | null;
+            /** Creado En */
+            creado_en?: string | null;
+            /** Documento Id */
+            documento_id: string;
+            /** Estado Presentacion */
+            estado_presentacion?: string | null;
+            /** Estado Presentacion Explicacion */
+            estado_presentacion_explicacion?: string | null;
+            /** Identificador Natural */
+            identificador_natural?: string | null;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
+            /** Numero */
+            numero?: string | null;
+            /** Ocs Afectadas */
+            ocs_afectadas?: {
+                [key: string]: unknown;
+            }[];
+            /** Orden En */
+            orden_en?: string | null;
+            /** Origen */
+            origen?: string | null;
+            propuesta?: components["schemas"]["PropuestaBandeja"] | null;
+            /** Requisito */
+            requisito?: string | null;
+            /** Requisito Definicion Id */
+            requisito_definicion_id?: string | null;
+            /** Sujeto Id */
+            sujeto_id: string;
+            /**
+             * Tipo Item
+             * @enum {string}
+             */
+            tipo_item: "propuesta" | "archivo";
+            /** Tipo Sujeto */
+            tipo_sujeto?: string | null;
+            vigente_comparacion?: components["schemas"]["ComparacionVigenteBandeja"] | null;
+            /** Vigente Desde */
+            vigente_desde?: string | null;
+            /** Vigente Hasta */
+            vigente_hasta?: string | null;
         };
         /** ItemCalendario */
         ItemCalendario: {
@@ -3799,6 +3915,14 @@ export interface components {
              */
             vigente_hasta: string;
         };
+        /** PropuestaBandeja */
+        PropuestaBandeja: {
+            cargado_por?: components["schemas"]["CargadoPorBandeja"] | null;
+            /** Vigente Desde */
+            vigente_desde?: string | null;
+            /** Vigente Hasta */
+            vigente_hasta?: string | null;
+        };
         /** PropuestaEnRevision */
         PropuestaEnRevision: {
             /** Documento Id */
@@ -4379,6 +4503,13 @@ export interface components {
             vigente_desde: string;
             /** Vigente Hasta */
             vigente_hasta: string;
+        };
+        /** UltimoRechazoPropuesta */
+        UltimoRechazoPropuesta: {
+            /** Motivo */
+            motivo: string;
+            /** Rechazado En */
+            rechazado_en: string;
         };
         /** UrlDeDescargaResponse */
         UrlDeDescargaResponse: {
@@ -8290,6 +8421,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BandejaDriveResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    bandeja_revision_v1_consultas_bandeja_revision_get: {
+        parameters: {
+            query?: {
+                pestana?: "todos" | "propuestas" | "archivos";
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BandejaRevisionResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
