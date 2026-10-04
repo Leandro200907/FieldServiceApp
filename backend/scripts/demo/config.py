@@ -19,8 +19,8 @@ TIPOS_SERVICIO = ("Wireline", "Slickline", "Cementación")
 
 
 def nombre_locacion_demo(operadora: str, indice: int) -> str:
-    """Etiqueta de catálogo OC (1-based)."""
-    return f"{operadora} — {LOCACIONES_POR_OPERADORA[operadora][indice - 1]}"
+    """Etiqueta de catálogo OC (1-based): solo el yacimiento/área, sin prefijo de operadora."""
+    return LOCACIONES_POR_OPERADORA[operadora][indice - 1]
 
 # Nombres locales (tenants que no copian del global)
 REQUISITOS_LOCALES: list[dict] = [

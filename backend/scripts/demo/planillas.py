@@ -240,23 +240,13 @@ def generar_planillas(est: EstadoTenant) -> Path:
     oc_fut_desde, oc_fut_hasta = rango_oc_futura(hoy)
     oc_rows = [
         [
-            f"OC-PLAN-{est.spec.slug}-CURSO",
+            f"OC-PLAN-{est.spec.slug}-OK",
             "ref",
             "YPF",
             loc_ypf,
             "Wireline",
             oc_curso_desde.isoformat(),
             oc_curso_hasta.isoformat(),
-            "activo",
-        ],
-        [
-            f"OC-PLAN-{est.spec.slug}-FUT",
-            "ref",
-            "Vista",
-            nombre_locacion_demo("Vista", 1),
-            "Slickline",
-            oc_fut_desde.isoformat(),
-            oc_fut_hasta.isoformat(),
             "activo",
         ],
         [
