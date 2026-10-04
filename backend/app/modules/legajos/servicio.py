@@ -30,6 +30,7 @@ from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento
 from app.comun.idempotencia import hash_canonico
 from app.comun.reloj import hoy_del_tenant
+from app.config import settings
 from app.modules.legajos import esquemas as e
 
 log = logging.getLogger("modulo1.legajos")
@@ -89,6 +90,46 @@ def _exigir_aplicable(definicion: dict[str, Any], legajo: dict[str, Any]) -> Non
 def _exigir_vigencia(desde: date, hasta: date) -> None:
     if desde > hasta:
         raise ErrorDeDominio("vigente_desde no puede ser posterior a vigente_hasta", {"vigente_desde": str(desde), "vigente_hasta": str(hasta)})
+
+
+def _exigir_vigencia_propuesta(
+    s: Session,
+    tenant_id: str,
+    sujeto_id: str,
+    requisito_definicion_id: str,
+    vigente_hasta: date,
+) -> None:
+    """D17: vencimiento futuro, posterior al vigente del requisito y dentro del tope configurable."""
+    hoy = hoy_del_tenant(s, tenant_id)
+    if vigente_hasta <= hoy:
+        raise ErrorDeDominio(
+            "La fecha de vencimiento debe ser posterior a hoy",
+            {"vigente_hasta": str(vigente_hasta), "hoy": str(hoy)},
+            codigo="vigencia_no_futura",
+        )
+    max_anios = settings.propuesta_max_anios_vigencia
+    if max_anios < 1:
+        raise ErrorDeDominio("propuesta_max_anios_vigencia debe ser >= 1", {"propuesta_max_anios_vigencia": max_anios})
+    tope = hoy + timedelta(days=365 * max_anios)
+    if vigente_hasta > tope:
+        raise ErrorDeDominio(
+            f"La fecha de vencimiento no puede superar {max_anios} años desde hoy",
+            {"vigente_hasta": str(vigente_hasta), "tope": str(tope), "max_anios": max_anios},
+            codigo="vigencia_propuesta_excede_plazo",
+        )
+    vigente_hasta_actual = s.execute(
+        text(
+            "SELECT vigente_hasta FROM modulo1.documento "
+            "WHERE tenant_id = :t AND sujeto_id = :sj AND requisito_definicion_id = :r AND estado_version = 'vigente'"
+        ),
+        {"t": tenant_id, "sj": sujeto_id, "r": requisito_definicion_id},
+    ).scalar()
+    if vigente_hasta_actual is not None and vigente_hasta <= vigente_hasta_actual:
+        raise ErrorDeDominio(
+            "La fecha de vencimiento propuesta debe ser posterior a la vigencia actual del documento",
+            {"vigente_hasta": str(vigente_hasta), "vigente_hasta_actual": str(vigente_hasta_actual)},
+            codigo="vigencia_no_posterior_a_vigente",
+        )
 
 
 def _exigir_categoria_documento(definicion: dict[str, Any]) -> None:
@@ -553,6 +594,7 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
     _exigir_categoria_documento(definicion)
     _exigir_aplicable(definicion, legajo)
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
+    _exigir_vigencia_propuesta(s, t, body.sujeto_id, str(body.requisito_definicion_id), body.vigente_hasta)
 
     eventos: list[str] = []
     r = _insertar_propuesta_documento(
