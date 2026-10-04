@@ -176,6 +176,8 @@ def _items_archivos(session: Session, identidad: Identidad, hoy: date, plazo_ten
         f = por_id.get(rid)
         if f is None:
             continue
+        if f.get("archivo_validacion") == "invalido":
+            continue
         enriquecida = enriquecer_fila_evidencia(dict(f), hoy, plazo_tenant)
         pres = enriquecida.get("estado_presentacion") or "archivo_en_revision"
         items.append({
