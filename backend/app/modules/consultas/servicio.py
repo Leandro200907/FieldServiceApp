@@ -91,7 +91,8 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
     if alcance is not None and sujeto_id not in alcance:
         raise Prohibido("El sujeto está fuera del alcance del usuario", {"sujeto_id": sujeto_id})
 
-    from app.modules.consultas.presentacion_evidencia import filas_evidencia_para_legajo, resumen_desde_items
+    from app.core.consulta_documental import resumen_legajo_con_en_regla
+    from app.modules.consultas.presentacion_evidencia import filas_evidencia_para_legajo
 
     datos = session.execute(
         text(
@@ -107,7 +108,7 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
     from app.modules.consultas.ocs_afectadas import adjuntar_ocs_afectadas_evidencias
 
     adjuntar_ocs_afectadas_evidencias(session, identidad, sujeto_id, items)
-    resumen = resumen_desde_items(items)
+    resumen = resumen_legajo_con_en_regla(items)
     return {
         "hoy": hoy.isoformat(),
         "legajo": _plano(datos),
@@ -290,8 +291,11 @@ def backlog_oc(
 ) -> dict[str, Any]:
     """Backlog de OC en modo consulta (D-E): alertas ciertas, sin veredicto de cobertura."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
     if estado and estado not in ("activo", "cancelado"):
         raise ErrorDeDominio("estado inválido", {"estado": estado, "validos": ["activo", "cancelado"]})
+    if vigencia_desde is None:
+        vigencia_desde = hoy
     if mes:
         m_desde, m_hasta = _rango_mes(mes)
         vigencia_desde = m_desde if vigencia_desde is None else max(vigencia_desde, m_desde)
@@ -441,21 +445,15 @@ def cobertura_oc(
     }
 
 
-def _fecha_desde_cuando_bloquea(oc: dict[str, Any], req: dict[str, Any], fallback: date) -> date:
-    """Posterior entre inicio de la OC y el día siguiente al vencimiento de la evidencia (consulta)."""
-    oc_inicio = oc["vigencia_desde"]
-    if isinstance(oc_inicio, str):
-        oc_inicio = date.fromisoformat(oc_inicio)
-    vh = req.get("vigente_hasta")
-    if vh:
-        vh_d = vh if isinstance(vh, date) else date.fromisoformat(str(vh))
-        return max(oc_inicio, vh_d + timedelta(days=1))
-    pq = req.get("primer_quiebre")
-    if pq:
-        pq_d = pq if isinstance(pq, date) else date.fromisoformat(str(pq))
-        return max(oc_inicio, pq_d)
-    fb = fallback if isinstance(fallback, date) else date.fromisoformat(str(fallback))
-    return max(oc_inicio, fb)
+def _fecha_desde_cuando_bloquea(
+    hoy: date,
+    oc: dict[str, Any],
+    req: dict[str, Any],
+    fallback: date,
+) -> date:
+    from app.core.consulta_documental import fecha_desde_cuando_bloquea
+
+    return fecha_desde_cuando_bloquea(hoy, oc, req, fallback)
 
 
 def acciones_pendientes(
@@ -472,6 +470,14 @@ def acciones_pendientes(
     tipo_recurso: str | None = None,
 ) -> dict[str, Any]:
     """Renovaciones/regularizaciones que afectan OCs activas (modo consulta)."""
+    from app.core.consulta_documental import (
+        accion_sugerida_para_req,
+        cargar_propuestas_pendientes,
+        clasificar_problema_documental,
+        etiqueta_bloqueo_desde,
+        fecha_desde_cuando_bloquea,
+        ventana_evaluacion_oc,
+    )
     from app.modules.consultas.ocs_afectadas import ordenar_ocs_afectadas, referencia_oc
     from app.modules.proyeccion import radar as radar_mod
 
@@ -479,39 +485,75 @@ def acciones_pendientes(
     hoy = hoy_del_tenant(session, identidad.tenant_id)
     desde = vigencia_desde or hoy
     hasta = vigencia_hasta or (hoy + timedelta(days=60))
+    propuestas = cargar_propuestas_pendientes(session, identidad.tenant_id)
     if mes:
         m_desde, m_hasta = _rango_mes(mes)
         desde, hasta = m_desde, m_hasta
+    from app.core.consulta_documental import cargar_entregas_operadora
+
     legajos = radar_mod._legajos_visibles(session, identidad)
     evidencias = radar_mod._evidencias(session, identidad.tenant_id)
+    entregas = cargar_entregas_operadora(session, identidad.tenant_id)
     filtros = {"q": q, "locacion_id": locacion_id}
     if operadora_id and len(operadora_id) == 1:
         filtros["cliente_id"] = operadora_id[0]
-    ocs = radar_mod._ocs(session, identidad.tenant_id, desde, hasta, filtros, offset=0, limit=500)
+    ocs = radar_mod._ocs(session, identidad.tenant_id, max(desde, hoy), hasta, filtros, offset=0, limit=500)
     if operadora_id and len(operadora_id) > 1:
         permitidos = set(operadora_id)
         ocs = [o for o in ocs if str(o["cliente_id"]) in permitidos]
-    acciones: list[dict[str, Any]] = []
-    agrupadas: dict[tuple[str, str, str], dict[str, Any]] = {}
+    agrupadas: dict[tuple[str, str], dict[str, Any]] = {}
+    estados_accion = {
+        "vence_durante_periodo",
+        "vencido_antes_inicio",
+        "faltante",
+        "evidencia_invalida",
+        "pendiente_revision",
+    }
     for oc in ocs:
-        inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
-        calc = radar_mod._evaluar_oc(session, identidad.tenant_id, oc, legajos, evidencias, inicio, fin)
-        eval_oc = evaluar_oc_backlog(session, identidad, {**oc, "vigencia_desde": inicio, "vigencia_hasta": fin})
+        inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=min(hasta, oc["vigencia_hasta"]))
+        op_id = str(oc["cliente_id"])
+        calc = radar_mod._evaluar_oc(
+            session,
+            identidad.tenant_id,
+            oc,
+            legajos,
+            evidencias,
+            inicio,
+            fin,
+            entregas=entregas,
+            operadora_id=op_id,
+        )
+        eval_oc = evaluar_oc_backlog(session, identidad, oc)
         genera_alerta = eval_oc.get("tiene_alertas")
         for leg in calc["legajos"]:
             if tipo_recurso and leg["tipo_sujeto"] != tipo_recurso:
                 continue
             for req in leg.get("requisitos") or []:
-                if not req.get("accion_sugerida"):
+                if req.get("estado") not in estados_accion and not req.get("es_rechazo_operadora"):
                     continue
-                fecha_limite = _fecha_desde_cuando_bloquea(oc, req, inicio).isoformat()
+                rid = str(req.get("requisito_definicion_id") or "")
+                if not rid:
+                    continue
+                accion = accion_sugerida_para_req(
+                    req,
+                    propuestas_pendientes=propuestas,
+                    sujeto_id=leg["sujeto_id"],
+                    requisito_definicion_id=rid,
+                )
+                if not accion:
+                    continue
+                fb = fecha_desde_cuando_bloquea(hoy, oc, req, inicio)
+                fecha_limite = fb.isoformat()
                 fecha_accion = req.get("accion_sugerida_fecha")
                 if hasattr(fecha_accion, "isoformat"):
                     fecha_accion = fecha_accion.isoformat()
                 elif fecha_accion is not None:
                     fecha_accion = str(fecha_accion)
-                clave = (leg["sujeto_id"], str(req.get("nombre") or ""), str(req["accion_sugerida"]))
+                clave = (leg["sujeto_id"], rid)
                 oc_ref = referencia_oc(oc)
+                tipo = clasificar_problema_documental(req)
+                etiqueta_tipo = {"sin_documento": "Sin documento", "vencido": "Vencido"}.get(tipo or "", "")
+                efecto = " · ".join(p for p in (etiqueta_tipo, etiqueta_bloqueo_desde(hoy, fb)) if p)
                 if clave in agrupadas:
                     item = agrupadas[clave]
                     if oc_ref not in item["ocs_afectadas"]:
@@ -519,21 +561,23 @@ def acciones_pendientes(
                     item["genera_alerta_cierta"] = bool(item["genera_alerta_cierta"] or genera_alerta)
                     if fecha_limite < item["fecha_limite"]:
                         item["fecha_limite"] = fecha_limite
+                        item["efecto"] = efecto
                     if fecha_accion and (not item["accion_sugerida_fecha"] or fecha_accion < item["accion_sugerida_fecha"]):
                         item["accion_sugerida_fecha"] = fecha_accion
                     continue
                 agrupadas[clave] = {
                     "requisito": req.get("nombre"),
+                    "requisito_definicion_id": rid,
                     "legajo_id": leg["sujeto_id"],
                     "legajo_nombre": leg.get("nombre_apellido") or leg.get("identificador_natural") or leg["sujeto_id"],
                     "nombre_apellido": leg.get("nombre_apellido"),
                     "identificador_natural": leg.get("identificador_natural"),
                     "tipo_sujeto": leg["tipo_sujeto"],
                     "fecha_limite": fecha_limite,
-                    "accion_sugerida": req["accion_sugerida"],
+                    "accion_sugerida": accion,
                     "accion_sugerida_fecha": fecha_accion,
                     "ocs_afectadas": [oc_ref],
-                    "efecto": req.get("motivo"),
+                    "efecto": efecto,
                     "genera_alerta_cierta": genera_alerta,
                 }
     hoy_acciones = hoy_del_tenant(session, identidad.tenant_id)

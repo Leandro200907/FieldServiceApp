@@ -13,8 +13,6 @@ import type { LegajoCompuesto } from '../mi-legajo/contracts';
 import { formatDniIdentificador, subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
 import {
   contarBuckets,
-  enReglaCount,
-  ocsAfectadasUnicas,
   proximoVencimientoIso,
   resumenVencimientosTexto,
   todosLosDocumentos,
@@ -44,10 +42,17 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (iso: string) => formatFecha(iso, tz);
   const items = todosLosDocumentos(data);
-  const buckets = contarBuckets(items);
-  const { enRegla, total } = enReglaCount(data.resumen);
+  const revision = contarBuckets(items).en_revision;
+  const buckets = {
+    vencidos: data.resumen.vencidos,
+    por_vencer: data.resumen.por_vencer ?? 0,
+    vigentes: data.resumen.vigentes_hoy,
+    en_revision: revision,
+  };
+  const enRegla = data.resumen.en_regla ?? 0;
+  const total = data.resumen.total;
   const proximo = proximoVencimientoIso(items);
-  const ocsCount = ocsAfectadasUnicas(items);
+  const ocsCount = data.resumen.ocs_afectadas ?? 0;
   const tipo = data.legajo.tipo_sujeto;
   const espejo = usePrototypeRead(() => legajosAccess().readEspejoOperadora(sujetoId), [sujetoId]);
 

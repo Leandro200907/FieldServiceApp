@@ -66,20 +66,33 @@ def iter_sin_cobertura_en_ocs(
     tipo_recurso: str | None = None,
 ) -> Iterator[tuple[str, str, dict[str, str]]]:
     """Emite (sujeto_id, requisito_definicion_id, referencia_oc) por cada OC afectada."""
+    from app.core.consulta_documental import cargar_entregas_operadora, ventana_evaluacion_oc
     from app.modules.proyeccion import radar as radar_mod
 
     filtros = dict(filtros or {})
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
     legajos = radar_mod._legajos_visibles(session, identidad)
     evidencias = radar_mod._evidencias(session, identidad.tenant_id)
-    ocs = radar_mod._ocs(session, identidad.tenant_id, desde, hasta, filtros, offset=0, limit=500)
+    entregas = cargar_entregas_operadora(session, identidad.tenant_id)
+    ocs = radar_mod._ocs(session, identidad.tenant_id, max(desde, hoy), hasta, filtros, offset=0, limit=500)
     operadoras = filtros.get("operadora_ids")
     if operadoras:
         permitidos = set(operadoras)
         ocs = [o for o in ocs if str(o["cliente_id"]) in permitidos]
 
     for oc in ocs:
-        inicio, fin = max(desde, _as_date(oc["vigencia_desde"])), min(hasta, _as_date(oc["vigencia_hasta"]))
-        calc = radar_mod._evaluar_oc(session, identidad.tenant_id, oc, legajos, evidencias, inicio, fin)
+        inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=min(hasta, _as_date(oc["vigencia_hasta"])))
+        calc = radar_mod._evaluar_oc(
+            session,
+            identidad.tenant_id,
+            oc,
+            legajos,
+            evidencias,
+            inicio,
+            fin,
+            entregas=entregas,
+            operadora_id=str(oc["cliente_id"]),
+        )
         for leg in calc["legajos"]:
             if sujeto_id and leg["sujeto_id"] != sujeto_id:
                 continue

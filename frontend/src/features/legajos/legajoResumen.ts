@@ -30,12 +30,6 @@ export function contarBuckets(items: EvidenciaVigente[]): Record<BucketDocumento
   return out;
 }
 
-export function enReglaCount(resumen: LegajoCompuesto['resumen']): { enRegla: number; total: number } {
-  const total = resumen.total;
-  const enRegla = Math.max(0, total - resumen.vencidos);
-  return { enRegla, total };
-}
-
 export function proximoVencimientoIso(items: EvidenciaVigente[]): string | null {
   const futuros = items
     .filter(i => (i.dias_para_vencer ?? 0) >= 0 && !i.vencido)

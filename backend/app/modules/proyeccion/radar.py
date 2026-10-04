@@ -289,8 +289,16 @@ def _evaluar_oc(
     *,
     tipos_disponibles: set[str] | None = None,
     tipos_fuera_de_alcance: list[str] | None = None,
+    entregas: dict[tuple[str, str], dict[str, Any]] | None = None,
+    operadora_id: str | None = None,
+    operadora_nombre: str = "",
 ) -> dict[str, Any]:
+    from app.core.consulta_documental import cargar_entregas_operadora, evaluar_requisito_en_oc
+
     inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
+    if entregas is None:
+        entregas = cargar_entregas_operadora(session, tenant_id)
+    operadora_id = operadora_id or str(oc.get("cliente_id") or "")
     tramos, particulares, huecos_matriz = _matrices_y_requisitos(session, tenant_id, oc, inicio, fin)
     tipos_requeridos = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
     disponibles = tipos_disponibles if tipos_disponibles is not None else {l["tipo_sujeto"] for l in legajos}
@@ -304,24 +312,32 @@ def _evaluar_oc(
                 if req.tipo_sujeto != legajo["tipo_sujeto"]:
                     continue
                 evidencias_requisito = tuple(evidencias.get((legajo["sujeto_id"], req.requisito_definicion_id), ()))
-                resultado = evaluar_requisito_documental(EvaluacionDocumentalEntrada(
-                    tramo["desde"], tramo["hasta"], req,
-                    evidencias_requisito,
-                ))
+                resultado, aviso_espejo, accion_espejo = evaluar_requisito_en_oc(
+                    EvaluacionDocumentalEntrada(tramo["desde"], tramo["hasta"], req, evidencias_requisito),
+                    operadora_id=operadora_id,
+                    operadora_nombre=operadora_nombre,
+                    entregas=entregas,
+                )
                 evidencia = next((e for e in evidencias_requisito if e.evidencia_id == resultado.evidencia_id), None)
+                es_rechazo = aviso_espejo == "rechazado"
                 resultados.append({
                     "matriz_version_id": tramo["matriz_version_id"], "version_matriz": tramo["version"],
                     "periodo_desde": tramo["desde"], "periodo_hasta": tramo["hasta"],
                     "requisito_definicion_id": req.requisito_definicion_id, "nombre": req.nombre,
                     "estado": resultado.estado.value, "primer_quiebre": resultado.primer_quiebre,
                     "evidencia_id": resultado.evidencia_id, "motivo": resultado.motivo,
-                    "accion_sugerida": resultado.accion_sugerida,
+                    "accion_sugerida": accion_espejo or resultado.accion_sugerida,
                     "accion_sugerida_fecha": resultado.accion_sugerida_fecha,
                     "vigente_hasta": evidencia.vigente_hasta if evidencia else None,
                     "estado_confirmacion": evidencia.estado_confirmacion.value if evidencia else None,
                     "archivo_validacion": evidencia.archivo_validacion.value if evidencia else None,
                     "requerido": resultado.estado.value != "no_aplica",
+                    "aviso_operadora": aviso_espejo,
+                    "es_rechazo_operadora": es_rechazo,
                 })
+                from app.core.consulta_documental import clasificar_problema_documental
+
+                resultados[-1]["tipo_problema"] = clasificar_problema_documental(resultados[-1])
         resumen = resumir_resultados(_resultado_desde_dict(r) for r in resultados)
         detalle_legajos.append({**legajo, "estado_documental": resumen.estado,
                                 "primer_quiebre": resumen.primer_quiebre, "requisitos": resultados,
@@ -374,8 +390,11 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
     _exigir_rango(desde, hasta)
     if estados and any(e not in ESTADOS_OC for e in estados):
         raise ErrorDeDominio("estado inválido", {"validos": list(ESTADOS_OC)})
+    from app.core.consulta_documental import cargar_entregas_operadora, ventana_evaluacion_oc
+
     legajos = _legajos_visibles(session, identidad)
     evidencias = _evidencias(session, identidad.tenant_id)
+    entregas = cargar_entregas_operadora(session, identidad.tenant_id)
     items: list[dict[str, Any]] = []
 
     def _adjuntar_habilitacion(item: dict[str, Any], oc: dict[str, Any], inicio: date, fin: date) -> None:
@@ -409,14 +428,32 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
             )
 
     def evaluar_item(oc: dict[str, Any]) -> dict[str, Any] | None:
-        inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
-        tramos, _, _ = _matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
+        inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=min(hasta, oc["vigencia_hasta"]))
+        tramos, _, huecos = _matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
         tipos_req = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
         fuera = _tipos_fuera_de_alcance(session, identidad.tenant_id, identidad, tipos_req, legajos)
-        calculo = _evaluar_oc(
-            session, identidad.tenant_id, oc, legajos, evidencias, desde, hasta,
-            tipos_fuera_de_alcance=fuera,
-        )
+        if huecos and not tramos:
+            estado = ResumenDocumental("sin_matriz", None, 0, 0)
+            calculo = {
+                "estado": estado,
+                "legajos": [],
+                "tipos_sin_legajos": [],
+                "tipos_fuera_de_alcance": sorted(fuera & tipos_req),
+                "huecos_matriz": huecos,
+            }
+        else:
+            calculo = _evaluar_oc(
+                session,
+                identidad.tenant_id,
+                oc,
+                legajos,
+                evidencias,
+                inicio,
+                fin,
+                tipos_fuera_de_alcance=fuera,
+                entregas=entregas,
+                operadora_id=str(oc["cliente_id"]),
+            )
         estado: ResumenDocumental = calculo["estado"]
         if estados and estado.estado not in estados:
             return None

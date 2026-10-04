@@ -903,6 +903,46 @@ La regla de calendario se aplica en `evaluar_requisito_documental`; la de respal
 
 **Estado.** Decidida.
 
+#### D23. Pregunta del Módulo 1 (backlog y radar)
+
+**Decisión.** El Módulo 1 es informativo y responde una sola pregunta: parados hoy, ¿los
+documentos de los recursos de la empresa cubren las OC del backlog? El backlog son las OC con
+al menos un día de vigencia desde hoy. Se evalúa solo desde hoy en adelante. El Módulo 1 no
+determina si una OC se cumplió ni su estado comercial: eso es del Módulo 2 (avance por OT y
+saldo por facturación). El Módulo 1 no usa las palabras Finalizada, Cumplida ni Cerrada.
+
+**Motivo.** Evitar mezclar cumplimiento comercial con cobertura documental y alinear Radar,
+Backlog y acciones pendientes al mismo universo temporal.
+
+**Estado.** Decidida.
+
+#### Regla general: el frontend no calcula estados de dominio
+
+**Decisión.** El frontend **no** calcula estados, conteos, cumplimiento ni OC afectadas. Solo
+muestra lo que devuelve el backend. Si un componente calculaba alguno de esos valores, el
+cálculo se mueve al backend (en el lugar compartido de la regla) y el frontend lo consume.
+
+**Motivo.** Una sola fuente de verdad para Módulo 1 y coherencia entre pantallas.
+
+**Estado.** Decidida.
+
+#### E-10. Rechazo de la operadora (criterio de bloqueo)
+
+**Decisión.**
+- Solo el **rechazo** de la operadora bloquea la habilitación documental, y solo en las OC de
+  **esa** operadora (`cliente_id` de la OC = operadora del espejo).
+- «Pendiente de envío» o «pendiente de aceptación» ante la operadora es aviso visible, **sin**
+  bloquear.
+- El rechazo aplica a **esa versión** del documento (`documento_id`). Si se confirma una versión
+  nueva, el rechazo deja de aplicar y la nueva queda «pendiente de envío» ante esa operadora.
+- Textos: Radar → motivo «Rechazado por {operadora} el dd/mm/aaaa»; ficha → observación
+  «Rechazado por {operadora}»; acciones pendientes → «Regularizar ante {operadora}».
+
+**Código.** `app/core/consulta_documental.py` (evaluación compartida), consumido por radar,
+backlog, acciones pendientes, ficha y Mi legajo.
+
+**Estado.** Decidida.
+
 ### Diseño
 
 #### D10. Documentos de empresa para el técnico

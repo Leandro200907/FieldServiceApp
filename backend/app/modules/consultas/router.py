@@ -66,6 +66,8 @@ class ResumenLegajo(BaseModel):
     vigentes_hoy: int
     por_vencer: int = 0
     vencidos: int
+    en_regla: int = 0
+    ocs_afectadas: int = 0
 
 
 class LegajoDatos(BaseModel):
