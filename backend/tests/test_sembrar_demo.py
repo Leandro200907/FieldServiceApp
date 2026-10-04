@@ -25,7 +25,7 @@ EVIDENCIAS_PENDIENTES_BANDEJA_POR_TENANT = 1
 EVIDENCIAS_INVALIDADAS_POR_TENANT = 1
 DOCUMENTOS_LOTE_IMPORTADO_POR_TENANT = 5
 DOCUMENTOS_LOTE_REVERTIDO_POR_TENANT = 1
-PROPUESTAS_PENDIENTES_MIN_POR_TENANT = 3
+PROPUESTAS_PENDIENTES_MIN_POR_TENANT = 2  # Flujo C: propuestas de tecnico3 (licencia con archivo + ART sin archivo)
 ESPEJO_ENTREGAS_MIN_POR_TENANT = 1
 
 
@@ -639,7 +639,7 @@ def test_tecnico3_todo_vigente(demo_sembrado):
                     ),
                     {"t": tid, "s": suj},
                 ).scalar()
-                assert n_prop_t3 == 0, f"{slug}: técnico 3 no debe tener propuestas pendientes"
+                assert n_prop_t3 >= 2, f"{slug}: técnico 3 debe tener propuestas demo para la bandeja (otros técnicos)"
 
 
 def test_reset_idempotente_en_cantidades(demo_sembrado):
