@@ -201,6 +201,38 @@ def _entrega_sin_cambios(
     return True
 
 
+def _movimiento_historial_duplicado(
+    session: Session,
+    tenant_id: str,
+    *,
+    operadora_id: str,
+    documento_id: str,
+    estado: str,
+    paso_en: datetime,
+) -> bool:
+    """E-29: idempotencia por historial (mismo doc, operadora, estado y fecha del paso)."""
+    return (
+        session.execute(
+            text(
+                """
+                SELECT 1 FROM modulo1.movimiento_entrega_operadora
+                WHERE tenant_id = :t AND operadora_id = :o AND documento_id = :d
+                  AND estado = :e AND paso_en = :p
+                LIMIT 1
+                """
+            ),
+            {
+                "t": tenant_id,
+                "o": operadora_id,
+                "d": documento_id,
+                "e": estado,
+                "p": paso_en,
+            },
+        ).scalar()
+        is not None
+    )
+
+
 def _movimiento_planilla_duplicado(
     session: Session,
     tenant_id: str,
@@ -355,6 +387,13 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
         rechazado_en=rechazado_en,
         observacion=observacion,
     )
+    paso_en = _instante_paso(
+        estado,
+        exportado_en=exportado_en,
+        enviado_en=enviado_en,
+        aceptado_en=aceptado_en,
+        rechazado_en=rechazado_en,
+    )
     movimiento_duplicado = _movimiento_planilla_duplicado(
         session,
         t,
@@ -364,6 +403,14 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
         fuente_archivo=fuente_archivo,
         fuente_hoja=fuente_hoja,
         fuente_fila=fuente_fila,
+    )
+    historial_duplicado = _movimiento_historial_duplicado(
+        session,
+        t,
+        operadora_id=str(operadora_id),
+        documento_id=documento_id,
+        estado=estado,
+        paso_en=paso_en,
     )
     session.execute(text("""
         INSERT INTO modulo1.operadora_legajo (tenant_id, operadora_id, sujeto_id, fuente)
@@ -388,7 +435,9 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
              "d": documento_id, "e": estado, "ex": exportado_en, "en": enviado_en,
              "ac": aceptado_en, "re": rechazado_en, "fa": fuente_archivo, "fh": fuente_hoja,
              "ff": fuente_fila, "obs": observacion, "u": identidad.usuario_id})
-    omitir_movimiento = sin_cambios and (movimiento_duplicado or fuente_archivo is None)
+    omitir_movimiento = historial_duplicado or (
+        sin_cambios and (movimiento_duplicado or fuente_archivo is None)
+    )
     if not omitir_movimiento:
         _registrar_movimiento(
             session,
@@ -398,13 +447,7 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
             requisito_definicion_id=str(doc["requisito_definicion_id"]),
             documento_id=documento_id,
             estado=estado,
-            paso_en=_instante_paso(
-                estado,
-                exportado_en=exportado_en,
-                enviado_en=enviado_en,
-                aceptado_en=aceptado_en,
-                rechazado_en=rechazado_en,
-            ),
+            paso_en=paso_en,
             observacion=observacion,
             registrado_por=identidad.usuario_id,
             fuente_archivo=fuente_archivo,

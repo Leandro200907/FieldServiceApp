@@ -46,6 +46,46 @@ def test_reimportar_misma_fila_planilla_no_duplica_movimiento_ni_evento(cliente_
     assert eventos == 1
 
 
+def test_reimportar_planilla_enviado_rechazado_deja_dos_movimientos(cliente_api, tenant_de_prueba):
+    """E-29: segunda planilla no duplica pasos ya registrados (mismo estado y paso_en)."""
+    t = tenant_de_prueba
+    _alta_operadora(cliente_api, t, "Op Secuencia")
+    req = _alta_def(cliente_api, t, "Apto secuencia")
+    sujeto = _alta_persona(cliente_api, t, "persona_secuencia")
+    doc = _cargar(cliente_api, t, sujeto, req, desde="2026-09-01", hasta="2027-08-31")
+    filas = [
+        _ENCABEZADOS,
+        [
+            "Op Secuencia", "persona", "persona_secuencia", sujeto, "Apto secuencia", req, "",
+            "2026-09-01", "2027-08-31", "enviado", "", "2026-09-10T10:00:00+00:00", "2026-09-15T10:00:00+00:00", "", "",
+        ],
+        [
+            "Op Secuencia", "persona", "persona_secuencia", sujeto, "Apto secuencia", req, "",
+            "2026-09-01", "2027-08-31", "rechazado", "", "2026-09-10T10:00:00+00:00", "2026-09-15T10:00:00+00:00",
+            "2026-09-22T10:00:00+00:00", "Obs",
+        ],
+    ]
+    xlsx = _xlsx(filas)
+    headers = {
+        **t.headers("responsable_legajos"),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Nombre-Archivo": "presentaciones_1.xlsx",
+    }
+    headers2 = {**headers, "X-Nombre-Archivo": "presentaciones_2.xlsx"}
+    assert cliente_api.post("/v1/comandos/importar_planilla_operadoras", content=xlsx, headers=headers).status_code == 200
+    assert cliente_api.post("/v1/comandos/importar_planilla_operadoras", content=xlsx, headers=headers2).status_code == 200
+    with tenant_session(t.tenant_id) as session:
+        movs = session.execute(
+            text(
+                "SELECT estado, paso_en FROM modulo1.movimiento_entrega_operadora "
+                "WHERE documento_id = :d ORDER BY paso_en"
+            ),
+            {"d": doc["documento_id"]},
+        ).mappings().all()
+    assert len(movs) == 2
+    assert [m["estado"] for m in movs] == ["enviado", "rechazado"]
+
+
 def test_rechazo_sin_fecha_respuesta_muestra_fecha_no_informada(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Apto sin fecha op")
