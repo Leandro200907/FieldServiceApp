@@ -23,8 +23,8 @@ function fila(partial: Partial<EvidenciaVigente> & Pick<EvidenciaVigente, 'estad
   } as EvidenciaVigente;
 }
 
-describe('contarBuckets en revisión', () => {
-  it('María: licencia por vencer con propuesta en revisión cuenta en «En revisión»', () => {
+describe('contarBuckets (E-6: tarjetas por fecha, revisión aparte)', () => {
+  it('María: licencia por vencer con propuesta en revisión sigue en «Por vencer»', () => {
     const lic = fila({
       estado_presentacion: 'por_vencer',
       propuesta_en_revision: {
@@ -36,11 +36,11 @@ describe('contarBuckets en revisión', () => {
       },
     });
     const buckets = contarBuckets([lic]);
-    expect(buckets.en_revision).toBe(1);
-    expect(buckets.por_vencer).toBe(0);
+    expect(buckets.por_vencer).toBe(1);
+    expect(buckets.en_revision).toBe(0);
   });
 
-  it('Juan: archivo en revisión cuenta en «En revisión» aunque esté vencida', () => {
+  it('Juan: vencida con archivo en revisión cuenta en «Vencidos»', () => {
     const lic = fila({
       sujeto_id: 'persona_patagonia_demo_t2',
       estado_presentacion: 'vencida',
@@ -56,7 +56,7 @@ describe('contarBuckets en revisión', () => {
       },
     });
     const buckets = contarBuckets([lic]);
-    expect(buckets.en_revision).toBe(1);
-    expect(buckets.vencidos).toBe(0);
+    expect(buckets.vencidos).toBe(1);
+    expect(buckets.en_revision).toBe(0);
   });
 });
