@@ -7,4 +7,18 @@ describe('PropuestasScreen rechazo', () => {
     const src = readFileSync(join(process.cwd(), 'src/features/propuestas/PropuestasScreen.tsx'), 'utf8');
     expect(src).toContain('disabled={busy || readOnly || !motivo.trim()}');
   });
+
+  it('muestra aviso tras confirmar o rechazar', () => {
+    const src = readFileSync(join(process.cwd(), 'src/features/propuestas/PropuestasScreen.tsx'), 'utf8');
+    expect(src).toContain('bandeja-aviso');
+    expect(src).toContain('ejecutarAccionBandejaExitosa');
+    expect(src).toContain('esCargaInicial(bandeja)');
+    expect(src).toMatch(/onAccionExitosa\(mensajeConfirmacionBandeja\(item\), haySiguiente\)/);
+  });
+
+  it('propuesta sin archivo no ofrece Ver archivo', () => {
+    const src = readFileSync(join(process.cwd(), 'src/features/propuestas/PropuestasScreen.tsx'), 'utf8');
+    expect(src).toContain('Sin archivo adjunto');
+    expect(src).toContain('propuestaSinArchivoAdjunto');
+  });
 });

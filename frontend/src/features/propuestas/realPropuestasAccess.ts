@@ -26,6 +26,22 @@ export const realPropuestasAccess: PropuestasAccess = {
       params: { query: { offset: query.offset, limit: query.limit } },
     }));
   },
+  async readBandejaRevision(query: PropuestasQuery) {
+    return unwrap(session.client.GET('/v1/consultas/bandeja_revision', {
+      params: {
+        query: {
+          offset: query.offset,
+          limit: query.limit,
+          pestana: query.pestana ?? 'todos',
+        },
+      },
+    }));
+  },
+  async abrirArchivo(documentoId: string) {
+    return unwrap(session.client.POST('/v1/storage/documentos/{documento_id}/url', {
+      params: { path: { documento_id: documentoId } },
+    }));
+  },
   async confirmarDocumento(documentoId: string, idempotencyKey?: string) {
     const intent = createCommandIntent('/v1/comandos/confirmar_documento', { documento_id: documentoId });
     return unwrap(session.client.POST('/v1/comandos/confirmar_documento', {

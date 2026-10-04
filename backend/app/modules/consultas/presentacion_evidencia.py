@@ -29,7 +29,7 @@ EXPLICACION_ESTADO: dict[str, str] = {
     "declarada": "Hay datos cargados que aún no fueron verificados por un responsable.",
     "por_vencer": "La evidencia sigue vigente pero vence dentro del plazo de aviso configurado.",
     "vencida": "La fecha de vigencia ya pasó; hace falta renovar o reemplazar la evidencia.",
-    "archivo_en_revision": "El archivo adjunto está pendiente de validación técnica.",
+    "archivo_en_revision": "Archivo en verificación técnica; el worker está validando formato e integridad.",
     "evidencia_invalida": "El archivo fue rechazado en la validación; hay que subir una evidencia nueva.",
     "sin_archivo_respaldo": "No hay archivo de respaldo cargado para esta evidencia.",
     "propuesta_en_revision": "Un técnico propuso una renovación que espera confirmación; no reemplaza la versión vigente.",
@@ -104,6 +104,11 @@ def enriquecer_fila_evidencia(
     )
     respaldo = estado_respaldo_presentacion(archivo)
     adicionales: list[str] = [respaldo] if respaldo else []
+    motivo_archivo: str | None = None
+    if respaldo == "evidencia_invalida":
+        from app.modules.evidencia.motivos_usuario import motivo_validacion_para_usuario
+
+        motivo_archivo = motivo_validacion_para_usuario(fila.get("archivo_validacion_motivo"))
     if str(fila.get("estado_confirmacion") or "") == "declarado":
         adicionales.append("declarada")
     salida = dict(fila)
@@ -112,7 +117,12 @@ def enriquecer_fila_evidencia(
     salida["estado_presentacion_explicacion"] = EXPLICACION_ESTADO[estado]
     if adicionales:
         salida["estados_adicionales"] = adicionales
-        salida["estados_adicionales_explicacion"] = {e: EXPLICACION_ESTADO[e] for e in adicionales}
+        explicaciones = {e: EXPLICACION_ESTADO[e] for e in adicionales}
+        if motivo_archivo and "evidencia_invalida" in explicaciones:
+            explicaciones["evidencia_invalida"] = motivo_archivo
+        salida["estados_adicionales_explicacion"] = explicaciones
+    if motivo_archivo:
+        salida["motivo_archivo_invalido"] = motivo_archivo
     return salida
 
 
@@ -124,6 +134,57 @@ def _cargar_plazo_tenant(session: Session, tenant_id: str) -> int:
         {"t": tenant_id},
     ).first()
     return int(fila[0]) if fila and fila[0] is not None else 30
+
+
+def mapa_ultimos_rechazos_propuesta(session: Session, tenant_id: str, sujeto_id: str) -> dict[str, dict[str, Any]]:
+    """Último motivo de rechazo de propuesta por requisito (event_log DocumentoRechazado)."""
+    from sqlalchemy import text
+
+    filas = session.execute(
+        text(
+            """
+            SELECT d.requisito_definicion_id::text AS requisito_definicion_id,
+                   e.payload->>'motivo' AS motivo,
+                   e.ocurrido_en
+            FROM modulo1.documento d
+            JOIN modulo1.event_log e ON e.tenant_id = d.tenant_id
+              AND e.tipo = 'DocumentoRechazado'
+              AND e.payload->>'documento_id' = d.documento_id::text
+            WHERE d.tenant_id = :t AND d.sujeto_id = :sj
+              AND d.estado_version = 'rechazada' AND d.origen_propuesta
+            ORDER BY e.ocurrido_en DESC
+            """
+        ),
+        {"t": tenant_id, "sj": sujeto_id},
+    ).mappings().all()
+    salida: dict[str, dict[str, Any]] = {}
+    for f in filas:
+        rid = str(f["requisito_definicion_id"])
+        if rid in salida:
+            continue
+        rechazado_en = f["ocurrido_en"]
+        from app.modules.evidencia.motivos_usuario import motivo_rechazo_propuesta_para_usuario
+
+        salida[rid] = {
+            "motivo": motivo_rechazo_propuesta_para_usuario(f["motivo"]) or f["motivo"],
+            "rechazado_en": rechazado_en.isoformat() if hasattr(rechazado_en, "isoformat") else str(rechazado_en),
+        }
+    return salida
+
+
+def adjuntar_ultimos_rechazos_propuesta(
+    session: Session,
+    tenant_id: str,
+    sujeto_id: str,
+    items: list[dict[str, Any]],
+) -> None:
+    rechazos = mapa_ultimos_rechazos_propuesta(session, tenant_id, sujeto_id)
+    for item in items:
+        if item.get("propuesta_en_revision"):
+            continue
+        rid = str(item.get("requisito_definicion_id") or "")
+        if rid and rid in rechazos:
+            item["ultimo_rechazo_propuesta"] = rechazos[rid]
 
 
 def filas_evidencia_para_legajo(
@@ -146,7 +207,8 @@ def filas_evidencia_para_legajo(
                    d.documento_id AS id, d.sujeto_id, d.requisito_definicion_id,
                    r.nombre AS requisito, r.categoria, d.vigente_desde, d.vigente_hasta,
                    d.estado_confirmacion, d.origen_propuesta, d.locacion_id,
-                   d.estado_version, d.archivo_estado, d.archivo_validacion, d.clave_storage,
+                   d.estado_version, d.archivo_estado, d.archivo_validacion, d.archivo_validacion_motivo,
+                   d.clave_storage,
                    d.sucede_a, r.plazo_aviso_dias,
                    l.identificador_natural, l.nombre_apellido, l.tipo_sujeto
             FROM modulo1.documento d
@@ -189,6 +251,7 @@ def filas_evidencia_para_legajo(
             base["estado_presentacion_explicacion"] = EXPLICACION_ESTADO["propuesta_en_revision"]
             salida.append(base)
     salida.sort(key=lambda i: (i.get("vigente_hasta") or "", i.get("tipo") or "", i.get("requisito") or ""))
+    adjuntar_ultimos_rechazos_propuesta(session, tenant_id, sujeto_id, salida)
     return salida
 
 

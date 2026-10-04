@@ -111,13 +111,16 @@ def verificar_archivo(contenido: bytes, content_type_declarado: str | None) -> t
 
 def _rechazar_por_validacion_fallida(session: Session, tenant_id: str, documento_id: str, motivo: str, doc: dict[str, Any]) -> None:
     """Caso A: misma semántica que RechazarPropuesta (propuesta → rechazada; vigente intacto)."""
+    from app.modules.evidencia.motivos_usuario import motivo_validacion_para_usuario
+
+    motivo_usuario = motivo_validacion_para_usuario(motivo)
     session.execute(text("UPDATE modulo1.documento SET estado_version = 'rechazada' WHERE tenant_id = :t AND documento_id = :d"),
                     {"t": tenant_id, "d": documento_id})
     registrar_evento(
         session, tenant_id, "DocumentoRechazado",
         {"documento_id": documento_id, "sujeto_id": doc["sujeto_id"],
          "requisito_definicion_id": str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None,
-         "motivo": f"validación técnica del archivo: {motivo}", "restaurado_documento_id": None},
+         "motivo": motivo_usuario, "motivo_tecnico": motivo, "restaurado_documento_id": None},
         None,
     )
 

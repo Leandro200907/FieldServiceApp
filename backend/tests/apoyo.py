@@ -44,6 +44,19 @@ def supervisor_de(s, tenant, sujeto_id: str, desde: date = date(2026, 1, 1), sup
     )
 
 
+def registrar_apertura_archivo(s, tenant_id: str, documento_id: str, usuario_id: str) -> None:
+    """D1 en tests: simula DescargarArchivoDeEvidencia del responsable."""
+    from app.comun.eventos import registrar_evento_interno
+
+    registrar_evento_interno(
+        s,
+        tenant_id,
+        "DescargarArchivoDeEvidencia",
+        {"documento_id": str(documento_id)},
+        usuario_id,
+    )
+
+
 def respaldo_valido_en_documento(s, tenant_id: str, documento_id: str, clave: str | None = None) -> None:
     """Marca archivo confirmado y válido (tests D19) y crea el objeto en storage local si aplica."""
     from pathlib import Path

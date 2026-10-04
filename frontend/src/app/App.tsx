@@ -10,7 +10,8 @@ import { detailIdFromPath, navigationGroupsFor, pageFromPath } from './navigatio
 import { BusinessDesign } from './BusinessDesign';
 import { DesignCatalog } from './DesignCatalog';
 import { ErrorState, LoadingState, Pending } from '../ui/States';
-import { loginPathWithReturn, resolvePostLoginPath } from './returnTo';
+import { defaultHomePath, loginPathWithReturn, resolvePostLoginPath } from './returnTo';
+import { subscribeBandejaRevisionRefresh } from '../features/propuestas/bandejaRevisionRefresh';
 import { isPropuestasIntegrated, propuestasAccess } from '../features/propuestas/access';
 
 type LoginValues = components['schemas']['LoginRequest'];
@@ -18,6 +19,8 @@ function useSession() { return useSyncExternalStore(session.subscribe, session.g
 
 function usePropuestasPendientesCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  useEffect(() => subscribeBandejaRevisionRefresh(() => setRefreshTick(t => t + 1)), []);
   useEffect(() => {
     if (!enabled || !isPropuestasIntegrated()) {
       setCount(null);
@@ -25,11 +28,11 @@ function usePropuestasPendientesCount(enabled: boolean) {
     }
     let cancelled = false;
     void propuestasAccess()
-      .readPropuestasPendientes({ offset: 0, limit: 1 })
-      .then(data => { if (!cancelled) setCount(data.total ?? data.items.length); })
+      .readBandejaRevision({ offset: 0, limit: 1, pestana: 'todos' })
+      .then(data => { if (!cancelled) setCount(data.conteos?.todos ?? data.total ?? data.items.length); })
       .catch(() => { if (!cancelled) setCount(null); });
     return () => { cancelled = true; };
-  }, [enabled]);
+  }, [enabled, refreshTick]);
   return count;
 }
 
@@ -143,6 +146,7 @@ function Workspace() {
   const navGroups = navigationGroupsFor(context ? [context] : roles);
   const rolEtiqueta = context ? roleLabels[context] : roles.map(r => roleLabels[r]).join(' · ');
   const usuarioNombre = snapshot.identity.usuario_nombre || snapshot.identity.usuario_email || 'Usuario';
+  const homePath = defaultHomePath(roles);
 
   const menu = (
     <>
@@ -173,7 +177,7 @@ function Workspace() {
   return (
     <div className="workspace">
       <header className="app-topbar">
-        <Link className="brand" to="/perfil"><span className="brand-mark">F</span><span>FieldServiceApp</span></Link>
+        <Link className="brand" to={homePath}><span className="brand-mark">F</span><span>FieldServiceApp</span></Link>
         <div className="app-topbar-meta">
           <span className="app-topbar-empresa">Empresa: <strong>{snapshot.identity.tenant_nombre}</strong></span>
           <Link className="app-topbar-user" to="/perfil">{usuarioNombre} · {rolEtiqueta} ▾</Link>

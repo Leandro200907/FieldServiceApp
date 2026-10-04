@@ -25,7 +25,7 @@ EVIDENCIAS_PENDIENTES_BANDEJA_POR_TENANT = 1
 EVIDENCIAS_INVALIDADAS_POR_TENANT = 1
 DOCUMENTOS_LOTE_IMPORTADO_POR_TENANT = 5
 DOCUMENTOS_LOTE_REVERTIDO_POR_TENANT = 1
-PROPUESTAS_PENDIENTES_MIN_POR_TENANT = 3
+PROPUESTAS_PENDIENTES_MIN_POR_TENANT = 2  # Flujo C: propuestas de tecnico3 (licencia con archivo + ART sin archivo)
 ESPEJO_ENTREGAS_MIN_POR_TENANT = 1
 
 
@@ -196,7 +196,7 @@ def test_tecnico1_licencia_por_vencer_y_propuesta_en_revision(demo_sembrado, cli
     lic = next(d for d in r.json()["documentos"] if d.get("requisito") == "Licencia de conducir")
     assert lic["estado_presentacion"] == "por_vencer"
     assert lic["estado_confirmacion"] == "verificado"
-    assert lic.get("propuesta_en_revision") is not None
+    assert lic.get("propuesta_en_revision") is None
     assert "archivo_en_revision" not in (lic.get("estados_adicionales") or [])
 
 
@@ -639,7 +639,7 @@ def test_tecnico3_todo_vigente(demo_sembrado):
                     ),
                     {"t": tid, "s": suj},
                 ).scalar()
-                assert n_prop_t3 == 0, f"{slug}: técnico 3 no debe tener propuestas pendientes"
+                assert n_prop_t3 >= 2, f"{slug}: técnico 3 debe tener propuestas demo para la bandeja (otros técnicos)"
 
 
 def test_reset_idempotente_en_cantidades(demo_sembrado):

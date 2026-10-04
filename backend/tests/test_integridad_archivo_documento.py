@@ -17,7 +17,7 @@ def test_rechazar_propuesta_no_restaura_sucedido_sin_archivo_en_storage(cliente_
     p = _alta_persona(cliente_api, t, "restaurar", sujeto_id=t.sujeto_tecnico)
     v1 = _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2026-12-31")
     prop = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {
-        "sujeto_id": p, "requisito_definicion_id": req, "vigente_desde": "2026-02-01", "vigente_hasta": "2026-12-31",
+        "sujeto_id": p, "requisito_definicion_id": req, "vigente_desde": "2026-02-01", "vigente_hasta": "2027-12-31",
     }))
     did_v1 = v1["documento_id"]
     with tenant_session(t.tenant_id) as s:

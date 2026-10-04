@@ -1,4 +1,4 @@
-import type { ConfirmarDocumentoResponse, DocumentoPropuesto, PropuestasAccess, PropuestasPendientesResponse, PropuestasQuery, RechazarPropuestaResponse } from './contracts';
+import type { BandejaRevisionResponse, ConfirmarDocumentoResponse, DocumentoPropuesto, PropuestasAccess, PropuestasPendientesResponse, PropuestasQuery, RechazarPropuestaResponse, UrlDeDescargaResponse } from './contracts';
 
 // Mock de desarrollo con la FORMA REAL del contrato — mismo patrón que el resto de
 // features. A diferencia de los mocks de solo lectura, éste mantiene estado mutable en
@@ -18,6 +18,35 @@ export const temporaryMockAccess: PropuestasAccess = {
     const offset = query.offset ?? 0;
     const limit = query.limit ?? 50;
     return { items: items.slice(offset, offset + limit), total: items.length, offset, limit };
+  },
+  async readBandejaRevision(query: PropuestasQuery): Promise<BandejaRevisionResponse> {
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 50;
+    const slice = items.slice(offset, offset + limit);
+    return {
+      items: slice.map(i => ({
+        tipo_item: 'propuesta',
+        documento_id: i.documento_id,
+        sujeto_id: i.sujeto_id,
+        requisito: i.requisito,
+        vigente_desde: i.vigente_desde,
+        vigente_hasta: i.vigente_hasta,
+        creado_en: i.creado_en,
+        origen: i.origen,
+        archivo_validacion: 'valido',
+        estado_presentacion: 'propuesta_en_revision',
+        estado_presentacion_explicacion: 'Propuesta pendiente',
+        ocs_afectadas: [],
+      })),
+      total: items.length,
+      offset,
+      limit,
+      pestana: query.pestana ?? 'todos',
+      conteos: { todos: items.length, propuestas: items.length, archivos: 0 },
+    };
+  },
+  async abrirArchivo(_documentoId: string): Promise<UrlDeDescargaResponse> {
+    return { documento_id: _documentoId, url: 'about:blank', eventos: ['DescargarArchivoDeEvidencia'] };
   },
   async confirmarDocumento(documentoId: string): Promise<ConfirmarDocumentoResponse> {
     const item = items.find(candidate => candidate.documento_id === documentoId);

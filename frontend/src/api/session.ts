@@ -106,7 +106,8 @@ export function createSession(options: Options = {}) {
   async function authorizedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const request = new Request(input, init);
     const target = new URL(request.url);
-    if (target.origin !== url.origin || !target.pathname.startsWith('/v1/') || target.pathname.startsWith('/v1/storage/') || ['/v1/auth/login', '/v1/auth/refresh', '/v1/auth/logout'].includes(target.pathname)) throw new Error('Use the dedicated transport for this endpoint');
+    const signedBlobOnly = target.pathname.startsWith('/v1/storage/') && !target.pathname.startsWith('/v1/storage/documentos/');
+    if (target.origin !== url.origin || !target.pathname.startsWith('/v1/') || signedBlobOnly || ['/v1/auth/login', '/v1/auth/refresh', '/v1/auth/logout'].includes(target.pathname)) throw new Error('Use the dedicated transport for this endpoint');
     const version = generation;
     if (!pair) throw new Error('No session');
     const margin = Math.min(5000, pair.expires_in * 100);

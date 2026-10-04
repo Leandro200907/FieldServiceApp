@@ -58,6 +58,7 @@ def test_e20_flujo_confirmacion_mantiene_vigente_y_luego_sucede(cliente_api, ten
 
     with tenant_session(t.tenant_id) as s:
         apoyo.respaldo_valido_en_documento(s, t.tenant_id, prop["documento_id"])
+        apoyo.registrar_apertura_archivo(s, t.tenant_id, prop["documento_id"], t.usuarios["responsable_legajos"])
     _ok(_post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": prop["documento_id"]}))
 
     docs = _docs(t, persona, req)

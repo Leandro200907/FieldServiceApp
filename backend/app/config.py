@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     storage_local_base_url: str = "/v1/storage"
     storage_max_bytes: int = 25 * 1024 * 1024  # tope por archivo de evidencia
 
+    # D17: tope de vigencia en propuestas del técnico (errores de tipeo en el selector de fecha).
+    propuesta_max_anios_vigencia: int = 10
+
     # Worker: cadencia del loop y umbral de readiness (`/salud/listo` exige un latido
     # global del worker más reciente que este umbral).
     worker_poll_seg: float = 5
