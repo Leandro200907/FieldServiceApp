@@ -226,12 +226,14 @@ def estado_documental_de_oc(
     hasta: date | None = None,
     tipos_fuera_de_alcance: list[str] | None = None,
     entregas: dict[tuple[str, str], dict[str, Any]] | None = None,
+    hasta_filtro: date | None = None,
 ) -> ResumenDocumental:
     """Estado agregado único para Radar y Backlog (E-21)."""
     from app.modules.proyeccion import radar as radar_mod
 
     entregas = entregas if entregas is not None else cargar_entregas_operadora(session, tenant_id)
-    inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=hasta)
+    fin_filtro = hasta_filtro if hasta_filtro is not None else hasta
+    inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=fin_filtro)
     operadora_id = str(oc.get("cliente_id") or "")
     nombres = session.execute(
         text("SELECT operadora_id::text, nombre FROM modulo1.operadora_documental WHERE tenant_id = :t"),

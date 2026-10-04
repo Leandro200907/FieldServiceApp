@@ -108,6 +108,9 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
     from app.modules.consultas.ocs_afectadas import adjuntar_ocs_afectadas_evidencias
 
     adjuntar_ocs_afectadas_evidencias(session, identidad, sujeto_id, items)
+    from app.modules.consultas.presentacion_evidencia import adjuntar_rechazos_operadora
+
+    adjuntar_rechazos_operadora(session, identidad.tenant_id, items)
     resumen = resumen_legajo_con_en_regla(items)
     return {
         "hoy": hoy.isoformat(),
@@ -253,7 +256,13 @@ def _oc_reprogramada(session: Session, oc_id: str) -> bool:
     return int(n or 0) > 0
 
 
-def _enriquecer_backlog(session: Session, identidad: Identidad, fila: Any) -> dict[str, Any]:
+def _enriquecer_backlog(
+    session: Session,
+    identidad: Identidad,
+    fila: Any,
+    *,
+    hasta_eval: date | None = None,
+) -> dict[str, Any]:
     d = _plano(fila)
     oc_datos = {
         "clave_origen": fila["clave_origen"],
@@ -263,7 +272,7 @@ def _enriquecer_backlog(session: Session, identidad: Identidad, fila: Any) -> di
         "vigencia_desde": fila["vigencia_desde"],
         "vigencia_hasta": fila["vigencia_hasta"],
     }
-    evaluacion = evaluar_oc_backlog(session, identidad, oc_datos)
+    evaluacion = evaluar_oc_backlog(session, identidad, oc_datos, hasta_filtro=hasta_eval)
     d.update(nombres_oc(session, identidad.tenant_id, d["cliente_id"], d["locacion_id"], d["tipo_servicio_id"]))
     d.update(evaluacion)
     d["modo"] = "consulta"
@@ -292,6 +301,7 @@ def backlog_oc(
     """Backlog de OC en modo consulta (D-E): alertas ciertas, sin veredicto de cobertura."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
+    eval_hasta = vigencia_hasta or (hoy + timedelta(days=60))
     if estado and estado not in ("activo", "cancelado"):
         raise ErrorDeDominio("estado inválido", {"estado": estado, "validos": ["activo", "cancelado"]})
     if vigencia_desde is None:
@@ -353,7 +363,8 @@ def backlog_oc(
             if not filas:
                 break
             for f in filas:
-                item = _enriquecer_backlog(session, identidad, f)
+                fin_oc = min(f["vigencia_hasta"], eval_hasta)
+                item = _enriquecer_backlog(session, identidad, f, hasta_eval=fin_oc)
                 if not _filtrar_post(item):
                     continue
                 if total >= p.offset and len(items) < p.limit:
@@ -373,7 +384,15 @@ def backlog_oc(
         ),
         {**params, "off": p.offset, "lim": p.limit},
     ).mappings().all()
-    items = [_enriquecer_backlog(session, identidad, f) for f in filas]
+    items = [
+        _enriquecer_backlog(
+            session,
+            identidad,
+            f,
+            hasta_eval=min(f["vigencia_hasta"], eval_hasta),
+        )
+        for f in filas
+    ]
     return envolver(items, int(total or 0), p)
 
 
@@ -511,6 +530,17 @@ def acciones_pendientes(
     }
     for oc in ocs:
         inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=min(hasta, oc["vigencia_hasta"]))
+        oc_eval = {
+            "clave_origen": oc["clave_origen"],
+            "cliente_id": str(oc["cliente_id"]),
+            "locacion_id": str(oc["locacion_id"]),
+            "tipo_servicio_id": str(oc["tipo_servicio_id"]),
+            "vigencia_desde": oc["vigencia_desde"],
+            "vigencia_hasta": oc["vigencia_hasta"],
+        }
+        eval_oc = evaluar_oc_backlog(session, identidad, oc_eval, hasta_filtro=fin)
+        if eval_oc.get("estado_documental") == "sin_matriz":
+            continue
         op_id = str(oc["cliente_id"])
         calc = radar_mod._evaluar_oc(
             session,
@@ -523,7 +553,6 @@ def acciones_pendientes(
             entregas=entregas,
             operadora_id=op_id,
         )
-        eval_oc = evaluar_oc_backlog(session, identidad, oc)
         genera_alerta = eval_oc.get("tiene_alertas")
         for leg in calc["legajos"]:
             if tipo_recurso and leg["tipo_sujeto"] != tipo_recurso:

@@ -102,12 +102,14 @@ def evaluar_oc_backlog(
     session: Session,
     identidad: Identidad,
     oc: dict[str, Any],
+    *,
+    hasta_filtro: date | None = None,
 ) -> dict[str, Any]:
     from app.comun.reloj import hoy_del_tenant
     from app.modules.oc.catalogos_maestros import nombres_oc
 
     hoy = hoy_del_tenant(session, identidad.tenant_id)
-    inicio, fin = ventana_evaluacion_oc(hoy, oc)
+    inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=hasta_filtro)
     operadora_id = str(oc.get("cliente_id") or "")
     nombres = nombres_oc(
         session,
@@ -300,6 +302,7 @@ def evaluar_oc_backlog(
         hasta=fin,
         tipos_fuera_de_alcance=sorted(fuera),
         entregas=entregas,
+        hasta_filtro=fin,
     )
     return {
         "estado_documental": estado_oc.estado,

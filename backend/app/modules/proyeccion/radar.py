@@ -397,23 +397,21 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
     entregas = cargar_entregas_operadora(session, identidad.tenant_id)
     items: list[dict[str, Any]] = []
 
-    def _adjuntar_habilitacion(item: dict[str, Any], oc: dict[str, Any], inicio: date, fin: date) -> None:
-        from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+    def _oc_para_evaluacion(oc: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "clave_origen": oc["clave_origen"],
+            "cliente_id": str(oc["cliente_id"]),
+            "locacion_id": str(oc["locacion_id"]),
+            "tipo_servicio_id": str(oc["tipo_servicio_id"]),
+            "vigencia_desde": oc["vigencia_desde"],
+            "vigencia_hasta": oc["vigencia_hasta"],
+        }
 
-        eval_doc = evaluar_oc_backlog(
-            session,
-            identidad,
-            {
-                "clave_origen": oc["clave_origen"],
-                "cliente_id": str(oc["cliente_id"]),
-                "locacion_id": str(oc["locacion_id"]),
-                "tipo_servicio_id": str(oc["tipo_servicio_id"]),
-                "vigencia_desde": inicio,
-                "vigencia_hasta": fin,
-            },
-        )
+    def _aplicar_eval_documental(item: dict[str, Any], eval_doc: dict[str, Any]) -> None:
         item.update(
             {
+                "estado_documental": eval_doc.get("estado_documental"),
+                "primer_quiebre": eval_doc.get("primer_quiebre_documental"),
                 "disponibilidad_por_tipo": eval_doc.get("disponibilidad_por_tipo") or [],
                 "impacto_por_tipo": eval_doc.get("impacto_por_tipo") or [],
                 "alertas_ciertas": eval_doc.get("alertas_ciertas") or [],
@@ -428,14 +426,20 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
             )
 
     def evaluar_item(oc: dict[str, Any]) -> dict[str, Any] | None:
+        from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+
         inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=min(hasta, oc["vigencia_hasta"]))
+        eval_doc = evaluar_oc_backlog(
+            session, identidad, _oc_para_evaluacion(oc), hasta_filtro=fin,
+        )
+        estado_doc = str(eval_doc.get("estado_documental") or "")
+        if estados and estado_doc not in estados:
+            return None
         tramos, _, huecos = _matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
         tipos_req = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
         fuera = _tipos_fuera_de_alcance(session, identidad.tenant_id, identidad, tipos_req, legajos)
-        if huecos and not tramos:
-            estado = ResumenDocumental("sin_matriz", None, 0, 0)
+        if estado_doc == "sin_matriz":
             calculo = {
-                "estado": estado,
                 "legajos": [],
                 "tipos_sin_legajos": [],
                 "tipos_fuera_de_alcance": sorted(set(fuera) & tipos_req),
@@ -454,9 +458,6 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
                 entregas=entregas,
                 operadora_id=str(oc["cliente_id"]),
             )
-        estado: ResumenDocumental = calculo["estado"]
-        if estados and estado.estado not in estados:
-            return None
         resumen = _resumen_por_tipo(calculo["legajos"])
         motivos = [f"{v['con_alertas']} {k} con alertas documentales" for k, v in resumen.items() if v["con_alertas"]]
         motivos.extend(
@@ -471,8 +472,6 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
             motivos.append("Hay períodos sin matriz de requisitos aplicable")
         item = {
             **{k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()},
-            "estado_documental": estado.estado,
-            "primer_quiebre": estado.primer_quiebre,
             "resumen": resumen,
             "motivos_resumidos": motivos,
         }
@@ -485,7 +484,7 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
                 str(oc["tipo_servicio_id"]),
             )
         )
-        _adjuntar_habilitacion(item, oc, inicio, fin)
+        _aplicar_eval_documental(item, eval_doc)
         return item
 
     if not estados:
