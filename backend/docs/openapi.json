@@ -2479,13 +2479,46 @@
             "title": "Clave Origen",
             "type": "string"
           },
+          "estado_oc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Oc"
+          },
           "llega_cubierto": {
             "title": "Llega Cubierto",
             "type": "boolean"
           },
+          "locacion_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Nombre"
+          },
           "oc_id": {
             "title": "Oc Id",
             "type": "string"
+          },
+          "operadora_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operadora Nombre"
           },
           "quiebres": {
             "items": {
@@ -2504,6 +2537,17 @@
               }
             ],
             "title": "Referencia"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
           },
           "vigencia_desde": {
             "title": "Vigencia Desde",
@@ -4127,6 +4171,17 @@
               }
             ],
             "title": "Nombre Apellido"
+          },
+          "observacion_operadora": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion Operadora"
           },
           "ocs_afectadas": {
             "items": {
