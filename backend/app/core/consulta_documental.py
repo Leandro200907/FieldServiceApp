@@ -20,9 +20,11 @@ from app.core.estado_documental import (
 from app.core.radar_documental import ResumenDocumental, resumir_oc, resumir_resultados
 
 
-def _as_date(value: date | str | None) -> date | None:
+def _as_date(value: date | datetime | str | None) -> date | None:
     if value is None:
         return None
+    if isinstance(value, datetime):
+        return value.date()
     if isinstance(value, date):
         return value
     return date.fromisoformat(str(value)[:10])
@@ -163,6 +165,11 @@ def fecha_desde_cuando_bloquea(
     """Única regla para Radar y acciones pendientes (E-64, D23)."""
     inicio_oc = _as_date(oc["vigencia_desde"]) or fallback
     inicio = max(hoy, inicio_oc)
+    if req.get("es_rechazo_operadora"):
+        rej = _as_date(req.get("rechazado_en"))
+        if rej:
+            return max(inicio_oc, rej)
+        return inicio
     pq = req.get("primer_quiebre")
     if pq:
         pq_d = _as_date(pq) or fallback
@@ -184,6 +191,46 @@ def etiqueta_bloqueo_desde(hoy: date, fecha_bloqueo: date) -> str:
     if fecha_bloqueo <= hoy:
         return "Ya bloquea"
     return f"Bloquea desde {fecha_bloqueo.strftime('%d/%m/%Y')}"
+
+
+def etiqueta_tipo_problema_accion(hoy: date, req: Mapping[str, Any]) -> str:
+    """Texto corto del problema para la columna efecto en acciones pendientes (E-79–E-81)."""
+    if req.get("es_rechazo_operadora"):
+        motivo = str(req.get("motivo") or "")
+        if motivo.startswith("Rechazado por "):
+            return motivo.split(" el ", 1)[0]
+        return "Rechazado por operadora"
+    estado = req.get("estado")
+    if estado == EstadoRequisitoDocumental.PENDIENTE_REVISION.value:
+        return "Sin respaldo validado"
+    arch = req.get("archivo_validacion")
+    if arch in ("sin_archivo", "pendiente", "invalido") and estado in (
+        EstadoRequisitoDocumental.FALTANTE.value,
+        EstadoRequisitoDocumental.EVIDENCIA_INVALIDA.value,
+        EstadoRequisitoDocumental.PENDIENTE_REVISION.value,
+    ):
+        return "Sin respaldo validado"
+    vh = _as_date(req.get("vigente_hasta"))
+    if estado in (
+        EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO.value,
+        EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO.value,
+    ):
+        if vh and vh >= hoy:
+            return "Por vencer"
+        return "Vencido"
+    if estado == EstadoRequisitoDocumental.FALTANTE.value and not req.get("evidencia_id"):
+        return "Sin documento"
+    if estado == EstadoRequisitoDocumental.FALTANTE.value:
+        return "Sin documento"
+    if estado == EstadoRequisitoDocumental.EVIDENCIA_INVALIDA.value:
+        return "Vencido"
+    return ""
+
+
+def efecto_accion_documental(hoy: date, oc: Mapping[str, Any], req: Mapping[str, Any], fallback: date) -> str:
+    fb = fecha_desde_cuando_bloquea(hoy, oc, req, fallback)
+    etiqueta_tipo = etiqueta_tipo_problema_accion(hoy, req)
+    return " · ".join(p for p in (etiqueta_tipo, etiqueta_bloqueo_desde(hoy, fb)) if p)
 
 
 def accion_sugerida_para_req(

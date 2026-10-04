@@ -320,6 +320,11 @@ def _evaluar_oc(
                 )
                 evidencia = next((e for e in evidencias_requisito if e.evidencia_id == resultado.evidencia_id), None)
                 es_rechazo = aviso_espejo == "rechazado"
+                rechazado_en = None
+                if es_rechazo and resultado.evidencia_id:
+                    entrega_rech = entregas.get((operadora_id, str(resultado.evidencia_id)))
+                    if entrega_rech:
+                        rechazado_en = entrega_rech.get("rechazado_en")
                 resultados.append({
                     "matriz_version_id": tramo["matriz_version_id"], "version_matriz": tramo["version"],
                     "periodo_desde": tramo["desde"], "periodo_hasta": tramo["hasta"],
@@ -334,6 +339,7 @@ def _evaluar_oc(
                     "requerido": resultado.estado.value != "no_aplica",
                     "aviso_operadora": aviso_espejo,
                     "es_rechazo_operadora": es_rechazo,
+                    "rechazado_en": rechazado_en,
                 })
                 from app.core.consulta_documental import clasificar_problema_documental
 

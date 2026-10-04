@@ -495,8 +495,7 @@ def acciones_pendientes(
     from app.core.consulta_documental import (
         accion_sugerida_para_req,
         cargar_propuestas_pendientes,
-        clasificar_problema_documental,
-        etiqueta_bloqueo_desde,
+        efecto_accion_documental,
         fecha_desde_cuando_bloquea,
         ventana_evaluacion_oc,
     )
@@ -583,9 +582,7 @@ def acciones_pendientes(
                     fecha_accion = str(fecha_accion)
                 clave = (leg["sujeto_id"], rid)
                 oc_ref = referencia_oc(oc)
-                tipo = clasificar_problema_documental(req)
-                etiqueta_tipo = {"sin_documento": "Sin documento", "vencido": "Vencido"}.get(tipo or "", "")
-                efecto = " · ".join(p for p in (etiqueta_tipo, etiqueta_bloqueo_desde(hoy, fb)) if p)
+                efecto = efecto_accion_documental(hoy, oc, req, inicio)
                 if clave in agrupadas:
                     item = agrupadas[clave]
                     if oc_ref not in item["ocs_afectadas"]:
@@ -755,6 +752,45 @@ def _etiqueta_legajo_requisito_auditoria(
     tipo: str,
     payload: dict[str, Any],
 ) -> str | None:
+    if tipo == "OcSinMatriz":
+        clave = payload.get("clave_origen")
+        if clave:
+            return f"OC {clave}"
+        return None
+    if tipo == "CumplimientoEmpresaAfectado":
+        leg = session.execute(
+            text(
+                "SELECT identificador_natural FROM modulo1.legajo "
+                "WHERE tenant_id = :t AND tipo_sujeto = 'empresa' LIMIT 1"
+            ),
+            {"t": tenant_id},
+        ).scalar()
+        empresa = leg or "Empresa"
+        return f"{empresa} · Cumplimiento documental"
+    if tipo == "EvidenciaAdjuntada":
+        doc_id = payload.get("documento_id")
+        if not doc_id:
+            return None
+        fila = session.execute(
+            text(
+                "SELECT d.sujeto_id, d.requisito_definicion_id, l.nombre_apellido, l.identificador_natural, "
+                "l.tipo_sujeto, r.nombre AS requisito "
+                "FROM modulo1.documento d "
+                "LEFT JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id "
+                "LEFT JOIN modulo1.definicion_requisito r ON r.requisito_definicion_id = d.requisito_definicion_id "
+                "WHERE d.tenant_id = :t AND d.documento_id = CAST(:d AS uuid)"
+            ),
+            {"t": tenant_id, "d": str(doc_id)},
+        ).mappings().first()
+        if not fila:
+            return None
+        if fila["tipo_sujeto"] == "persona" and fila.get("nombre_apellido"):
+            persona = fila["nombre_apellido"]
+        else:
+            persona = fila.get("identificador_natural") or str(fila["sujeto_id"])
+        if fila.get("requisito"):
+            return f"{persona} · {fila['requisito']}"
+        return persona
     if tipo == "LocacionOcCreada":
         loc_id = payload.get("locacion_id")
         op_id = payload.get("operadora_id")
