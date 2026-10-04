@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ApiFailure } from '../../api';
 import type { EvidenciaVigente } from './contracts';
 import { proponerRenovacion } from './realRenovacionAccess';
+import { mensajeErrorApiRenovacion, validarFechaRenovacion } from './validarRenovacion';
 import { formatFecha } from '../../ui/fechas';
 import { session } from '../../api';
 
@@ -25,8 +26,13 @@ export function RenovarDocumentoForm({
   const [error, setError] = useState<string | null>(null);
 
   async function enviar() {
-    if (!archivo || !vigenteHasta) {
-      setError('Adjuntá un archivo y elegí la fecha de vencimiento.');
+    if (!archivo) {
+      setError('Adjuntá un archivo (PDF o imagen).');
+      return;
+    }
+    const validacion = validarFechaRenovacion(vigenteHasta, item.vigente_hasta, hoyIso, tz);
+    if (validacion) {
+      setError(validacion);
       return;
     }
     setBusy(true);
@@ -41,8 +47,8 @@ export function RenovarDocumentoForm({
       });
       onDone();
     } catch (caught) {
-      const msg = caught instanceof ApiFailure ? caught.message : caught instanceof Error ? caught.message : 'No se pudo enviar la renovación.';
-      setError(msg);
+      const raw = caught instanceof ApiFailure ? caught.message : caught instanceof Error ? caught.message : 'No se pudo enviar la renovación.';
+      setError(mensajeErrorApiRenovacion(raw));
     } finally {
       setBusy(false);
     }
