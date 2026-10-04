@@ -145,6 +145,14 @@ def reconciliar(session: Session, identidad: Identidad, *, operadora_id: str, su
     return _datos_alerta(session, t, str(fila))
 
 
+_CAMPO_FECHA_ENTREGA = {
+    "exportado": "exportado_en",
+    "enviado": "enviado_en",
+    "aceptado": "aceptado_en",
+    "rechazado": "rechazado_en",
+}
+
+
 def _instante_paso(
     estado: str,
     *,
@@ -163,6 +171,87 @@ def _instante_paso(
     if valor is not None:
         return valor
     return datetime.now(timezone.utc)
+
+
+def _entrega_sin_cambios(
+    actual: dict[str, Any] | None,
+    *,
+    estado: str,
+    exportado_en: datetime | None,
+    enviado_en: datetime | None,
+    aceptado_en: datetime | None,
+    rechazado_en: datetime | None,
+    observacion: str | None,
+) -> bool:
+    if actual is None:
+        return False
+    if str(actual.get("estado") or "") != estado:
+        return False
+    if (actual.get("observacion") or None) != (observacion or None):
+        return False
+    pares = (
+        ("exportado_en", exportado_en),
+        ("enviado_en", enviado_en),
+        ("aceptado_en", aceptado_en),
+        ("rechazado_en", rechazado_en),
+    )
+    for campo, nuevo in pares:
+        if actual.get(campo) != nuevo:
+            return False
+    return True
+
+
+def _movimiento_planilla_duplicado(
+    session: Session,
+    tenant_id: str,
+    *,
+    operadora_id: str,
+    documento_id: str,
+    estado: str,
+    fuente_archivo: str | None,
+    fuente_hoja: str | None,
+    fuente_fila: int | None,
+) -> bool:
+    if not fuente_archivo or fuente_fila is None:
+        return False
+    return (
+        session.execute(
+            text(
+                """
+                SELECT 1 FROM modulo1.movimiento_entrega_operadora
+                WHERE tenant_id = :t AND operadora_id = :o AND documento_id = :d AND estado = :e
+                  AND fuente_archivo = :fa AND fuente_hoja IS NOT DISTINCT FROM :fh AND fuente_fila = :ff
+                LIMIT 1
+                """
+            ),
+            {
+                "t": tenant_id,
+                "o": operadora_id,
+                "d": documento_id,
+                "e": estado,
+                "fa": fuente_archivo,
+                "fh": fuente_hoja,
+                "ff": fuente_fila,
+            },
+        ).scalar()
+        is not None
+    )
+
+
+def _texto_paso_en(
+    estado: str,
+    entrega: dict[str, Any] | None,
+    paso_en: datetime,
+    tz: ZoneInfo,
+) -> str:
+    """E-30: sin timestamp de dominio → «fecha no informada»."""
+    if entrega is not None:
+        campo = _CAMPO_FECHA_ENTREGA.get(estado)
+        if campo and entrega.get(campo) is None:
+            return "fecha no informada"
+    if isinstance(paso_en, datetime):
+        return paso_en.astimezone(tz).isoformat()
+    return str(paso_en)
 
 
 def _registrar_movimiento(
@@ -247,6 +336,35 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
         {"t": t, "o": operadora_id},
     ).scalar() is None:
         raise NoEncontrado("Operadora inexistente en el catálogo", {"operadora_id": operadora_id})
+    entrega_prev = session.execute(
+        text(
+            """
+            SELECT estado, exportado_en, enviado_en, aceptado_en, rechazado_en, observacion
+            FROM modulo1.entrega_documento_operadora
+            WHERE tenant_id = :t AND operadora_id = :o AND documento_id = :d
+            """
+        ),
+        {"t": t, "o": str(operadora_id), "d": documento_id},
+    ).mappings().first()
+    sin_cambios = _entrega_sin_cambios(
+        dict(entrega_prev) if entrega_prev else None,
+        estado=estado,
+        exportado_en=exportado_en,
+        enviado_en=enviado_en,
+        aceptado_en=aceptado_en,
+        rechazado_en=rechazado_en,
+        observacion=observacion,
+    )
+    movimiento_duplicado = _movimiento_planilla_duplicado(
+        session,
+        t,
+        operadora_id=str(operadora_id),
+        documento_id=documento_id,
+        estado=estado,
+        fuente_archivo=fuente_archivo,
+        fuente_hoja=fuente_hoja,
+        fuente_fila=fuente_fila,
+    )
     session.execute(text("""
         INSERT INTO modulo1.operadora_legajo (tenant_id, operadora_id, sujeto_id, fuente)
         VALUES (:t, :o, :s, 'planilla') ON CONFLICT DO NOTHING
@@ -270,32 +388,35 @@ def registrar_estado(session: Session, identidad: Identidad, *, operadora: str, 
              "d": documento_id, "e": estado, "ex": exportado_en, "en": enviado_en,
              "ac": aceptado_en, "re": rechazado_en, "fa": fuente_archivo, "fh": fuente_hoja,
              "ff": fuente_fila, "obs": observacion, "u": identidad.usuario_id})
-    _registrar_movimiento(
-        session,
-        t,
-        operadora_id=str(operadora_id),
-        sujeto_id=sujeto_id,
-        requisito_definicion_id=str(doc["requisito_definicion_id"]),
-        documento_id=documento_id,
-        estado=estado,
-        paso_en=_instante_paso(
-            estado,
-            exportado_en=exportado_en,
-            enviado_en=enviado_en,
-            aceptado_en=aceptado_en,
-            rechazado_en=rechazado_en,
-        ),
-        observacion=observacion,
-        registrado_por=identidad.usuario_id,
-        fuente_archivo=fuente_archivo,
-        fuente_hoja=fuente_hoja,
-        fuente_fila=fuente_fila,
-    )
-    registrar_evento_interno(session, t, "EstadoDocumentoOperadoraRegistrado", {
-        "operadora_id": str(operadora_id), "operadora": operadora, "sujeto_id": sujeto_id,
-        "documento_id": documento_id, "estado": estado, "fuente_archivo": fuente_archivo,
-        "fuente_hoja": fuente_hoja, "fuente_fila": fuente_fila,
-    }, identidad.usuario_id)
+    omitir_movimiento = sin_cambios and (movimiento_duplicado or fuente_archivo is None)
+    if not omitir_movimiento:
+        _registrar_movimiento(
+            session,
+            t,
+            operadora_id=str(operadora_id),
+            sujeto_id=sujeto_id,
+            requisito_definicion_id=str(doc["requisito_definicion_id"]),
+            documento_id=documento_id,
+            estado=estado,
+            paso_en=_instante_paso(
+                estado,
+                exportado_en=exportado_en,
+                enviado_en=enviado_en,
+                aceptado_en=aceptado_en,
+                rechazado_en=rechazado_en,
+            ),
+            observacion=observacion,
+            registrado_por=identidad.usuario_id,
+            fuente_archivo=fuente_archivo,
+            fuente_hoja=fuente_hoja,
+            fuente_fila=fuente_fila,
+        )
+    if not sin_cambios:
+        registrar_evento_interno(session, t, "EstadoDocumentoOperadoraRegistrado", {
+            "operadora_id": str(operadora_id), "operadora": operadora, "sujeto_id": sujeto_id,
+            "documento_id": documento_id, "estado": estado, "fuente_archivo": fuente_archivo,
+            "fuente_hoja": fuente_hoja, "fuente_fila": fuente_fila,
+        }, identidad.usuario_id)
     alerta = reconciliar(session, identidad, operadora_id=str(operadora_id), sujeto_id=sujeto_id,
                         requisito_definicion_id=str(doc["requisito_definicion_id"]))
     return {"operadora_id": str(operadora_id), "documento_id": documento_id, "estado": estado,
@@ -458,6 +579,20 @@ def historial_operadora(
     _exigir_sujeto_en_alcance(session, identidad, sujeto_id)
     t = identidad.tenant_id
     tz = ZoneInfo(zona_horaria_del_tenant(session, t))
+    entregas = {
+        str(f["documento_id"]): dict(f)
+        for f in session.execute(
+            text(
+                """
+                SELECT documento_id::text, exportado_en, enviado_en, aceptado_en, rechazado_en
+                FROM modulo1.entrega_documento_operadora
+                WHERE tenant_id = :t AND operadora_id = :o AND sujeto_id = :s
+                  AND requisito_definicion_id = :r
+                """
+            ),
+            {"t": t, "o": operadora_id, "s": sujeto_id, "r": requisito_definicion_id},
+        ).mappings().all()
+    }
     filas = session.execute(
         text("""
             SELECT m.documento_id, m.estado, m.paso_en, m.observacion, m.registrado_por, m.origen,
@@ -487,9 +622,9 @@ def historial_operadora(
                 "pasos": [],
             }
             orden.append(doc_id)
-        paso_en = fila["paso_en"]
-        if isinstance(paso_en, datetime):
-            paso_en = paso_en.astimezone(tz).isoformat()
+        paso_en_raw = fila["paso_en"]
+        entrega = entregas.get(doc_id)
+        paso_en = _texto_paso_en(str(fila["estado"]), entrega, paso_en_raw, tz)
         versiones[doc_id]["pasos"].append({
             "estado": fila["estado"],
             "paso_en": paso_en,
