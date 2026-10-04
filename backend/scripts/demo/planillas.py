@@ -18,7 +18,7 @@ from app.auth.identidad import Rol
 from scripts.demo.config import dni_tecnico, nombre_locacion_demo
 from scripts.demo.contexto import EstadoTenant
 from scripts.demo.db_util import ErrorDemo
-from scripts.demo.fechas import hoy_tenant
+from scripts.demo.fechas import hoy_tenant, rango_oc_en_curso, rango_oc_futura
 
 RAIZ = Path(__file__).resolve().parents[1]
 PLANTILLA = RAIZ.parents[1] / "frontend" / "public" / "Plantilla_presentaciones_operadoras.xlsx"
@@ -236,15 +236,27 @@ def generar_planillas(est: EstadoTenant) -> Path:
     wb_err.save(out / "presentaciones_con_errores.xlsx")
 
     loc_ypf = nombre_locacion_demo("YPF", 1)
+    oc_curso_desde, oc_curso_hasta = rango_oc_en_curso(hoy)
+    oc_fut_desde, oc_fut_hasta = rango_oc_futura(hoy)
     oc_rows = [
         [
-            f"OC-PLAN-{est.spec.slug}-OK",
+            f"OC-PLAN-{est.spec.slug}-CURSO",
             "ref",
             "YPF",
             loc_ypf,
             "Wireline",
-            (hoy + timedelta(days=60)).isoformat(),
-            (hoy + timedelta(days=90)).isoformat(),
+            oc_curso_desde.isoformat(),
+            oc_curso_hasta.isoformat(),
+            "activo",
+        ],
+        [
+            f"OC-PLAN-{est.spec.slug}-FUT",
+            "ref",
+            "Vista",
+            nombre_locacion_demo("Vista", 1),
+            "Slickline",
+            oc_fut_desde.isoformat(),
+            oc_fut_hasta.isoformat(),
             "activo",
         ],
         [
@@ -253,8 +265,8 @@ def generar_planillas(est: EstadoTenant) -> Path:
             "Operadora Inexistente",
             loc_ypf,
             "Wireline",
-            hoy.isoformat(),
-            (hoy + timedelta(days=10)).isoformat(),
+            oc_fut_desde.isoformat(),
+            oc_fut_hasta.isoformat(),
             "activo",
         ],
     ]
