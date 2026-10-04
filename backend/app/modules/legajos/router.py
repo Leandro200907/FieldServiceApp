@@ -34,6 +34,7 @@ class DocumentoCargadoResponse(BaseModel):
 
     documento_id: str
     version: int
+    estado_version: str
     sucede_a: str | None
     eventos: list[str]
 

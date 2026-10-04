@@ -55,7 +55,7 @@ export function AuditoriaScreen() {
               <td>{formatFechaHora(evento.ocurrido_en, tz)}</td>
               <td>{usuario ?? '—'}</td>
               <td>{labelTipoEventoAuditoria(evento.tipo)}</td>
-              <td>{evento.legajo_requisito_etiqueta || '—'}</td>
+              <td>{(evento as { legajo_requisito_etiqueta?: string }).legajo_requisito_etiqueta || '—'}</td>
               <td>
                 {detalle && <span>{detalle}</span>}
                 <details><summary className="text-button">Payload</summary><pre className="audit-payload">{JSON.stringify(evento.payload, null, 2)}</pre></details>

@@ -7,10 +7,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.auth.identidad import Identidad
+from app.core.consulta_documental import cargar_entregas_operadora, evaluar_requisito_en_oc, ventana_evaluacion_oc
 from app.core.estado_documental import (
     EvaluacionDocumentalEntrada,
     EstadoRequisitoDocumental,
-    evaluar_requisito_documental,
 )
 from app.core.radar_documental import ESTADOS_ALERTA, ESTADOS_INCOMPLETOS
 from app.modules.proyeccion import radar as radar_mod
@@ -30,12 +30,19 @@ def _eval_legajo_tramo(
     legajo: dict[str, Any],
     tramo: dict[str, Any],
     evidencias: dict[tuple[str, str], list[Any]],
+    *,
+    operadora_id: str,
+    operadora_nombre: str,
+    entregas: dict[tuple[str, str], dict[str, Any]],
 ) -> tuple[bool, list[dict[str, Any]]]:
     detalle: list[dict[str, Any]] = []
     for req in _reqs_tipo(tramo, legajo["tipo_sujeto"]):
         evs = tuple(evidencias.get((legajo["sujeto_id"], req.requisito_definicion_id), ()))
-        res = evaluar_requisito_documental(
+        res, _, _ = evaluar_requisito_en_oc(
             EvaluacionDocumentalEntrada(tramo["desde"], tramo["hasta"], req, evs),
+            operadora_id=operadora_id,
+            operadora_nombre=operadora_nombre,
+            entregas=entregas,
         )
         detalle.append(
             {
@@ -57,13 +64,20 @@ def _eval_legajo_ventana(
     evidencias: dict[tuple[str, str], list[Any]],
     inicio: date,
     fin: date,
+    *,
+    operadora_id: str,
+    operadora_nombre: str,
+    entregas: dict[tuple[str, str], dict[str, Any]],
 ) -> str:
     """Clasifica: habilitado_toda_ventana | se_cae_en_ventana | no_habilitado."""
     if not tramos:
         return "no_habilitado"
     caida: dict[str, Any] | None = None
     for tramo in tramos:
-        ok, det = _eval_legajo_tramo(legajo, tramo, evidencias)
+        ok, det = _eval_legajo_tramo(
+            legajo, tramo, evidencias,
+            operadora_id=operadora_id, operadora_nombre=operadora_nombre, entregas=entregas,
+        )
         if not ok:
             for d in det:
                 if d["estado"] == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO.value:
@@ -73,8 +87,11 @@ def _eval_legajo_ventana(
     for tramo in tramos:
         for req in _reqs_tipo(tramo, legajo["tipo_sujeto"]):
             evs = tuple(evidencias.get((legajo["sujeto_id"], req.requisito_definicion_id), ()))
-            res = evaluar_requisito_documental(
+            res, _, _ = evaluar_requisito_en_oc(
                 EvaluacionDocumentalEntrada(inicio, fin, req, evs),
+                operadora_id=operadora_id,
+                operadora_nombre=operadora_nombre,
+                entregas=entregas,
             )
             if res.estado != EstadoRequisitoDocumental.VIGENTE_TODO_EL_PERIODO:
                 return "se_cae_en_ventana"
@@ -85,8 +102,24 @@ def evaluar_oc_backlog(
     session: Session,
     identidad: Identidad,
     oc: dict[str, Any],
+    *,
+    hasta_filtro: date | None = None,
 ) -> dict[str, Any]:
-    inicio, fin = oc["vigencia_desde"], oc["vigencia_hasta"]
+    from app.comun.reloj import hoy_del_tenant
+    from app.modules.oc.catalogos_maestros import nombres_oc
+
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=hasta_filtro)
+    operadora_id = str(oc.get("cliente_id") or "")
+    nombres = nombres_oc(
+        session,
+        identidad.tenant_id,
+        operadora_id,
+        str(oc.get("locacion_id") or ""),
+        str(oc.get("tipo_servicio_id") or ""),
+    )
+    operadora_nombre = nombres.get("operadora_nombre") or ""
+    entregas = cargar_entregas_operadora(session, identidad.tenant_id)
     todos = radar_mod._legajos(session, identidad.tenant_id)
     visibles = radar_mod._legajos_visibles(session, identidad)
     ids_visibles = {l["sujeto_id"] for l in visibles}
@@ -97,6 +130,23 @@ def evaluar_oc_backlog(
     MSG_FUERA = "hay recursos habilitados fuera de tu alcance"
 
     alertas: list[dict[str, Any]] = []
+    sin_matriz_total = bool(huecos) and not tramos
+    if sin_matriz_total:
+        return {
+            "estado_documental": "sin_matriz",
+            "alertas_ciertas": [
+                {
+                    "codigo": "sin_matriz",
+                    "mensaje": "Sin matriz aplicable",
+                    "desde": inicio.isoformat(),
+                    "hasta": fin.isoformat(),
+                }
+            ],
+            "tiene_alertas": False,
+            "disponibilidad_por_tipo": [],
+            "impacto_por_tipo": [],
+            "tipos_fuera_de_alcance": [],
+        }
     if huecos:
         for h in huecos:
             alertas.append(
@@ -126,7 +176,10 @@ def evaluar_oc_backlog(
         cae: list[dict[str, Any]] = []
         no: list[dict[str, Any]] = []
         for leg in legajos_tipo:
-            cls = _eval_legajo_ventana(leg, tramos, evidencias, inicio, fin)
+            cls = _eval_legajo_ventana(
+                leg, tramos, evidencias, inicio, fin,
+                operadora_id=operadora_id, operadora_nombre=operadora_nombre, entregas=entregas,
+            )
             item = {
                 "sujeto_id": leg["sujeto_id"],
                 "nombre": leg.get("identificador_natural") or leg["sujeto_id"],
@@ -137,7 +190,10 @@ def evaluar_oc_backlog(
                 vigente_hasta = None
                 req_nombre = None
                 for tramo in tramos:
-                    _, det = _eval_legajo_tramo(leg, tramo, evidencias)
+                    _, det = _eval_legajo_tramo(
+                        leg, tramo, evidencias,
+                        operadora_id=operadora_id, operadora_nombre=operadora_nombre, entregas=entregas,
+                    )
                     hit = next((d for d in det if d["estado"] == EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO.value), None)
                     if hit:
                         vigente_hasta = hit.get("vigente_hasta")
@@ -157,7 +213,13 @@ def evaluar_oc_backlog(
             if tramo_dia is None:
                 return True
             mini = {"desde": dia, "hasta": dia, "requisitos": tramo_dia["requisitos"]}
-            return any(_eval_legajo_tramo(l, mini, evidencias)[0] for l in legajos_tipo)
+            return any(
+                _eval_legajo_tramo(
+                    l, mini, evidencias,
+                    operadora_id=operadora_id, operadora_nombre=operadora_nombre, entregas=entregas,
+                )[0]
+                for l in legajos_tipo
+            )
 
         cursor = inicio
         while cursor <= fin:
@@ -228,7 +290,23 @@ def evaluar_oc_backlog(
     for tipo in sorted(t for t in tipos_req if t != "empresa"):
         procesar_tipo(tipo)
 
+    from app.core.consulta_documental import estado_documental_de_oc
+
+    estado_oc = estado_documental_de_oc(
+        session,
+        identidad.tenant_id,
+        oc,
+        visibles,
+        evidencias,
+        hoy,
+        hasta=fin,
+        tipos_fuera_de_alcance=sorted(fuera),
+        entregas=entregas,
+        hasta_filtro=fin,
+    )
     return {
+        "estado_documental": estado_oc.estado,
+        "primer_quiebre_documental": estado_oc.primer_quiebre,
         "alertas_ciertas": alertas,
         "tiene_alertas": len(alertas) > 0,
         "disponibilidad_por_tipo": disponibilidad,

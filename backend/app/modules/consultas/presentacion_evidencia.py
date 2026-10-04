@@ -51,7 +51,7 @@ def _archivo_validacion_de_fila(fila: Mapping[str, Any]) -> str:
 
 
 def _es_propuesta_pendiente(fila: Mapping[str, Any]) -> bool:
-    return bool(fila.get("origen_propuesta")) and fila.get("estado_confirmacion") == "declarado"
+    return fila.get("estado_version") == "propuesta" and fila.get("estado_confirmacion") == "declarado"
 
 
 def _plazo_aviso(plazo_requisito: int | None, plazo_tenant: int) -> int:
@@ -154,7 +154,7 @@ def filas_evidencia_para_legajo(
               ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
             LEFT JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id
             WHERE d.tenant_id = :t AND d.sujeto_id = :s
-              AND d.estado_version IN ('vigente', 'sucedida')
+              AND d.estado_version IN ('vigente', 'sucedida', 'propuesta')
             ORDER BY d.requisito_definicion_id, d.estado_version DESC, d.version DESC
             """
         ),
@@ -168,58 +168,26 @@ def filas_evidencia_para_legajo(
     salida: list[dict[str, Any]] = []
     for grupo in por_req.values():
         vigente = next((g for g in grupo if g["estado_version"] == "vigente"), None)
-        if vigente is None:
-            continue
-        if _es_propuesta_pendiente(vigente) and vigente.get("sucede_a"):
-            confirmada = next(
-                (g for g in grupo if str(g["id"]) == str(vigente["sucede_a"]) and g["estado_version"] == "sucedida"),
-                None,
-            )
-            if confirmada is None:
-                confirmada = session.execute(
-                    text(
-                        """
-                        SELECT CASE r.categoria WHEN 'competencia' THEN 'acreditacion'
-                                                WHEN 'induccion' THEN 'induccion'
-                                                ELSE 'documento' END AS tipo,
-                               d.documento_id AS id, d.sujeto_id, d.requisito_definicion_id,
-                               r.nombre AS requisito, r.categoria, d.vigente_desde, d.vigente_hasta,
-                               d.estado_confirmacion, d.origen_propuesta, d.locacion_id,
-                               d.estado_version, d.archivo_estado, d.archivo_validacion, d.clave_storage,
-                               d.sucede_a, r.plazo_aviso_dias,
-                               l.identificador_natural, l.nombre_apellido, l.tipo_sujeto
-                        FROM modulo1.documento d
-                        LEFT JOIN modulo1.definicion_requisito r
-                          ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
-                        LEFT JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id
-                        WHERE d.tenant_id = :t AND d.documento_id = CAST(:d AS uuid)
-                        """
-                    ),
-                    {"t": tenant_id, "d": str(vigente["sucede_a"])},
-                ).mappings().first()
-                if confirmada is not None:
-                    confirmada = dict(confirmada)
-            if confirmada is not None:
-                base = _fila_con_vigencia(confirmada, hoy)
-                base = enriquecer_fila_evidencia(base, hoy, plazo_tenant)
+        propuesta = next((g for g in grupo if g["estado_version"] == "propuesta"), None)
+        if vigente is not None:
+            base = _fila_con_vigencia(vigente, hoy)
+            base = enriquecer_fila_evidencia(base, hoy, plazo_tenant)
+            if propuesta is not None and _es_propuesta_pendiente(propuesta):
                 base["propuesta_en_revision"] = {
-                    "documento_id": str(vigente["id"]),
-                    "vigente_desde": vigente["vigente_desde"].isoformat() if vigente.get("vigente_desde") else None,
-                    "vigente_hasta": vigente["vigente_hasta"].isoformat() if vigente.get("vigente_hasta") else None,
+                    "documento_id": str(propuesta["id"]),
+                    "vigente_desde": propuesta["vigente_desde"].isoformat() if propuesta.get("vigente_desde") else None,
+                    "vigente_hasta": propuesta["vigente_hasta"].isoformat() if propuesta.get("vigente_hasta") else None,
                     "estado_presentacion": "propuesta_en_revision",
                     "estado_presentacion_explicacion": EXPLICACION_ESTADO["propuesta_en_revision"],
                 }
-                salida.append(base)
-                continue
-        if _es_propuesta_pendiente(vigente) and not vigente.get("sucede_a"):
-            base = _fila_con_vigencia(vigente, hoy)
+            salida.append(base)
+            continue
+        if propuesta is not None and _es_propuesta_pendiente(propuesta):
+            base = _fila_con_vigencia(propuesta, hoy)
             base = enriquecer_fila_evidencia(base, hoy, plazo_tenant)
             base["estado_presentacion"] = "propuesta_en_revision"
             base["estado_presentacion_explicacion"] = EXPLICACION_ESTADO["propuesta_en_revision"]
             salida.append(base)
-            continue
-        base = _fila_con_vigencia(vigente, hoy)
-        salida.append(enriquecer_fila_evidencia(base, hoy, plazo_tenant))
     salida.sort(key=lambda i: (i.get("vigente_hasta") or "", i.get("tipo") or "", i.get("requisito") or ""))
     return salida
 
@@ -245,6 +213,39 @@ def _fila_con_vigencia(fila: dict[str, Any], hoy: date) -> dict[str, Any]:
     return salida
 
 
+def _cuenta_como_en_regla_hoy(item: dict[str, Any]) -> bool:
+    """D19: solo verificado/confirmado_en_fuente con respaldo válido habilita para el resumen."""
+    if item.get("estado_presentacion") == "propuesta_en_revision":
+        return False
+    if not item.get("vigente_hoy"):
+        return False
+    if item.get("estado_confirmacion") not in ("verificado", "confirmado_en_fuente"):
+        return False
+    if item.get("archivo_validacion") != "valido":
+        return False
+    return True
+
+
+def adjuntar_rechazos_operadora(session: Session, tenant_id: str, items: list[dict[str, Any]]) -> None:
+    """E-10: rechazo en ficha / mi legajo (texto corto por operadora)."""
+    from app.core.consulta_documental import cargar_entregas_operadora
+
+    entregas = cargar_entregas_operadora(session, tenant_id)
+    for item in items:
+        doc_id = str(item.get("id") or "")
+        if not doc_id:
+            continue
+        rechazos = [
+            entrega
+            for (_op, did), entrega in entregas.items()
+            if did == doc_id and str(entrega.get("estado") or "") == "rechazado"
+        ]
+        if not rechazos:
+            continue
+        nombre = str(rechazos[0].get("operadora_nombre") or "la operadora")
+        item["observacion_operadora"] = f"Rechazado por {nombre}"
+
+
 def resumen_desde_items(items: list[dict[str, Any]]) -> dict[str, int]:
     vigentes = por_vencer = vencidos = 0
     for i in items:
@@ -254,7 +255,7 @@ def resumen_desde_items(items: list[dict[str, Any]]) -> dict[str, int]:
         elif est == "por_vencer":
             por_vencer += 1
         elif est in ("verificada", "declarada"):
-            if i.get("vigente_hoy"):
+            if _cuenta_como_en_regla_hoy(i):
                 vigentes += 1
     return {
         "total": len(items),
@@ -263,23 +264,3 @@ def resumen_desde_items(items: list[dict[str, Any]]) -> dict[str, int]:
         "vencidos": vencidos,
     }
 
-
-def evidencias_para_evaluacion_consulta(
-    evidencias: dict[tuple[str, str], list[Any]],
-) -> dict[tuple[str, str], list[Any]]:
-    """Para radar/vencimientos: ignora propuesta vigente si hay sucedida confirmada en el mismo requisito."""
-    from app.core.estado_documental import EvidenciaDocumental
-
-    salida: dict[tuple[str, str], list[Any]] = {}
-    for clave, lista in evidencias.items():
-        vigentes = [e for e in lista if e.estado_version.value == "vigente"]
-        sucedidas = [e for e in lista if e.estado_version.value == "sucedida"]
-        if (
-            len(vigentes) == 1
-            and vigentes[0].estado_confirmacion.value == "declarado"
-            and sucedidas
-        ):
-            salida[clave] = list(sucedidas) + [e for e in vigentes if False]
-            continue
-        salida[clave] = list(lista)
-    return salida

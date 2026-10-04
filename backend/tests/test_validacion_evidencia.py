@@ -134,7 +134,7 @@ def test_caso_a_declarado_invalido_rechaza_como_rechazar_propuesta(cliente_api, 
     assert fila_propuesta["archivo_validacion"] == "invalido"
     assert fila_propuesta["estado_version"] == "rechazada"  # Caso A: mismo camino que RechazarPropuesta
 
-    assert _fila(t.tenant_id, original)["estado_version"] == "vigente"  # se restauró
+    assert _fila(t.tenant_id, original)["estado_version"] == "vigente"  # vigente confirmado intacto
 
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tenant_id = :t AND tipo = 'DocumentoRechazado' "

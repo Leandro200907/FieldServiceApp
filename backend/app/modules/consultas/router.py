@@ -58,6 +58,7 @@ class EvidenciaVigente(BaseModel):
     estados_adicionales: list[str] | None = None
     estados_adicionales_explicacion: dict[str, str] | None = None
     propuesta_en_revision: PropuestaEnRevision | None = None
+    observacion_operadora: str | None = None
     ocs_afectadas: list[OcAfectadaRef] = Field(default_factory=list)
 
 
@@ -66,6 +67,8 @@ class ResumenLegajo(BaseModel):
     vigentes_hoy: int
     por_vencer: int = 0
     vencidos: int
+    en_regla: int = 0
+    ocs_afectadas: int = 0
 
 
 class LegajoDatos(BaseModel):
@@ -166,6 +169,8 @@ class OcBacklogItem(BaseModel):
     actualizado_en: str
     modo: str
     reprogramada: bool = False
+    estado_documental: str | None = None
+    primer_quiebre_documental: str | None = None
     tiene_alertas: bool
     alertas_ciertas: list[AlertaCiertaOc]
     disponibilidad_por_tipo: list[DisponibilidadTipoOc]
@@ -487,6 +492,10 @@ class CruceOcTimeline(BaseModel):
     referencia: str | None
     vigencia_desde: str
     vigencia_hasta: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    servicio_nombre: str | None = None
+    estado_oc: str | None = None
     llega_cubierto: bool
     quiebres: list[QuiebreOcTimeline]
 

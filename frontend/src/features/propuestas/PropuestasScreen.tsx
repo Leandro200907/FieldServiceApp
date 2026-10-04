@@ -51,6 +51,8 @@ function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPro
     nombre_apellido: item.nombre_apellido ?? null,
     identificador_natural: item.identificador_natural ?? item.sujeto_id,
   };
+  const sinArchivo = item.archivo_validacion === 'sin_archivo' || item.archivo_validacion == null;
+  const avisoSinArchivo = 'Sin archivo adjunto: no se puede confirmar. Pedile al técnico que adjunte la foto, o rechazala.';
   return <tr>
     <td><strong>{tituloLegajoPersona(sujeto)}</strong>{subtituloLegajoPersona(sujeto) && <small><br />{subtituloLegajoPersona(sujeto)}</small>}<small>{origenLabels[item.origen] || item.origen}{item.confianza_extraccion ? ` · confianza ${item.confianza_extraccion}` : ''}</small></td>
     <td>{item.requisito || 'Requisito sin nombre'}{item.numero ? <small> · N° {item.numero}</small> : null}</td>
@@ -59,7 +61,7 @@ function ProposalRow({ item, onChanged, access, readOnly }: { item: DocumentoPro
     <td>
       {error && <p className="field-error" role="alert">{error.message}</p>}
       {!rejecting
-        ? <div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || readOnly} onClick={() => void confirmar()}>Confirmar</button><button type="button" className="button button-secondary" disabled={busy || readOnly} onClick={() => setRejecting(true)}>Rechazar</button></div>
+        ? <div className="proposal-actions">{sinArchivo && <p className="muted" role="note">{avisoSinArchivo}</p>}<button type="button" className="button button-primary" disabled={busy || readOnly || sinArchivo} onClick={() => void confirmar()}>Confirmar</button><button type="button" className="button button-secondary" disabled={busy || readOnly} onClick={() => setRejecting(true)}>Rechazar</button></div>
         : <div className="proposal-reject"><label htmlFor={`motivo-${item.documento_id}`}>Motivo del rechazo</label><input id={`motivo-${item.documento_id}`} value={motivo} onChange={event => setMotivo(event.target.value)} disabled={busy || readOnly} required /><div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || readOnly || !motivo.trim()} onClick={() => void rechazar()}>Confirmar rechazo</button><button type="button" className="button button-secondary" disabled={busy} onClick={() => setRejecting(false)}>Cancelar</button></div></div>}
     </td>
   </tr>;

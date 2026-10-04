@@ -22,7 +22,7 @@ export function HistorialOperadoraPanel({ operadoraId, sujetoId, requisitoDefini
   const [error, setError] = useState<ReturnType<typeof safeFailure> | null>(null);
   const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (value: string) => formatFecha(value, timeZone);
-  const fmtPaso = (value: string) => formatFechaHora(value, timeZone);
+  const fmtPaso = (value: string) => (value === 'fecha no informada' ? value : formatFechaHora(value, timeZone));
   const estadoLabel = (estado: string) => ESTADO_HISTORIAL_LABELS[estado] || estado;
 
   useEffect(() => {

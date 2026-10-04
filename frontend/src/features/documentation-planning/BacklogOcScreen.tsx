@@ -13,11 +13,12 @@ import { formatFecha, todayIso } from './dates';
 import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, tituloQuiebreMapa, vigenciaReprogramacion } from './ocDetail';
 import { ListDetailLayout, FichaEncabezado } from '../../ui/ListDetailLayout';
 import { StatusDot } from '../../ui/StatusDot';
+import { labelEstadoDocumentalOcConMatriz, variantEstadoDocumentalOc } from '../../ui/documentalLabels';
 import { NotaAnalisisInformativo } from '../../ui/InformativoFooter';
 import './planning.css';
 import './timeline.css';
 
-type BacklogItem = components['schemas']['OcBacklogItem'];
+type BacklogItem = components['schemas']['OcBacklogItem'] & { estado_documental?: string | null };
 type Cobertura = components['schemas']['CoberturaOcResponse'];
 type Catalogos = components['schemas']['CatalogosOcResponse'];
 type FilaRechazada = components['schemas']['FilaRechazada'];
@@ -463,8 +464,8 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
                   <span className="list-item-secondary">{contarAlertasBacklog(row)} alerta{contarAlertasBacklog(row) === 1 ? '' : 's'}</span>
                 )}
               </span>
-              <StatusDot variant={itemTieneAlertas(row) ? 'por_vencer' : 'vigente'}>
-                {itemTieneAlertas(row) ? 'Con alertas' : 'En regla'}
+              <StatusDot variant={variantEstadoDocumentalOc((row as BacklogItem).estado_documental || '')}>
+                {labelEstadoDocumentalOcConMatriz((row as BacklogItem).estado_documental || '', row)}
               </StatusDot>
             </button>
           ))}

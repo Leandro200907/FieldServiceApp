@@ -444,7 +444,7 @@ def test_propuestas_pendientes_por_tenant(demo_sembrado):
                     text(
                         "SELECT count(*) FROM modulo1.documento "
                         "WHERE tenant_id = :t AND origen_propuesta AND estado_confirmacion = 'declarado' "
-                        "AND estado_version = 'vigente'"
+                        "AND estado_version = 'propuesta'"
                     ),
                     {"t": tid},
                 ).scalar()
@@ -635,7 +635,7 @@ def test_tecnico3_todo_vigente(demo_sembrado):
                     text(
                         "SELECT count(*) FROM modulo1.documento d "
                         "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.origen_propuesta "
-                        "AND d.estado_confirmacion = 'declarado' AND d.estado_version = 'vigente'"
+                        "AND d.estado_confirmacion = 'declarado' AND d.estado_version = 'propuesta'"
                     ),
                     {"t": tid, "s": suj},
                 ).scalar()

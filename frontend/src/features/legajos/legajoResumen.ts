@@ -17,23 +17,21 @@ function enRevision(item: EvidenciaVigente): boolean {
 }
 
 function bucketDeItem(item: EvidenciaVigente): BucketDocumento {
-  if (enRevision(item)) return 'en_revision';
   const labels = etiquetasEvidencia(item).map(l => l.toLowerCase());
   if (labels.some(l => l.includes('vencid'))) return 'vencidos';
   if (labels.some(l => l.includes('por vencer'))) return 'por_vencer';
+  if (enRevision(item)) return 'en_revision';
   return 'vigentes';
+}
+
+export function contarPendientesRevision(items: EvidenciaVigente[]): number {
+  return items.filter(enRevision).length;
 }
 
 export function contarBuckets(items: EvidenciaVigente[]): Record<BucketDocumento, number> {
   const out: Record<BucketDocumento, number> = { vencidos: 0, por_vencer: 0, en_revision: 0, vigentes: 0 };
   for (const item of items) out[bucketDeItem(item)] += 1;
   return out;
-}
-
-export function enReglaCount(resumen: LegajoCompuesto['resumen']): { enRegla: number; total: number } {
-  const total = resumen.total;
-  const enRegla = Math.max(0, total - resumen.vencidos);
-  return { enRegla, total };
 }
 
 export function proximoVencimientoIso(items: EvidenciaVigente[]): string | null {

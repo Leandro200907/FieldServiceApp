@@ -40,7 +40,7 @@
     "descripcion": "9 hallazgos confirmados (B-01 a B-10, B-04 no era bug) + una segunda revisión que señaló la asimetría B-03/B-07, resuelta explícitamente (opción A, simetría). Detalle completo: docs/PROYECCION_DOCUMENTAL.md §16 del backend.",
     "cambios_de_contrato": [
       "ItemBacklog suma oc_referencia (string|null), cliente_id, locacion_id — aditivo (B-05)",
-      "estado (ItemBacklog Y ProyeccionDocumentalResponse) suma un 7º valor: vigencia_finalizada — una OC ya vencida ya no da 422 en el endpoint puntual ni reusa pendiente_de_planificacion en el backlog (B-07, y su simetría en el puntual)",
+      "estado_documental (radar/backlog, ver openapi ItemRadar) permanece en 5 valores; no hay vigencia_finalizada. Por D23, OC con vigencia_hasta < hoy del tenant quedan fuera del universo backlog/radar (filtro SQL vigencia_hasta >= desde), no por un estado de proyección adicional (B-07 histórico, superseded por alineación D23/E-21)",
       "capacidad_documental_potencial(_hoy) y estado pueden variar para la misma OC frente a corridas anteriores si hay constancias/excepciones otorgadas en juego (B-02: antes el motor las ignoraba) — no es un campo nuevo, es una corrección de exactitud"
     ]
   },

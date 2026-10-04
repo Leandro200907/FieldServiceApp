@@ -101,7 +101,7 @@ function Profile() {
           <dt>Empresa</dt><dd>{identity.tenant_nombre}</dd>
         </dl>
         <div className="form-actions">
-          <button type="button" className="button button-secondary button-soon" disabled title="Disponible en una próxima versión">Próximamente</button>
+          <button type="button" className="button button-secondary button-soon" disabled title="Disponible en una próxima versión">Cambiar contraseña · Próximamente</button>
           <button className="button button-primary" type="button" onClick={() => { void session.logout(); }}>Salir</button>
         </div>
       </section>

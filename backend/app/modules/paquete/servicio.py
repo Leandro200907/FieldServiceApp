@@ -164,7 +164,7 @@ def vista_publica(session: Session, tenant_id: str, token_hash: str, origen: str
             "d.archivo_estado, d.archivo_validacion, d.clave_storage "
             "FROM modulo1.documento d JOIN modulo1.definicion_requisito r "
             "ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id "
-            "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.estado_version IN ('vigente', 'sucedida') "
+            "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.estado_version IN ('vigente', 'sucedida', 'propuesta') "
             "ORDER BY r.nombre"
         ),
         {"t": tenant_id, "s": p["sujeto_id"]},

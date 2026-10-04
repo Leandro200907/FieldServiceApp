@@ -38,6 +38,17 @@
             "title": "Genera Alerta Cierta",
             "type": "boolean"
           },
+          "identificador_natural": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identificador Natural"
+          },
           "legajo_id": {
             "title": "Legajo Id",
             "type": "string"
@@ -45,6 +56,17 @@
           "legajo_nombre": {
             "title": "Legajo Nombre",
             "type": "string"
+          },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
           },
           "ocs_afectadas": {
             "items": {
@@ -2457,13 +2479,46 @@
             "title": "Clave Origen",
             "type": "string"
           },
+          "estado_oc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Oc"
+          },
           "llega_cubierto": {
             "title": "Llega Cubierto",
             "type": "boolean"
           },
+          "locacion_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Nombre"
+          },
           "oc_id": {
             "title": "Oc Id",
             "type": "string"
+          },
+          "operadora_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operadora Nombre"
           },
           "quiebres": {
             "items": {
@@ -2482,6 +2537,17 @@
               }
             ],
             "title": "Referencia"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
           },
           "vigencia_desde": {
             "title": "Vigencia Desde",
@@ -3057,6 +3123,10 @@
             "title": "Documento Id",
             "type": "string"
           },
+          "estado_version": {
+            "title": "Estado Version",
+            "type": "string"
+          },
           "eventos": {
             "items": {
               "type": "string"
@@ -3083,6 +3153,7 @@
         "required": [
           "documento_id",
           "version",
+          "estado_version",
           "sucede_a",
           "eventos"
         ],
@@ -3812,6 +3883,17 @@
             "title": "Motivo",
             "type": "string"
           },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
           "operadora": {
             "title": "Operadora",
             "type": "string"
@@ -3931,6 +4013,17 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "legajo_requisito_etiqueta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legajo Requisito Etiqueta"
           },
           "ocurrido_en": {
             "title": "Ocurrido En",
@@ -4068,6 +4161,28 @@
             ],
             "title": "Locacion Id"
           },
+          "nombre_apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Apellido"
+          },
+          "observacion_operadora": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion Operadora"
+          },
           "ocs_afectadas": {
             "items": {
               "$ref": "#/components/schemas/OcAfectadaRef"
@@ -4111,6 +4226,17 @@
           "tipo": {
             "title": "Tipo",
             "type": "string"
+          },
+          "tipo_sujeto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Sujeto"
           },
           "vencido": {
             "title": "Vencido",
@@ -6070,6 +6196,17 @@
             "title": "Estado",
             "type": "string"
           },
+          "estado_documental": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Documental"
+          },
           "impacto_por_tipo": {
             "items": {
               "additionalProperties": true,
@@ -6133,6 +6270,17 @@
               }
             ],
             "title": "Origen Oc"
+          },
+          "primer_quiebre_documental": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primer Quiebre Documental"
           },
           "referencia": {
             "anyOf": [
@@ -7661,6 +7809,16 @@
       },
       "ResumenLegajo": {
         "properties": {
+          "en_regla": {
+            "default": 0,
+            "title": "En Regla",
+            "type": "integer"
+          },
+          "ocs_afectadas": {
+            "default": 0,
+            "title": "Ocs Afectadas",
+            "type": "integer"
+          },
           "por_vencer": {
             "default": 0,
             "title": "Por Vencer",
@@ -8538,7 +8696,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0030_legajo_nombre_apellido"
+    "x-migracion-head": "0031_documento_estado_propuesta"
   },
   "openapi": "3.1.0",
   "paths": {

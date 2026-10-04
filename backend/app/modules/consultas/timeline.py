@@ -29,13 +29,26 @@ LIMITE_DIAS = 366
 ROLES = (Rol.RESPONSABLE_LEGAJOS, Rol.CONFIGURACION, Rol.SUPERVISOR, Rol.TECNICO)
 
 
-def _estado_visual(hoy: date, desde: date, hasta: date | None, confirmacion: str) -> str:
-    if confirmacion == "declarado":
-        return "declarado_sin_verificar"
+def _estado_visual(
+    hoy: date,
+    desde: date,
+    hasta: date | None,
+    confirmacion: str,
+    archivo_validacion: str,
+) -> str:
+    """Color del tramo: D19 — sin respaldo válido no se dibuja como cobertura (no verde)."""
+    if hasta is not None and hasta < hoy:
+        return "vencido"
+    if archivo_validacion != "valido":
+        if confirmacion == "declarado":
+            return "declarado_sin_verificar"
+        if archivo_validacion == "invalido":
+            return "evidencia_invalida"
+        if archivo_validacion == "pendiente":
+            return "archivo_en_revision"
+        return "sin_archivo_respaldo"
     if hasta is None:
         return "vigente"
-    if hasta < hoy:
-        return "vencido"
     if (hasta - hoy).days <= 30:
         return "por_vencer"
     return "vigente"
@@ -85,9 +98,14 @@ def timeline_recursos(
     if oc_id:
         oc_filtro = session.execute(
             text(
-                "SELECT oc_id, clave_origen, referencia, vigencia_desde, vigencia_hasta, "
-                "cliente_id, locacion_id, tipo_servicio_id FROM modulo1.oc "
-                "WHERE tenant_id = :t AND oc_id = CAST(:id AS uuid)"
+                "SELECT oc.oc_id, oc.clave_origen, oc.referencia, oc.vigencia_desde, oc.vigencia_hasta, "
+                "oc.cliente_id, oc.locacion_id, oc.tipo_servicio_id, oc.estado AS estado_oc, "
+                "op.nombre AS operadora_nombre, loc.nombre AS locacion_nombre, ts.nombre AS servicio_nombre "
+                "FROM modulo1.oc oc "
+                "LEFT JOIN modulo1.operadora_documental op ON op.tenant_id = oc.tenant_id AND op.operadora_id = oc.cliente_id "
+                "LEFT JOIN modulo1.locacion_oc loc ON loc.tenant_id = oc.tenant_id AND loc.locacion_id = oc.locacion_id "
+                "LEFT JOIN modulo1.tipo_servicio_oc ts ON ts.tenant_id = oc.tenant_id AND ts.tipo_servicio_id = oc.tipo_servicio_id "
+                "WHERE oc.tenant_id = :t AND oc.oc_id = CAST(:id AS uuid)"
             ),
             {"t": tenant_id, "id": oc_id},
         ).mappings().first()
@@ -114,9 +132,14 @@ def timeline_recursos(
 
     ocs = session.execute(
         text(
-            "SELECT oc_id, clave_origen, referencia, vigencia_desde, vigencia_hasta "
-            "FROM modulo1.oc WHERE tenant_id = :t AND estado = 'activo' "
-            "AND vigencia_desde <= :hasta AND vigencia_hasta >= :desde ORDER BY vigencia_desde"
+            "SELECT oc.oc_id, oc.clave_origen, oc.referencia, oc.vigencia_desde, oc.vigencia_hasta, oc.estado AS estado_oc, "
+            "op.nombre AS operadora_nombre, loc.nombre AS locacion_nombre, ts.nombre AS servicio_nombre "
+            "FROM modulo1.oc oc "
+            "LEFT JOIN modulo1.operadora_documental op ON op.tenant_id = oc.tenant_id AND op.operadora_id = oc.cliente_id "
+            "LEFT JOIN modulo1.locacion_oc loc ON loc.tenant_id = oc.tenant_id AND loc.locacion_id = oc.locacion_id "
+            "LEFT JOIN modulo1.tipo_servicio_oc ts ON ts.tenant_id = oc.tenant_id AND ts.tipo_servicio_id = oc.tipo_servicio_id "
+            "WHERE oc.tenant_id = :t AND oc.estado = 'activo' "
+            "AND oc.vigencia_desde <= :hasta AND oc.vigencia_hasta >= :desde ORDER BY oc.vigencia_desde"
         ),
         {"t": tenant_id, "desde": desde, "hasta": hasta},
     ).mappings().all()
@@ -148,7 +171,13 @@ def timeline_recursos(
                 "vigente_desde": d["vigente_desde"].isoformat(),
                 "vigente_hasta": d["vigente_hasta"].isoformat(),
                 "estado_confirmacion": d["estado_confirmacion"],
-                "estado_visual": _estado_visual(hoy, d["vigente_desde"], d["vigente_hasta"], d["estado_confirmacion"]),
+                "estado_visual": _estado_visual(
+                    hoy,
+                    d["vigente_desde"],
+                    d["vigente_hasta"],
+                    d["estado_confirmacion"],
+                    d["archivo_validacion"],
+                ),
             })
 
         cruces: list[dict[str, Any]] = []
@@ -173,7 +202,7 @@ def timeline_recursos(
                             "SELECT documento_id, vigente_desde, vigente_hasta, estado_confirmacion, estado_version, "
                             "CASE WHEN archivo_estado = 'confirmado' THEN archivo_validacion ELSE 'sin_archivo' END AS archivo_validacion "
                             "FROM modulo1.documento WHERE tenant_id = :t AND sujeto_id = :s AND requisito_definicion_id = CAST(:r AS uuid) "
-                            "AND vigente_hasta IS NOT NULL"
+                            "AND estado_version = 'vigente' AND vigente_hasta IS NOT NULL"
                         ),
                         {"t": tenant_id, "s": sid, "r": rid},
                     ).mappings().all()
@@ -210,6 +239,10 @@ def timeline_recursos(
                 "referencia": oc.get("referencia"),
                 "vigencia_desde": oc_desde.isoformat(),
                 "vigencia_hasta": oc_hasta.isoformat(),
+                "operadora_nombre": oc.get("operadora_nombre"),
+                "locacion_nombre": oc.get("locacion_nombre"),
+                "servicio_nombre": oc.get("servicio_nombre"),
+                "estado_oc": oc.get("estado_oc"),
                 "llega_cubierto": llega and not quiebres,
                 "quiebres": quiebres,
             })

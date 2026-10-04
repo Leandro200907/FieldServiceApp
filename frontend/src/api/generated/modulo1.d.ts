@@ -1511,14 +1511,14 @@ export interface components {
              * @default false
              */
             genera_alerta_cierta: boolean;
+            /** Identificador Natural */
+            identificador_natural?: string | null;
             /** Legajo Id */
             legajo_id: string;
             /** Legajo Nombre */
             legajo_nombre: string;
             /** Nombre Apellido */
             nombre_apellido?: string | null;
-            /** Identificador Natural */
-            identificador_natural?: string | null;
             /** Ocs Afectadas */
             ocs_afectadas: {
                 [key: string]: unknown;
@@ -2349,14 +2349,22 @@ export interface components {
         CruceOcTimeline: {
             /** Clave Origen */
             clave_origen: string;
+            /** Estado Oc */
+            estado_oc?: string | null;
             /** Llega Cubierto */
             llega_cubierto: boolean;
+            /** Locacion Nombre */
+            locacion_nombre?: string | null;
             /** Oc Id */
             oc_id: string;
+            /** Operadora Nombre */
+            operadora_nombre?: string | null;
             /** Quiebres */
             quiebres: components["schemas"]["QuiebreOcTimeline"][];
             /** Referencia */
             referencia: string | null;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
             /** Vigencia Desde */
             vigencia_desde: string;
             /** Vigencia Hasta */
@@ -2575,6 +2583,8 @@ export interface components {
         DocumentoCargadoResponse: {
             /** Documento Id */
             documento_id: string;
+            /** Estado Version */
+            estado_version: string;
             /** Eventos */
             eventos: string[];
             /** Sucede A */
@@ -2808,10 +2818,10 @@ export interface components {
             estado_operadora: string;
             /** Identificador Natural */
             identificador_natural: string;
-            /** Nombre Apellido */
-            nombre_apellido?: string | null;
             /** Motivo */
             motivo: string;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
             /** Operadora */
             operadora: string;
             /** Operadora Id */
@@ -2861,6 +2871,8 @@ export interface components {
             evento_id: string;
             /** Id */
             id: number;
+            /** Legajo Requisito Etiqueta */
+            legajo_requisito_etiqueta?: string | null;
             /** Ocurrido En */
             ocurrido_en: string;
             /** Payload */
@@ -2871,8 +2883,6 @@ export interface components {
             tipo: string;
             /** Usuario Nombre */
             usuario_nombre?: string | null;
-            /** Legajo Requisito Etiqueta */
-            legajo_requisito_etiqueta?: string | null;
         };
         /** EvidenciaVigente */
         EvidenciaVigente: {
@@ -2898,10 +2908,12 @@ export interface components {
             id: string;
             /** Identificador Natural */
             identificador_natural?: string | null;
-            /** Nombre Apellido */
-            nombre_apellido?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
+            /** Nombre Apellido */
+            nombre_apellido?: string | null;
+            /** Observacion Operadora */
+            observacion_operadora?: string | null;
             /** Ocs Afectadas */
             ocs_afectadas?: components["schemas"]["OcAfectadaRef"][];
             /** Origen Propuesta */
@@ -3579,6 +3591,8 @@ export interface components {
             disponibilidad_por_tipo: components["schemas"]["DisponibilidadTipoOc"][];
             /** Estado */
             estado: string;
+            /** Estado Documental */
+            estado_documental?: string | null;
             /** Impacto Por Tipo */
             impacto_por_tipo: {
                 [key: string]: unknown;
@@ -3597,6 +3611,8 @@ export interface components {
             operadora_nombre?: string | null;
             /** Origen Oc */
             origen_oc?: string | null;
+            /** Primer Quiebre Documental */
+            primer_quiebre_documental?: string | null;
             /** Referencia */
             referencia: string | null;
             /**
@@ -4168,6 +4184,16 @@ export interface components {
         };
         /** ResumenLegajo */
         ResumenLegajo: {
+            /**
+             * En Regla
+             * @default 0
+             */
+            en_regla: number;
+            /**
+             * Ocs Afectadas
+             * @default 0
+             */
+            ocs_afectadas: number;
             /**
              * Por Vencer
              * @default 0

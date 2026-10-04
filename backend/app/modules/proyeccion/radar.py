@@ -206,7 +206,7 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
         LEFT JOIN modulo1.definicion_requisito r
           ON r.tenant_id = d.tenant_id AND r.requisito_definicion_id = d.requisito_definicion_id
         WHERE d.tenant_id = :t AND d.vigente_hasta IS NOT NULL
-          AND d.estado_version IN ('vigente', 'sucedida')
+          AND d.estado_version IN ('vigente', 'sucedida', 'propuesta')
     """ + condicion_sujeto), params).mappings().all()
     from app.core.resolucion_evidencia import (
         agrupar_filas_documento,
@@ -233,15 +233,10 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
 
     salida: dict[tuple[str, str], list[EvidenciaDocumental]] = defaultdict(list)
     for clave, grupo in agrupar_filas_documento(filas).items():
-        vigente = next((g for g in grupo if g["estado_version"] == "vigente"), None)
-        if vigente and es_propuesta_pendiente(vigente) and vigente.get("sucede_a"):
-            elegida = fila_para_evaluacion(grupo)
-            filas_eval = [elegida] if elegida else []
-        elif vigente and es_propuesta_pendiente(vigente):
-            filas_eval = [vigente]
-        else:
-            filas_eval = [g for g in grupo if g["estado_version"] in ("vigente", "sucedida")]
-        for d in filas_eval:
+        elegida = fila_para_evaluacion(grupo)
+        if elegida is None:
+            continue
+        for d in (elegida,):
             arch = archivo_validacion_para_evaluacion_documental(
                 d,
                 categoria=d.get("categoria"),
@@ -294,8 +289,16 @@ def _evaluar_oc(
     *,
     tipos_disponibles: set[str] | None = None,
     tipos_fuera_de_alcance: list[str] | None = None,
+    entregas: dict[tuple[str, str], dict[str, Any]] | None = None,
+    operadora_id: str | None = None,
+    operadora_nombre: str = "",
 ) -> dict[str, Any]:
+    from app.core.consulta_documental import cargar_entregas_operadora, evaluar_requisito_en_oc
+
     inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
+    if entregas is None:
+        entregas = cargar_entregas_operadora(session, tenant_id)
+    operadora_id = operadora_id or str(oc.get("cliente_id") or "")
     tramos, particulares, huecos_matriz = _matrices_y_requisitos(session, tenant_id, oc, inicio, fin)
     tipos_requeridos = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
     disponibles = tipos_disponibles if tipos_disponibles is not None else {l["tipo_sujeto"] for l in legajos}
@@ -309,24 +312,38 @@ def _evaluar_oc(
                 if req.tipo_sujeto != legajo["tipo_sujeto"]:
                     continue
                 evidencias_requisito = tuple(evidencias.get((legajo["sujeto_id"], req.requisito_definicion_id), ()))
-                resultado = evaluar_requisito_documental(EvaluacionDocumentalEntrada(
-                    tramo["desde"], tramo["hasta"], req,
-                    evidencias_requisito,
-                ))
+                resultado, aviso_espejo, accion_espejo = evaluar_requisito_en_oc(
+                    EvaluacionDocumentalEntrada(tramo["desde"], tramo["hasta"], req, evidencias_requisito),
+                    operadora_id=operadora_id,
+                    operadora_nombre=operadora_nombre,
+                    entregas=entregas,
+                )
                 evidencia = next((e for e in evidencias_requisito if e.evidencia_id == resultado.evidencia_id), None)
+                es_rechazo = aviso_espejo == "rechazado"
+                rechazado_en = None
+                if es_rechazo and resultado.evidencia_id:
+                    entrega_rech = entregas.get((operadora_id, str(resultado.evidencia_id)))
+                    if entrega_rech:
+                        rechazado_en = entrega_rech.get("rechazado_en")
                 resultados.append({
                     "matriz_version_id": tramo["matriz_version_id"], "version_matriz": tramo["version"],
                     "periodo_desde": tramo["desde"], "periodo_hasta": tramo["hasta"],
                     "requisito_definicion_id": req.requisito_definicion_id, "nombre": req.nombre,
                     "estado": resultado.estado.value, "primer_quiebre": resultado.primer_quiebre,
                     "evidencia_id": resultado.evidencia_id, "motivo": resultado.motivo,
-                    "accion_sugerida": resultado.accion_sugerida,
+                    "accion_sugerida": accion_espejo or resultado.accion_sugerida,
                     "accion_sugerida_fecha": resultado.accion_sugerida_fecha,
                     "vigente_hasta": evidencia.vigente_hasta if evidencia else None,
                     "estado_confirmacion": evidencia.estado_confirmacion.value if evidencia else None,
                     "archivo_validacion": evidencia.archivo_validacion.value if evidencia else None,
                     "requerido": resultado.estado.value != "no_aplica",
+                    "aviso_operadora": aviso_espejo,
+                    "es_rechazo_operadora": es_rechazo,
+                    "rechazado_en": rechazado_en,
                 })
+                from app.core.consulta_documental import clasificar_problema_documental
+
+                resultados[-1]["tipo_problema"] = clasificar_problema_documental(resultados[-1])
         resumen = resumir_resultados(_resultado_desde_dict(r) for r in resultados)
         detalle_legajos.append({**legajo, "estado_documental": resumen.estado,
                                 "primer_quiebre": resumen.primer_quiebre, "requisitos": resultados,
@@ -379,27 +396,28 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
     _exigir_rango(desde, hasta)
     if estados and any(e not in ESTADOS_OC for e in estados):
         raise ErrorDeDominio("estado inválido", {"validos": list(ESTADOS_OC)})
+    from app.core.consulta_documental import cargar_entregas_operadora, ventana_evaluacion_oc
+
     legajos = _legajos_visibles(session, identidad)
     evidencias = _evidencias(session, identidad.tenant_id)
+    entregas = cargar_entregas_operadora(session, identidad.tenant_id)
     items: list[dict[str, Any]] = []
 
-    def _adjuntar_habilitacion(item: dict[str, Any], oc: dict[str, Any], inicio: date, fin: date) -> None:
-        from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+    def _oc_para_evaluacion(oc: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "clave_origen": oc["clave_origen"],
+            "cliente_id": str(oc["cliente_id"]),
+            "locacion_id": str(oc["locacion_id"]),
+            "tipo_servicio_id": str(oc["tipo_servicio_id"]),
+            "vigencia_desde": oc["vigencia_desde"],
+            "vigencia_hasta": oc["vigencia_hasta"],
+        }
 
-        eval_doc = evaluar_oc_backlog(
-            session,
-            identidad,
-            {
-                "clave_origen": oc["clave_origen"],
-                "cliente_id": str(oc["cliente_id"]),
-                "locacion_id": str(oc["locacion_id"]),
-                "tipo_servicio_id": str(oc["tipo_servicio_id"]),
-                "vigencia_desde": inicio,
-                "vigencia_hasta": fin,
-            },
-        )
+    def _aplicar_eval_documental(item: dict[str, Any], eval_doc: dict[str, Any]) -> None:
         item.update(
             {
+                "estado_documental": eval_doc.get("estado_documental"),
+                "primer_quiebre": eval_doc.get("primer_quiebre_documental"),
                 "disponibilidad_por_tipo": eval_doc.get("disponibilidad_por_tipo") or [],
                 "impacto_por_tipo": eval_doc.get("impacto_por_tipo") or [],
                 "alertas_ciertas": eval_doc.get("alertas_ciertas") or [],
@@ -414,17 +432,38 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
             )
 
     def evaluar_item(oc: dict[str, Any]) -> dict[str, Any] | None:
-        inicio, fin = max(desde, oc["vigencia_desde"]), min(hasta, oc["vigencia_hasta"])
-        tramos, _, _ = _matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
+        from app.modules.consultas.backlog_documental import evaluar_oc_backlog
+
+        inicio, fin = ventana_evaluacion_oc(hoy, oc, hasta_filtro=min(hasta, oc["vigencia_hasta"]))
+        eval_doc = evaluar_oc_backlog(
+            session, identidad, _oc_para_evaluacion(oc), hasta_filtro=fin,
+        )
+        estado_doc = str(eval_doc.get("estado_documental") or "")
+        if estados and estado_doc not in estados:
+            return None
+        tramos, _, huecos = _matrices_y_requisitos(session, identidad.tenant_id, oc, inicio, fin)
         tipos_req = {req.tipo_sujeto for tramo in tramos for req in tramo["requisitos"]}
         fuera = _tipos_fuera_de_alcance(session, identidad.tenant_id, identidad, tipos_req, legajos)
-        calculo = _evaluar_oc(
-            session, identidad.tenant_id, oc, legajos, evidencias, desde, hasta,
-            tipos_fuera_de_alcance=fuera,
-        )
-        estado: ResumenDocumental = calculo["estado"]
-        if estados and estado.estado not in estados:
-            return None
+        if estado_doc == "sin_matriz":
+            calculo = {
+                "legajos": [],
+                "tipos_sin_legajos": [],
+                "tipos_fuera_de_alcance": sorted(set(fuera) & tipos_req),
+                "huecos_matriz": huecos,
+            }
+        else:
+            calculo = _evaluar_oc(
+                session,
+                identidad.tenant_id,
+                oc,
+                legajos,
+                evidencias,
+                inicio,
+                fin,
+                tipos_fuera_de_alcance=fuera,
+                entregas=entregas,
+                operadora_id=str(oc["cliente_id"]),
+            )
         resumen = _resumen_por_tipo(calculo["legajos"])
         motivos = [f"{v['con_alertas']} {k} con alertas documentales" for k, v in resumen.items() if v["con_alertas"]]
         motivos.extend(
@@ -439,8 +478,6 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
             motivos.append("Hay períodos sin matriz de requisitos aplicable")
         item = {
             **{k: (str(v) if k.endswith("_id") else v) for k, v in oc.items()},
-            "estado_documental": estado.estado,
-            "primer_quiebre": estado.primer_quiebre,
             "resumen": resumen,
             "motivos_resumidos": motivos,
         }
@@ -453,7 +490,7 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
                 str(oc["tipo_servicio_id"]),
             )
         )
-        _adjuntar_habilitacion(item, oc, inicio, fin)
+        _aplicar_eval_documental(item, eval_doc)
         return item
 
     if not estados:

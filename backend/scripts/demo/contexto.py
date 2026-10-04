@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from app.auth.identidad import Identidad, Rol
 from scripts.administracion import crear_tenant, crear_usuario, desactivar_usuario
-from scripts.demo.config import ROLES, TenantDemo
+from scripts.demo.config import ROLES, TenantDemo, nombre_tecnico
 
 
 def identidad_de(tenant_id: str, usuario_id: str, rol: str, sujeto_id: str | None = None) -> Identidad:
@@ -61,11 +61,13 @@ def crear_usuarios_demo(est: EstadoTenant, password: str, nombres_iter) -> None:
             nom, ape = next(nombres_iter)
             email = f"{rol}{n}@{est.spec.slug}.demo.test"
             sujeto = None
+            nombre_usuario = f"{nom} {ape}"
             if rol == "tecnico":
                 sujeto = f"persona_{est.spec.slug.replace('-', '_')}_t{n}"
                 est.sujetos[f"tecnico{n}"] = sujeto
-            uid = crear_usuario(est.spec.slug, email, f"{nom} {ape}", [rol], password, sujeto)
-            est.usuarios.append(UsuarioDemo(email=email, nombre=f"{nom} {ape}", rol=rol, usuario_id=uid, sujeto_id=sujeto))
+                nombre_usuario = nombre_tecnico(est.spec.slug, n)
+            uid = crear_usuario(est.spec.slug, email, nombre_usuario, [rol], password, sujeto)
+            est.usuarios.append(UsuarioDemo(email=email, nombre=nombre_usuario, rol=rol, usuario_id=uid, sujeto_id=sujeto))
 
     extra_email = f"inactivo@{est.spec.slug}.demo.test"
     uid_inactivo = crear_usuario(est.spec.slug, extra_email, "Usuario Inactivo Demo", ["configuracion"], password, None)

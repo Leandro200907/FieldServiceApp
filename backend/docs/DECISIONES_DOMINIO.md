@@ -7,30 +7,30 @@ estas reglas exige releer la cita y justificar contra ella.
 
 ## 1. Propuesta del técnico (`ProponerDocumento` / `RechazarPropuesta`)
 
-**Cita.** especificacion.md 2.2, invariantes de Documento: *"Al **declarar** o confirmar
-una versión nueva del mismo requisito+sujeto, la anterior pasa a `sucedida` en la misma
-operación"*; *"`rechazada` es terminal … ni participa de la invariante de 'a lo sumo un
-vigente' — es como si nunca hubiera llegado a ser candidata"*; *"El motor siempre filtra
-primero por `estado_version = vigente` y recién ahí mira `estado_confirmacion`"*.
-documentacion-habilitante.md 1.10 / modelo-dominio.md 2.4: lo declarado nunca prueba la
-habilitación; *"una renovación propuesta y no confirmada no cierra nada, solo pausa"*.
+**Actualización 2026-10-04 (E-20 / E-37).** La regla anterior (propuesta como única fila
+`vigente` que sucedía al confirmado) hacía que lectores que filtran `estado_version =
+'vigente'` — Línea de tiempo, calendario, etc. — tomaran la renovación sin aprobar como
+cobertura. Se reemplaza por un estado de versión dedicado.
+
+**Cita.** especificacion.md 2.2 (sucesión al confirmar); documentacion-habilitante.md
+1.10 / modelo-dominio.md 2.4: lo declarado no prueba habilitación hasta confirmación del
+responsable.
 
 **Regla definitiva.**
-- La propuesta entra como versión `vigente` + `declarado` + `origen_propuesta=true` y
-  sucede al vigente anterior (guardando `sucede_a`). Mientras está pendiente, el motor
-  ve esa versión y devuelve `requiere_revision` para ese requisito: el sujeto no prueba
-  habilitación hasta que el Responsable confirme. **Consecuencia deliberada de la spec**:
-  proponer una renovación temprano degrada el veredicto del sujeto hasta la revisión —
-  por eso existe la alerta "propuesta pendiente hace más de N días" (habilitante 2.x).
-- `RechazarPropuesta` → `rechazada` (terminal) y se restaura el **antecesor no terminal
-  más cercano** siguiendo la cadena `sucede_a` (una `sucedida`). Si la antecesora
-  inmediata ya es terminal (p. ej. un lote revertido después de la propuesta) se sigue
-  subiendo; una versión terminal nunca se resucita.
-- Solo se rechaza una propuesta `vigente`; una propuesta ya sucedida por otra versión
-  devuelve 409 (la sucesión ya la dejó fuera de juego, y "rechazarla" no cambiaría nada).
+- `ProponerDocumento` inserta `estado_version = propuesta`, `estado_confirmacion =
+  declarado`, `origen_propuesta = true`. Guarda `sucede_a` apuntando al vigente confirmado
+  (si existe). **No** modifica el vigente confirmado.
+- A lo sumo **una** propuesta pendiente por (sujeto, requisito) (`uq_documento_propuesta_pendiente`).
+  Una nueva propuesta **rechaza** la anterior con motivo fijo *"Reemplazada por nueva
+  propuesta del técnico"*.
+- `ConfirmarDocumento` sobre la propuesta: la propuesta pasa a `vigente` + `verificado`; el
+  vigente confirmado previo (si hay) pasa a `sucedida` en la misma operación.
+- `RechazarPropuesta`: la propuesta pasa a `rechazada` (terminal). El vigente confirmado **no
+  cambia** (no se usa `_restaurar_sucedido` en este flujo).
+- Solo se rechaza/confirma una fila en `propuesta`; terminales (`rechazada`, etc.) devuelven 409.
 
-**Código.** `app/modules/legajos/servicio.py::_insertar_version_documento`,
-`rechazar_propuesta`, `_restaurar_sucedido`. Migración `0003_legajos_documento_sucede_a`.
+**Código.** `app/modules/legajos/servicio.py::_insertar_propuesta_documento`,
+`confirmar_documento`, `rechazar_propuesta`. Migración `0031_documento_estado_propuesta`.
 
 ## 2. Agregación del veredicto de la OC (`evaluar_compromiso`)
 
@@ -900,6 +900,46 @@ La regla de calendario se aplica en `evaluar_requisito_documental`; la de respal
 
 **Motivo.** Alinear habilitación operativa con evidencia respaldada y evitar documentos
 “verificados” sin archivo en producción, sin ocultar vencimientos reales.
+
+**Estado.** Decidida.
+
+#### D23. Pregunta del Módulo 1 (backlog y radar)
+
+**Decisión.** El Módulo 1 es informativo y responde una sola pregunta: parados hoy, ¿los
+documentos de los recursos de la empresa cubren las OC del backlog? El backlog son las OC con
+al menos un día de vigencia desde hoy. Se evalúa solo desde hoy en adelante. El Módulo 1 no
+determina si una OC se cumplió ni su estado comercial: eso es del Módulo 2 (avance por OT y
+saldo por facturación). El Módulo 1 no usa las palabras Finalizada, Cumplida ni Cerrada.
+
+**Motivo.** Evitar mezclar cumplimiento comercial con cobertura documental y alinear Radar,
+Backlog y acciones pendientes al mismo universo temporal.
+
+**Estado.** Decidida.
+
+#### Regla general: el frontend no calcula estados de dominio
+
+**Decisión.** El frontend **no** calcula estados, conteos, cumplimiento ni OC afectadas. Solo
+muestra lo que devuelve el backend. Si un componente calculaba alguno de esos valores, el
+cálculo se mueve al backend (en el lugar compartido de la regla) y el frontend lo consume.
+
+**Motivo.** Una sola fuente de verdad para Módulo 1 y coherencia entre pantallas.
+
+**Estado.** Decidida.
+
+#### E-10. Rechazo de la operadora (criterio de bloqueo)
+
+**Decisión.**
+- Solo el **rechazo** de la operadora bloquea la habilitación documental, y solo en las OC de
+  **esa** operadora (`cliente_id` de la OC = operadora del espejo).
+- «Pendiente de envío» o «pendiente de aceptación» ante la operadora es aviso visible, **sin**
+  bloquear.
+- El rechazo aplica a **esa versión** del documento (`documento_id`). Si se confirma una versión
+  nueva, el rechazo deja de aplicar y la nueva queda «pendiente de envío» ante esa operadora.
+- Textos: Radar → motivo «Rechazado por {operadora} el dd/mm/aaaa»; ficha → observación
+  «Rechazado por {operadora}»; acciones pendientes → «Regularizar ante {operadora}».
+
+**Código.** `app/core/consulta_documental.py` (evaluación compartida), consumido por radar,
+backlog, acciones pendientes, ficha y Mi legajo.
 
 **Estado.** Decidida.
 

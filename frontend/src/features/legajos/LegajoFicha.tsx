@@ -12,9 +12,7 @@ import type { EvidenciaVigente } from '../mi-legajo/contracts';
 import type { LegajoCompuesto } from '../mi-legajo/contracts';
 import { formatDniIdentificador, subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
 import {
-  contarBuckets,
-  enReglaCount,
-  ocsAfectadasUnicas,
+  contarPendientesRevision,
   proximoVencimientoIso,
   resumenVencimientosTexto,
   todosLosDocumentos,
@@ -34,6 +32,8 @@ type Tab = 'documentos' | 'presentaciones' | 'historial';
 
 function observacionFila(item: EvidenciaVigente): string {
   const parts: string[] = [];
+  const obsOp = (item as { observacion_operadora?: string }).observacion_operadora;
+  if (obsOp) parts.push(obsOp);
   if (item.propuesta_en_revision) parts.push(textoPropuestaEnRevision(item.propuesta_en_revision));
   return parts.join(' · ') || '—';
 }
@@ -44,10 +44,16 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (iso: string) => formatFecha(iso, tz);
   const items = todosLosDocumentos(data);
-  const buckets = contarBuckets(items);
-  const { enRegla, total } = enReglaCount(data.resumen);
+  const pendientesRevision = contarPendientesRevision(items);
+  const buckets = {
+    vencidos: data.resumen.vencidos,
+    por_vencer: data.resumen.por_vencer ?? 0,
+    vigentes: data.resumen.vigentes_hoy,
+  };
+  const enRegla = data.resumen.en_regla ?? 0;
+  const total = data.resumen.total;
   const proximo = proximoVencimientoIso(items);
-  const ocsCount = ocsAfectadasUnicas(items);
+  const ocsCount = data.resumen.ocs_afectadas ?? 0;
   const tipo = data.legajo.tipo_sujeto;
   const espejo = usePrototypeRead(() => legajosAccess().readEspejoOperadora(sujetoId), [sujetoId]);
 
@@ -88,9 +94,13 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
           <div className="resumen-tarjetas">
             <div className="resumen-tarjeta"><strong>{buckets.vencidos}</strong><span>Vencidos</span></div>
             <div className="resumen-tarjeta"><strong>{buckets.por_vencer}</strong><span>Por vencer</span></div>
-            <div className="resumen-tarjeta"><strong>{buckets.en_revision}</strong><span>En revisión</span></div>
             <div className="resumen-tarjeta"><strong>{buckets.vigentes}</strong><span>Vigentes</span></div>
           </div>
+          {pendientesRevision > 0 && (
+            <p className="legajo-pendientes-revision muted">
+              {pendientesRevision} pendiente{pendientesRevision === 1 ? '' : 's'} de revisar
+            </p>
+          )}
           <div className="read-table-scroll">
             <table className="read-table legajo-doc-table">
               <thead>

@@ -55,8 +55,8 @@ def test_propuesta_sucede_al_vigente_y_el_motor_evalua_la_confirmada_si_cubre(cl
     prop = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {
         "sujeto_id": persona, "requisito_definicion_id": req, "vigente_desde": "2026-09-01", "vigente_hasta": "2027-09-01"}))
     docs = _docs(t, persona, req)
-    assert _vigentes(docs) == [prop["documento_id"]]
-    assert next(d for d in docs if d["documento_id"] == v1)["estado_version"] == "sucedida"
+    assert _vigentes(docs) == [v1]
+    assert next(d for d in docs if d["documento_id"] == prop["documento_id"])["estado_version"] == "propuesta"
 
     clave = clave_de_matriz()
     insertar_legajo(sesion, t.tenant_id, "empresa_x", "empresa")
@@ -74,7 +74,7 @@ def test_rechazar_propuesta_restaura_el_anterior_y_es_terminal(cliente_api, tena
     prop = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {
         "sujeto_id": persona, "requisito_definicion_id": req, "vigente_desde": "2026-09-01", "vigente_hasta": "2027-09-01"}))["documento_id"]
     r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": prop, "motivo": "ilegible"}))
-    assert r["restaurado_documento_id"] == v1
+    assert r["restaurado_documento_id"] is None
     assert _vigentes(_docs(t, persona, req)) == [v1]
     # Terminal: no se rechaza dos veces ni se confirma una rechazada.
     assert _post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": prop, "motivo": "reintento"}).status_code == 409
@@ -94,10 +94,11 @@ def test_rechazo_sobre_cadena_con_lote_revertido_restaura_el_antecesor_no_termin
     v3 = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {
         "sujeto_id": persona, "requisito_definicion_id": req, "vigente_desde": "2026-09-10", "vigente_hasta": "2027-09-10"}))["documento_id"]
     rev = _ok(_post(cliente_api, t, "responsable_legajos", "revertir_lote", {"lote_id": lote}))
-    assert rev["documentos_restaurados"] == []  # V3 seguía vigente: no se restaura nada
-    assert _vigentes(_docs(t, persona, req)) == [v3]
+    assert rev["documentos_restaurados"] == [v1]  # el lote seguía vigente; V3 es propuesta y no bloquea la restauración
+    assert next(d for d in _docs(t, persona, req) if d["documento_id"] == v3)["estado_version"] == "propuesta"
+    assert _vigentes(_docs(t, persona, req)) == [v1]
     r = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": v3, "motivo": "descartar"}))
-    assert r["restaurado_documento_id"] == v1
+    assert r["restaurado_documento_id"] is None
     estados = {d["documento_id"]: d["estado_version"] for d in _docs(t, persona, req)}
     assert estados[v1] == "vigente" and estados[v3] == "rechazada"
     assert [e for i, e in estados.items() if i not in (v1, v3)] == ["revertida_por_lote"]

@@ -18,7 +18,7 @@ from app.auth.identidad import Rol
 from scripts.demo.config import dni_tecnico, nombre_locacion_demo
 from scripts.demo.contexto import EstadoTenant
 from scripts.demo.db_util import ErrorDemo
-from scripts.demo.fechas import hoy_tenant
+from scripts.demo.fechas import hoy_tenant, rango_oc_en_curso, rango_oc_futura
 
 RAIZ = Path(__file__).resolve().parents[1]
 PLANTILLA = RAIZ.parents[1] / "frontend" / "public" / "Plantilla_presentaciones_operadoras.xlsx"
@@ -88,6 +88,22 @@ def _fechas_por_estado(hoy, estado: str) -> tuple[str, str, str]:
     return "", "", ""
 
 
+def _fechas_demo_vista_apto(hoy, estado: str) -> tuple[str, str, str]:
+    """E-30: fechas distintas para el apto de María ante Vista (envío / rechazo)."""
+    exportado = f"{(hoy - timedelta(days=24)).isoformat()}T10:00:00+00:00"
+    presentado = f"{(hoy - timedelta(days=19)).isoformat()}T10:00:00+00:00"
+    rechazado = f"{(hoy - timedelta(days=12)).isoformat()}T10:00:00+00:00"
+    if estado == "exportado":
+        return exportado, "", ""
+    if estado == "enviado":
+        return exportado, presentado, ""
+    if estado == "rechazado":
+        return exportado, presentado, rechazado
+    if estado == "aceptado":
+        return exportado, presentado, rechazado
+    return "", "", ""
+
+
 def generar_planillas(est: EstadoTenant) -> Path:
     out = _dir_slug(est)
     hoy = hoy_tenant(est.tenant_id)
@@ -107,9 +123,9 @@ def generar_planillas(est: EstadoTenant) -> Path:
     wb = load_workbook(PLANTILLA)
     hoja = wb["Presentaciones"]
 
-    def fila_presentacion(op: str, doc_id: str, estado: str, obs: str = "") -> None:
+    def fila_presentacion(op: str, doc_id: str, estado: str, obs: str = "", *, fechas: tuple[str, str, str] | None = None) -> None:
         nonlocal row
-        f_exp, f_pres, f_resp = _fechas_por_estado(hoy, estado)
+        f_exp, f_pres, f_resp = fechas if fechas is not None else _fechas_por_estado(hoy, estado)
         hoja.cell(row=row, column=1, value=op)
         hoja.cell(row=row, column=2, value="persona")
         hoja.cell(row=row, column=3, value=dni_tecnico(est.spec.slug, 1))
@@ -169,9 +185,12 @@ def generar_planillas(est: EstadoTenant) -> Path:
 
     row = 6
     for i, (op, doc) in enumerate(docs):
-        fila_presentacion(op, doc, ("exportado", "enviado", "aceptado")[i])
+        estado = ("exportado", "enviado", "aceptado")[i]
+        fechas_vista = _fechas_demo_vista_apto(hoy, estado) if op == "Vista" else None
+        fila_presentacion(op, doc, estado, fechas=fechas_vista)
     for op, doc in docs[:2]:
-        fila_presentacion(op, doc, "rechazado", "Observación demo")
+        fechas_vista = _fechas_demo_vista_apto(hoy, "rechazado") if op == "Vista" else None
+        fila_presentacion(op, doc, "rechazado", "Observación demo", fechas=fechas_vista)
     p1 = out / "presentaciones_1.xlsx"
     wb.save(p1)
 
@@ -236,6 +255,8 @@ def generar_planillas(est: EstadoTenant) -> Path:
     wb_err.save(out / "presentaciones_con_errores.xlsx")
 
     loc_ypf = nombre_locacion_demo("YPF", 1)
+    oc_curso_desde, oc_curso_hasta = rango_oc_en_curso(hoy)
+    oc_fut_desde, oc_fut_hasta = rango_oc_futura(hoy)
     oc_rows = [
         [
             f"OC-PLAN-{est.spec.slug}-OK",
@@ -243,8 +264,8 @@ def generar_planillas(est: EstadoTenant) -> Path:
             "YPF",
             loc_ypf,
             "Wireline",
-            (hoy + timedelta(days=60)).isoformat(),
-            (hoy + timedelta(days=90)).isoformat(),
+            oc_curso_desde.isoformat(),
+            oc_curso_hasta.isoformat(),
             "activo",
         ],
         [
@@ -253,8 +274,8 @@ def generar_planillas(est: EstadoTenant) -> Path:
             "Operadora Inexistente",
             loc_ypf,
             "Wireline",
-            hoy.isoformat(),
-            (hoy + timedelta(days=10)).isoformat(),
+            oc_fut_desde.isoformat(),
+            oc_fut_hasta.isoformat(),
             "activo",
         ],
     ]

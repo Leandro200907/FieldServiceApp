@@ -34,6 +34,8 @@ from app.modules.legajos import esquemas as e
 
 log = logging.getLogger("modulo1.legajos")
 
+MOTIVO_REEMPLAZO_PROPUESTA = "Reemplazada por nueva propuesta del técnico"
+
 
 def _hook_secundario(session: Session, etiqueta: str, fn) -> None:
     """Best-effort en savepoint (DECISIONES D-C / B-5): no revierte la versión documental."""
@@ -227,9 +229,6 @@ def _insertar_version_documento(
         )
         eventos.append("DocumentoSucedido")
 
-    # Si el legajo ya se presenta ante una o más operadoras, una nueva versión interna
-    # puede dejar desactualizado ese espejo. Se compara en la misma transacción y se
-    # notifica una sola vez por operadora + requisito + versión.
     from app.modules.operadoras.servicio import al_registrar_nueva_version
 
     _hook_secundario(
@@ -239,7 +238,138 @@ def _insertar_version_documento(
         ),
     )
 
-    return {"documento_id": documento_id, "version": version, "sucede_a": sucede_a}
+    return {
+        "documento_id": documento_id,
+        "sujeto_id": sujeto_id,
+        "requisito_definicion_id": requisito_definicion_id,
+        "version": version,
+        "estado_version": "vigente",
+        "estado_confirmacion": estado_confirmacion,
+        "origen_propuesta": origen_propuesta,
+        "sucede_a": sucede_a,
+        "lote_id": lote_id,
+    }
+
+
+def _rechazar_propuesta_en_transaccion(
+    s: Session,
+    identidad: Identidad,
+    doc: dict[str, Any],
+    motivo: str,
+    eventos: list[str],
+) -> None:
+    """Marca una propuesta como rechazada (terminal) sin tocar el vigente confirmado."""
+    t = identidad.tenant_id
+    if doc["estado_version"] != "propuesta":
+        raise Conflicto("La propuesta ya no está pendiente", {"estado_version": doc["estado_version"]})
+    if doc["estado_confirmacion"] != "declarado":
+        raise Conflicto("Solo se rechaza una propuesta declarada", {"estado_confirmacion": doc["estado_confirmacion"]})
+    s.execute(
+        text("UPDATE modulo1.documento SET estado_version = 'rechazada' WHERE tenant_id = :t AND documento_id = :d"),
+        {"t": t, "d": str(doc["documento_id"])},
+    )
+    registrar_evento(
+        s, t, "DocumentoRechazado",
+        {
+            "documento_id": str(doc["documento_id"]),
+            "sujeto_id": doc["sujeto_id"],
+            "requisito_definicion_id": str(doc["requisito_definicion_id"]),
+            "motivo": motivo,
+            "restaurado_documento_id": None,
+        },
+        identidad.usuario_id,
+    )
+    eventos.append("DocumentoRechazado")
+
+
+def _insertar_propuesta_documento(
+    s: Session,
+    identidad: Identidad,
+    *,
+    sujeto_id: str,
+    requisito_definicion_id: str,
+    vigente_desde: date,
+    vigente_hasta: date,
+    numero: str | None,
+    origen: str,
+    eventos: list[str],
+) -> dict[str, Any]:
+    """Propuesta del técnico: no sucede al vigente; a lo sumo una propuesta pendiente por requisito."""
+    t = identidad.tenant_id
+    _bloquear_legajo(s, t, sujeto_id)
+    vigente = s.execute(
+        text(
+            "SELECT documento_id, version FROM modulo1.documento "
+            "WHERE tenant_id = :t AND sujeto_id = :sj AND requisito_definicion_id = :r AND estado_version = 'vigente' "
+            "FOR UPDATE"
+        ),
+        {"t": t, "sj": sujeto_id, "r": requisito_definicion_id},
+    ).mappings().first()
+    anterior_propuesta = s.execute(
+        text(
+            "SELECT documento_id, sujeto_id, requisito_definicion_id, estado_confirmacion, estado_version, "
+            "origen_propuesta, version, sucede_a, lote_id FROM modulo1.documento "
+            "WHERE tenant_id = :t AND sujeto_id = :sj AND requisito_definicion_id = :r AND estado_version = 'propuesta' "
+            "FOR UPDATE"
+        ),
+        {"t": t, "sj": sujeto_id, "r": requisito_definicion_id},
+    ).mappings().first()
+    if anterior_propuesta is not None:
+        _rechazar_propuesta_en_transaccion(
+            s, identidad, dict(anterior_propuesta), MOTIVO_REEMPLAZO_PROPUESTA, eventos,
+        )
+
+    max_ver = s.execute(
+        text(
+            "SELECT COALESCE(MAX(version), 0) FROM modulo1.documento "
+            "WHERE tenant_id = :t AND sujeto_id = :sj AND requisito_definicion_id = :r"
+        ),
+        {"t": t, "sj": sujeto_id, "r": requisito_definicion_id},
+    ).scalar()
+    documento_id = str(uuid.uuid4())
+    version = int(max_ver or 0) + 1
+    sucede_a = str(vigente["documento_id"]) if vigente else None
+
+    s.execute(
+        text(
+            "INSERT INTO modulo1.documento (documento_id, tenant_id, sujeto_id, requisito_definicion_id, numero, "
+            "vigente_desde, vigente_hasta, estado_confirmacion, estado_version, origen_propuesta, version, origen, "
+            "sucede_a) "
+            "VALUES (:d, :t, :sj, :r, :num, :desde, :hasta, 'declarado', 'propuesta', true, :ver, :origen, :sucede_a)"
+        ),
+        {
+            "d": documento_id, "t": t, "sj": sujeto_id, "r": requisito_definicion_id, "num": numero,
+            "desde": vigente_desde, "hasta": vigente_hasta, "ver": version, "origen": origen, "sucede_a": sucede_a,
+        },
+    )
+    registrar_evento(
+        s, t, "DocumentoCargado",
+        {
+            "documento_id": documento_id, "sujeto_id": sujeto_id, "requisito_definicion_id": requisito_definicion_id,
+            "version": version, "estado_confirmacion": "declarado", "origen": origen,
+            "origen_propuesta": True, "estado_version": "propuesta",
+        },
+        identidad.usuario_id,
+    )
+    eventos.append("DocumentoCargado")
+    if requisito_definicion_id is not None:
+        from app.modules.alertas.servicio import registrar_accion
+
+        _hook_secundario(
+            s, "registrar_accion",
+            lambda: registrar_accion(s, t, sujeto_id, str(requisito_definicion_id), "carga_documento", documento_id),
+        )
+    return {
+        "documento_id": documento_id,
+        "sujeto_id": sujeto_id,
+        "requisito_definicion_id": requisito_definicion_id,
+        "version": version,
+        "estado_version": "propuesta",
+        "estado_confirmacion": "declarado",
+        "origen_propuesta": True,
+        "sucede_a": sucede_a,
+        "lote_id": None,
+    }
 
 
 # --------------------------------------------------------------------------- legajos
@@ -425,12 +555,11 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
     _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
 
     eventos: list[str] = []
-    r = _insertar_version_documento(
+    r = _insertar_propuesta_documento(
         s, identidad,
         sujeto_id=body.sujeto_id, requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, numero=body.numero,
-        origen=body.origen, estado_confirmacion="declarado", origen_propuesta=True,
-        eventos=eventos,
+        origen=body.origen, eventos=eventos,
     )
     return {**r, "eventos": eventos}
 
@@ -483,53 +612,86 @@ def _al_verificar(s: Session, identidad: Identidad, doc: dict[str, Any], eventos
 def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocumento) -> dict[str, Any]:
     t = identidad.tenant_id
     doc = _documento(s, t, str(body.documento_id), bloquear=True)
-    if doc["estado_version"] != "vigente":
-        raise Conflicto("Solo se confirma la versión vigente", {"estado_version": doc["estado_version"]})
+    if doc["estado_version"] not in ("vigente", "propuesta"):
+        raise Conflicto("Solo se confirma una versión vigente o una propuesta pendiente", {"estado_version": doc["estado_version"]})
     if doc["estado_confirmacion"] != "declarado":
         raise Conflicto("El documento no está en estado declarado", {"estado_confirmacion": doc["estado_confirmacion"]})
+    if doc["estado_version"] == "vigente" and doc["origen_propuesta"]:
+        raise Conflicto("La propuesta debe confirmarse desde el estado propuesta", {"estado_version": doc["estado_version"]})
 
     _exigir_respaldo_valido(
         s, t, str(doc["documento_id"]),
         str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None,
     )
 
-    s.execute(
-        text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE tenant_id = :t AND documento_id = :d"),
-        {"t": t, "d": str(doc["documento_id"])},
-    )
     eventos: list[str] = []
-    regularizadas = _al_verificar(s, identidad, {"documento_id": str(doc["documento_id"]), "sujeto_id": doc["sujeto_id"],
-                                                "requisito_definicion_id": str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None},
-                                  eventos)
-    return {"documento_id": str(doc["documento_id"]), "excepciones_regularizadas": regularizadas, "eventos": eventos}
+    documento_id = str(doc["documento_id"])
+    if doc["estado_version"] == "propuesta":
+        _bloquear_legajo(s, t, doc["sujeto_id"])
+        vigente_actual = s.execute(
+            text(
+                "SELECT documento_id FROM modulo1.documento "
+                "WHERE tenant_id = :t AND sujeto_id = :sj AND requisito_definicion_id = :r AND estado_version = 'vigente' "
+                "FOR UPDATE"
+            ),
+            {"t": t, "sj": doc["sujeto_id"], "r": str(doc["requisito_definicion_id"])},
+        ).mappings().first()
+        if vigente_actual is not None:
+            ant_id = str(vigente_actual["documento_id"])
+            s.execute(
+                text("UPDATE modulo1.documento SET estado_version = 'sucedida' WHERE tenant_id = :t AND documento_id = :d"),
+                {"t": t, "d": ant_id},
+            )
+            registrar_evento(
+                s, t, "DocumentoSucedido",
+                {
+                    "documento_id": ant_id, "sucedido_por": documento_id,
+                    "sujeto_id": doc["sujeto_id"], "requisito_definicion_id": str(doc["requisito_definicion_id"]),
+                },
+                identidad.usuario_id,
+            )
+            eventos.append("DocumentoSucedido")
+        s.execute(
+            text(
+                "UPDATE modulo1.documento SET estado_version = 'vigente', estado_confirmacion = 'verificado' "
+                "WHERE tenant_id = :t AND documento_id = :d"
+            ),
+            {"t": t, "d": documento_id},
+        )
+        from app.modules.operadoras.servicio import al_registrar_nueva_version
+
+        _hook_secundario(
+            s, "al_registrar_nueva_version",
+            lambda: al_registrar_nueva_version(
+                s, identidad, sujeto_id=doc["sujeto_id"], requisito_definicion_id=str(doc["requisito_definicion_id"]),
+            ),
+        )
+    else:
+        s.execute(
+            text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE tenant_id = :t AND documento_id = :d"),
+            {"t": t, "d": documento_id},
+        )
+    regularizadas = _al_verificar(
+        s, identidad,
+        {
+            "documento_id": documento_id,
+            "sujeto_id": doc["sujeto_id"],
+            "requisito_definicion_id": str(doc["requisito_definicion_id"]) if doc["requisito_definicion_id"] else None,
+        },
+        eventos,
+    )
+    return {"documento_id": documento_id, "excepciones_regularizadas": regularizadas, "eventos": eventos}
 
 
 def rechazar_propuesta(s: Session, identidad: Identidad, body: e.RechazarPropuesta) -> dict[str, Any]:
     t = identidad.tenant_id
-    doc = _documento(s, t, str(body.documento_id))
+    doc = _documento(s, t, str(body.documento_id), bloquear=True)
     _bloquear_legajo(s, t, doc["sujeto_id"])
-    doc = _documento(s, t, str(body.documento_id), bloquear=True)  # re-lectura ya serializada
     if not doc["origen_propuesta"]:
         raise Conflicto("El documento no es una propuesta", {"documento_id": str(doc["documento_id"])})
-    if doc["estado_confirmacion"] != "declarado":
-        raise Conflicto("Solo se rechaza una propuesta declarada", {"estado_confirmacion": doc["estado_confirmacion"]})
-    if doc["estado_version"] != "vigente":
-        # `rechazada` es terminal; una propuesta ya sucedida por otra versión tampoco se
-        # rechaza (la sucesión ya la dejó fuera de juego).
-        raise Conflicto("La propuesta ya no está vigente", {"estado_version": doc["estado_version"]})
-
-    s.execute(
-        text("UPDATE modulo1.documento SET estado_version = 'rechazada' WHERE tenant_id = :t AND documento_id = :d"),
-        {"t": t, "d": str(doc["documento_id"])},
-    )
-    restaurado = _restaurar_sucedido(s, t, doc["sucede_a"])
-    registrar_evento(
-        s, t, "DocumentoRechazado",
-        {"documento_id": str(doc["documento_id"]), "sujeto_id": doc["sujeto_id"], "requisito_definicion_id": str(doc["requisito_definicion_id"]),
-         "motivo": body.motivo, "restaurado_documento_id": restaurado},
-        identidad.usuario_id,
-    )
-    return {"documento_id": str(doc["documento_id"]), "restaurado_documento_id": restaurado, "eventos": ["DocumentoRechazado"]}
+    eventos: list[str] = []
+    _rechazar_propuesta_en_transaccion(s, identidad, doc, body.motivo, eventos)
+    return {"documento_id": str(doc["documento_id"]), "restaurado_documento_id": None, "eventos": eventos}
 
 
 def _archivo_confirmado_presente(clave_storage: str | None) -> bool:

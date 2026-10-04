@@ -72,6 +72,10 @@ def _docs(tenant, sujeto_id: str, req: str) -> list[dict]:
 def _vigentes(docs: list[dict]) -> list[str]:
     return [d["documento_id"] for d in docs if d["estado_version"] == "vigente"]
 
+
+def _propuestas(docs: list[dict]) -> list[str]:
+    return [d["documento_id"] for d in docs if d["estado_version"] == "propuesta"]
+
 def _eventos(tenant, tipo: str) -> int:
     with tenant_session(tenant.tenant_id) as s:
         return s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tipo = :tipo"), {"tipo": tipo}).scalar()
@@ -167,15 +171,15 @@ def test_propuesta_y_rechazo_restaura_el_anterior(cliente_api, tenant_de_prueba)
     assert _post(cliente_api, t, "responsable_legajos", "proponer_documento", body).status_code == 403
 
     prop = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", body))
-    assert prop["sucede_a"] == d1["documento_id"] and prop["eventos"] == ["DocumentoCargado", "DocumentoSucedido"]
+    assert prop["sucede_a"] == d1["documento_id"] and prop["eventos"] == ["DocumentoCargado"]
     docs = _docs(t, propio, req)
-    assert _vigentes(docs) == [prop["documento_id"]]
+    assert _vigentes(docs) == [d1["documento_id"]]
+    assert _propuestas(docs) == [prop["documento_id"]]
     assert docs[1]["origen_propuesta"] is True and docs[1]["estado_confirmacion"] == "declarado"
-    assert docs[0]["estado_version"] == "sucedida"
 
-    # rechazar: la propuesta queda `rechazada` (terminal) y d1 vuelve a `vigente`
+    # rechazar: la propuesta queda `rechazada` (terminal); d1 sigue vigente
     rech = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": prop["documento_id"], "motivo": "foto ilegible"}))
-    assert rech["restaurado_documento_id"] == d1["documento_id"] and rech["eventos"] == ["DocumentoRechazado"]
+    assert rech["restaurado_documento_id"] is None and rech["eventos"] == ["DocumentoRechazado"]
     docs = _docs(t, propio, req)
     assert {d["documento_id"]: d["estado_version"] for d in docs} == {d1["documento_id"]: "vigente", prop["documento_id"]: "rechazada"}
 
@@ -188,7 +192,7 @@ def test_propuesta_y_rechazo_restaura_el_anterior(cliente_api, tenant_de_prueba)
     # propuesta sobre un requisito sin documento previo: queda vigente sin sucesión
     req2 = _alta_def(cliente_api, t, "Carnet de conducir")
     sola = _ok(_post(cliente_api, t, "tecnico", "proponer_documento", {**body, "requisito_definicion_id": req2}))
-    assert sola["sucede_a"] is None and sola["eventos"] == ["DocumentoCargado"]  # propuesta: declarada, sin verificación
+    assert sola["sucede_a"] is None and sola["estado_version"] == "propuesta" and sola["eventos"] == ["DocumentoCargado"]
     rech2 = _ok(_post(cliente_api, t, "responsable_legajos", "rechazar_propuesta", {"documento_id": sola["documento_id"], "motivo": "no corresponde"}))
     assert rech2["restaurado_documento_id"] is None
     assert _vigentes(_docs(t, propio, req2)) == []

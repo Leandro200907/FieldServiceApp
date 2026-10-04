@@ -11,7 +11,7 @@ import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { RadarLegajoEvidenciaPanel } from './RadarLegajoEvidenciaPanel';
 import { ListDetailLayout } from '../../ui/ListDetailLayout';
 import { StatusDot, variantFromEtiquetaVigencia } from '../../ui/StatusDot';
-import { estadoDocumentalOcLabels, labelEstadoDocumentalOc, variantEstadoDocumentalOc } from '../../ui/documentalLabels';
+import { estadoDocumentalOcLabels, labelEstadoDocumentalOc, labelEstadoDocumentalOcConMatriz, variantEstadoDocumentalOc } from '../../ui/documentalLabels';
 import { etiquetaTipoSujeto } from '../../ui/tipoSujetoLabels';
 import { lineaPersonaConDni } from '../legajos/legajoDisplay';
 import { NotaAnalisisInformativo } from '../../ui/InformativoFooter';
@@ -50,7 +50,12 @@ function etiquetaOcContexto(parts: { operadora_nombre?: string | null; locacion_
 }
 
 function contarAlertas(row: ItemRadar): number {
-  return Object.values(row.resumen).reduce((t, item) => t + item.con_alertas + item.incompletos, 0);
+  const ciertas = row.alertas_ciertas?.length ?? 0;
+  const caidas = (row.disponibilidad_por_tipo || []).reduce(
+    (t, d) => t + ((d as { se_cae_en_ventana?: unknown[] }).se_cae_en_ventana?.length ?? 0),
+    0,
+  );
+  return ciertas + caidas;
 }
 
 function textoMatrizUtilizada(
@@ -182,7 +187,7 @@ export function RadarDocumentalScreen({ roles, detailId }: { roles: readonly str
                 <span className="list-item-secondary">{displayDate(row.vigencia_desde)} — {displayDate(row.vigencia_hasta)}</span>
                 {contarAlertas(row) > 0 && <span className="list-item-secondary">{contarAlertas(row)} alerta{contarAlertas(row) === 1 ? '' : 's'}</span>}
               </span>
-              <StatusDot variant={estadoVariant(row.estado_documental)}>{labelEstadoDocumentalOc(row.estado_documental)}</StatusDot>
+              <StatusDot variant={estadoVariant(row.estado_documental)}>{labelEstadoDocumentalOcConMatriz(row.estado_documental, row)}</StatusDot>
             </button>
           ))}
           {radar.data?.items.length === 0 && <p className="empty-inline">No hay OC visibles para estos filtros.</p>}

@@ -610,6 +610,9 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 ),
             )
             est.documentos[f"t{n}_propuesta_Licencia de conducir"] = pr["documento_id"]
+        pr_t1 = est.documentos.get("t1_propuesta_Licencia de conducir")
+        if pr_t1:
+            _subir(storage, s, idn, pr_t1, est.sujetos["tecnico1"], "Licencia propuesta t1")
         pr_extra = legajos.proponer_documento(
             s,
             est.idn("tecnico", 2),

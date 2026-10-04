@@ -219,7 +219,7 @@ def cargar_evidencias(
             vigente_desde=fila["vigente_desde"],
             vigente_hasta=fila["vigente_hasta"],
             estado_confirmacion=EstadoConfirmacion(fila["estado_confirmacion"]),
-            estado_version=EstadoVersionDocumento.VIGENTE,
+            estado_version=EstadoVersionDocumento(fila["estado_version"]),
             archivo_requiere_revision=archivo_requiere_revision,
         )
 
@@ -235,7 +235,7 @@ def cargar_evidencias(
                 "SELECT documento_id, sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, "
                 "estado_confirmacion, estado_version, origen_propuesta, sucede_a, "
                 "archivo_estado, archivo_validacion, clave_storage FROM modulo1.documento "
-                "WHERE tenant_id = :t AND estado_version IN ('vigente', 'sucedida') "
+                "WHERE tenant_id = :t AND estado_version IN ('vigente', 'sucedida', 'propuesta') "
                 "  AND requisito_definicion_id = ANY(CAST(:ids AS uuid[]))" + cond_sujeto
             ),
             {"t": tenant_id, "ids": requisito_ids, "sids": sujeto_ids},

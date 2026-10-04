@@ -134,7 +134,17 @@ def test_propuestas_pendientes(cliente_api, tenant_de_prueba):
     hoy = _hoy(t)
     with tenant_session(t.tenant_id) as s:
         rid = _requisito(s, t)
-        _documento(s, t, "p1", rid, hoy, hoy + timedelta(days=30), origen_propuesta=True, estado_confirmacion="declarado")
+        _documento(
+            s,
+            t,
+            "p1",
+            rid,
+            hoy,
+            hoy + timedelta(days=30),
+            origen_propuesta=True,
+            estado_confirmacion="declarado",
+            estado_version="propuesta",
+        )
         _documento(s, t, "p2", rid, hoy, hoy + timedelta(days=30), origen_propuesta=True, estado_confirmacion="verificado")
         _documento(s, t, "p3", rid, hoy, hoy + timedelta(days=30), origen_propuesta=False, estado_confirmacion="declarado")
     r = cliente_api.get("/v1/consultas/propuestas_pendientes", headers=t.headers("responsable_legajos"))

@@ -26,6 +26,7 @@ class EstadoConfirmacion(str, Enum):
 class EstadoVersionDocumento(str, Enum):
     VIGENTE = "vigente"
     SUCEDIDA = "sucedida"
+    PROPUESTA = "propuesta"
     REVERTIDA_POR_LOTE = "revertida_por_lote"
     RECHAZADA = "rechazada"
 
