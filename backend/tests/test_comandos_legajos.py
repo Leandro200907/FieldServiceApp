@@ -56,6 +56,12 @@ def _cargar(
 def _confirmar_con_respaldo(cliente_api, tenant, documento_id: str, *, storage=None) -> dict:
     with tenant_session(tenant.tenant_id) as s:
         apoyo.respaldo_valido_en_documento(s, tenant.tenant_id, documento_id)
+        estado = s.execute(
+            text("SELECT estado_version FROM modulo1.documento WHERE tenant_id = :t AND documento_id = CAST(:d AS uuid)"),
+            {"t": tenant.tenant_id, "d": documento_id},
+        ).scalar()
+        if estado == "propuesta":
+            apoyo.registrar_apertura_archivo(s, tenant.tenant_id, documento_id, tenant.usuarios["responsable_legajos"])
     return _ok(_post(cliente_api, tenant, "responsable_legajos", "confirmar_documento", {"documento_id": documento_id}))
 
 def _docs(tenant, sujeto_id: str, req: str) -> list[dict]:
