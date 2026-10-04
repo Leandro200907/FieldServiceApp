@@ -118,10 +118,11 @@ h3 { font-size: 15px; }
   left: 0;
   bottom: 0;
   width: var(--sidebar-width);
-  padding: 16px 12px;
+  padding: 16px 12px 28px;
   background: var(--color-panel);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
