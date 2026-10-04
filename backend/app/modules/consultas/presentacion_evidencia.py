@@ -126,6 +126,55 @@ def _cargar_plazo_tenant(session: Session, tenant_id: str) -> int:
     return int(fila[0]) if fila and fila[0] is not None else 30
 
 
+def mapa_ultimos_rechazos_propuesta(session: Session, tenant_id: str, sujeto_id: str) -> dict[str, dict[str, Any]]:
+    """Último motivo de rechazo de propuesta por requisito (event_log DocumentoRechazado)."""
+    from sqlalchemy import text
+
+    filas = session.execute(
+        text(
+            """
+            SELECT d.requisito_definicion_id::text AS requisito_definicion_id,
+                   e.payload->>'motivo' AS motivo,
+                   e.ocurrido_en
+            FROM modulo1.documento d
+            JOIN modulo1.event_log e ON e.tenant_id = d.tenant_id
+              AND e.tipo = 'DocumentoRechazado'
+              AND e.payload->>'documento_id' = d.documento_id::text
+            WHERE d.tenant_id = :t AND d.sujeto_id = :sj
+              AND d.estado_version = 'rechazada' AND d.origen_propuesta
+            ORDER BY e.ocurrido_en DESC
+            """
+        ),
+        {"t": tenant_id, "sj": sujeto_id},
+    ).mappings().all()
+    salida: dict[str, dict[str, Any]] = {}
+    for f in filas:
+        rid = str(f["requisito_definicion_id"])
+        if rid in salida:
+            continue
+        rechazado_en = f["ocurrido_en"]
+        salida[rid] = {
+            "motivo": f["motivo"],
+            "rechazado_en": rechazado_en.isoformat() if hasattr(rechazado_en, "isoformat") else str(rechazado_en),
+        }
+    return salida
+
+
+def adjuntar_ultimos_rechazos_propuesta(
+    session: Session,
+    tenant_id: str,
+    sujeto_id: str,
+    items: list[dict[str, Any]],
+) -> None:
+    rechazos = mapa_ultimos_rechazos_propuesta(session, tenant_id, sujeto_id)
+    for item in items:
+        if item.get("propuesta_en_revision"):
+            continue
+        rid = str(item.get("requisito_definicion_id") or "")
+        if rid and rid in rechazos:
+            item["ultimo_rechazo_propuesta"] = rechazos[rid]
+
+
 def filas_evidencia_para_legajo(
     session: Session,
     tenant_id: str,
@@ -189,6 +238,7 @@ def filas_evidencia_para_legajo(
             base["estado_presentacion_explicacion"] = EXPLICACION_ESTADO["propuesta_en_revision"]
             salida.append(base)
     salida.sort(key=lambda i: (i.get("vigente_hasta") or "", i.get("tipo") or "", i.get("requisito") or ""))
+    adjuntar_ultimos_rechazos_propuesta(session, tenant_id, sujeto_id, salida)
     return salida
 
 

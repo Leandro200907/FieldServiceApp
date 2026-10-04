@@ -27,6 +27,11 @@ class PropuestaEnRevision(BaseModel):
     estado_presentacion_explicacion: str
 
 
+class UltimoRechazoPropuesta(BaseModel):
+    motivo: str
+    rechazado_en: str
+
+
 class OcAfectadaRef(BaseModel):
     clave_origen: str
     oc_id: str
@@ -58,6 +63,7 @@ class EvidenciaVigente(BaseModel):
     estados_adicionales: list[str] | None = None
     estados_adicionales_explicacion: dict[str, str] | None = None
     propuesta_en_revision: PropuestaEnRevision | None = None
+    ultimo_rechazo_propuesta: UltimoRechazoPropuesta | None = None
     observacion_operadora: str | None = None
     ocs_afectadas: list[OcAfectadaRef] = Field(default_factory=list)
 
