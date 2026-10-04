@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0030_legajo_nombre_apellido
+-- head: 0031_documento_estado_propuesta
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -373,7 +373,7 @@ CREATE TABLE modulo1.documento (
     CONSTRAINT documento_archivo_validacion_check CHECK ((archivo_validacion = ANY (ARRAY['pendiente'::text, 'valido'::text, 'invalido'::text]))),
     CONSTRAINT documento_confianza_extraccion_check CHECK ((confianza_extraccion = ANY (ARRAY['alta'::text, 'media'::text, 'baja'::text]))),
     CONSTRAINT documento_estado_confirmacion_check CHECK ((estado_confirmacion = ANY (ARRAY['declarado'::text, 'verificado'::text, 'confirmado_en_fuente'::text]))),
-    CONSTRAINT documento_estado_version_check CHECK ((estado_version = ANY (ARRAY['vigente'::text, 'sucedida'::text, 'revertida_por_lote'::text, 'rechazada'::text]))),
+    CONSTRAINT documento_estado_version_check CHECK ((estado_version = ANY (ARRAY['vigente'::text, 'sucedida'::text, 'revertida_por_lote'::text, 'rechazada'::text, 'propuesta'::text]))),
     CONSTRAINT documento_lote_entidad_check CHECK (((lote_entidad IS NULL) OR (lote_entidad = 'legajos'::text))),
     CONSTRAINT documento_origen_check CHECK ((origen = ANY (ARRAY['planilla'::text, 'carga_manual'::text, 'drive'::text])))
 );
@@ -1279,6 +1279,8 @@ CREATE UNIQUE INDEX uq_constancia_especifica_activa ON modulo1.constancia_client
 CREATE UNIQUE INDEX uq_constancia_general_activa ON modulo1.constancia_cliente USING btree (tenant_id, sujeto_id, requisito_definicion_id, cliente_id) WHERE ((estado = 'vigente'::text) AND (commitment_id IS NULL));
 -- Name: uq_documento_vigente; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_documento_vigente ON modulo1.documento USING btree (tenant_id, sujeto_id, requisito_definicion_id) WHERE ((estado_version = 'vigente'::text) AND (requisito_definicion_id IS NOT NULL));
+-- Name: uq_documento_propuesta_pendiente; Type: INDEX; Schema: modulo1; Owner: -
+CREATE UNIQUE INDEX uq_documento_propuesta_pendiente ON modulo1.documento USING btree (tenant_id, sujeto_id, requisito_definicion_id) WHERE ((estado_version = 'propuesta'::text) AND (requisito_definicion_id IS NOT NULL));
 -- Name: uq_excepcion_activa; Type: INDEX; Schema: modulo1; Owner: -
 CREATE UNIQUE INDEX uq_excepcion_activa ON modulo1.excepcion USING btree (tenant_id, sujeto_id, requisito_definicion_id, commitment_id) WHERE (estado = 'otorgada'::text);
 -- Name: uq_latido_proceso; Type: INDEX; Schema: modulo1; Owner: -

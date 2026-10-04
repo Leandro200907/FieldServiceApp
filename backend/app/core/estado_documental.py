@@ -32,6 +32,7 @@ class EstadoConfirmacionDocumental(str, Enum):
 class EstadoVersionEvidencia(str, Enum):
     VIGENTE = "vigente"
     SUCEDIDA = "sucedida"
+    PROPUESTA = "propuesta"
     REVERTIDA_POR_LOTE = "revertida_por_lote"
     RECHAZADA = "rechazada"
 
@@ -103,7 +104,10 @@ def _resultado(
 def _utilizables(evidencias: Iterable[EvidenciaDocumental]) -> list[EvidenciaDocumental]:
     """La vigente cubre desde su inicio. Las sucedidas sólo cubren días previos a ese inicio."""
     lista = list(evidencias)
-    vigentes = [e for e in lista if e.estado_version == EstadoVersionEvidencia.VIGENTE]
+    vigentes = [
+        e for e in lista
+        if e.estado_version in (EstadoVersionEvidencia.VIGENTE, EstadoVersionEvidencia.PROPUESTA)
+    ]
     if not vigentes:
         return []
     inicios = [e.vigente_desde for e in vigentes if e.vigente_desde is not None]
@@ -278,28 +282,48 @@ def evaluar_requisito_documental(
     if validas_probada:
         return _cobertura_temporal(validas_probada, desde, hasta, requisito)
     if pendientes:
-        alerta = _alerta_temporal_sin_respaldo(
-            pendientes, desde, hasta, requisito, hay_vigente_no_probada=hay_vigente_no_probada
-        )
-        if alerta is not None:
-            return alerta
+        con_fechas = [e for e in pendientes if e.vigente_desde is not None and e.vigente_hasta is not None]
+        if con_fechas:
+            ordenadas = sorted(con_fechas, key=lambda e: (e.vigente_desde, e.vigente_hasta, e.evidencia_id))
+            if all(e.vigente_hasta < desde for e in ordenadas):
+                elegida = max(ordenadas, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
+                return _resultado(
+                    EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO,
+                    f"{requisito.nombre} está vencido antes del inicio del período (sin respaldo que habilite)",
+                    evidencia=elegida,
+                    primer_quiebre=desde,
+                    accion="Renovar y confirmar con respaldo válido",
+                )
         elegida = max(
             pendientes,
             key=lambda e: (e.vigente_hasta or date.min, e.vigente_desde or date.min, e.evidencia_id),
         )
+        if elegida.archivo_validacion == EstadoValidacionArchivo.SIN_ARCHIVO:
+            motivo = f"{requisito.nombre} no tiene respaldo adjunto"
+        elif elegida.archivo_validacion == EstadoValidacionArchivo.PENDIENTE:
+            motivo = f"{requisito.nombre} tiene respaldo pendiente de validación"
+        elif elegida.estado_confirmacion == EstadoConfirmacionDocumental.DECLARADO:
+            motivo = f"{requisito.nombre} está solo declarado, sin confirmación"
+        else:
+            motivo = f"{requisito.nombre} tiene información pendiente de revisión"
         return _resultado(
             EstadoRequisitoDocumental.PENDIENTE_REVISION,
-            f"{requisito.nombre} tiene información pendiente de revisión",
+            motivo,
             evidencia=elegida,
             primer_quiebre=desde,
             accion="Revisar y confirmar la evidencia",
         )
     if invalidas:
-        alerta = _alerta_temporal_sin_respaldo(
-            invalidas, desde, hasta, requisito, hay_vigente_no_probada=hay_vigente_no_probada
-        )
-        if alerta is not None:
-            return alerta
+        con_fechas = [e for e in invalidas if e.vigente_desde is not None and e.vigente_hasta is not None]
+        if con_fechas and all(e.vigente_hasta < desde for e in con_fechas):
+            elegida = max(con_fechas, key=lambda e: (e.vigente_hasta, e.vigente_desde, e.evidencia_id))
+            return _resultado(
+                EstadoRequisitoDocumental.VENCIDO_ANTES_INICIO,
+                f"{requisito.nombre} está vencido antes del inicio del período",
+                evidencia=elegida,
+                primer_quiebre=desde,
+                accion="Renovar antes del inicio del período",
+            )
         elegida = max(invalidas, key=lambda e: e.evidencia_id)
         return _resultado(
             EstadoRequisitoDocumental.EVIDENCIA_INVALIDA,

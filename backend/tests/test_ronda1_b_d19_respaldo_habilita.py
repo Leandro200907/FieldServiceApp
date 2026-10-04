@@ -14,6 +14,7 @@ from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _ok, 
 from tests.test_orquestacion import (
     clave_de_matriz,
     insertar_definicion,
+    insertar_documento,
     insertar_legajo,
     insertar_matriz,
     insertar_oc,
@@ -126,6 +127,47 @@ def test_d19_confirmar_sin_respaldo_rechazado(cliente_api, tenant_de_prueba):
     r = _post(cliente_api, t, "responsable_legajos", "confirmar_documento", {"documento_id": doc_id})
     assert r.status_code == 422
     assert r.json()["error"]["codigo"] == "sin_respaldo_valido"
+
+
+def test_d19_declarado_archivo_pendiente_no_cuenta_en_resumen_legajo(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    req = _alta_def(cliente_api, t, "Licencia D19 resumen")
+    persona = _alta_persona(cliente_api, t, "DNI-D19-RES", t.sujeto_tecnico)
+    doc_id = _cargar(
+        cliente_api, t, persona, req, desde="2026-01-01", hasta="2027-12-31", solo_declarado=True
+    )["documento_id"]
+    with tenant_session(t.tenant_id) as s:
+        s.execute(
+            text(
+                "UPDATE modulo1.documento SET archivo_estado = 'confirmado', archivo_validacion = 'pendiente', "
+                "clave_storage = :c, checksum_archivo = 'x', archivo_bytes = 1 WHERE documento_id = CAST(:d AS uuid)"
+            ),
+            {"d": doc_id, "c": f"{t.tenant_id}/{doc_id}/pendiente.pdf"},
+        )
+    r = cliente_api.get(
+        "/v1/consultas/legajo", params={"sujeto_id": persona}, headers=t.headers("responsable_legajos")
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["resumen"]["vigentes_hoy"] == 0
+
+
+def test_d19_timeline_seguro_verificado_sin_archivo_no_verde(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    insertar_legajo(sesion, t.tenant_id, "empresa_rc", "empresa")
+    req = insertar_definicion(sesion, t.tenant_id, "Seguro RC", "empresa")
+    insertar_documento(
+        sesion, t.tenant_id, "empresa_rc", req, date(2026, 1, 1), date(2027, 12, 31), confirmacion="declarado"
+    )
+    sesion.commit()
+    r = cliente_api.get(
+        "/v1/consultas/timeline_recursos",
+        params={"desde": "2026-10-01", "hasta": "2026-11-30", "tipo_sujeto": "empresa"},
+        headers=t.headers("responsable_legajos"),
+    )
+    assert r.status_code == 200, r.text
+    item = next(i for i in r.json()["items"] if i["sujeto_id"] == "empresa_rc")
+    tramo = next(t for t in item["tramos"] if t["requisito"] == "Seguro RC")
+    assert tramo["estado_visual"] == "declarado_sin_verificar"
 
 
 def test_d19_importar_lote_sigue_declarado(cliente_api, tenant_de_prueba):
