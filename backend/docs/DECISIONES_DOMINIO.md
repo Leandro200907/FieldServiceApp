@@ -700,10 +700,24 @@ hasta que el código y la spec se alineen.
 **Decisión.** El responsable debe poder ver el archivo de evidencia antes de confirmar o
 rechazar. G-03 pasa a requisito de salida.
 
-**Motivo.** Sin vista previa, la revisión es ciega y no cumple el flujo operativo real de
-los responsables de legajos.
+**Implementación (híbrida, rama C).**
+- **UI:** el botón Confirmar permanece deshabilitado hasta que el responsable abrió el
+  archivo en la bandeja de revisión (E-78).
+- **Backend:** `confirmar_documento` sobre una fila en `estado_version = propuesta` exige
+  que exista en `event_log` un evento `DescargarArchivoDeEvidencia` del **mismo**
+  `usuario_id`, para ese `documento_id`, con `ocurrido_en` **posterior** a `documento.creado_en`
+  de la propuesta. Si no hay registro, responde **409** con mensaje *«Abrí el archivo antes
+  de confirmar»* (`archivo_sin_apertura`). La descarga firmada (`POST
+  /v1/storage/documentos/{documento_id}/url`) es quien registra el evento.
 
-**Estado.** Decidida.
+**Motivo.** Sin vista previa, la revisión es ciega y no cumple el flujo operativo real de
+los responsables de legajos; el control en servidor evita confirmar por API sin haber
+abierto la evidencia.
+
+**Código.** `app/modules/legajos/servicio.py::_exigir_apertura_archivo_para_confirmar`,
+`app/storage/servicio.py::firmar_descarga`.
+
+**Estado.** Decidida e implementada en backend (rama C).
 
 #### D2. Gestión de contraseña
 

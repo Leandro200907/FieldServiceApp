@@ -157,7 +157,7 @@ def _documento(s: Session, tenant_id: str, documento_id: str, *, bloquear: bool 
     fila = s.execute(
         text(
             "SELECT documento_id, sujeto_id, requisito_definicion_id, estado_confirmacion, estado_version, "
-            "origen_propuesta, version, sucede_a, lote_id FROM modulo1.documento "
+            "origen_propuesta, version, sucede_a, lote_id, creado_en FROM modulo1.documento "
             "WHERE tenant_id = :t AND documento_id = :d" + (" FOR UPDATE" if bloquear else "")
         ),
         {"t": tenant_id, "d": documento_id},
@@ -534,6 +534,41 @@ def _soportes_archivo(s: Session, tenant_id: str, documento_id: str) -> list[dic
     return [dict(f) for f in filas]
 
 
+def _exigir_apertura_archivo_para_confirmar(
+    s: Session,
+    identidad: Identidad,
+    documento_id: str,
+    propuesta_creado_en: Any,
+) -> None:
+    """D1: el responsable debe haber abierto el archivo (DescargarArchivoDeEvidencia) tras crear la propuesta."""
+    if not identidad.usuario_id:
+        raise Prohibido("Usuario sin identidad para confirmar", {"documento_id": documento_id})
+    fila = s.execute(
+        text(
+            """
+            SELECT 1 FROM modulo1.event_log
+            WHERE tenant_id = :t AND tipo = 'DescargarArchivoDeEvidencia'
+              AND payload->>'documento_id' = :d
+              AND payload->>'usuario_id' = :u
+              AND ocurrido_en >= :desde
+            LIMIT 1
+            """
+        ),
+        {
+            "t": identidad.tenant_id,
+            "d": documento_id,
+            "u": str(identidad.usuario_id),
+            "desde": propuesta_creado_en,
+        },
+    ).first()
+    if fila is None:
+        raise Conflicto(
+            "Abrí el archivo antes de confirmar",
+            {"documento_id": documento_id},
+            codigo="archivo_sin_apertura",
+        )
+
+
 def _exigir_respaldo_valido(s: Session, tenant_id: str, documento_id: str, requisito_definicion_id: str | None) -> None:
     from app.core.resolucion_evidencia import respaldo_valido
 
@@ -660,6 +695,9 @@ def confirmar_documento(s: Session, identidad: Identidad, body: e.ConfirmarDocum
         raise Conflicto("El documento no está en estado declarado", {"estado_confirmacion": doc["estado_confirmacion"]})
     if doc["estado_version"] == "vigente" and doc["origen_propuesta"]:
         raise Conflicto("La propuesta debe confirmarse desde el estado propuesta", {"estado_version": doc["estado_version"]})
+
+    if doc["estado_version"] == "propuesta":
+        _exigir_apertura_archivo_para_confirmar(s, identidad, str(doc["documento_id"]), doc["creado_en"])
 
     _exigir_respaldo_valido(
         s, t, str(doc["documento_id"]),
