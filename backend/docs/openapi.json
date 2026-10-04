@@ -6141,6 +6141,17 @@
             "title": "Estado",
             "type": "string"
           },
+          "estado_documental": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Documental"
+          },
           "impacto_por_tipo": {
             "items": {
               "additionalProperties": true,
@@ -6204,6 +6215,17 @@
               }
             ],
             "title": "Origen Oc"
+          },
+          "primer_quiebre_documental": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primer Quiebre Documental"
           },
           "referencia": {
             "anyOf": [
