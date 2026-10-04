@@ -33,3 +33,7 @@ Verificable en pantalla con datos demo:
 - Detección de conflictos de OC (D5).
 - Carga masiva (P4).
 - Notificaciones por mail.
+
+## Pendiente (E-91, no implementado en esta ronda)
+
+La **ficha del legajo** y **Mi legajo** listan solo documentos ya cargados en el sistema, no el catálogo completo de requisitos exigidos sin evidencia asociada. Por eso un técnico puede figurar «en regla» en el resumen del legajo aunque le falte un requisito exigido por matrices/OC (por ejemplo, una inducción HSE requerida por operadoras concretas) hasta que exista carga o propuesta para ese requisito.
