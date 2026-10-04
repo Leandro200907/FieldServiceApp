@@ -58,6 +58,7 @@ class EvidenciaVigente(BaseModel):
     estados_adicionales: list[str] | None = None
     estados_adicionales_explicacion: dict[str, str] | None = None
     propuesta_en_revision: PropuestaEnRevision | None = None
+    observacion_operadora: str | None = None
     ocs_afectadas: list[OcAfectadaRef] = Field(default_factory=list)
 
 
@@ -491,6 +492,10 @@ class CruceOcTimeline(BaseModel):
     referencia: str | None
     vigencia_desde: str
     vigencia_hasta: str
+    operadora_nombre: str | None = None
+    locacion_nombre: str | None = None
+    servicio_nombre: str | None = None
+    estado_oc: str | None = None
     llega_cubierto: bool
     quiebres: list[QuiebreOcTimeline]
 
