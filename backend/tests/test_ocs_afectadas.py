@@ -27,7 +27,8 @@ def test_requisito_sin_cobertura_incluye_alertas_temporales():
     assert requisito_sin_cobertura_en_periodo({"estado": "vence_durante_periodo"})
     assert requisito_sin_cobertura_en_periodo({"estado": "vencido_antes_inicio"})
     assert requisito_sin_cobertura_en_periodo({"estado": "faltante"})
-    assert not requisito_sin_cobertura_en_periodo({"estado": "pendiente_revision"})
+    assert requisito_sin_cobertura_en_periodo({"estado": "pendiente_revision"})
+    assert requisito_sin_cobertura_en_periodo({"estado": "evidencia_invalida"})
     assert not requisito_sin_cobertura_en_periodo({"estado": "vigente_todo_el_periodo"})
 
 

@@ -12,7 +12,10 @@ import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
 import './planning.css';
 
 type Acciones = components['schemas']['AccionesPendientesResponse'];
-type Accion = components['schemas']['AccionPendienteItem'];
+type Accion = components['schemas']['AccionPendienteItem'] & {
+  nombre_apellido?: string | null;
+  identificador_natural?: string | null;
+};
 type Catalogos = components['schemas']['CatalogosOcResponse'];
 
 export function AccionesPendientesScreen() {

@@ -168,6 +168,8 @@ class OcBacklogItem(BaseModel):
     actualizado_en: str
     modo: str
     reprogramada: bool = False
+    estado_documental: str | None = None
+    primer_quiebre_documental: str | None = None
     tiene_alertas: bool
     alertas_ciertas: list[AlertaCiertaOc]
     disponibilidad_por_tipo: list[DisponibilidadTipoOc]

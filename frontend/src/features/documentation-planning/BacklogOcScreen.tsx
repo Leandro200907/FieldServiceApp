@@ -18,7 +18,7 @@ import { NotaAnalisisInformativo } from '../../ui/InformativoFooter';
 import './planning.css';
 import './timeline.css';
 
-type BacklogItem = components['schemas']['OcBacklogItem'];
+type BacklogItem = components['schemas']['OcBacklogItem'] & { estado_documental?: string | null };
 type Cobertura = components['schemas']['CoberturaOcResponse'];
 type Catalogos = components['schemas']['CatalogosOcResponse'];
 type FilaRechazada = components['schemas']['FilaRechazada'];
