@@ -16,9 +16,24 @@ function evidencia(partial: Pick<EvidenciaVigente, 'tipo' | 'id' | 'sujeto_id' |
     vigente_desde: '2026-08-01',
     estado_presentacion,
     estado_presentacion_explicacion: 'Mock temporal',
+    exigido_backlog: true,
+    no_exigido_backlog: false,
+    faltante_exigido: false,
     ...partial,
   };
 }
+
+const resumenBacklog = (base: { total: number; vigentes_hoy: number; por_vencer: number; vencidos: number; en_regla: number; ocs_afectadas: number }) => ({
+  ...base,
+  exigidos: base.total,
+  en_regla_exigidos: base.en_regla,
+  sin_documento: 0,
+  observados_operadora: 0,
+  exigidos_vencidos: base.vencidos,
+  exigidos_por_vencer: base.por_vencer,
+  exigidos_vigentes: base.vigentes_hoy,
+  exigidos_sin_documento: 0,
+});
 
 function legajoDatos(sujeto_id: string, tipo_sujeto: string, nombre: string): LegajoDatos {
   return { legajo_id: `legajo-${sujeto_id}`, sujeto_id, tipo_sujeto, identificador_natural: nombre, dado_de_baja_en: null, creado_en: '2026-01-15T10:00:00Z' };
@@ -37,7 +52,7 @@ const persona: LegajoCompuesto = {
   inducciones: [
     evidencia({ tipo: 'induccion', id: 'ind-locacion', sujeto_id: 'persona-mock', requisito: 'Inducción de locación', vigente_hasta: '2026-11-01', estado_confirmacion: 'verificado', dias_para_vencer: 40, vencido: false }),
   ],
-  resumen: { total: 4, vigentes_hoy: 3, por_vencer: 0, vencidos: 1, en_regla: 2, ocs_afectadas: 0 },
+  resumen: resumenBacklog({ total: 4, vigentes_hoy: 3, por_vencer: 0, vencidos: 1, en_regla: 2, ocs_afectadas: 0 }),
 };
 
 const recursosBajoCustodia: RecursoCustodiado[] = [
@@ -46,7 +61,7 @@ const recursosBajoCustodia: RecursoCustodiado[] = [
     legajo: legajoDatos('vehiculo-mock', 'vehiculo', 'Unidad de ejemplo VX-23'),
     documentos: [evidencia({ tipo: 'documento', id: 'doc-vtv', sujeto_id: 'vehiculo-mock', requisito: 'VTV', vigente_hasta: '2026-10-05', estado_confirmacion: 'verificado', dias_para_vencer: 13, vencido: false })],
     acreditaciones: [], inducciones: [],
-    resumen: { total: 1, vigentes_hoy: 1, por_vencer: 0, vencidos: 0, en_regla: 1, ocs_afectadas: 0 },
+    resumen: resumenBacklog({ total: 1, vigentes_hoy: 1, por_vencer: 0, vencidos: 0, en_regla: 1, ocs_afectadas: 0 }),
   },
 ];
 

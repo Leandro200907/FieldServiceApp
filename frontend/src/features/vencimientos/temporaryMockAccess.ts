@@ -5,7 +5,13 @@ import type { EvidenciaVigente, TableroVencimientosResponse, VencimientosAccess,
 // `featureFlags.expirationsBoardIntegration` está en `false` (ver access.ts).
 const HOY = '2026-09-21';
 
-const mockPres = (estado: string) => ({ estado_presentacion: estado, estado_presentacion_explicacion: 'Mock temporal' });
+const mockPres = (estado: string) => ({
+  estado_presentacion: estado,
+  estado_presentacion_explicacion: 'Mock temporal',
+  exigido_backlog: true,
+  no_exigido_backlog: false,
+  faltante_exigido: false,
+});
 const items: EvidenciaVigente[] = [
   { tipo: 'documento', id: 'ev-per-marina-apto', sujeto_id: 'persona-marina', requisito_definicion_id: 'req-apto-medico', requisito: 'Apto médico', categoria: 'documento', vigente_desde: '2026-08-01', vigente_hasta: '2026-09-27', estado_confirmacion: 'verificado', origen_propuesta: false, locacion_id: null, vigente_hoy: true, dias_para_vencer: 6, vencido: false, ...mockPres('verificada') },
   { tipo: 'induccion', id: 'ev-per-diego-induccion', sujeto_id: 'persona-diego', requisito_definicion_id: 'req-induccion-locacion', requisito: 'Inducción de locación', categoria: 'induccion', vigente_desde: '2026-08-18', vigente_hasta: '2026-09-17', estado_confirmacion: 'verificado', origen_propuesta: false, locacion_id: 'locacion-norte-01', vigente_hoy: false, dias_para_vencer: -4, vencido: true, ...mockPres('vencida') },
