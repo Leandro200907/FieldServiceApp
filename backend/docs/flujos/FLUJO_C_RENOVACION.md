@@ -38,6 +38,21 @@ Verificable en pantalla con datos demo:
 
 - **E-92:** Si la propuesta no tiene archivo adjunto, ocultar el recuadro de vista previa (hoy muestra el texto genérico «La vista previa aparece acá después de ver el archivo»).
 
-## Pendiente (E-91, no implementado en esta ronda)
+## E-91 (implementado — ver PR #13 y D23 / «Ficha de legajo: tarjetas vs cumplimiento»)
 
-La **ficha del legajo** y **Mi legajo** listan solo documentos ya cargados en el sistema, no el catálogo completo de requisitos exigidos sin evidencia asociada. Por eso un técnico puede figurar «en regla» en el resumen del legajo aunque le falte un requisito exigido por matrices/OC (por ejemplo, una inducción HSE requerida por operadoras concretas) hasta que exista carga o propuesta para ese requisito.
+La **ficha del legajo** y **Mi legajo** fusionan evidencia cargada con **requisitos exigidos**
+por el backlog (misma ventana que Radar). Faltantes de documento, inducción o competencia se
+listan; Incorporar solo para documento; inducción/competencia las registra el responsable.
+Tarjetas y resumen de exigidos según decisión de dominio (calendario del papel vs cumplimiento
+del backlog).
+
+## Pendientes (no implementados)
+
+- **E-97 (grave):** `registrar_induccion` / `registrar_acreditacion_de_competencia` aceptan como
+  respaldo **cualquier** `documento_id` del mismo sujeto; el front envía `estado_confirmacion:
+  "verificado"` fijo y `vigente_desde = hoy` sin validar D19 ni tipo de evidencia. Corregir en
+  rama propia (backend + formulario). El test `test_e91_flujo_legajo` usa `doc_apto` como
+  respaldo de inducción y debe alinearse en E-97.
+- **E-99:** documento **rechazado por operadora** sin acción de gestión en la ficha (ej. apto
+  vigente rechazado por Vista). Pendiente de definir con negocio (regularizar / reenvío / solo
+  observación).
