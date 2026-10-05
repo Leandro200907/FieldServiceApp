@@ -469,12 +469,16 @@ def test_espejo_operadora_con_filas_tras_importar(demo_sembrado):
 
 
 def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
-    """En OC en curso: Lucía (t3) solo alerta por inducción faltante (E-91); recursos con vencidos."""
+    """En OC en curso (Vista|Slickline): recursos con alertas; Lucía según matriz del tenant.
+
+    semilla_tenant publica Vista sin inducción solo en patagonia-demo (copiar_globales);
+    anelo/neuquen incluyen Inducción operadora → Lucía sin registro alerta solo por eso.
+    """
     _exigir_base_demo_tests()
     from app.comun.paginacion import Pagina
     from app.db import platform_session
     from app.modules.proyeccion import radar as radar_mod
-    from scripts.demo.config import dni_tecnico
+    from scripts.demo.config import TENANTS, dni_tecnico
     from scripts.demo.contexto import identidad_de
 
     with platform_session() as ps:
@@ -526,15 +530,14 @@ def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
                     for r in leg.get("requisitos", [])
                     if r.get("estado") in ("pendiente_revision", "no_evaluable", "faltante")
                 ]
-                if pendientes == ["Inducción operadora"]:
-                    assert t3["estado_documental"] == "con_alertas_documentales"
-                elif t3["estado_documental"] != "sin_alertas_documentales":
-                    pytest.fail(
-                        f"{slug}: técnico 3 debería estar sin alertas (o solo inducción faltante), "
-                        f"tiene {t3['estado_documental']}; requisitos pendientes: {pendientes}"
-                    )
+                spec = next(t for t in TENANTS if t.slug == slug)
+                exige_induccion_en_curso = not spec.copiar_globales
+                if exige_induccion_en_curso:
+                    assert t3["estado_documental"] == "con_alertas_documentales", slug
+                    assert pendientes == ["Inducción operadora"], slug
                 else:
-                    assert pendientes == [], f"{slug}: t3 sin alertas pero pendientes={pendientes}"
+                    assert t3["estado_documental"] == "sin_alertas_documentales", slug
+                    assert pendientes == [], slug
                 assert por_tipo["persona"]["total"] >= 3
 
 
