@@ -520,17 +520,21 @@ def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
                     None,
                 )
                 assert t3, f"{slug}: técnico 3 no está en el radar de la OC en curso"
-                if t3["estado_documental"] != "sin_alertas_documentales":
-                    leg = radar_mod.detalle_legajo(s, idn, oc_id, t3["sujeto_id"])["legajo"]
-                    pendientes = [
-                        r["nombre"]
-                        for r in leg.get("requisitos", [])
-                        if r.get("estado") in ("pendiente_revision", "no_evaluable", "faltante")
-                    ]
+                leg = radar_mod.detalle_legajo(s, idn, oc_id, t3["sujeto_id"])["legajo"]
+                pendientes = [
+                    r["nombre"]
+                    for r in leg.get("requisitos", [])
+                    if r.get("estado") in ("pendiente_revision", "no_evaluable", "faltante")
+                ]
+                if pendientes == ["Inducción operadora"]:
+                    assert t3["estado_documental"] == "con_alertas_documentales"
+                elif t3["estado_documental"] != "sin_alertas_documentales":
                     pytest.fail(
-                        f"{slug}: técnico 3 debería estar sin alertas, tiene {t3['estado_documental']}; "
-                        f"requisitos pendientes: {pendientes}"
+                        f"{slug}: técnico 3 debería estar sin alertas (o solo inducción faltante), "
+                        f"tiene {t3['estado_documental']}; requisitos pendientes: {pendientes}"
                     )
+                else:
+                    assert pendientes == [], f"{slug}: t3 sin alertas pero pendientes={pendientes}"
                 assert por_tipo["persona"]["total"] >= 3
 
 
