@@ -1707,6 +1707,11 @@
             "title": "Escalamiento Dias",
             "type": "integer"
           },
+          "horizonte_backlog_dias": {
+            "default": 60,
+            "title": "Horizonte Backlog Dias",
+            "type": "integer"
+          },
           "plazo_aviso_dias": {
             "title": "Plazo Aviso Dias",
             "type": "integer"
@@ -1877,6 +1882,19 @@
             "title": "Escalamiento Dias",
             "type": "integer"
           },
+          "horizonte_backlog_dias": {
+            "anyOf": [
+              {
+                "maximum": 366.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizonte Backlog Dias"
+          },
           "plazo_aviso_dias": {
             "default": 30,
             "maximum": 365.0,
@@ -1917,6 +1935,11 @@
             },
             "title": "Eventos",
             "type": "array"
+          },
+          "horizonte_backlog_dias": {
+            "default": 60,
+            "title": "Horizonte Backlog Dias",
+            "type": "integer"
           },
           "plazo_aviso_dias": {
             "title": "Plazo Aviso Dias",
@@ -4298,6 +4321,49 @@
             ],
             "title": "Estados Adicionales Explicacion"
           },
+          "evaluacion_backlog_estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluacion Backlog Estado"
+          },
+          "exigido_backlog": {
+            "default": true,
+            "title": "Exigido Backlog",
+            "type": "boolean"
+          },
+          "faltante_exigido": {
+            "default": false,
+            "title": "Faltante Exigido",
+            "type": "boolean"
+          },
+          "gestion_responsable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gestion Responsable"
+          },
+          "gestion_tecnico": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gestion Tecnico"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -4334,6 +4400,11 @@
               }
             ],
             "title": "Motivo Archivo Invalido"
+          },
+          "no_exigido_backlog": {
+            "default": false,
+            "title": "No Exigido Backlog",
+            "type": "boolean"
           },
           "nombre_apellido": {
             "anyOf": [
@@ -8263,7 +8334,43 @@
         "properties": {
           "en_regla": {
             "default": 0,
+            "description": "Obsoleto para cumplimiento backlog: ver en_regla_exigidos.",
             "title": "En Regla",
+            "type": "integer"
+          },
+          "en_regla_exigidos": {
+            "default": 0,
+            "title": "En Regla Exigidos",
+            "type": "integer"
+          },
+          "exigidos": {
+            "default": 0,
+            "title": "Exigidos",
+            "type": "integer"
+          },
+          "exigidos_por_vencer": {
+            "default": 0,
+            "title": "Exigidos Por Vencer",
+            "type": "integer"
+          },
+          "exigidos_sin_documento": {
+            "default": 0,
+            "title": "Exigidos Sin Documento",
+            "type": "integer"
+          },
+          "exigidos_vencidos": {
+            "default": 0,
+            "title": "Exigidos Vencidos",
+            "type": "integer"
+          },
+          "exigidos_vigentes": {
+            "default": 0,
+            "title": "Exigidos Vigentes",
+            "type": "integer"
+          },
+          "observados_operadora": {
+            "default": 0,
+            "title": "Observados Operadora",
             "type": "integer"
           },
           "ocs_afectadas": {
@@ -8276,7 +8383,13 @@
             "title": "Por Vencer",
             "type": "integer"
           },
+          "sin_documento": {
+            "default": 0,
+            "title": "Sin Documento",
+            "type": "integer"
+          },
           "total": {
+            "description": "Obsoleto para cumplimiento: cantidad de ítems cargados en legajo. Usar exigidos.",
             "title": "Total",
             "type": "integer"
           },
