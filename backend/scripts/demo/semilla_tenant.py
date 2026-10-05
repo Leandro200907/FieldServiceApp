@@ -736,7 +736,7 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
                     requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
                     vigente_desde=v1,
                     vigente_hasta=v2,
-                    certificado_documento_id=uuid.UUID(cert_t1),
+                    certificado_documento_id=uuid.UUID(cert_t1_comp),
                 ),
             )
             est.documentos["t1_competencia_Manejo defensivo"] = acr_t1["acreditacion_id"]
