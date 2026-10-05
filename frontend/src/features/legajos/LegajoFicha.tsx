@@ -24,6 +24,7 @@ import { RegistrarCompetenciaForm } from './RegistrarCompetenciaForm';
 import { RegistrarInduccionForm } from './RegistrarInduccionForm';
 import { abrirUrlDescargaAbsoluta } from '../propuestas/archivoPreview';
 import { abrirCertificadoRespaldo } from './certificadoRespaldoApi';
+import { observacionFila } from './legajoFichaObservacion';
 
 const tipoRuta: Record<string, string> = {
   persona: 'Personas',
@@ -43,14 +44,6 @@ type ItemExt = EvidenciaVigente & {
   gestion_responsable?: string | null;
   faltante_exigido?: boolean;
 };
-
-function observacionFila(item: ItemExt): string {
-  const parts: string[] = [];
-  if (item.observacion_ficha) parts.push(item.observacion_ficha);
-  if (item.observacion_operadora) parts.push(item.observacion_operadora);
-  if (item.no_exigido_backlog) parts.push('No exigido por OC actuales');
-  return parts.join(' · ') || '—';
-}
 
 export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompuesto; sujetoId: string; onClose: () => void; onRefresh?: () => void }) {
   const [tab, setTab] = useState<Tab>('documentos');
