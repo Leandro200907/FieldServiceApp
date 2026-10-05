@@ -23,6 +23,7 @@ class ConfigurarAlertasBody(BaseModel):
     escalamiento_dias: int = Field(7, ge=0, le=365)
     rol_escalamiento: Literal["configuracion", "responsable_legajos", "supervisor"] = "responsable_legajos"
     reconocimiento_dias: int = Field(3, ge=0, le=30)
+    horizonte_backlog_dias: int | None = Field(None, ge=1, le=366)
 
 
 class ReconocerAlertaBody(BaseModel):
@@ -41,6 +42,7 @@ class ConfiguracionAlertasResponse(BaseModel):
     escalamiento_dias: int
     rol_escalamiento: str
     reconocimiento_dias: int
+    horizonte_backlog_dias: int = 60
     plazos_por_requisito: list[PlazoPorRequisito]
 
 

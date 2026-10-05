@@ -105,13 +105,15 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
         raise NoEncontrado("Legajo inexistente", {"sujeto_id": sujeto_id})
 
     items = filas_evidencia_para_legajo(session, identidad.tenant_id, sujeto_id, hoy)
-    from app.modules.consultas.ocs_afectadas import adjuntar_ocs_afectadas_evidencias
-
-    adjuntar_ocs_afectadas_evidencias(session, identidad, sujeto_id, items)
     from app.modules.consultas.presentacion_evidencia import adjuntar_rechazos_operadora
 
     adjuntar_rechazos_operadora(session, identidad.tenant_id, items)
+    from app.modules.consultas.legajo_exigidos import fusionar_legajo_con_exigidos
+
+    datos_legajo = _plano(datos)
+    items, resumen_ex = fusionar_legajo_con_exigidos(session, identidad, sujeto_id, datos_legajo, items, hoy)
     resumen = resumen_legajo_con_en_regla(items)
+    resumen.update(resumen_ex)
     return {
         "hoy": hoy.isoformat(),
         "legajo": _plano(datos),
@@ -304,7 +306,11 @@ def backlog_oc(
     """Backlog de OC en modo consulta (D-E): alertas ciertas, sin veredicto de cobertura."""
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
     hoy = hoy_del_tenant(session, identidad.tenant_id)
-    eval_hasta = vigencia_hasta or (hoy + timedelta(days=60))
+    from app.core.ventana_backlog import rango_backlog_documental
+
+    _, eval_hasta = rango_backlog_documental(
+        session, identidad.tenant_id, hoy, vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta,
+    )
     if estado and estado not in ("activo", "cancelado"):
         raise ErrorDeDominio("estado inválido", {"estado": estado, "validos": ["activo", "cancelado"]})
     if vigencia_desde is None:
@@ -503,9 +509,12 @@ def acciones_pendientes(
     from app.modules.proyeccion import radar as radar_mod
 
     identidad.exigir_rol(Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR)
+    from app.core.ventana_backlog import rango_backlog_documental
+
     hoy = hoy_del_tenant(session, identidad.tenant_id)
-    desde = vigencia_desde or hoy
-    hasta = vigencia_hasta or (hoy + timedelta(days=60))
+    desde, hasta = rango_backlog_documental(
+        session, identidad.tenant_id, hoy, vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta,
+    )
     propuestas = cargar_propuestas_pendientes(session, identidad.tenant_id)
     if mes:
         m_desde, m_hasta = _rango_mes(mes)

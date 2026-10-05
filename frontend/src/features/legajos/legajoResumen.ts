@@ -58,3 +58,19 @@ export function resumenVencimientosTexto(vencidos: number, porVencer: number): s
   if (porVencer > 0) parts.push(`${porVencer} por vencer`);
   return parts.length ? parts.join(' · ') : 'Sin vencimientos pendientes';
 }
+
+/** E-96: texto del encabezado «Resumen» desde conteos exigidos del API (sin recalcular dominio). */
+export function resumenExigidosTexto(resumen: {
+  exigidos_sin_documento?: number;
+  exigidos_vencidos?: number;
+  exigidos_por_vencer?: number;
+}): string {
+  const parts: string[] = [];
+  const sinDoc = resumen.exigidos_sin_documento ?? 0;
+  const vencidos = resumen.exigidos_vencidos ?? 0;
+  const porVencer = resumen.exigidos_por_vencer ?? 0;
+  if (sinDoc > 0) parts.push(`${sinDoc} sin documento`);
+  if (vencidos > 0) parts.push(`${vencidos} vencido${vencidos === 1 ? '' : 's'}`);
+  if (porVencer > 0) parts.push(`${porVencer} por vencer`);
+  return parts.length ? parts.join(' · ') : 'Sin pendientes';
+}

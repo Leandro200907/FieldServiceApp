@@ -33,6 +33,7 @@ EXPLICACION_ESTADO: dict[str, str] = {
     "evidencia_invalida": "El archivo fue rechazado en la validación; hay que subir una evidencia nueva.",
     "sin_archivo_respaldo": "No hay archivo de respaldo cargado para esta evidencia.",
     "propuesta_en_revision": "Un técnico propuso una renovación que espera confirmación; no reemplaza la versión vigente.",
+    "sin_documento": "Requisito exigido por las OC del backlog sin evidencia cargada.",
 }
 
 

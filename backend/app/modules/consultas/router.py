@@ -67,15 +67,29 @@ class EvidenciaVigente(BaseModel):
     motivo_archivo_invalido: str | None = None
     observacion_operadora: str | None = None
     ocs_afectadas: list[OcAfectadaRef] = Field(default_factory=list)
+    exigido_backlog: bool = True
+    no_exigido_backlog: bool = False
+    faltante_exigido: bool = False
+    gestion_tecnico: str | None = None
+    gestion_responsable: str | None = None
+    evaluacion_backlog_estado: str | None = None
 
 
 class ResumenLegajo(BaseModel):
-    total: int
+    total: int = Field(description="Obsoleto para cumplimiento: cantidad de ítems cargados en legajo. Usar exigidos.")
     vigentes_hoy: int
     por_vencer: int = 0
     vencidos: int
-    en_regla: int = 0
+    en_regla: int = Field(0, description="Obsoleto para cumplimiento backlog: ver en_regla_exigidos.")
     ocs_afectadas: int = 0
+    exigidos: int = 0
+    en_regla_exigidos: int = 0
+    sin_documento: int = 0
+    observados_operadora: int = 0
+    exigidos_vencidos: int = 0
+    exigidos_por_vencer: int = 0
+    exigidos_vigentes: int = 0
+    exigidos_sin_documento: int = 0
 
 
 class LegajoDatos(BaseModel):

@@ -2085,6 +2085,11 @@ export interface components {
         ConfiguracionAlertasResponse: {
             /** Escalamiento Dias */
             escalamiento_dias: number;
+            /**
+             * Horizonte Backlog Dias
+             * @default 60
+             */
+            horizonte_backlog_dias: number;
             /** Plazo Aviso Dias */
             plazo_aviso_dias: number;
             /** Plazos Por Requisito */
@@ -2137,6 +2142,8 @@ export interface components {
              * @default 7
              */
             escalamiento_dias: number;
+            /** Horizonte Backlog Dias */
+            horizonte_backlog_dias?: number | null;
             /**
              * Plazo Aviso Dias
              * @default 30
@@ -2160,6 +2167,11 @@ export interface components {
             escalamiento_dias: number;
             /** Eventos */
             eventos: string[];
+            /**
+             * Horizonte Backlog Dias
+             * @default 60
+             */
+            horizonte_backlog_dias: number;
             /** Plazo Aviso Dias */
             plazo_aviso_dias: number;
             /** Plazos Por Requisito */
@@ -2968,6 +2980,22 @@ export interface components {
             estados_adicionales_explicacion?: {
                 [key: string]: string;
             } | null;
+            /** Evaluacion Backlog Estado */
+            evaluacion_backlog_estado?: string | null;
+            /**
+             * Exigido Backlog
+             * @default true
+             */
+            exigido_backlog: boolean;
+            /**
+             * Faltante Exigido
+             * @default false
+             */
+            faltante_exigido: boolean;
+            /** Gestion Responsable */
+            gestion_responsable?: string | null;
+            /** Gestion Tecnico */
+            gestion_tecnico?: string | null;
             /** Id */
             id: string;
             /** Identificador Natural */
@@ -2976,6 +3004,11 @@ export interface components {
             locacion_id: string | null;
             /** Motivo Archivo Invalido */
             motivo_archivo_invalido?: string | null;
+            /**
+             * No Exigido Backlog
+             * @default false
+             */
+            no_exigido_backlog: boolean;
             /** Nombre Apellido */
             nombre_apellido?: string | null;
             /** Observacion Operadora */
@@ -4310,9 +4343,45 @@ export interface components {
         ResumenLegajo: {
             /**
              * En Regla
+             * @description Obsoleto para cumplimiento backlog: ver en_regla_exigidos.
              * @default 0
              */
             en_regla: number;
+            /**
+             * En Regla Exigidos
+             * @default 0
+             */
+            en_regla_exigidos: number;
+            /**
+             * Exigidos
+             * @default 0
+             */
+            exigidos: number;
+            /**
+             * Exigidos Por Vencer
+             * @default 0
+             */
+            exigidos_por_vencer: number;
+            /**
+             * Exigidos Sin Documento
+             * @default 0
+             */
+            exigidos_sin_documento: number;
+            /**
+             * Exigidos Vencidos
+             * @default 0
+             */
+            exigidos_vencidos: number;
+            /**
+             * Exigidos Vigentes
+             * @default 0
+             */
+            exigidos_vigentes: number;
+            /**
+             * Observados Operadora
+             * @default 0
+             */
+            observados_operadora: number;
             /**
              * Ocs Afectadas
              * @default 0
@@ -4323,7 +4392,15 @@ export interface components {
              * @default 0
              */
             por_vencer: number;
-            /** Total */
+            /**
+             * Sin Documento
+             * @default 0
+             */
+            sin_documento: number;
+            /**
+             * Total
+             * @description Obsoleto para cumplimiento: cantidad de ítems cargados en legajo. Usar exigidos.
+             */
             total: number;
             /** Vencidos */
             vencidos: number;

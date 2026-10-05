@@ -921,7 +921,8 @@ La regla de calendario se aplica en `evaluar_requisito_documental`; la de respal
 
 **Decisión.** El Módulo 1 es informativo y responde una sola pregunta: parados hoy, ¿los
 documentos de los recursos de la empresa cubren las OC del backlog? El backlog son las OC con
-al menos un día de vigencia desde hoy. Se evalúa solo desde hoy en adelante. El Módulo 1 no
+al menos un día de vigencia desde hoy. Se evalúa solo desde hoy en adelante. Ventana del
+backlog: desde hoy hasta hoy + N días (N configurable por empresa, 60 por defecto). El Módulo 1 no
 determina si una OC se cumplió ni su estado comercial: eso es del Módulo 2 (avance por OT y
 saldo por facturación). El Módulo 1 no usa las palabras Finalizada, Cumplida ni Cerrada.
 
@@ -929,6 +930,30 @@ saldo por facturación). El Módulo 1 no usa las palabras Finalizada, Cumplida n
 Backlog y acciones pendientes al mismo universo temporal.
 
 **Estado.** Decidida.
+
+#### Ficha de legajo: tarjetas vs cumplimiento (E-91 / E-94)
+
+**Decisión.** En la ficha de legajo (y la misma lectura en Mi legajo para el técnico),
+dos capas distintas:
+
+- **Tarjetas** (Vencidos / Por vencer / Vigentes / Sin documento): clasifican el estado del
+  **papel** por **calendario**, no si el requisito habilita las OC del backlog. Con
+  `evidencia_id` en el agregado del requisito exigido, la tarjeta depende solo de
+  `vigente_hasta`, la fecha **hoy** del tenant y `plazo_aviso_dias` (por requisito o, si no
+  tiene, el de `configuracion_alertas`; **30 días por defecto**). Sin evidencia → **Sin
+  documento**. Si `archivo_validacion` no es `valido` → **Vencidos**. El **rechazo de
+  operadora** (E-10) **no** es un vencimiento: no debe contar en la tarjeta Vencidos.
+- **Cumplimiento** en cabecera (`N de M en regla · K observado ante X`): responde si el
+  sujeto **alcanza para trabajar** las OC del backlog (misma evaluación que Radar /
+  acciones pendientes: `sin_cobertura`, rechazo operadora, etc.). Los observados ante la
+  operadora se muestran aquí y en la columna Observación, no como vencimiento calendario.
+- **Por vencer** (tarjeta y filas) usa **`plazo_aviso_dias`**, no el **horizonte del backlog**
+  de D23 (`horizonte_backlog_dias`, 60 por defecto): son parámetros y preguntas distintas.
+
+**Motivo.** Evitar que un documento vigente por fechas pero bloqueado ante una operadora
+figure como «vencido», y separar aviso calendario del cumplimiento operativo del backlog.
+
+**Estado.** Decidida (implementado en rama E-91).
 
 #### Regla general: el frontend no calcula estados de dominio
 

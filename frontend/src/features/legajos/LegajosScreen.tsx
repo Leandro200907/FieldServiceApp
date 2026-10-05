@@ -24,7 +24,8 @@ export function LegajosScreen({ detailId }: { detailId?: string }) {
   const [tipoSujeto, setTipoSujeto] = useState<SubjectKind | ''>('');
   const selected = detailId ?? null;
   const search = usePrototypeRead(() => legajosAccess().searchSujetos({ q: q || undefined, tipoSujeto: tipoSujeto || undefined, limit: 20 }), [q, tipoSujeto]);
-  const legajo = usePrototypeRead(() => selected ? legajosAccess().readLegajo(selected) : Promise.resolve(null), [selected]);
+  const [legajoRefresh, setLegajoRefresh] = useState(0);
+  const legajo = usePrototypeRead(() => selected ? legajosAccess().readLegajo(selected) : Promise.resolve(null), [selected, legajoRefresh]);
 
   const abrir = (sujetoId: string) => navigate(`/legajos/${sujetoId}`);
   const cerrar = () => navigate('/legajos');
@@ -60,7 +61,7 @@ export function LegajosScreen({ detailId }: { detailId?: string }) {
 
   const detail = selected && (legajo.loading ? <LoadingState /> : legajo.error ? (
     <ErrorState message={legajo.error.message} requestId={legajo.error instanceof ApiFailure && legajo.error.detail.referenceSource === 'server' ? legajo.error.detail.requestId : undefined} />
-  ) : legajo.data ? <LegajoFicha data={legajo.data} sujetoId={selected} onClose={cerrar} /> : null);
+  ) : legajo.data ? <LegajoFicha data={legajo.data} sujetoId={selected} onClose={cerrar} onRefresh={() => setLegajoRefresh(t => t + 1)} /> : null);
 
   return <ListDetailLayout listTitle="Legajos" list={list} detail={detail} onCloseDetail={cerrar} />;
 }

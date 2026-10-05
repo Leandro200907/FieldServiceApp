@@ -1,13 +1,15 @@
 """OCs donde un requisito no cubre el período evaluado (mismo barrido que acciones pendientes)."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Any, Iterator
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.auth.identidad import Identidad
 from app.comun.reloj import hoy_del_tenant
+from app.core.ventana_backlog import rango_backlog_documental
 
 # Mismas alertas temporales que `estado_documental._ESTADOS_ALERTA_TEMPORAL`.
 _ESTADOS_SIN_COBERTURA_PERIODO = frozenset({
@@ -59,6 +61,26 @@ def _agregar_oc(destino: list[dict[str, str]], oc_ref: dict[str, str]) -> None:
         destino.append(oc_ref)
 
 
+def _legajos_para_evaluacion(
+    session: Session,
+    identidad: Identidad,
+    *,
+    sujeto_id: str | None = None,
+) -> list[dict[str, Any]]:
+    from app.modules.proyeccion import radar as radar_mod
+
+    if not sujeto_id:
+        return radar_mod._legajos_visibles(session, identidad)
+    fila = session.execute(
+        text(
+            "SELECT sujeto_id, tipo_sujeto, identificador_natural, nombre_apellido "
+            "FROM modulo1.legajo WHERE tenant_id = :t AND sujeto_id = :s AND dado_de_baja_en IS NULL"
+        ),
+        {"t": identidad.tenant_id, "s": sujeto_id},
+    ).mappings().first()
+    return [dict(fila)] if fila else []
+
+
 def iter_sin_cobertura_en_ocs(
     session: Session,
     identidad: Identidad,
@@ -75,8 +97,10 @@ def iter_sin_cobertura_en_ocs(
 
     filtros = dict(filtros or {})
     hoy = hoy_del_tenant(session, identidad.tenant_id)
-    legajos = radar_mod._legajos_visibles(session, identidad)
-    evidencias = radar_mod._evidencias(session, identidad.tenant_id)
+    legajos = _legajos_para_evaluacion(session, identidad, sujeto_id=sujeto_id)
+    if not legajos:
+        return
+    evidencias = radar_mod._evidencias(session, identidad.tenant_id, sujeto_id) if sujeto_id else radar_mod._evidencias(session, identidad.tenant_id)
     entregas = cargar_entregas_operadora(session, identidad.tenant_id)
     ocs = radar_mod._ocs(session, identidad.tenant_id, max(desde, hoy), hasta, filtros, offset=0, limit=500)
     operadoras = filtros.get("operadora_ids")
@@ -120,8 +144,9 @@ def mapa_ocs_afectadas_por_requisito(
     vigencia_hasta: date | None = None,
 ) -> dict[str, list[dict[str, str]]]:
     hoy = hoy_del_tenant(session, identidad.tenant_id)
-    desde = vigencia_desde or hoy
-    hasta = vigencia_hasta or (hoy + timedelta(days=60))
+    desde, hasta = rango_backlog_documental(
+        session, identidad.tenant_id, hoy, vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta,
+    )
     mapa: dict[str, list[dict[str, str]]] = {}
     for suj, rid, oc_ref in iter_sin_cobertura_en_ocs(
         session, identidad, desde=desde, hasta=hasta, sujeto_id=sujeto_id,

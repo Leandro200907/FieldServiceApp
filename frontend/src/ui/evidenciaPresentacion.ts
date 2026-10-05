@@ -10,6 +10,7 @@ export const estadoPresentacionLabels: Record<string, string> = {
   evidencia_invalida: 'Evidencia inválida',
   sin_archivo_respaldo: 'Sin archivo de respaldo',
   propuesta_en_revision: 'Propuesta en revisión',
+  sin_documento: 'Sin documento',
 };
 
 const ESTADOS_RESPALDO = new Set(['archivo_en_revision', 'evidencia_invalida', 'sin_archivo_respaldo']);
@@ -81,6 +82,9 @@ export function etiquetasEvidencia(
     'estado_presentacion' | 'estado_confirmacion' | 'dias_para_vencer' | 'vencido' | 'estados_adicionales'
   > & { propuesta_en_revision?: EvidenciaVigente['propuesta_en_revision'] },
 ): string[] {
+  if (item.estado_presentacion === 'sin_documento') {
+    return [etiquetaDeCodigo('sin_documento')];
+  }
   if (item.estado_presentacion === 'propuesta_en_revision' && !item.propuesta_en_revision) {
     return [etiquetaDeCodigo('propuesta_en_revision')];
   }

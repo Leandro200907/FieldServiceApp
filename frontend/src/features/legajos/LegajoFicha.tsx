@@ -5,21 +5,23 @@ import { HistorialOperadoraPanel } from '../vencimientos/HistorialOperadoraPanel
 import { EstadoReferenciaLegajo } from '../../ui/EstadoReferencia';
 import { FichaDato, FichaEncabezado } from '../../ui/ListDetailLayout';
 import { StatusDot, variantFromEtiquetaVigencia } from '../../ui/StatusDot';
-import { etiquetasEvidencia, textoPropuestaEnRevision } from '../../ui/evidenciaPresentacion';
+import { etiquetasEvidencia } from '../../ui/evidenciaPresentacion';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
 import type { EvidenciaVigente } from '../mi-legajo/contracts';
 import type { LegajoCompuesto } from '../mi-legajo/contracts';
 import { formatDniIdentificador, subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
+import { textoCumplimientoExigidos } from './legajoCumplimiento';
 import {
   contarPendientesRevision,
   proximoVencimientoIso,
-  resumenVencimientosTexto,
+  resumenExigidosTexto,
   todosLosDocumentos,
 } from './legajoResumen';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { legajosAccess } from './access';
 import { LegajoHistorialTab } from './LegajoHistorialTab';
+import { RegistrarInduccionForm } from './RegistrarInduccionForm';
 
 const tipoRuta: Record<string, string> = {
   persona: 'Personas',
@@ -30,32 +32,41 @@ const tipoRuta: Record<string, string> = {
 
 type Tab = 'documentos' | 'presentaciones' | 'historial';
 
-function observacionFila(item: EvidenciaVigente): string {
+type ItemExt = EvidenciaVigente & {
+  observacion_operadora?: string;
+  no_exigido_backlog?: boolean;
+  gestion_responsable?: string | null;
+  faltante_exigido?: boolean;
+};
+
+function observacionFila(item: ItemExt): string {
   const parts: string[] = [];
-  const obsOp = (item as { observacion_operadora?: string }).observacion_operadora;
-  if (obsOp) parts.push(obsOp);
-  if (item.propuesta_en_revision) parts.push(textoPropuestaEnRevision(item.propuesta_en_revision));
+  if (item.observacion_operadora) parts.push(item.observacion_operadora);
+  if (item.no_exigido_backlog) parts.push('No exigido por OC actuales');
   return parts.join(' · ') || '—';
 }
 
-export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoId: string; onClose: () => void }) {
+export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompuesto; sujetoId: string; onClose: () => void; onRefresh?: () => void }) {
   const [tab, setTab] = useState<Tab>('documentos');
   const [historialSel, setHistorialSel] = useState<{ operadoraId: string; requisitoId: string } | null>(null);
+  const [registrarInduccionId, setRegistrarInduccionId] = useState<string | null>(null);
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+  const roles = session.getSnapshot().identity?.roles ?? [];
+  const esResponsable = roles.includes('responsable_legajos') || roles.includes('configuracion');
   const fmt = (iso: string) => formatFecha(iso, tz);
-  const items = todosLosDocumentos(data);
+  const items = todosLosDocumentos(data) as ItemExt[];
   const pendientesRevision = contarPendientesRevision(items);
   const buckets = {
-    vencidos: data.resumen.vencidos,
-    por_vencer: data.resumen.por_vencer ?? 0,
-    vigentes: data.resumen.vigentes_hoy,
+    vencidos: data.resumen.exigidos_vencidos ?? data.resumen.vencidos,
+    por_vencer: data.resumen.exigidos_por_vencer ?? data.resumen.por_vencer ?? 0,
+    vigentes: data.resumen.exigidos_vigentes ?? data.resumen.vigentes_hoy,
+    sin_documento: data.resumen.exigidos_sin_documento ?? data.resumen.sin_documento ?? 0,
   };
-  const enRegla = data.resumen.en_regla ?? 0;
-  const total = data.resumen.total;
-  const proximo = proximoVencimientoIso(items);
+  const proximo = proximoVencimientoIso(items.filter(i => i.estado_presentacion !== 'sin_documento'));
   const ocsCount = data.resumen.ocs_afectadas ?? 0;
   const tipo = data.legajo.tipo_sujeto;
   const espejo = usePrototypeRead(() => legajosAccess().readEspejoOperadora(sujetoId), [sujetoId]);
+  const docsRespaldo = data.documentos.filter(d => !String(d.id).startsWith('exigido-'));
 
   const estadoLabels: Record<string, string> = {
     pendiente_envio: 'Pendiente de envío',
@@ -74,10 +85,10 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
           <>
             {tipo === 'persona' && <FichaDato label="DNI" mono>{formatDniIdentificador(data.legajo.identificador_natural)}</FichaDato>}
             <FichaDato label="Alta">{fmt(data.legajo.creado_en.slice(0, 10))}</FichaDato>
-            <FichaDato label="Cumplimiento">{enRegla} de {total} en regla</FichaDato>
+            <FichaDato label="Cumplimiento">{textoCumplimientoExigidos(data)}</FichaDato>
             <FichaDato label="Próximo vencimiento">{proximo ? fmt(proximo) : '—'}</FichaDato>
-            <FichaDato label="OC afectadas">{ocsCount > 0 ? `${ocsCount} órden${ocsCount === 1 ? '' : 'es'}` : 'Ninguna'}</FichaDato>
-            <FichaDato label="Resumen">{resumenVencimientosTexto(data.resumen.vencidos, data.resumen.por_vencer ?? 0)}</FichaDato>
+            <FichaDato label="OC afectadas">{ocsCount > 0 ? `${ocsCount} ${ocsCount === 1 ? 'orden' : 'órdenes'}` : 'Ninguna'}</FichaDato>
+            <FichaDato label="Resumen">{resumenExigidosTexto(data.resumen)}</FichaDato>
           </>
         )}
       />
@@ -95,6 +106,7 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
             <div className="resumen-tarjeta"><strong>{buckets.vencidos}</strong><span>Vencidos</span></div>
             <div className="resumen-tarjeta"><strong>{buckets.por_vencer}</strong><span>Por vencer</span></div>
             <div className="resumen-tarjeta"><strong>{buckets.vigentes}</strong><span>Vigentes</span></div>
+            <div className="resumen-tarjeta"><strong>{buckets.sin_documento}</strong><span>Sin documento</span></div>
           </div>
           {pendientesRevision > 0 && (
             <p className="legajo-pendientes-revision muted">
@@ -119,7 +131,11 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
                     <tr key={item.id}>
                       <td>{item.requisito || 'Requisito sin nombre'}</td>
                       <td><span className="estado-tags">{labels.map(label => <StatusDot key={label} variant={variantFromEtiquetaVigencia(label)}>{label}</StatusDot>)}</span></td>
-                      <td>{fmt(item.vigente_hasta)} · {formatDaysToExpiry(item.dias_para_vencer)}</td>
+                      <td>
+                        {item.estado_presentacion === 'sin_documento'
+                          ? '—'
+                          : `${fmt(item.vigente_hasta)} · ${formatDaysToExpiry(item.dias_para_vencer)}`}
+                      </td>
                       <td>
                         {(() => {
                           const obs = observacionFila(item);
@@ -133,7 +149,27 @@ export function LegajoFicha({ data, sujetoId }: { data: LegajoCompuesto; sujetoI
                           );
                         })()}
                       </td>
-                      <td>—</td>
+                      <td>
+                        {esResponsable && item.gestion_responsable === 'registrar_induccion' && item.faltante_exigido && (
+                          <button
+                            type="button"
+                            className="button button-secondary button-small"
+                            onClick={() => setRegistrarInduccionId(item.id)}
+                          >
+                            Registrar inducción
+                          </button>
+                        )}
+                        {registrarInduccionId === item.id && (
+                          <RegistrarInduccionForm
+                            item={item}
+                            personaId={sujetoId}
+                            documentosEvidencia={docsRespaldo}
+                            hoyIso={data.hoy}
+                            onDone={() => { setRegistrarInduccionId(null); onRefresh?.(); }}
+                            onCancel={() => setRegistrarInduccionId(null)}
+                          />
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

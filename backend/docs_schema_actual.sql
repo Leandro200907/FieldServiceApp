@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0031_documento_estado_propuesta
+-- head: 0032_horizonte_backlog_dias
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -252,9 +252,11 @@ CREATE TABLE modulo1.configuracion_alertas (
     escalamiento_dias integer DEFAULT 7 NOT NULL,
     rol_escalamiento text DEFAULT 'responsable_legajos'::text NOT NULL,
     reconocimiento_dias integer DEFAULT 3 NOT NULL,
+    horizonte_backlog_dias integer DEFAULT 60 NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_por text,
     CONSTRAINT configuracion_alertas_escalamiento_dias_check CHECK (((escalamiento_dias >= 0) AND (escalamiento_dias <= 365))),
+    CONSTRAINT configuracion_alertas_horizonte_backlog_dias_check CHECK (((horizonte_backlog_dias >= 1) AND (horizonte_backlog_dias <= 366))),
     CONSTRAINT configuracion_alertas_plazo_aviso_dias_check CHECK (((plazo_aviso_dias >= 1) AND (plazo_aviso_dias <= 365))),
     CONSTRAINT configuracion_alertas_reconocimiento_dias_check CHECK (((reconocimiento_dias >= 0) AND (reconocimiento_dias <= 30))),
     CONSTRAINT configuracion_alertas_rol_escalamiento_check CHECK ((rol_escalamiento = ANY (ARRAY['configuracion'::text, 'responsable_legajos'::text, 'supervisor'::text])))
