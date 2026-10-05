@@ -931,29 +931,33 @@ Backlog y acciones pendientes al mismo universo temporal.
 
 **Estado.** Decidida.
 
-#### Ficha de legajo: tarjetas vs cumplimiento (E-91 / E-94)
+#### Ficha de legajo: tarjetas vs cumplimiento (E-91 / E-94 / E-101)
 
 **Decisión.** En la ficha de legajo (y la misma lectura en Mi legajo para el técnico),
 dos capas distintas:
 
 - **Tarjetas** (Vencidos / Por vencer / Vigentes / Sin documento): clasifican el estado del
-  **papel** por **calendario**, no si el requisito habilita las OC del backlog. Con
-  `evidencia_id` en el agregado del requisito exigido, la tarjeta depende solo de
-  `vigente_hasta`, la fecha **hoy** del tenant y `plazo_aviso_dias` (por requisito o, si no
-  tiene, el de `configuracion_alertas`; **30 días por defecto**). Sin evidencia → **Sin
-  documento**. Si `archivo_validacion` no es `valido` → **Vencidos**. El **rechazo de
-  operadora** (E-10) **no** es un vencimiento: no debe contar en la tarjeta Vencidos.
+  **papel** por **calendario** cuando hay respaldo con fechas que cuenta como «papel»; sin
+  evidencia cargada → **Sin documento**. **Sin respaldo válido** (soporte legado que no es
+  certificado propio, archivo inválido o sin archivo en documentos de empresa) → tarjeta
+  **Sin documento** (no «Vencidos»). **Certificado pendiente de validación** → tarjeta por
+  **calendario** (`vigente_hasta`, hoy del tenant, `plazo_aviso_dias`; **30 días por defecto**).
+  El **rechazo de operadora** (E-10) **no** es un vencimiento: no debe contar en la tarjeta
+  Vencidos.
 - **Cumplimiento** en cabecera (`N de M en regla · K observado ante X`): responde si el
   sujeto **alcanza para trabajar** las OC del backlog (misma evaluación que Radar /
-  acciones pendientes: `sin_cobertura`, rechazo operadora, etc.). Los observados ante la
-  operadora se muestran aquí y en la columna Observación, no como vencimiento calendario.
+  acciones pendientes: `sin_cobertura`, rechazo operadora, respaldo D19, etc.). Los observados
+  ante la operadora se muestran aquí y en la columna Observación, no como vencimiento calendario.
+- **Fila (Estado / Observación):** el backend devuelve `estado_fila` (p. ej. «Sin respaldo
+  válido», «Pendiente de validación», «Vigente») y `observacion_ficha` con el motivo; el front
+  no infiere «Vigente» solo por fechas si el respaldo no alcanza.
 - **Por vencer** (tarjeta y filas) usa **`plazo_aviso_dias`**, no el **horizonte del backlog**
   de D23 (`horizonte_backlog_dias`, 60 por defecto): son parámetros y preguntas distintas.
 
-**Motivo.** Evitar que un documento vigente por fechas pero bloqueado ante una operadora
-figure como «vencido», y separar aviso calendario del cumplimiento operativo del backlog.
+**Motivo.** Evitar que un documento vigente por fechas pero sin certificado propio o con archivo
+pendiente figure como «vencido», y separar aviso calendario del cumplimiento operativo del backlog.
 
-**Estado.** Decidida (implementado en rama E-91).
+**Estado.** Decidida (E-101).
 
 #### Regla general: el frontend no calcula estados de dominio
 

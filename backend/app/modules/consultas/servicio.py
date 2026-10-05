@@ -112,6 +112,12 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
 
     datos_legajo = _plano(datos)
     items, resumen_ex = fusionar_legajo_con_exigidos(session, identidad, sujeto_id, datos_legajo, items, hoy)
+    from app.modules.consultas.ficha_legajo import enriquecer_items_ficha_legajo
+
+    enriquecer_items_ficha_legajo(session, identidad.tenant_id, items, hoy)
+    from app.modules.consultas.legajo_exigidos import reaplicar_gestion_responsable_respaldo
+
+    reaplicar_gestion_responsable_respaldo(items)
     resumen = resumen_legajo_con_en_regla(items)
     resumen.update(resumen_ex)
     return {

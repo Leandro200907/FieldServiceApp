@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.identidad import Identidad
 from app.modules.consultas.presentacion_evidencia import EXPLICACION_ESTADO, _cargar_plazo_tenant
+from app.modules.consultas.ficha_legajo import ofrece_registro_respaldo_responsable
 from app.modules.consultas.requisitos_exigidos_legajo import (
     AgregadoRequisitoExigido,
     agregar_requisitos_exigidos,
@@ -93,6 +94,18 @@ def _gestion_es_faltante_doc(ag: AgregadoRequisitoExigido, item: dict[str, Any])
             return True
         return False
     return ag.categoria in ("induccion", "competencia") and ag.sin_cobertura and ag.estado_peor == "faltante"
+
+
+def reaplicar_gestion_responsable_respaldo(items: list[dict[str, Any]]) -> None:
+    """Tras enriquecer ficha (archivo efectivo), habilita registro inducción/competencia."""
+    for item in items:
+        if not item.get("exigido_backlog") or item.get("no_exigido_backlog"):
+            continue
+        gestion_tec, gestion_resp = _gestion_por_categoria(item.get("categoria"))
+        if ofrece_registro_respaldo_responsable(item):
+            item["gestion_responsable"] = gestion_resp
+            if gestion_tec:
+                item["gestion_tecnico"] = gestion_tec
 
 
 def fusionar_legajo_con_exigidos(

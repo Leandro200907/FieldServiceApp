@@ -88,8 +88,10 @@ def enriquecer_fila_evidencia(
     fila: dict[str, Any],
     hoy: date,
     plazo_tenant: int,
+    *,
+    archivo_validacion_override: str | None = None,
 ) -> dict[str, Any]:
-    archivo = _archivo_validacion_de_fila(fila)
+    archivo = archivo_validacion_override if archivo_validacion_override is not None else _archivo_validacion_de_fila(fila)
     plazo = _plazo_aviso(fila.get("plazo_aviso_dias"), plazo_tenant)
     hasta = fila.get("vigente_hasta")
     if isinstance(hasta, str):
@@ -104,7 +106,9 @@ def enriquecer_fila_evidencia(
         plazo_aviso_dias=plazo,
     )
     respaldo = estado_respaldo_presentacion(archivo)
-    adicionales: list[str] = [respaldo] if respaldo else []
+    adicionales: list[str] = []
+    if respaldo and archivo != "valido":
+        adicionales.append(respaldo)
     motivo_archivo: str | None = None
     if respaldo == "evidencia_invalida":
         from app.modules.evidencia.motivos_usuario import motivo_validacion_para_usuario
@@ -122,6 +126,9 @@ def enriquecer_fila_evidencia(
         if motivo_archivo and "evidencia_invalida" in explicaciones:
             explicaciones["evidencia_invalida"] = motivo_archivo
         salida["estados_adicionales_explicacion"] = explicaciones
+    else:
+        salida.pop("estados_adicionales", None)
+        salida.pop("estados_adicionales_explicacion", None)
     if motivo_archivo:
         salida["motivo_archivo_invalido"] = motivo_archivo
     return salida
