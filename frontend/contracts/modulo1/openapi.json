@@ -1385,7 +1385,8 @@
             "enum": [
               "planilla",
               "carga_manual",
-              "drive"
+              "drive",
+              "certificado_respaldo"
             ],
             "title": "Origen",
             "type": "string"
@@ -2657,6 +2658,41 @@
           "nombre_apellido"
         ],
         "title": "CorregirNombreLegajoPersona",
+        "type": "object"
+      },
+      "CrearCertificadoRespaldo": {
+        "properties": {
+          "persona_id": {
+            "minLength": 1,
+            "title": "Persona Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "persona_id"
+        ],
+        "title": "CrearCertificadoRespaldo",
+        "type": "object"
+      },
+      "CrearCertificadoRespaldoResponse": {
+        "properties": {
+          "certificado_documento_id": {
+            "title": "Certificado Documento Id",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Eventos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "certificado_documento_id",
+          "eventos"
+        ],
+        "title": "CrearCertificadoRespaldoResponse",
         "type": "object"
       },
       "CruceOcTimeline": {
@@ -7256,7 +7292,8 @@
             "enum": [
               "planilla",
               "carga_manual",
-              "drive"
+              "drive",
+              "certificado_respaldo"
             ],
             "title": "Origen",
             "type": "string"
@@ -7856,24 +7893,10 @@
       },
       "RegistrarAcreditacionDeCompetencia": {
         "properties": {
-          "estado_confirmacion": {
-            "default": "verificado",
-            "enum": [
-              "declarado",
-              "verificado",
-              "confirmado_en_fuente"
-            ],
-            "title": "Estado Confirmacion",
+          "certificado_documento_id": {
+            "format": "uuid",
+            "title": "Certificado Documento Id",
             "type": "string"
-          },
-          "evidencias": {
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Evidencias",
-            "type": "array"
           },
           "persona_id": {
             "minLength": 1,
@@ -7901,7 +7924,7 @@
           "requisito_definicion_id",
           "vigente_desde",
           "vigente_hasta",
-          "evidencias"
+          "certificado_documento_id"
         ],
         "title": "RegistrarAcreditacionDeCompetencia",
         "type": "object"
@@ -8106,19 +8129,9 @@
       },
       "RegistrarInduccion": {
         "properties": {
-          "estado_confirmacion": {
-            "default": "verificado",
-            "enum": [
-              "declarado",
-              "verificado",
-              "confirmado_en_fuente"
-            ],
-            "title": "Estado Confirmacion",
-            "type": "string"
-          },
-          "evidencia": {
+          "certificado_documento_id": {
             "format": "uuid",
-            "title": "Evidencia",
+            "title": "Certificado Documento Id",
             "type": "string"
           },
           "locacion_id": {
@@ -8153,7 +8166,7 @@
           "requisito_definicion_id",
           "vigente_desde",
           "vigente_hasta",
-          "evidencia"
+          "certificado_documento_id"
         ],
         "title": "RegistrarInduccion",
         "type": "object"
@@ -9279,7 +9292,7 @@
     "description": "Contrato HTTP del backend. Prefijo /v1. Ver docs/HANDOFF_FRONTEND.md.",
     "title": "Módulo 1 — Documentación habilitante",
     "version": "1.0.0-rc1",
-    "x-migracion-head": "0032_horizonte_backlog_dias"
+    "x-migracion-head": "0033_certificado_respaldo_e97"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -11409,6 +11422,120 @@
           }
         ],
         "summary": "Corregir Nombre Legajo Persona",
+        "tags": [
+          "legajos"
+        ]
+      }
+    },
+    "/v1/comandos/crear_certificado_respaldo": {
+      "post": {
+        "operationId": "crear_certificado_respaldo_v1_comandos_crear_certificado_respaldo_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCertificadoRespaldo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrearCertificadoRespaldoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No autenticado (sin token, vencido, usuario inexistente o inactivo)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rol insuficiente o fuera de alcance"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Recurso inexistente o no visible para el rol"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflicto de dominio, idempotencia o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validación o regla de dominio"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error interno; informar request_id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Crear Certificado Respaldo",
         "tags": [
           "legajos"
         ]

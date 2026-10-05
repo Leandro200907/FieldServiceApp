@@ -12,6 +12,7 @@ export const idempotentPostPaths = [
   "/v1/comandos/configurar_drive",
   "/v1/comandos/confirmar_documento",
   "/v1/comandos/confirmar_subida_de_evidencia",
+  "/v1/comandos/crear_certificado_respaldo",
   "/v1/comandos/copiar_definicion_global",
   "/v1/comandos/copiar_matriz_global",
   "/v1/comandos/dar_de_alta_definicion_de_requisito",
