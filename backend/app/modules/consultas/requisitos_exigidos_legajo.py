@@ -24,18 +24,27 @@ def _tipo_lista_desde_categoria(categoria: str | None) -> str:
     return "documento"
 
 
+ESTADO_PEOR_SIN_EVALUACION = "sin_evaluacion"
+
+
 def _precedencia_estado(estado: str) -> int:
+    """Menor número = peor estado (misma escala que el motor documental por OC)."""
     orden = {
         "faltante": 0,
         "vencido_antes_inicio": 1,
         "evidencia_invalida": 2,
+        "no_evaluable": 2,
         "pendiente_revision": 3,
         "vence_durante_periodo": 4,
         "vigente_todo_el_periodo": 5,
-        "no_evaluable": 2,
         "no_aplica": 6,
+        ESTADO_PEOR_SIN_EVALUACION: 99,
     }
     return orden.get(estado, 2)
+
+
+def _es_mas_grave(estado_nuevo: str, estado_actual: str) -> bool:
+    return _precedencia_estado(estado_nuevo) < _precedencia_estado(estado_actual)
 
 
 @dataclass
@@ -45,7 +54,7 @@ class AgregadoRequisitoExigido:
     categoria: str | None
     tipo: str
     locacion_id: str | None = None
-    estado_peor: str = "faltante"
+    estado_peor: str = ESTADO_PEOR_SIN_EVALUACION
     evidencia_id: str | None = None
     vigente_hasta: date | None = None
     archivo_validacion: str | None = None
@@ -59,7 +68,7 @@ class AgregadoRequisitoExigido:
         estado = str(req.get("estado") or "faltante")
         if req.get("evidencia_id"):
             self.evidencia_id = str(req["evidencia_id"])
-        if _precedencia_estado(estado) < _precedencia_estado(self.estado_peor):
+        if self.estado_peor == ESTADO_PEOR_SIN_EVALUACION or _es_mas_grave(estado, self.estado_peor):
             self.estado_peor = estado
             self.vigente_hasta = req.get("vigente_hasta") or self.vigente_hasta
             self.archivo_validacion = req.get("archivo_validacion") or self.archivo_validacion

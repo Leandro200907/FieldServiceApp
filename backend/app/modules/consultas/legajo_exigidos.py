@@ -82,10 +82,16 @@ def _aplicar_agregado_a_fila(item: dict[str, Any], ag: AgregadoRequisitoExigido)
 
 
 def _gestion_es_faltante_doc(ag: AgregadoRequisitoExigido, item: dict[str, Any]) -> bool:
-    if ag.categoria == "documento" and ag.estado_peor == "faltante" and not item.get("id", "").startswith("exigido-"):
-        return True
     if item.get("faltante_exigido"):
         return True
+    if ag.categoria == "documento" and ag.sin_cobertura:
+        if ag.es_rechazo_operadora and ag.evidencia_id:
+            return False
+        if not ag.evidencia_id:
+            return not str(item.get("id", "")).startswith("exigido-")
+        if item.get("propuesta_en_revision") or item.get("estado_presentacion") == "propuesta_en_revision":
+            return True
+        return False
     return ag.categoria in ("induccion", "competencia") and ag.sin_cobertura and ag.estado_peor == "faltante"
 
 
