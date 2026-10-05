@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contarBuckets } from '../src/features/legajos/legajoResumen';
+import { contarBuckets, resumenExigidosTexto } from '../src/features/legajos/legajoResumen';
 import type { EvidenciaVigente } from '../src/features/mi-legajo/contracts';
 
 function fila(partial: Partial<EvidenciaVigente> & Pick<EvidenciaVigente, 'estado_presentacion'>): EvidenciaVigente {
@@ -22,6 +22,20 @@ function fila(partial: Partial<EvidenciaVigente> & Pick<EvidenciaVigente, 'estad
     ...partial,
   } as EvidenciaVigente;
 }
+
+describe('resumenExigidosTexto (E-96)', () => {
+  it('Lucía: 1 sin documento', () => {
+    expect(resumenExigidosTexto({ exigidos_sin_documento: 1, exigidos_vencidos: 0, exigidos_por_vencer: 0 })).toBe(
+      '1 sin documento',
+    );
+  });
+
+  it('María: sin pendientes de calendario ni faltantes', () => {
+    expect(resumenExigidosTexto({ exigidos_sin_documento: 0, exigidos_vencidos: 0, exigidos_por_vencer: 0 })).toBe(
+      'Sin pendientes',
+    );
+  });
+});
 
 describe('contarBuckets (E-6: tarjetas por fecha, revisión aparte)', () => {
   it('María: licencia por vencer con propuesta en revisión sigue en «Por vencer»', () => {

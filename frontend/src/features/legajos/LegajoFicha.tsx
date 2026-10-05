@@ -15,7 +15,7 @@ import { textoCumplimientoExigidos } from './legajoCumplimiento';
 import {
   contarPendientesRevision,
   proximoVencimientoIso,
-  resumenVencimientosTexto,
+  resumenExigidosTexto,
   todosLosDocumentos,
 } from './legajoResumen';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
@@ -88,7 +88,7 @@ export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompues
             <FichaDato label="Cumplimiento">{textoCumplimientoExigidos(data)}</FichaDato>
             <FichaDato label="Próximo vencimiento">{proximo ? fmt(proximo) : '—'}</FichaDato>
             <FichaDato label="OC afectadas">{ocsCount > 0 ? `${ocsCount} ${ocsCount === 1 ? 'orden' : 'órdenes'}` : 'Ninguna'}</FichaDato>
-            <FichaDato label="Resumen">{resumenVencimientosTexto(data.resumen.vencidos, data.resumen.por_vencer ?? 0)}</FichaDato>
+            <FichaDato label="Resumen">{resumenExigidosTexto(data.resumen)}</FichaDato>
           </>
         )}
       />
