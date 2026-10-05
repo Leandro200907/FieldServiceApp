@@ -469,7 +469,7 @@ def test_espejo_operadora_con_filas_tras_importar(demo_sembrado):
 
 
 def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
-    """En OC en curso: técnico 3 limpio; empresa, vehículo y equipo con alertas por vencidos."""
+    """En OC en curso: Lucía (t3) solo alerta por inducción faltante (E-91); recursos con vencidos."""
     _exigir_base_demo_tests()
     from app.comun.paginacion import Pagina
     from app.db import platform_session
