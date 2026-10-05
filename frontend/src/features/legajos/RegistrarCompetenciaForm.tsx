@@ -1,7 +1,7 @@
 import type { EvidenciaVigente } from '../mi-legajo/contracts';
 import { RegistrarRespaldoRequisitoForm } from './RegistrarRespaldoRequisitoForm';
 
-export function RegistrarInduccionForm({
+export function RegistrarCompetenciaForm({
   item,
   personaId,
   hoyIso,
@@ -16,7 +16,7 @@ export function RegistrarInduccionForm({
 }) {
   return (
     <RegistrarRespaldoRequisitoForm
-      modo="induccion"
+      modo="competencia"
       item={item}
       personaId={personaId}
       hoyIso={hoyIso}

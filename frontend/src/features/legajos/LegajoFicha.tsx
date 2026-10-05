@@ -21,6 +21,7 @@ import {
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { legajosAccess } from './access';
 import { LegajoHistorialTab } from './LegajoHistorialTab';
+import { RegistrarCompetenciaForm } from './RegistrarCompetenciaForm';
 import { RegistrarInduccionForm } from './RegistrarInduccionForm';
 
 const tipoRuta: Record<string, string> = {
@@ -50,6 +51,7 @@ export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompues
   const [tab, setTab] = useState<Tab>('documentos');
   const [historialSel, setHistorialSel] = useState<{ operadoraId: string; requisitoId: string } | null>(null);
   const [registrarInduccionId, setRegistrarInduccionId] = useState<string | null>(null);
+  const [registrarCompetenciaId, setRegistrarCompetenciaId] = useState<string | null>(null);
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const roles = session.getSnapshot().identity?.roles ?? [];
   const esResponsable = roles.includes('responsable_legajos') || roles.includes('configuracion');
@@ -66,8 +68,6 @@ export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompues
   const ocsCount = data.resumen.ocs_afectadas ?? 0;
   const tipo = data.legajo.tipo_sujeto;
   const espejo = usePrototypeRead(() => legajosAccess().readEspejoOperadora(sujetoId), [sujetoId]);
-  const docsRespaldo = data.documentos.filter(d => !String(d.id).startsWith('exigido-'));
-
   const estadoLabels: Record<string, string> = {
     pendiente_envio: 'Pendiente de envío',
     pendiente_aceptacion: 'Pendiente de aceptación',
@@ -154,19 +154,36 @@ export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompues
                           <button
                             type="button"
                             className="button button-secondary button-small"
-                            onClick={() => setRegistrarInduccionId(item.id)}
+                            onClick={() => { setRegistrarCompetenciaId(null); setRegistrarInduccionId(item.id); }}
                           >
                             Registrar inducción
+                          </button>
+                        )}
+                        {esResponsable && item.gestion_responsable === 'registrar_acreditacion' && item.faltante_exigido && (
+                          <button
+                            type="button"
+                            className="button button-secondary button-small"
+                            onClick={() => { setRegistrarInduccionId(null); setRegistrarCompetenciaId(item.id); }}
+                          >
+                            Registrar competencia
                           </button>
                         )}
                         {registrarInduccionId === item.id && (
                           <RegistrarInduccionForm
                             item={item}
                             personaId={sujetoId}
-                            documentosEvidencia={docsRespaldo}
                             hoyIso={data.hoy}
                             onDone={() => { setRegistrarInduccionId(null); onRefresh?.(); }}
                             onCancel={() => setRegistrarInduccionId(null)}
+                          />
+                        )}
+                        {registrarCompetenciaId === item.id && (
+                          <RegistrarCompetenciaForm
+                            item={item}
+                            personaId={sujetoId}
+                            hoyIso={data.hoy}
+                            onDone={() => { setRegistrarCompetenciaId(null); onRefresh?.(); }}
+                            onCancel={() => setRegistrarCompetenciaId(null)}
                           />
                         )}
                       </td>
