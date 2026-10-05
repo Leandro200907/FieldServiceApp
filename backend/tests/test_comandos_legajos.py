@@ -160,6 +160,35 @@ def test_permisos_supervisor_no_puede_cargar_documento(cliente_api, tenant_de_pr
     sin_token = cliente_api.post(f"{CMD}/cargar_documento", json=body)
     assert sin_token.status_code == 401 and sin_token.json()["error"]["codigo"] == "no_autenticado"
 
+
+def test_permisos_e97_respaldo_solo_responsable(cliente_api, tenant_de_prueba, storage):
+    from tests.apoyo_e97 import certificado_subido
+
+    t = tenant_de_prueba
+    loc = str(uuid.uuid4())
+    req_comp = _alta_def(cliente_api, t, "Competencia permisos E97", "competencia")
+    req_ind = _alta_def(cliente_api, t, "Inducción permisos E97", "induccion", locacion_id=loc)
+    sujeto = _alta_persona(cliente_api, t, "DNI permisos E97")
+    cert = certificado_subido(cliente_api, storage, t, sujeto)
+    base = {"persona_id": sujeto, "vigente_desde": "2026-03-01", "vigente_hasta": "2027-03-01"}
+    casos = (
+        ("crear_certificado_respaldo", {"persona_id": sujeto}),
+        (
+            "registrar_acreditacion_de_competencia",
+            {**base, "requisito_definicion_id": req_comp, "certificado_documento_id": cert},
+        ),
+        (
+            "registrar_induccion",
+            {**base, "locacion_id": loc, "requisito_definicion_id": req_ind, "certificado_documento_id": cert},
+        ),
+    )
+    for rol in ("tecnico", "supervisor"):
+        for comando, body in casos:
+            r = _post(cliente_api, t, rol, comando, body)
+            assert r.status_code == 403, (rol, comando)
+            assert r.json()["error"]["codigo"] == "prohibido"
+            assert r.json()["error"]["detalles"]["roles_requeridos"] == ["responsable_legajos"]
+
 # --------------------------------------------------------------------------- propuestas
 
 def test_propuesta_y_rechazo_restaura_el_anterior(cliente_api, tenant_de_prueba):

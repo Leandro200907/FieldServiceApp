@@ -193,3 +193,171 @@ def test_e97_lectura_induccion_vieja_con_apto_no_habilita(cliente_api, tenant_de
     with tenant_session(t.tenant_id) as s_motor:
         r_motor = evaluar_compromiso(s_motor, t.tenant_id, "OC-E97-LEG", AHORA, None)
     assert requisitos_de(r_motor, persona)[req_ind]["veredicto"] == "requiere_revision"
+
+
+def _ids_en_legajo(body: dict) -> set[str]:
+    ids: set[str] = set()
+    for coleccion in ("documentos", "acreditaciones", "inducciones"):
+        for item in body.get(coleccion, []):
+            if item.get("id"):
+                ids.add(str(item["id"]))
+    return ids
+
+
+def test_e97_certificado_huérfano_no_aparece_en_legajo(cliente_api, tenant_de_prueba):
+    t = tenant_de_prueba
+    persona = _alta_persona(cliente_api, t, "DNI-E97-huerfano")
+    cert = _ok(
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "crear_certificado_respaldo",
+            {"persona_id": persona},
+        )
+    )["certificado_documento_id"]
+    legajo = cliente_api.get(
+        "/v1/consultas/legajo", params={"sujeto_id": persona}, headers=t.headers("responsable_legajos")
+    )
+    assert legajo.status_code == 200, legajo.text
+    assert cert not in _ids_en_legajo(legajo.json())
+
+
+def test_e97_induccion_verificada_cert_invalido_fuera_de_regla(cliente_api, tenant_de_prueba, sesion, storage):
+    t = tenant_de_prueba
+    hoy = hoy_del_tenant(sesion, t.tenant_id)
+    clave = clave_de_matriz()
+    insertar_catalogos_maestros(sesion, t.tenant_id, clave)
+    insertar_legajo(sesion, t.tenant_id, "empresa_e97_inv", "empresa")
+    persona = "persona-e97-inv"
+    insertar_legajo(sesion, t.tenant_id, persona, "persona")
+    loc_id = clave["l"]
+    req_ind = str(
+        sesion.execute(
+            text(
+                "INSERT INTO modulo1.definicion_requisito (tenant_id, nombre, categoria, tipo_sujeto_aplicable, locacion_id) "
+                "VALUES (:t, :n, 'induccion', 'persona', CAST(:l AS uuid)) RETURNING requisito_definicion_id"
+            ),
+            {"t": t.tenant_id, "n": "Inducción E97 inv", "l": loc_id},
+        ).scalar()
+    )
+    insertar_matriz(sesion, t.tenant_id, clave, {req_ind: "bloqueante_duro"})
+    insertar_oc(sesion, t.tenant_id, "OC-E97-INV", clave, hoy, hoy + timedelta(days=30))
+    sesion.commit()
+
+    cert_id = _certificado_subido(cliente_api, storage, t, persona, validar=False)
+    desde = (hoy - timedelta(days=10)).isoformat()
+    hasta = (hoy + timedelta(days=200)).isoformat()
+    _ok(
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "registrar_induccion",
+            {
+                "persona_id": persona,
+                "locacion_id": loc_id,
+                "requisito_definicion_id": req_ind,
+                "vigente_desde": desde,
+                "vigente_hasta": hasta,
+                "certificado_documento_id": cert_id,
+            },
+        )
+    )
+    _validar(t, storage, ahora=ahora_utc())
+
+    legajo_ok = cliente_api.get(
+        "/v1/consultas/legajo", params={"sujeto_id": persona}, headers=t.headers("responsable_legajos")
+    )
+    assert legajo_ok.json()["resumen"]["en_regla_exigidos"] == 1
+
+    with tenant_session(t.tenant_id) as s:
+        s.execute(
+            text(
+                "UPDATE modulo1.documento SET archivo_validacion = 'invalido', archivo_validacion_motivo = 'test E97' "
+                "WHERE documento_id = CAST(:d AS uuid)"
+            ),
+            {"d": cert_id},
+        )
+        s.commit()
+
+    legajo_inv = cliente_api.get(
+        "/v1/consultas/legajo", params={"sujeto_id": persona}, headers=t.headers("responsable_legajos")
+    )
+    assert legajo_inv.json()["resumen"]["en_regla_exigidos"] == 0
+
+    with tenant_session(t.tenant_id) as s_motor:
+        r_motor = evaluar_compromiso(s_motor, t.tenant_id, "OC-E97-INV", AHORA, None)
+    assert requisitos_de(r_motor, persona)[req_ind]["veredicto"] == "requiere_revision"
+
+
+def test_e97_cert_invalido_antes_de_registro_induccion_declarado_sin_regla(
+    cliente_api, tenant_de_prueba, sesion, storage
+):
+    t = tenant_de_prueba
+    hoy = hoy_del_tenant(sesion, t.tenant_id)
+    clave = clave_de_matriz()
+    insertar_catalogos_maestros(sesion, t.tenant_id, clave)
+    insertar_legajo(sesion, t.tenant_id, "empresa_e97_pre", "empresa")
+    persona = "persona-e97-pre"
+    insertar_legajo(sesion, t.tenant_id, persona, "persona")
+    loc_id = clave["l"]
+    req_ind = str(
+        sesion.execute(
+            text(
+                "INSERT INTO modulo1.definicion_requisito (tenant_id, nombre, categoria, tipo_sujeto_aplicable, locacion_id) "
+                "VALUES (:t, :n, 'induccion', 'persona', CAST(:l AS uuid)) RETURNING requisito_definicion_id"
+            ),
+            {"t": t.tenant_id, "n": "Inducción E97 pre", "l": loc_id},
+        ).scalar()
+    )
+    insertar_matriz(sesion, t.tenant_id, clave, {req_ind: "bloqueante_duro"})
+    insertar_oc(sesion, t.tenant_id, "OC-E97-PRE", clave, hoy, hoy + timedelta(days=30))
+    sesion.commit()
+
+    cert_id = _certificado_subido(cliente_api, storage, t, persona, validar=True)
+    with tenant_session(t.tenant_id) as s:
+        s.execute(
+            text(
+                "UPDATE modulo1.documento SET archivo_validacion = 'invalido', archivo_validacion_motivo = 'test E97 pre' "
+                "WHERE documento_id = CAST(:d AS uuid)"
+            ),
+            {"d": cert_id},
+        )
+        s.commit()
+
+    desde = (hoy - timedelta(days=10)).isoformat()
+    hasta = (hoy + timedelta(days=200)).isoformat()
+    reg = _ok(
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "registrar_induccion",
+            {
+                "persona_id": persona,
+                "locacion_id": loc_id,
+                "requisito_definicion_id": req_ind,
+                "vigente_desde": desde,
+                "vigente_hasta": hasta,
+                "certificado_documento_id": cert_id,
+            },
+        )
+    )
+    ind_id = reg["induccion_id"]
+
+    with tenant_session(t.tenant_id) as s:
+        conf = s.execute(
+            text("SELECT estado_confirmacion FROM modulo1.documento WHERE documento_id = CAST(:d AS uuid)"),
+            {"d": ind_id},
+        ).scalar()
+        assert conf == "declarado"
+
+    legajo = cliente_api.get(
+        "/v1/consultas/legajo", params={"sujeto_id": persona}, headers=t.headers("responsable_legajos")
+    )
+    assert legajo.json()["resumen"]["en_regla_exigidos"] == 0
+
+    with tenant_session(t.tenant_id) as s_motor:
+        r_motor = evaluar_compromiso(s_motor, t.tenant_id, "OC-E97-PRE", AHORA, None)
+    assert requisitos_de(r_motor, persona)[req_ind]["veredicto"] == "requiere_revision"
