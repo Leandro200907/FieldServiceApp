@@ -921,7 +921,8 @@ La regla de calendario se aplica en `evaluar_requisito_documental`; la de respal
 
 **Decisión.** El Módulo 1 es informativo y responde una sola pregunta: parados hoy, ¿los
 documentos de los recursos de la empresa cubren las OC del backlog? El backlog son las OC con
-al menos un día de vigencia desde hoy. Se evalúa solo desde hoy en adelante. El Módulo 1 no
+al menos un día de vigencia desde hoy. Se evalúa solo desde hoy en adelante. Ventana del
+backlog: desde hoy hasta hoy + N días (N configurable por empresa, 60 por defecto). El Módulo 1 no
 determina si una OC se cumplió ni su estado comercial: eso es del Módulo 2 (avance por OT y
 saldo por facturación). El Módulo 1 no usa las palabras Finalizada, Cumplida ni Cerrada.
 

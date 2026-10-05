@@ -392,7 +392,12 @@ def _resumen_por_tipo(legajos: Iterable[dict[str, Any]]) -> dict[str, dict[str, 
 def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: date | None = None,
                   hasta: date | None = None, estados: list[str] | None = None, **filtros: Any) -> dict[str, Any]:
     identidad.exigir_rol(*ROLES_RADAR)
-    hoy = hoy_del_tenant(session, identidad.tenant_id); desde = desde or hoy; hasta = hasta or desde + timedelta(days=60)
+    from app.core.ventana_backlog import rango_backlog_documental
+
+    hoy = hoy_del_tenant(session, identidad.tenant_id)
+    desde, hasta = rango_backlog_documental(
+        session, identidad.tenant_id, hoy, vigencia_desde=desde, vigencia_hasta=hasta,
+    )
     _exigir_rango(desde, hasta)
     if estados and any(e not in ESTADOS_OC for e in estados):
         raise ErrorDeDominio("estado inválido", {"validos": list(ESTADOS_OC)})

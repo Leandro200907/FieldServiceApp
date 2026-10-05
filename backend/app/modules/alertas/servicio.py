@@ -38,28 +38,65 @@ from app.worker.cola import encolar
 
 def parametros(session: Session, tenant_id: str) -> ParametrosAlerta:
     fila = session.execute(
-        text("SELECT plazo_aviso_dias, escalamiento_dias, rol_escalamiento, reconocimiento_dias FROM modulo1.configuracion_alertas WHERE tenant_id = :t"),
+        text(
+            "SELECT plazo_aviso_dias, escalamiento_dias, rol_escalamiento, reconocimiento_dias "
+            "FROM modulo1.configuracion_alertas WHERE tenant_id = :t"
+        ),
         {"t": tenant_id},
     ).mappings().first()
     return ParametrosAlerta(**dict(fila)) if fila else ParametrosAlerta()
 
 
-def configurar(session: Session, identidad: Identidad, *, plazo_aviso_dias: int, escalamiento_dias: int,
-               rol_escalamiento: str, reconocimiento_dias: int) -> dict[str, Any]:
+def configurar(
+    session: Session,
+    identidad: Identidad,
+    *,
+    plazo_aviso_dias: int,
+    escalamiento_dias: int,
+    rol_escalamiento: str,
+    reconocimiento_dias: int,
+    horizonte_backlog_dias: int | None = None,
+) -> dict[str, Any]:
     identidad.exigir_rol(Rol.CONFIGURACION)
     t = identidad.tenant_id
+    from app.core.ventana_backlog import horizonte_backlog_dias as leer_horizonte_backlog
+
+    horizonte = horizonte_backlog_dias if horizonte_backlog_dias is not None else leer_horizonte_backlog(session, t)
     session.execute(
         text(
-            "INSERT INTO modulo1.configuracion_alertas (tenant_id, plazo_aviso_dias, escalamiento_dias, rol_escalamiento, reconocimiento_dias, actualizado_por) "
-            "VALUES (:t, :p, :n, :r, :k, :u) ON CONFLICT (tenant_id) DO UPDATE SET plazo_aviso_dias = EXCLUDED.plazo_aviso_dias, "
-            "escalamiento_dias = EXCLUDED.escalamiento_dias, rol_escalamiento = EXCLUDED.rol_escalamiento, "
-            "reconocimiento_dias = EXCLUDED.reconocimiento_dias, actualizado_en = now(), actualizado_por = EXCLUDED.actualizado_por"
+            "INSERT INTO modulo1.configuracion_alertas "
+            "(tenant_id, plazo_aviso_dias, escalamiento_dias, rol_escalamiento, reconocimiento_dias, horizonte_backlog_dias, actualizado_por) "
+            "VALUES (:t, :p, :n, :r, :k, :h, :u) ON CONFLICT (tenant_id) DO UPDATE SET "
+            "plazo_aviso_dias = EXCLUDED.plazo_aviso_dias, "
+            "escalamiento_dias = EXCLUDED.escalamiento_dias, "
+            "rol_escalamiento = EXCLUDED.rol_escalamiento, "
+            "reconocimiento_dias = EXCLUDED.reconocimiento_dias, "
+            "horizonte_backlog_dias = EXCLUDED.horizonte_backlog_dias, "
+            "actualizado_en = now(), actualizado_por = EXCLUDED.actualizado_por"
         ),
-        {"t": t, "p": plazo_aviso_dias, "n": escalamiento_dias, "r": rol_escalamiento, "k": reconocimiento_dias, "u": identidad.usuario_id},
+        {
+            "t": t,
+            "p": plazo_aviso_dias,
+            "n": escalamiento_dias,
+            "r": rol_escalamiento,
+            "k": reconocimiento_dias,
+            "h": horizonte,
+            "u": identidad.usuario_id,
+        },
     )
-    registrar_evento_interno(session, t, "ConfiguracionDeAlertasActualizada",
-                             {"plazo_aviso_dias": plazo_aviso_dias, "escalamiento_dias": escalamiento_dias,
-                              "rol_escalamiento": rol_escalamiento, "reconocimiento_dias": reconocimiento_dias}, identidad.usuario_id)
+    registrar_evento_interno(
+        session,
+        t,
+        "ConfiguracionDeAlertasActualizada",
+        {
+            "plazo_aviso_dias": plazo_aviso_dias,
+            "escalamiento_dias": escalamiento_dias,
+            "rol_escalamiento": rol_escalamiento,
+            "reconocimiento_dias": reconocimiento_dias,
+            "horizonte_backlog_dias": horizonte,
+        },
+        identidad.usuario_id,
+    )
     return {**configuracion(session, identidad), "eventos": ["ConfiguracionDeAlertasActualizada"]}
 
 
@@ -69,8 +106,16 @@ def configuracion(session: Session, identidad: Identidad) -> dict[str, Any]:
     overrides = [dict(f) for f in session.execute(
         text("SELECT requisito_definicion_id::text, nombre, plazo_aviso_dias FROM modulo1.definicion_requisito "
              "WHERE tenant_id = :t AND plazo_aviso_dias IS NOT NULL AND activa ORDER BY nombre"), {"t": identidad.tenant_id}).mappings()]
-    return {"plazo_aviso_dias": p.plazo_aviso_dias, "escalamiento_dias": p.escalamiento_dias, "rol_escalamiento": p.rol_escalamiento,
-            "reconocimiento_dias": p.reconocimiento_dias, "plazos_por_requisito": overrides}
+    from app.core.ventana_backlog import horizonte_backlog_dias
+
+    return {
+        "plazo_aviso_dias": p.plazo_aviso_dias,
+        "escalamiento_dias": p.escalamiento_dias,
+        "rol_escalamiento": p.rol_escalamiento,
+        "reconocimiento_dias": p.reconocimiento_dias,
+        "horizonte_backlog_dias": horizonte_backlog_dias(session, identidad.tenant_id),
+        "plazos_por_requisito": overrides,
+    }
 
 
 # --------------------------------------------------------------------------- fuentes
