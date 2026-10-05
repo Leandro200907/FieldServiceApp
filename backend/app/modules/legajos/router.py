@@ -61,6 +61,11 @@ class RegistrarInduccionResponse(BaseModel):
     eventos: list[str]
 
 
+class CrearCertificadoRespaldoResponse(BaseModel):
+    certificado_documento_id: str
+    eventos: list[str]
+
+
 class FilaRechazadaLote(BaseModel):
     fila: int
     sujeto_id: str | None
@@ -164,6 +169,13 @@ _ruta("cargar_documento", e.CargarDocumento, servicio.cargar_documento, RESPONSA
 _ruta("proponer_documento", e.ProponerDocumento, servicio.proponer_documento, TECNICO, DocumentoCargadoResponse)
 _ruta("confirmar_documento", e.ConfirmarDocumento, servicio.confirmar_documento, RESPONSABLE, ConfirmarDocumentoResponse)
 _ruta("rechazar_propuesta", e.RechazarPropuesta, servicio.rechazar_propuesta, RESPONSABLE, RechazarPropuestaResponse)
+_ruta(
+    "crear_certificado_respaldo",
+    e.CrearCertificadoRespaldo,
+    servicio.crear_certificado_respaldo,
+    RESPONSABLE,
+    CrearCertificadoRespaldoResponse,
+)
 _ruta(
     "registrar_acreditacion_de_competencia",
     e.RegistrarAcreditacionDeCompetencia,
