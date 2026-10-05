@@ -99,12 +99,15 @@ def enriquecer_fila_evidencia(
     vencido = bool(fila.get("vencido"))
     if hasta is not None and not vencido:
         vencido = hasta < hoy
-    estado = estado_vigencia_presentacion(
-        hoy,
-        vigente_hasta=hasta,
-        vencido=vencido,
-        plazo_aviso_dias=plazo,
-    )
+    if _es_propuesta_pendiente(fila) and fila.get("estado_version") == "propuesta":
+        estado = "propuesta_en_revision"
+    else:
+        estado = estado_vigencia_presentacion(
+            hoy,
+            vigente_hasta=hasta,
+            vencido=vencido,
+            plazo_aviso_dias=plazo,
+        )
     respaldo = estado_respaldo_presentacion(archivo)
     adicionales: list[str] = []
     if respaldo and archivo != "valido":

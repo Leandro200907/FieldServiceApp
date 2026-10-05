@@ -84,6 +84,7 @@ def test_e101_legado_apto_sin_certificado_tarjeta_y_fila(cliente_api, tenant_de_
     assert res["exigidos_vencidos"] == 0
     fila = _induccion_en_legajo(body, "Inducción E101")
     assert fila["estado_fila"] == "Sin respaldo válido"
+    assert "registrá la inducción con su certificado" in fila["observacion_ficha"]
     assert fila.get("gestion_responsable") == "registrar_induccion"
     assert "Sin archivo de respaldo" not in str(fila.get("estados_adicionales") or [])
 
@@ -182,6 +183,7 @@ def test_e101_certificado_valido_fila_y_certificado_id(cliente_api, tenant_de_pr
     assert body["resumen"]["en_regla_exigidos"] == 1
     fila = _induccion_en_legajo(body, "Inducción E101 val")
     assert fila["estado_fila"] == "Vigente"
+    assert fila["observacion_ficha"] == "—"
     assert fila["certificado_respaldo_documento_id"] == cert_id
     assert "sin_archivo_respaldo" not in (fila.get("estados_adicionales") or [])
 

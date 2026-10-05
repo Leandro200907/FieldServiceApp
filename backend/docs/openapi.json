@@ -4284,6 +4284,17 @@
       },
       "EvidenciaVigente": {
         "properties": {
+          "ambito_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ambito Nombre"
+          },
           "archivo_validacion": {
             "anyOf": [
               {
@@ -4306,6 +4317,17 @@
             ],
             "title": "Categoria"
           },
+          "certificado_respaldo_documento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificado Respaldo Documento Id"
+          },
           "dias_para_vencer": {
             "anyOf": [
               {
@@ -4320,6 +4342,17 @@
           "estado_confirmacion": {
             "title": "Estado Confirmacion",
             "type": "string"
+          },
+          "estado_fila": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Fila"
           },
           "estado_presentacion": {
             "title": "Estado Presentacion",
@@ -4356,39 +4389,6 @@
               }
             ],
             "title": "Estados Adicionales Explicacion"
-          },
-          "ambito_nombre": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ambito Nombre"
-          },
-          "certificado_respaldo_documento_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Certificado Respaldo Documento Id"
-          },
-          "estado_fila": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Estado Fila"
           },
           "evaluacion_backlog_estado": {
             "anyOf": [
@@ -4497,17 +4497,6 @@
             ],
             "title": "Nombre Apellido"
           },
-          "observacion_operadora": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Observacion Operadora"
-          },
           "observacion_ficha": {
             "anyOf": [
               {
@@ -4518,6 +4507,17 @@
               }
             ],
             "title": "Observacion Ficha"
+          },
+          "observacion_operadora": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion Operadora"
           },
           "ocs_afectadas": {
             "items": {

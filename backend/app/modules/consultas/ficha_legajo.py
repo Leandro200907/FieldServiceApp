@@ -107,11 +107,10 @@ def estado_fila_y_observacion(
         obs = item.get("motivo_archivo_invalido") or EXPLICACION_ESTADO.get("evidencia_invalida", "")
         if archivo_efectivo == "sin_archivo":
             cat = (item.get("categoria") or "").lower()
-            if cat in ("induccion", "competencia"):
-                obs = (
-                    "El respaldo no es un certificado propio válido; registrá la inducción o competencia "
-                    "con certificado de respaldo."
-                )
+            if cat == "induccion":
+                obs = "El respaldo no es un certificado propio válido; registrá la inducción con su certificado."
+            elif cat == "competencia":
+                obs = "El respaldo no es un certificado propio válido; registrá la competencia con su certificado."
             else:
                 obs = EXPLICACION_ESTADO["sin_archivo_respaldo"]
         return "Sin respaldo válido", obs
@@ -140,7 +139,7 @@ def estado_fila_y_observacion(
         return "Vencida", EXPLICACION_ESTADO["vencida"]
     if cal == "por_vencer":
         return "Por vencer", EXPLICACION_ESTADO["por_vencer"]
-    return "Vigente", EXPLICACION_ESTADO.get("verificada", EXPLICACION_ESTADO["declarada"])
+    return "Vigente", "—"
 
 
 def enriquecer_items_ficha_legajo(
