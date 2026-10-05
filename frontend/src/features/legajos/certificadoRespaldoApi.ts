@@ -47,6 +47,15 @@ export async function registrarInduccionConCertificado(body: RegistrarInduccion)
   );
 }
 
+export async function abrirCertificadoRespaldo(documentoId: string): Promise<string> {
+  const data = await unwrap(
+    session.client.POST('/v1/storage/documentos/{documento_id}/url', {
+      params: { path: { documento_id: documentoId } },
+    }),
+  );
+  return data.url;
+}
+
 export async function registrarCompetenciaConCertificado(body: RegistrarAcreditacion): Promise<void> {
   const intent = createCommandIntent('/v1/comandos/registrar_acreditacion_de_competencia', body);
   await unwrap(

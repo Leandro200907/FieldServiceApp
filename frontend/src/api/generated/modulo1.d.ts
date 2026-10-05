@@ -3009,6 +3009,12 @@ export interface components {
             estados_adicionales_explicacion?: {
                 [key: string]: string;
             } | null;
+            /** Ambito Nombre */
+            ambito_nombre?: string | null;
+            /** Certificado Respaldo Documento Id */
+            certificado_respaldo_documento_id?: string | null;
+            /** Estado Fila */
+            estado_fila?: string | null;
             /** Evaluacion Backlog Estado */
             evaluacion_backlog_estado?: string | null;
             /**
@@ -3031,6 +3037,8 @@ export interface components {
             identificador_natural?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
+            /** Locacion Nombre */
+            locacion_nombre?: string | null;
             /** Motivo Archivo Invalido */
             motivo_archivo_invalido?: string | null;
             /**
@@ -3042,6 +3050,8 @@ export interface components {
             nombre_apellido?: string | null;
             /** Observacion Operadora */
             observacion_operadora?: string | null;
+            /** Observacion Ficha */
+            observacion_ficha?: string | null;
             /** Ocs Afectadas */
             ocs_afectadas?: components["schemas"]["OcAfectadaRef"][];
             /** Origen Propuesta */

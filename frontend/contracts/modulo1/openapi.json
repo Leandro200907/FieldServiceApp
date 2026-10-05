@@ -4357,6 +4357,39 @@
             ],
             "title": "Estados Adicionales Explicacion"
           },
+          "ambito_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ambito Nombre"
+          },
+          "certificado_respaldo_documento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificado Respaldo Documento Id"
+          },
+          "estado_fila": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Fila"
+          },
           "evaluacion_backlog_estado": {
             "anyOf": [
               {
@@ -4426,6 +4459,17 @@
             ],
             "title": "Locacion Id"
           },
+          "locacion_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locacion Nombre"
+          },
           "motivo_archivo_invalido": {
             "anyOf": [
               {
@@ -4463,6 +4507,17 @@
               }
             ],
             "title": "Observacion Operadora"
+          },
+          "observacion_ficha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion Ficha"
           },
           "ocs_afectadas": {
             "items": {

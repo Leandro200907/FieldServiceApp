@@ -136,9 +136,8 @@ export function RegistrarRespaldoRequisitoForm({
     }
   }
 
-  const ambitoInduccion = item.locacion_id
-    ? `Locación del requisito (${item.locacion_id})`
-    : 'Sin locación en el requisito';
+  const ambitoInduccion = item.ambito_nombre ?? item.locacion_nombre
+    ?? (item.locacion_id ? `Locación del requisito (${item.locacion_id})` : 'Sin locación en el requisito');
 
   return (
     <div className="renovar-panel panel" role="dialog" aria-labelledby="respaldo-requisito-title">

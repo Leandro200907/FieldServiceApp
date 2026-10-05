@@ -20,6 +20,16 @@ export function StatusDot({ variant, children }: { variant: StatusVariant; child
   );
 }
 
+export function variantFromEstadoFilaLegajo(estado: string): StatusVariant {
+  const n = estado.toLowerCase();
+  if (n.includes('vencid')) return 'vencido';
+  if (n.includes('por vencer')) return 'por_vencer';
+  if (n.includes('pendiente') || n.includes('propuesta')) return 'revision';
+  if (n.includes('sin respaldo') || n.includes('sin documento') || n.includes('inválid')) return 'sin_respaldo';
+  if (n.includes('vigente')) return 'vigente';
+  return 'neutral';
+}
+
 export function variantFromEtiquetaVigencia(label: string): StatusVariant {
   const n = label.toLowerCase();
   if (n.includes('vencid')) return 'vencido';
