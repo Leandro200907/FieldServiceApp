@@ -218,6 +218,13 @@ def filas_evidencia_para_legajo(
             LEFT JOIN modulo1.legajo l ON l.tenant_id = d.tenant_id AND l.sujeto_id = d.sujeto_id
             WHERE d.tenant_id = :t AND d.sujeto_id = :s
               AND d.estado_version IN ('vigente', 'sucedida', 'propuesta')
+              AND NOT (
+                d.origen = 'certificado_respaldo'
+                AND NOT EXISTS (
+                  SELECT 1 FROM modulo1.documento_soporte ds
+                  WHERE ds.tenant_id = d.tenant_id AND ds.soporte_documento_id = d.documento_id
+                )
+              )
             ORDER BY d.requisito_definicion_id, d.estado_version DESC, d.version DESC
             """
         ),
