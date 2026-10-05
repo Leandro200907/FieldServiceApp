@@ -196,6 +196,49 @@ def persona_con_docs(cliente_api, tenant_de_prueba, storage):
     return {"t": t, "persona": p, "req": req}
 
 
+@pytest.fixture
+def persona_con_competencia_cert_pendiente(cliente_api, tenant_de_prueba, storage):
+    from tests.apoyo_e97 import certificado_subido
+
+    t = tenant_de_prueba
+    req = _alta_def(cliente_api, t, "Apto médico pend")
+    req2 = _alta_def(cliente_api, t, "Altura pend", categoria="competencia")
+    p = _alta_persona(cliente_api, t, "DNI 30.000.001")
+    _cargar(cliente_api, t, p, req, desde="2026-01-01", hasta="2027-12-31")
+    cert = certificado_subido(cliente_api, storage, t, p, validar=False)
+    _ok(
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "registrar_acreditacion_de_competencia",
+            {
+                "persona_id": p,
+                "requisito_definicion_id": req2,
+                "vigente_desde": "2026-01-01",
+                "vigente_hasta": "2027-12-31",
+                "certificado_documento_id": cert,
+            },
+        )
+    )
+    return {"t": t, "persona": p}
+
+
+def test_paquete_publico_competencia_declarado_sin_verificar_si_cert_pendiente(
+    cliente_api, persona_con_competencia_cert_pendiente
+):
+    t = persona_con_competencia_cert_pendiente["t"]
+    p = persona_con_competencia_cert_pendiente["persona"]
+    r = _post(cliente_api, t, "responsable_legajos", "generar_paquete_entrega", {"sujeto_id": p, "dias_validez": 7})
+    assert r.status_code == 200, r.text
+    token = r.json()["url"].rsplit("/", 1)[1]
+    pub = cliente_api.get(f"/v1/publico/paquete/{token}")
+    assert pub.status_code == 200, pub.text
+    estados = {x["requisito"]: x["estado"] for x in pub.json()["requisitos"]}
+    assert estados["Apto médico pend"] == "vigente"
+    assert estados["Altura pend"] == "declarado_sin_verificar"
+
+
 def test_paquete_publico_firmado_con_qr_vencimiento_y_revocacion(cliente_api, persona_con_docs):
     t, p = persona_con_docs["t"], persona_con_docs["persona"]
     assert _post(cliente_api, t, "supervisor", "generar_paquete_entrega", {"sujeto_id": p}).status_code == 403
