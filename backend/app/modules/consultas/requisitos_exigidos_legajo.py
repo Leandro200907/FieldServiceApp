@@ -172,7 +172,7 @@ def agregar_requisitos_exigidos(
 
 
 def _es_sin_documento(ag: AgregadoRequisitoExigido) -> bool:
-    return ag.estado_peor == "faltante" and not ag.evidencia_id
+    return not ag.evidencia_id
 
 
 def _vigente_hasta_date(ag: AgregadoRequisitoExigido) -> date | None:
@@ -184,26 +184,19 @@ def _vigente_hasta_date(ag: AgregadoRequisitoExigido) -> date | None:
     return date.fromisoformat(str(vh)[:10])
 
 
-def _bucket_calendario_exigido(ag: AgregadoRequisitoExigido, hoy: date, plazo_aviso: int) -> str:
-    """Tarjetas E-94: solo calendario del papel (rechazo operadora no cuenta como vencido)."""
-    if ag.estado_peor in ("vencido_antes_inicio", "evidencia_invalida", "faltante"):
-        return "vencidos"
-    if ag.estado_peor == "vence_durante_periodo":
-        vh = _vigente_hasta_date(ag)
-        if vh is not None and vh >= hoy and (vh - hoy).days <= plazo_aviso:
-            return "por_vencer"
-        return "vencidos"
-    if ag.estado_peor == "pendiente_revision":
-        return "vencidos"
-    return "vigentes"
-
-
 def _bucket_tarjeta_exigido(ag: AgregadoRequisitoExigido, hoy: date, plazo_aviso: int) -> str:
-    if _es_sin_documento(ag):
+    """Tarjetas E-94: calendario del papel si hay evidencia; sin cobertura no define la tarjeta."""
+    if not ag.evidencia_id:
         return "sin_documento"
-    if not ag.sin_cobertura:
-        return "vigentes"
-    return _bucket_calendario_exigido(ag, hoy, plazo_aviso)
+    arch = ag.archivo_validacion
+    if arch is not None and arch != "valido":
+        return "vencidos"
+    vh = _vigente_hasta_date(ag)
+    if vh is None or vh < hoy:
+        return "vencidos"
+    if (vh - hoy).days <= plazo_aviso:
+        return "por_vencer"
+    return "vigentes"
 
 
 def resumen_exigidos_backlog(
