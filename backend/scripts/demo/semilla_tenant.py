@@ -624,23 +624,12 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
         est.documentos["t3_propuesta_Constancia ART"] = pr_t3_art["documento_id"]
 
 
-def subir_evidencias_competencia_induccion(est: EstadoTenant, storage) -> None:
-    """Archivos en versiones vigentes creadas tras cargar_evidencias (competencia / inducción)."""
-    idn = est.idn("responsable_legajos", 1)
-    claves = (
-        "t1_competencia_Manejo defensivo",
-        "t1_induccion_Inducción operadora",
-        "t2_competencia_Manejo defensivo",
-        "t3_competencia_Manejo defensivo",
-        "t3_induccion_Inducción operadora",
-    )
-    with tenant_session(est.tenant_id) as s:
-        for key in claves:
-            doc_id = est.documentos.get(key)
-            if not doc_id:
-                continue
-            suj = _sujeto_para_clave_doc(est, key)
-            _subir_y_verificar(storage, s, idn, doc_id, suj, key)
+def _certificado_respaldo_valido(storage, s, idn, persona_id: str, etiqueta: str) -> str:
+    """Shell certificado_respaldo con archivo confirmado y validación válida (E-97)."""
+    r = legajos.crear_certificado_respaldo(s, idn, leg_esq.CrearCertificadoRespaldo(persona_id=persona_id))
+    cert_id = r["certificado_documento_id"]
+    _subir_y_verificar(storage, s, idn, cert_id, persona_id, etiqueta)
+    return cert_id
 
 
 def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant) -> None:
@@ -736,6 +725,9 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
                 continue
             _subir_y_verificar(storage, s, idn, doc_id, suj, etiqueta)
         if doc_t1:
+            cert_t1_comp = _certificado_respaldo_valido(
+                storage, s, idn, est.sujetos["tecnico1"], "Certificado manejo defensivo t1"
+            )
             acr_t1 = legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
@@ -744,11 +736,14 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
                     requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
                     vigente_desde=v1,
                     vigente_hasta=v2,
-                    evidencias=[uuid.UUID(doc_t1)],
+                    certificado_documento_id=uuid.UUID(cert_t1),
                 ),
             )
             est.documentos["t1_competencia_Manejo defensivo"] = acr_t1["acreditacion_id"]
         if doc_t2:
+            cert_t2_comp = _certificado_respaldo_valido(
+                storage, s, idn, est.sujetos["tecnico2"], "Certificado manejo defensivo t2"
+            )
             acr_t2 = legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
@@ -757,13 +752,16 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
                     requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
                     vigente_desde=ve1,
                     vigente_hasta=ve2,
-                    evidencias=[uuid.UUID(doc_t2)],
+                    certificado_documento_id=uuid.UUID(cert_t2_comp),
                 ),
             )
             est.documentos["t2_competencia_Manejo defensivo"] = acr_t2["acreditacion_id"]
         loc_ind = est.catalogos.get("loc_YPF_1")
         req_ind = est.requisitos.get("Inducción operadora", est.requisitos["Apto médico"])
         if loc_ind and doc_t1:
+            cert_t1_ind = _certificado_respaldo_valido(
+                storage, s, idn, est.sujetos["tecnico1"], "Certificado inducción operadora t1"
+            )
             ind_t1 = legajos.registrar_induccion(
                 s,
                 idn,
@@ -773,25 +771,15 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
                     requisito_definicion_id=uuid.UUID(req_ind),
                     vigente_desde=v1,
                     vigente_hasta=v2,
-                    evidencia=uuid.UUID(doc_t1),
+                    certificado_documento_id=uuid.UUID(cert_t1_ind),
                 ),
             )
             est.documentos["t1_induccion_Inducción operadora"] = ind_t1["induccion_id"]
-        if loc_ind and doc_t3 and not est.spec.copiar_globales:
-            ind_t3 = legajos.registrar_induccion(
-                s,
-                idn,
-                leg_esq.RegistrarInduccion(
-                    persona_id=est.sujetos["tecnico3"],
-                    locacion_id=uuid.UUID(loc_ind),
-                    requisito_definicion_id=uuid.UUID(req_ind),
-                    vigente_desde=v1,
-                    vigente_hasta=v2,
-                    evidencia=uuid.UUID(doc_t3),
-                ),
-            )
-            est.documentos["t3_induccion_Inducción operadora"] = ind_t3["induccion_id"]
+        # Lucía (t3): manejo defensivo con certificado propio; sin inducción (caso E-91 en demo).
         if doc_t3:
+            cert_t3_comp = _certificado_respaldo_valido(
+                storage, s, idn, est.sujetos["tecnico3"], "Certificado manejo defensivo t3"
+            )
             acr_t3 = legajos.registrar_acreditacion_de_competencia(
                 s,
                 idn,
@@ -800,7 +788,7 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
                     requisito_definicion_id=uuid.UUID(est.requisitos["Curso de manejo defensivo"]),
                     vigente_desde=v1,
                     vigente_hasta=v2,
-                    evidencias=[uuid.UUID(doc_t3)],
+                    certificado_documento_id=uuid.UUID(cert_t3_comp),
                 ),
             )
             est.documentos["t3_competencia_Manejo defensivo"] = acr_t3["acreditacion_id"]
@@ -886,6 +874,5 @@ def sembrar_tenant(est: EstadoTenant, storage, ctx: SemillaContext) -> None:
     _run("ocs", lambda: cargar_ocs(est, ctx), ctx)
     _run("evidencias", lambda: cargar_evidencias_y_propuestas(est, storage, ctx), ctx)
     _run("lotes", lambda: cargar_lotes_competencias(est, storage, ctx), ctx)
-    _run("evidencias_competencia", lambda: subir_evidencias_competencia_induccion(est, storage), ctx)
     _run("supervisores", lambda: asignar_supervisores(est, ctx), ctx)
     _run("alertas_paquetes", lambda: configurar_alertas_y_paquetes(est, ctx), ctx)
