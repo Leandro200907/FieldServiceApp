@@ -6,6 +6,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.comun.reloj import hoy_del_tenant
+from tests.apoyo_e97 import certificado_subido
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _ok, _post
 from tests.test_orquestacion import (
     clave_de_matriz,
@@ -24,7 +25,7 @@ def _legajo(cliente_api, t, sujeto_id):
     return cliente_api.get("/v1/consultas/legajo", params={"sujeto_id": sujeto_id}, headers=t.headers("responsable_legajos"))
 
 
-def test_e91_induccion_faltante_y_registro_responsable(cliente_api, tenant_de_prueba, sesion):
+def test_e91_induccion_faltante_y_registro_responsable(cliente_api, tenant_de_prueba, sesion, storage):
     t = tenant_de_prueba
     hoy = hoy_del_tenant(sesion, t.tenant_id)
     clave = clave_de_matriz()
@@ -57,6 +58,7 @@ def test_e91_induccion_faltante_y_registro_responsable(cliente_api, tenant_de_pr
     nombres = {i["requisito"] for i in body["inducciones"] + body["documentos"]}
     assert "Inducción E91" in nombres
 
+    cert_id = certificado_subido(cliente_api, storage, t, persona)
     reg = _ok(
         _post(
             cliente_api,
@@ -69,7 +71,7 @@ def test_e91_induccion_faltante_y_registro_responsable(cliente_api, tenant_de_pr
                 "requisito_definicion_id": req_ind,
                 "vigente_desde": hoy.isoformat(),
                 "vigente_hasta": (hoy + timedelta(days=365)).isoformat(),
-                "evidencia": doc_apto,
+                "certificado_documento_id": cert_id,
             },
         )
     )

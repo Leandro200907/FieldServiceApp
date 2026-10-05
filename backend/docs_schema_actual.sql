@@ -1,5 +1,5 @@
 -- docs_schema_actual.sql — esquema de Módulo 1 generado por scripts/generar_schema.py
--- head: 0032_horizonte_backlog_dias
+-- head: 0033_certificado_respaldo_e97
 -- Base creada desde cero (scripts/crear_roles.sql → scripts/crear_base.sql → alembic upgrade head),
 -- pg_dump --schema-only --no-owner --no-privileges. Sin datos ni credenciales. No editar a mano.
 
@@ -377,7 +377,7 @@ CREATE TABLE modulo1.documento (
     CONSTRAINT documento_estado_confirmacion_check CHECK ((estado_confirmacion = ANY (ARRAY['declarado'::text, 'verificado'::text, 'confirmado_en_fuente'::text]))),
     CONSTRAINT documento_estado_version_check CHECK ((estado_version = ANY (ARRAY['vigente'::text, 'sucedida'::text, 'revertida_por_lote'::text, 'rechazada'::text, 'propuesta'::text]))),
     CONSTRAINT documento_lote_entidad_check CHECK (((lote_entidad IS NULL) OR (lote_entidad = 'legajos'::text))),
-    CONSTRAINT documento_origen_check CHECK ((origen = ANY (ARRAY['planilla'::text, 'carga_manual'::text, 'drive'::text])))
+    CONSTRAINT documento_origen_check CHECK ((origen = ANY (ARRAY['planilla'::text, 'carga_manual'::text, 'drive'::text, 'certificado_respaldo'::text])))
 );
 ALTER TABLE ONLY modulo1.documento FORCE ROW LEVEL SECURITY;
 -- Name: documento_soporte; Type: TABLE; Schema: modulo1; Owner: -
@@ -386,6 +386,7 @@ CREATE TABLE modulo1.documento_soporte (
     documento_id uuid NOT NULL,
     soporte_documento_id uuid NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    es_certificado_propio boolean DEFAULT false NOT NULL,
     CONSTRAINT documento_soporte_check CHECK ((documento_id <> soporte_documento_id))
 );
 ALTER TABLE ONLY modulo1.documento_soporte FORCE ROW LEVEL SECURITY;

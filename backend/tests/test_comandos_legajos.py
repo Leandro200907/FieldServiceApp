@@ -244,35 +244,69 @@ def test_confirmar_documento_regulariza_excepcion(cliente_api, tenant_de_prueba)
 
 # --------------------------------------------------------------------------- competencia / inducción
 
-def test_acreditacion_e_induccion(cliente_api, tenant_de_prueba):
+def test_acreditacion_e_induccion(cliente_api, tenant_de_prueba, storage):
+    from tests.apoyo_e97 import certificado_subido
+
     t = tenant_de_prueba
     loc = str(uuid.uuid4())
-    req_doc = _alta_def(cliente_api, t, "Certificado altura")
+    req_doc = _alta_def(cliente_api, t, "Apto altura")
     req_comp = _alta_def(cliente_api, t, "Trabajo en altura", "competencia")
     req_ind = _alta_def(cliente_api, t, "Inducción yacimiento", "induccion", locacion_id=loc)
     sujeto = _alta_persona(cliente_api, t, "DNI 7")
     otro = _alta_persona(cliente_api, t, "DNI 8")
-    evidencia = _cargar(cliente_api, t, sujeto, req_doc, solo_declarado=True)["documento_id"]
-    with tenant_session(t.tenant_id) as s:
-        apoyo.respaldo_valido_en_documento(s, t.tenant_id, evidencia)
+    cert = certificado_subido(cliente_api, storage, t, sujeto)
+    doc_apto = _cargar(cliente_api, t, sujeto, req_doc, solo_declarado=True)["documento_id"]
 
     base = {"persona_id": sujeto, "vigente_desde": "2026-03-01", "vigente_hasta": "2027-03-01"}
-    acr = _ok(_post(cliente_api, t, "responsable_legajos", "registrar_acreditacion_de_competencia",
-                    {**base, "requisito_definicion_id": req_comp, "evidencias": [evidencia]}))
+    acr = _ok(
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "registrar_acreditacion_de_competencia",
+            {**base, "requisito_definicion_id": req_comp, "certificado_documento_id": cert},
+        )
+    )
     assert acr["eventos"] == ["AcreditacionDeCompetenciaRegistrada"]
-    # evidencia de otro sujeto → 404; categoría equivocada → 422; sin evidencias → 422 validación
-    assert _post(cliente_api, t, "responsable_legajos", "registrar_acreditacion_de_competencia",
-                 {**base, "persona_id": otro, "requisito_definicion_id": req_comp, "evidencias": [evidencia]}).status_code == 404
-    assert _post(cliente_api, t, "responsable_legajos", "registrar_acreditacion_de_competencia",
-                 {**base, "requisito_definicion_id": req_doc, "evidencias": [evidencia]}).status_code == 422
-    assert _post(cliente_api, t, "responsable_legajos", "registrar_acreditacion_de_competencia",
-                 {**base, "requisito_definicion_id": req_comp, "evidencias": []}).status_code == 422
+    assert (
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "registrar_acreditacion_de_competencia",
+            {**base, "persona_id": otro, "requisito_definicion_id": req_comp, "certificado_documento_id": cert},
+        ).status_code
+        == 404
+    )
+    assert (
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "registrar_acreditacion_de_competencia",
+            {**base, "requisito_definicion_id": req_comp, "certificado_documento_id": doc_apto},
+        ).json()["error"]["codigo"]
+        == "respaldo_tipo_no_admitido"
+    )
 
-    ind = _ok(_post(cliente_api, t, "responsable_legajos", "registrar_induccion",
-                    {**base, "locacion_id": loc, "requisito_definicion_id": req_ind, "evidencia": evidencia}))
+    cert_ind = certificado_subido(cliente_api, storage, t, sujeto)
+    ind = _ok(
+        _post(
+            cliente_api,
+            t,
+            "responsable_legajos",
+            "registrar_induccion",
+            {**base, "locacion_id": loc, "requisito_definicion_id": req_ind, "certificado_documento_id": cert_ind},
+        )
+    )
     assert ind["eventos"] == ["InduccionRegistrada"]
-    otra_loc = _post(cliente_api, t, "responsable_legajos", "registrar_induccion",
-                     {**base, "locacion_id": str(uuid.uuid4()), "requisito_definicion_id": req_ind, "evidencia": evidencia})
+    otra_loc = _post(
+        cliente_api,
+        t,
+        "responsable_legajos",
+        "registrar_induccion",
+        {**base, "locacion_id": str(uuid.uuid4()), "requisito_definicion_id": req_ind, "certificado_documento_id": cert_ind},
+    )
     assert otra_loc.status_code == 422
 
     with tenant_session(t.tenant_id) as s:
