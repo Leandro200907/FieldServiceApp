@@ -175,25 +175,35 @@ def _es_sin_documento(ag: AgregadoRequisitoExigido) -> bool:
     return ag.estado_peor == "faltante" and not ag.evidencia_id
 
 
+def _vigente_hasta_date(ag: AgregadoRequisitoExigido) -> date | None:
+    vh = ag.vigente_hasta
+    if vh is None:
+        return None
+    if isinstance(vh, date):
+        return vh
+    return date.fromisoformat(str(vh)[:10])
+
+
+def _bucket_calendario_exigido(ag: AgregadoRequisitoExigido, hoy: date, plazo_aviso: int) -> str:
+    """Tarjetas E-94: solo calendario del papel (rechazo operadora no cuenta como vencido)."""
+    if ag.estado_peor in ("vencido_antes_inicio", "evidencia_invalida", "faltante"):
+        return "vencidos"
+    if ag.estado_peor == "vence_durante_periodo":
+        vh = _vigente_hasta_date(ag)
+        if vh is not None and vh >= hoy and (vh - hoy).days <= plazo_aviso:
+            return "por_vencer"
+        return "vencidos"
+    if ag.estado_peor == "pendiente_revision":
+        return "vencidos"
+    return "vigentes"
+
+
 def _bucket_tarjeta_exigido(ag: AgregadoRequisitoExigido, hoy: date, plazo_aviso: int) -> str:
     if _es_sin_documento(ag):
         return "sin_documento"
     if not ag.sin_cobertura:
         return "vigentes"
-    if ag.es_rechazo_operadora or ag.estado_peor in ("vencido_antes_inicio", "evidencia_invalida", "faltante"):
-        return "vencidos"
-    if ag.estado_peor == "vence_durante_periodo":
-        vh = ag.vigente_hasta
-        if isinstance(vh, date) and vh >= hoy and (vh - hoy).days <= plazo_aviso:
-            return "por_vencer"
-        if isinstance(vh, str):
-            vh_d = date.fromisoformat(vh[:10])
-            if vh_d >= hoy and (vh_d - hoy).days <= plazo_aviso:
-                return "por_vencer"
-        return "vencidos"
-    if ag.estado_peor == "pendiente_revision":
-        return "vencidos"
-    return "vencidos"
+    return _bucket_calendario_exigido(ag, hoy, plazo_aviso)
 
 
 def resumen_exigidos_backlog(
