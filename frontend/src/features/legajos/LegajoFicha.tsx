@@ -87,7 +87,7 @@ export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompues
             <FichaDato label="Alta">{fmt(data.legajo.creado_en.slice(0, 10))}</FichaDato>
             <FichaDato label="Cumplimiento">{textoCumplimientoExigidos(data)}</FichaDato>
             <FichaDato label="Próximo vencimiento">{proximo ? fmt(proximo) : '—'}</FichaDato>
-            <FichaDato label="OC afectadas">{ocsCount > 0 ? `${ocsCount} orden${ocsCount === 1 ? '' : 'es'}` : 'Ninguna'}</FichaDato>
+            <FichaDato label="OC afectadas">{ocsCount > 0 ? `${ocsCount} ${ocsCount === 1 ? 'orden' : 'órdenes'}` : 'Ninguna'}</FichaDato>
             <FichaDato label="Resumen">{resumenVencimientosTexto(data.resumen.vencidos, data.resumen.por_vencer ?? 0)}</FichaDato>
           </>
         )}
