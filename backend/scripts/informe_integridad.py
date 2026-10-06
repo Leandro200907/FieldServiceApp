@@ -640,12 +640,12 @@ def imprimir(controles: list[Control]) -> None:
     print("-" * 120)
     for c in controles:
         print(f"{c.numero:<3} {c.nombre:<42} {c.severidad:<10} {c.cantidad:<6} {c.detalle}")
-    resumen_errores = sum(c.errores for c in controles)
-    resumen_avisos = sum(c.avisos for c in controles)
-    print(f"\nResumen: ERROR={resumen_errores} AVISO={resumen_avisos}")
         if c.ejemplos:
             for ej in c.ejemplos[:5]:
                 print(f"    · {json.dumps(ej, ensure_ascii=False, default=str)}")
+    resumen_errores = sum(c.errores for c in controles)
+    resumen_avisos = sum(c.avisos for c in controles)
+    print(f"\nResumen: ERROR={resumen_errores} AVISO={resumen_avisos}")
     print("\n=== JSON ===")
     print(
         json.dumps(
