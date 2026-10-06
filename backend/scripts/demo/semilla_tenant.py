@@ -225,10 +225,6 @@ def cargar_documentos_tecnicos(est: EstadoTenant, ctx: SemillaContext) -> None:
         _cargar_doc(s, idn, est.sujetos["empresa"], "ART empresa", est, v1, v2)
         rc_venc = _cargar_doc(s, idn, est.sujetos["empresa"], "Seguro de responsabilidad civil", est, ve1, ve2)
         est.documentos["empresa_rc_vencido"] = rc_venc
-        s.execute(
-            text("UPDATE modulo1.documento SET estado_confirmacion = 'verificado' WHERE documento_id = CAST(:d AS uuid)"),
-            {"d": rc_venc},
-        )
 
 
 def _lineas_persona_matriz(est: EstadoTenant) -> list[req_esq.LineaDeMatriz]:
@@ -487,7 +483,7 @@ _EVIDENCIAS_SIN_ARCHIVO_EN_CARGA = frozenset(
 )
 
 # Verificado sin archivo a propósito (demo «Sin archivo de respaldo»); no subir en evidencias.
-_EVIDENCIAS_SIN_ARCHIVO_DEMO = frozenset({"empresa_rc_vencido"})
+_EVIDENCIAS_SIN_ARCHIVO_DEMO: frozenset[str] = frozenset()
 
 _EVIDENCIAS_TECNICO3 = (
     "t3_vigente_Apto médico",
@@ -537,7 +533,7 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
                 )
     if "empresa_rc_vencido" in est.documentos:
         ctx.notas.append(
-            "evidencias: empresa_rc_vencido queda verificado sin archivo de respaldo (demo Sin archivo de respaldo)"
+            "evidencias: Seguro RC vencido de empresa se verifica vía confirmar_documento tras subir archivo (vigencia vencida demo)"
         )
     with tenant_session(est.tenant_id) as s:
         ya_subidos: set[str] = set()

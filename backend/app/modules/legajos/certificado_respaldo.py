@@ -16,11 +16,14 @@ ORIGEN_CERTIFICADO_RESPALDO = "certificado_respaldo"
 
 
 def promover_padres_si_certificado_valido(session: Session, tenant_id: str, soporte_documento_id: str) -> None:
-    """Tras validar el archivo del certificado, verifica registros padre declarados."""
+    """Tras validar el archivo del certificado, verifica registros padre declarados (E-107)."""
+    from app.auth.identidad import Identidad
+    from app.modules.legajos.servicio import _al_verificar
+
     padres = session.execute(
         text(
             """
-            SELECT d.documento_id::text
+            SELECT d.documento_id::text, d.sujeto_id, d.requisito_definicion_id::text
             FROM modulo1.documento_soporte ds
             JOIN modulo1.documento d
               ON d.tenant_id = ds.tenant_id AND d.documento_id = ds.documento_id
@@ -31,14 +34,46 @@ def promover_padres_si_certificado_valido(session: Session, tenant_id: str, sopo
             """
         ),
         {"t": tenant_id, "s": soporte_documento_id},
-    ).scalars().all()
-    for padre_id in padres:
+    ).mappings().all()
+    validacion = session.execute(
+        text(
+            """
+            SELECT evento_id::text
+            FROM modulo1.event_log
+            WHERE tenant_id = :t AND tipo = 'EvidenciaValidada'
+              AND payload->>'documento_id' = :c
+            ORDER BY ocurrido_en DESC
+            LIMIT 1
+            """
+        ),
+        {"t": tenant_id, "c": soporte_documento_id},
+    ).scalar()
+    identidad = Identidad(tenant_id=tenant_id, usuario_id="", roles=frozenset())
+    payload_extra = {
+        "certificado_documento_id": soporte_documento_id,
+        "validacion_certificado_evento_id": validacion,
+        "promovido_por": "validacion_evidencia_worker",
+    }
+    for fila in padres:
+        padre_id = fila["documento_id"]
         session.execute(
             text(
                 "UPDATE modulo1.documento SET estado_confirmacion = 'verificado' "
                 "WHERE tenant_id = :t AND documento_id = CAST(:d AS uuid)"
             ),
             {"t": tenant_id, "d": padre_id},
+        )
+        eventos: list[str] = []
+        _al_verificar(
+            session,
+            identidad,
+            {
+                "documento_id": padre_id,
+                "sujeto_id": fila["sujeto_id"],
+                "requisito_definicion_id": fila["requisito_definicion_id"],
+            },
+            eventos,
+            payload_extra=payload_extra,
         )
 
 
