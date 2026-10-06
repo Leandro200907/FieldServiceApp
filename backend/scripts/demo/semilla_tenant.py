@@ -439,27 +439,32 @@ def _drenar_validacion_evidencia(tenant_id: str, storage, max_jobs: int = 200) -
     )
 
 
-def _confirmar_tras_archivo(s, idn, doc_id: str, storage) -> None:
-    """D19: tras subida confirmada, validar archivo (worker) y confirmar si sigue declarado."""
-    _drenar_validacion_evidencia(idn.tenant_id, storage)
-    estado = s.execute(
-        text("SELECT estado_confirmacion FROM modulo1.documento WHERE documento_id = CAST(:d AS uuid)"),
-        {"d": doc_id},
-    ).scalar()
-    if estado != "declarado":
-        return
-    legajos.confirmar_documento(s, idn, leg_esq.ConfirmarDocumento(documento_id=uuid.UUID(doc_id)))
+def _confirmar_tras_archivo(tenant_id: str, idn, doc_id: str, storage) -> None:
+    """D19: tras subida confirmada y commit, validar (worker) y confirmar si el archivo quedó válido."""
+    _drenar_validacion_evidencia(tenant_id, storage)
+    with tenant_session(tenant_id) as s:
+        fila = s.execute(
+            text(
+                "SELECT estado_confirmacion, archivo_validacion FROM modulo1.documento "
+                "WHERE documento_id = CAST(:d AS uuid)"
+            ),
+            {"d": doc_id},
+        ).first()
+        if not fila or fila.estado_confirmacion != "declarado" or fila.archivo_validacion != "valido":
+            return
+        legajos.confirmar_documento(s, idn, leg_esq.ConfirmarDocumento(documento_id=uuid.UUID(doc_id)))
 
 
-def _subir_y_verificar(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = False) -> None:
-    version = s.execute(
-        text("SELECT estado_version FROM modulo1.documento WHERE documento_id = CAST(:d AS uuid)"),
-        {"d": doc_id},
-    ).scalar()
-    if version != "vigente":
-        return
-    _subir(storage, s, idn, doc_id, sujeto, req, jpeg=jpeg)
-    _confirmar_tras_archivo(s, idn, doc_id, storage)
+def _subir_y_verificar(storage, tenant_id: str, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = False) -> None:
+    with tenant_session(tenant_id) as s:
+        version = s.execute(
+            text("SELECT estado_version FROM modulo1.documento WHERE documento_id = CAST(:d AS uuid)"),
+            {"d": doc_id},
+        ).scalar()
+        if version != "vigente":
+            return
+        _subir(storage, s, idn, doc_id, sujeto, req, jpeg=jpeg)
+    _confirmar_tras_archivo(tenant_id, idn, doc_id, storage)
 
 
 def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
@@ -547,7 +552,7 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             if not doc_id:
                 continue
             suj = _sujeto_para_clave_doc(est, key)
-            _subir_y_verificar(storage, s, idn, doc_id, suj, key)
+            _subir_y_verificar(storage, est.tenant_id, idn, doc_id, suj, key)
             ya_subidos.add(key)
         for key, doc_id in est.documentos.items():
             if (
@@ -558,15 +563,15 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
             ):
                 continue
             suj = _sujeto_para_clave_doc(est, key)
-            _subir_y_verificar(storage, s, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
+            _subir_y_verificar(storage, est.tenant_id, idn, doc_id, suj, key, jpeg="vehiculo" in key or "equipo" in key)
             ya_subidos.add(key)
         inv = est.documentos.get("t1_vencido_Constancia ART")
         if inv:
-            _subir_y_verificar(storage, s, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
+            _subir_y_verificar(storage, est.tenant_id, idn, inv, est.sujetos["tecnico1"], "Constancia ART")
             ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv, motivo="Evidencia demo invalidada")
         inv_rep = est.documentos.get("t2_vencido_Constancia ART")
         if inv_rep:
-            _subir_y_verificar(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART")
+            _subir_y_verificar(storage, est.tenant_id, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART")
             ev_svc.invalidar_evidencia_verificada(s, idn, documento_id=inv_rep, motivo="Invalidada demo — reemplazo")
             _subir(storage, s, idn, inv_rep, est.sujetos["tecnico2"], "Constancia ART reemplazo")
         sin_archivo: list[str] = []
@@ -625,11 +630,12 @@ def cargar_evidencias_y_propuestas(est: EstadoTenant, storage, ctx: SemillaConte
         est.documentos["t3_propuesta_Constancia ART"] = pr_t3_art["documento_id"]
 
 
-def _certificado_respaldo_valido(storage, s, idn, persona_id: str, etiqueta: str) -> str:
+def _certificado_respaldo_valido(storage, idn, persona_id: str, etiqueta: str) -> str:
     """Shell certificado_respaldo con archivo confirmado y validación válida (E-97)."""
-    r = legajos.crear_certificado_respaldo(s, idn, leg_esq.CrearCertificadoRespaldo(persona_id=persona_id))
-    cert_id = r["certificado_documento_id"]
-    _subir_y_verificar(storage, s, idn, cert_id, persona_id, etiqueta)
+    with tenant_session(idn.tenant_id) as s:
+        r = legajos.crear_certificado_respaldo(s, idn, leg_esq.CrearCertificadoRespaldo(persona_id=persona_id))
+        cert_id = r["certificado_documento_id"]
+    _subir_y_verificar(storage, idn.tenant_id, idn, cert_id, persona_id, etiqueta)
     return cert_id
 
 
@@ -702,12 +708,11 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
             if not doc_id:
                 continue
             if _exigir_archivo_confirmado(s, est.tenant_id, doc_id):
-                _drenar_validacion_evidencia(est.tenant_id, storage)
                 continue
-            _subir_y_verificar(storage, s, idn, doc_id, suj, etiqueta)
+            _subir_y_verificar(storage, est.tenant_id, idn, doc_id, suj, etiqueta)
         if doc_t1:
             cert_t1_comp = _certificado_respaldo_valido(
-                storage, s, idn, est.sujetos["tecnico1"], "Certificado manejo defensivo t1"
+                storage, idn, est.sujetos["tecnico1"], "Certificado manejo defensivo t1"
             )
             acr_t1 = legajos.registrar_acreditacion_de_competencia(
                 s,
@@ -723,7 +728,7 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
             est.documentos["t1_competencia_Manejo defensivo"] = acr_t1["acreditacion_id"]
         if doc_t2:
             cert_t2_comp = _certificado_respaldo_valido(
-                storage, s, idn, est.sujetos["tecnico2"], "Certificado manejo defensivo t2"
+                storage, idn, est.sujetos["tecnico2"], "Certificado manejo defensivo t2"
             )
             acr_t2 = legajos.registrar_acreditacion_de_competencia(
                 s,
@@ -741,7 +746,7 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
         req_ind = est.requisitos.get("Inducción operadora", est.requisitos["Apto médico"])
         if loc_ind and doc_t1:
             cert_t1_ind = _certificado_respaldo_valido(
-                storage, s, idn, est.sujetos["tecnico1"], "Certificado inducción operadora t1"
+                storage, idn, est.sujetos["tecnico1"], "Certificado inducción operadora t1"
             )
             ind_t1 = legajos.registrar_induccion(
                 s,
@@ -759,7 +764,7 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
         # Lucía (t3): manejo defensivo con certificado propio; sin inducción (caso E-91 en demo).
         if doc_t3:
             cert_t3_comp = _certificado_respaldo_valido(
-                storage, s, idn, est.sujetos["tecnico3"], "Certificado manejo defensivo t3"
+                storage, idn, est.sujetos["tecnico3"], "Certificado manejo defensivo t3"
             )
             acr_t3 = legajos.registrar_acreditacion_de_competencia(
                 s,
