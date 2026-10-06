@@ -72,10 +72,12 @@ backend promueve el padre a `verificado` si el enlace es `es_certificado_propio`
 
 ## Terminado cuando
 
-- Registro con certificado nuevo por API; negativo con apto médico → `respaldo_tipo_no_admitido`.
-- Lectura: inducción vieja con soporte apto → no en regla / pendiente de revisión por respaldo.
-- `test_e91_flujo_legajo` y demo (semilla, etapa posterior) alineados al flujo nuevo.
-- Front: formularios inducción + competencia con subida, fechas y D1.
+- [x] Registro con certificado nuevo por API; negativo con apto médico → `respaldo_tipo_no_admitido`. **(cumplido 2026-10-05)**
+- [x] Lectura: inducción/competencia con soporte que no es certificado propio → no en regla / sin respaldo válido (D19). **(cumplido 2026-10-05)**
+- [x] Tests API y lectura (`test_e97_*`, `test_e91_flujo_legajo`, ficha E-101). **(cumplido 2026-10-05)**
+- [x] Front: formularios inducción + competencia con subida, fechas C1 y D1 (vista previa). **(cumplido 2026-10-05)**
+- [x] Semilla demo: certificados propios (María/Juan/Lucía manejo defensivo; María inducción; Lucía **sin** inducción E-91); CI `modulo1_ci_demo`. **(cumplido 2026-10-05)**
+- [ ] **Supuesto de negocio (certificado propio con fechas de realización/vencimiento en el archivo) a confirmar con el cliente.** Sigue pendiente de validación comercial; la implementación ya exige certificado propio y vigencias C1 en API.
 
 ## Fuera de alcance
 
@@ -85,33 +87,34 @@ backend promueve el padre a `verificado` si el enlace es `es_certificado_propio`
 
 ---
 
-## Diagnóstico de datos — `fsm_demo`, tenant `patagonia-demo` (solo lectura, 2026-10-05)
+## Diagnóstico de datos — semilla demo (referencia post E-97, 2026-10-05)
 
-| Persona | Requisito | Soporte actual | Con regla E-97 |
-|---------|-----------|----------------|----------------|
-| t1 | Manejo defensivo / Inducción HSE | Apto médico | **No habilita** (no certificado propio) |
-| t2, t3 | Manejo defensivo | Apto médico | **No habilita** |
+| Persona | Requisito | Soporte en semilla |
+|---------|-----------|-------------------|
+| María (t1) | Manejo defensivo / Inducción HSE | Certificado propio (`certificado_respaldo`, `es_certificado_propio`, archivo válido) |
+| Juan (t2) | Manejo defensivo | Certificado propio |
+| Lucía (t3) | Manejo defensivo | Certificado propio; **sin** inducción registrada (caso E-91 en demo) |
 
-**Semilla (etapa posterior):** certificados propios por `crear_certificado_respaldo` + registro.
+El apto médico de María rechazado por Vista en el flujo operadora **no** se usa como soporte de inducción/competencia.
 
 ---
 
 ## Plan por etapas
 
-### Etapa 1 — Backend (en curso)
+### Etapa 1 — Backend **(cerrada 2026-10-05)**
 
 **Archivos:** migración `0033_certificado_respaldo`, `legajos/servicio.py`, `esquemas.py`,
 `router.py`, `resolucion_evidencia.py`, consultas que cargan soportes (`orquestacion.py`,
 `radar.py`, `paquete/servicio.py`), `evidencia/servicio.py` (promoción post-validación),
 `tests/test_e97_*`, `tests/test_e91_flujo_legajo.py`, ajustes en tests que usaban `evidencia`/`evidencias`.
 
-**Cierra con:** tests API + lectura D19; sin front ni semilla.
+**Cierra con:** tests API + lectura D19; sin front ni semilla. **Hecho.**
 
-### Etapa 2 — Front: inducción + competencia
+### Etapa 2 — Front: inducción + competencia **(cerrada 2026-10-05)**
 
 `RegistrarInduccionForm`, `RegistrarCompetenciaForm`, subida, fechas C1, D1 vista previa, sin
-`estado_confirmacion` ni selector de legajo.
+`estado_confirmacion` ni selector de legajo. **Hecho.**
 
-### Etapa 3 — Semilla demo y cierre doc
+### Etapa 3 — Semilla demo y cierre doc **(cerrada 2026-10-05)**
 
-`semilla_tenant.py`, re-sembrado `patagonia-demo`, actualizar pendiente E-97 en `FLUJO_C_RENOVACION.md`.
+`semilla_tenant.py`, CI demo; pendiente de negocio: supuesto de fechas en certificado (ver arriba).

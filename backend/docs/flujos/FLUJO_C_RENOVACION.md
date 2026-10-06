@@ -46,13 +46,15 @@ listan; Incorporar solo para documento; inducción/competencia las registra el r
 Tarjetas y resumen de exigidos según decisión de dominio (calendario del papel vs cumplimiento
 del backlog).
 
+## E-97 (implementado — rama `fix/app-e97-respaldo-induccion`, verificado en pantalla 2026-10-05)
+
+Inducción y competencia se registran con **certificado propio** (`crear_certificado_respaldo` +
+`certificado_documento_id`); D19 en lectura; formularios responsable con subida y D1; semilla demo
+alineada (Lucía sin inducción, certificados válidos). Supuesto comercial de fechas en el PDF sigue
+**a confirmar con el cliente** (ver `FLUJO_E97_INDUCCION_COMPETENCIA.md`).
+
 ## Pendientes (no implementados)
 
-- **E-97 (grave):** `registrar_induccion` / `registrar_acreditacion_de_competencia` aceptan como
-  respaldo **cualquier** `documento_id` del mismo sujeto; el front envía `estado_confirmacion:
-  "verificado"` fijo y `vigente_desde = hoy` sin validar D19 ni tipo de evidencia. Corregir en
-  rama propia (backend + formulario). El test `test_e91_flujo_legajo` usa `doc_apto` como
-  respaldo de inducción y debe alinearse en E-97.
 - **E-99:** documento **rechazado por operadora** sin acción de gestión en la ficha (ej. apto
   vigente rechazado por Vista). Pendiente de definir con negocio (regularizar / reenvío / solo
-  observación).
+  observación). La ficha ya muestra la observación de operadora (E-105); falta el flujo de acción.
