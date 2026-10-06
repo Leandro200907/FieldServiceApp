@@ -132,6 +132,21 @@ def test_e97_induccion_flujo_certificado_pendiente_luego_en_regla(cliente_api, t
             {"d": ind_id},
         ).scalar()
         assert conf == "verificado"
+        verificado = s.execute(
+            text(
+                """
+                SELECT payload FROM modulo1.event_log
+                WHERE tenant_id = :t AND tipo = 'DocumentoVerificado'
+                  AND payload->>'documento_id' = :d
+                """
+            ),
+            {"t": t.tenant_id, "d": ind_id},
+        ).scalar()
+        assert verificado is not None
+        assert verificado["usuario_id"] == "sistema"
+        assert verificado["certificado_documento_id"] == cert_id
+        assert verificado.get("promovido_por") == "validacion_evidencia_worker"
+        assert verificado.get("validacion_certificado_evento_id")
 
     legajo2 = cliente_api.get(
         "/v1/consultas/legajo", params={"sujeto_id": persona}, headers=t.headers("responsable_legajos")

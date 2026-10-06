@@ -641,15 +641,29 @@ def proponer_documento(s: Session, identidad: Identidad, body: e.ProponerDocumen
     return {**r, "eventos": eventos}
 
 
-def _al_verificar(s: Session, identidad: Identidad, doc: dict[str, Any], eventos: list[str]) -> list[str]:
+def _al_verificar(
+    s: Session,
+    identidad: Identidad,
+    doc: dict[str, Any],
+    eventos: list[str],
+    *,
+    payload_extra: dict[str, Any] | None = None,
+) -> list[str]:
     """Efectos de DocumentoVerificado (7.2): el evento canónico y la regularización
     automática de excepciones `otorgada` del mismo (sujeto, requisito). Compartido por
     ConfirmarDocumento y por la carga ya verificada."""
     t = identidad.tenant_id
+    payload: dict[str, Any] = {
+        "documento_id": str(doc["documento_id"]),
+        "sujeto_id": doc["sujeto_id"],
+        "requisito_definicion_id": doc["requisito_definicion_id"],
+    }
+    if payload_extra:
+        payload.update(payload_extra)
     registrar_evento(
         s, t, "DocumentoVerificado",
-        {"documento_id": str(doc["documento_id"]), "sujeto_id": doc["sujeto_id"], "requisito_definicion_id": doc["requisito_definicion_id"]},
-        identidad.usuario_id,
+        payload,
+        identidad.usuario_id or None,
     )
     eventos.append("DocumentoVerificado")
     # Verificación que cubre la fuente de una alerta → resuelta (solo verificado cierra, 2.4).
