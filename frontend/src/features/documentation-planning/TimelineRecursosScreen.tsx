@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
-import { addDays, formatFecha, todayIso } from './dates';
+import { addDays, formatFecha } from './dates';
 import { lineaPersonaConDni } from '../legajos/legajoDisplay';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
@@ -36,9 +36,10 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
   const vista = searchParams.get('vista') === 'documentos' ? 'documentos' : 'recursos';
   const ocId = searchParams.get('oc_id') || undefined;
   const [offset, setOffset] = useState(0);
-  const hoyBase = todayIso();
-  const [desde, setDesde] = useState(searchParams.get('desde') || addDays(hoyBase, -30));
-  const [hasta, setHasta] = useState(searchParams.get('hasta') || addDays(hoyBase, 90));
+  const bootstrapDesde = '2020-01-01';
+  const bootstrapHasta = '2035-12-31';
+  const [desde, setDesde] = useState(searchParams.get('desde') || bootstrapDesde);
+  const [hasta, setHasta] = useState(searchParams.get('hasta') || bootstrapHasta);
   const [soloQuiebres, setSoloQuiebres] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
@@ -58,7 +59,15 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
     return data as Timeline;
   }, [desde, hasta, offset, ocId, soloQuiebres, reloadKey]);
 
-  const hoy = query.data?.hoy ?? hoyBase;
+  const hoy = query.data?.hoy ?? '';
+  useEffect(() => {
+    const anchor = query.data?.hoy;
+    if (!anchor || searchParams.get('desde')) return;
+    if (desde === bootstrapDesde && hasta === bootstrapHasta) {
+      setDesde(addDays(anchor, -30));
+      setHasta(addDays(anchor, 90));
+    }
+  }, [query.data?.hoy, desde, hasta, searchParams]);
   const rows = query.data?.items ?? [];
 
   const gantt = useGanttViewport({ hoy, autoDesde: desde, autoHasta: hasta });

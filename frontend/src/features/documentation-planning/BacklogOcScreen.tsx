@@ -9,7 +9,7 @@ import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
 import { OcGanttNav } from './OcGanttNav';
 import { useGanttViewport } from './useGanttViewport';
-import { formatFecha, todayIso } from './dates';
+import { formatFecha } from './dates';
 import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, tituloQuiebreMapa, vigenciaReprogramacion } from './ocDetail';
 import { ListDetailLayout, FichaEncabezado } from '../../ui/ListDetailLayout';
 import { StatusDot } from '../../ui/StatusDot';
@@ -205,8 +205,6 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
   const [reproError, setReproError] = useState<string | null>(null);
   const puedeImportar = roles.includes('responsable_legajos');
   const puedeReprogramar = roles.includes('responsable_legajos') || roles.includes('configuracion');
-  const hoy = todayIso();
-
   const [reloadKey, setReloadKey] = useState(0);
   const catalogosQuery = usePrototypeRead(async () => {
     const { data, error, response } = await session.client.GET('/v1/consultas/catalogos_oc');
@@ -254,6 +252,7 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
   }, [selectedId, ocIdDetalle, ocVigenciaDesde, ocVigenciaHasta]);
 
   const items = backlogQuery.data?.items ?? [];
+  const hoy = backlogQuery.data?.hoy ?? '';
 
   useEffect(() => {
     const legacyOc = params.get('oc');

@@ -22,19 +22,13 @@ export type DocumentationScope = 'responsible' | 'supervisor' | 'technician';
 
 export type RadarState = ItemRadar['estado_documental'];
 
-// `calendario_vigencias` NO cruza contra matriz/OC (confirmado en
-// docs/PROYECCION_DOCUMENTAL.md §2.1) — no tiene un campo `estado` de evidencia. Los 3
-// estados visuales de abajo son una presentación INEQUÍVOCA de campos ya devueltos por
-// `ItemCalendario`, sin ningún umbral inventado (fórmulas fijadas en
-// docs/PROYECCION_DOCUMENTAL.md §3.1). Deliberadamente NO incluye `proxima_a_vencer`
-// (necesita `plazo_aviso_dias`, que este endpoint no entrega hoy) ni `sin_evidencia` (la
-// ausencia de un ítem ES la señal; nunca es un valor de estado).
-export type VisualCalendarState = 'declarada' | 'verificada' | 'vencida';
+// `calendario_vigencias` expone `estado_visual_calendario` calculado en el backend.
+export type VisualCalendarState = ItemCalendario['estado_visual_calendario'];
 
-export function deriveVisualState(item: Pick<ItemCalendario, 'estado_confirmacion' | 'dias_para_vencer'>): VisualCalendarState {
-  if (item.estado_confirmacion === 'declarado') return 'declarada';
-  if (item.dias_para_vencer < 0) return 'vencida';
-  return 'verificada';
+export function deriveVisualState(
+  item: Pick<ItemCalendario, 'estado_visual_calendario'>,
+): VisualCalendarState {
+  return item.estado_visual_calendario;
 }
 
 export interface CalendarQuery {

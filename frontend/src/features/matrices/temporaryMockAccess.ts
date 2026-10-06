@@ -7,9 +7,9 @@ import type { MatricesAccess, MatricesQuery, MatrizItem, MatrizVigenteQuery, Mat
 // (visto en `CargarRequisitoParticular` del contrato generado) — no "obligatorio"/
 // "recomendado".
 const versiones: MatrizItem[] = [
-  { matriz_version_id: 'matriz-norte-01-v2', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'servicio-mantenimiento', version: 2, vigente_desde: '2026-06-01', vigente_hasta: null, fuente: 'planilla', autor: 'usr-config-01', matriz_global_id: null, copiada_de_version: 1, creado_en: '2026-06-01T09:00:00Z', lineas: 3 },
-  { matriz_version_id: 'matriz-norte-01-v1', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'servicio-mantenimiento', version: 1, vigente_desde: '2026-01-01', vigente_hasta: '2026-05-31', fuente: 'planilla', autor: 'usr-config-01', matriz_global_id: null, copiada_de_version: null, creado_en: '2026-01-01T09:00:00Z', lineas: 2 },
-  { matriz_version_id: 'matriz-sur-02-v1', cliente_id: 'cliente-sur', locacion_id: 'locacion-sur-02', tipo_servicio_id: 'servicio-perforacion', version: 1, vigente_desde: '2026-03-15', vigente_hasta: null, fuente: 'drive', autor: 'usr-config-02', matriz_global_id: 'global-perforacion-01', copiada_de_version: null, creado_en: '2026-03-15T09:00:00Z', lineas: 4 },
+  { matriz_version_id: 'matriz-norte-01-v2', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'servicio-mantenimiento', version: 2, vigente_desde: '2026-06-01', vigente_hasta: null, vigente_hoy: true, fuente: 'planilla', autor: 'usr-config-01', matriz_global_id: null, copiada_de_version: 1, creado_en: '2026-06-01T09:00:00Z', lineas: 3 },
+  { matriz_version_id: 'matriz-norte-01-v1', cliente_id: 'cliente-norte', locacion_id: 'locacion-norte-01', tipo_servicio_id: 'servicio-mantenimiento', version: 1, vigente_desde: '2026-01-01', vigente_hasta: '2026-05-31', vigente_hoy: false, fuente: 'planilla', autor: 'usr-config-01', matriz_global_id: null, copiada_de_version: null, creado_en: '2026-01-01T09:00:00Z', lineas: 2 },
+  { matriz_version_id: 'matriz-sur-02-v1', cliente_id: 'cliente-sur', locacion_id: 'locacion-sur-02', tipo_servicio_id: 'servicio-perforacion', version: 1, vigente_desde: '2026-03-15', vigente_hasta: null, vigente_hoy: true, fuente: 'drive', autor: 'usr-config-02', matriz_global_id: 'global-perforacion-01', copiada_de_version: null, creado_en: '2026-03-15T09:00:00Z', lineas: 4 },
 ];
 
 const lineasPorVersion: Record<string, MatrizVigenteResponse> = {
@@ -50,7 +50,11 @@ export const temporaryMockAccess: MatricesAccess = {
       && (!query.soloVigentes || (item.vigente_desde <= hoy && (item.vigente_hasta === null || item.vigente_hasta >= hoy))));
     const offset = query.offset ?? 0;
     const limit = query.limit ?? 50;
-    return { items: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit };
+    const items = filtered.map(item => ({
+      ...item,
+      vigente_hoy: item.vigente_desde <= hoy && (item.vigente_hasta === null || item.vigente_hasta >= hoy),
+    }));
+    return { hoy, items: items.slice(offset, offset + limit), total: items.length, offset, limit };
   },
   async readMatrizVigente(query: MatrizVigenteQuery) {
     const match = Object.values(lineasPorVersion).find(version =>

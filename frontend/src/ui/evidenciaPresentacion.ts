@@ -20,28 +20,18 @@ function etiquetaDeCodigo(codigo: string): string {
   return estadoPresentacionLabels[codigo] ?? codigo;
 }
 
-/** Código de vigencia por fechas (independiente de confirmación y archivo). */
-function codigoVigencia(
-  item: Pick<EvidenciaVigente, 'estado_presentacion' | 'dias_para_vencer' | 'vencido'>,
-): 'vigente' | 'por_vencer' | 'vencida' {
-  const presentacion = item.estado_presentacion;
-  if (presentacion === 'por_vencer') return 'por_vencer';
-  if (presentacion === 'vencida' || item.vencido || (item.dias_para_vencer ?? 0) < 0) return 'vencida';
-  if (presentacion === 'verificada' || presentacion === 'vigente') return 'vigente';
-  if (presentacion === 'declarada') {
-    return item.vencido || (item.dias_para_vencer ?? 0) < 0 ? 'vencida' : 'vigente';
-  }
-  if (presentacion && ESTADOS_RESPALDO.has(presentacion)) {
-    return item.vencido || (item.dias_para_vencer ?? 0) < 0 ? 'vencida' : 'vigente';
-  }
-  return 'vigente';
+function codigoPresentacion(
+  item: Pick<EvidenciaVigente, 'codigo_estado' | 'estado_presentacion'>,
+): string {
+  return (item.codigo_estado ?? item.estado_presentacion ?? '').trim();
 }
 
 export function etiquetaVigencia(
-  item: Pick<EvidenciaVigente, 'estado_presentacion' | 'estado_confirmacion' | 'dias_para_vencer' | 'vencido'>,
+  item: Pick<EvidenciaVigente, 'codigo_estado' | 'estado_presentacion'>,
 ): string {
-  const codigo = codigoVigencia(item);
-  if (codigo === 'vigente') return 'Vigente';
+  const codigo = codigoPresentacion(item);
+  if (!codigo) return '—';
+  if (codigo === 'verificada' || codigo === 'vigente') return 'Vigente';
   return etiquetaDeCodigo(codigo);
 }
 
@@ -79,7 +69,7 @@ function etiquetasConfirmacion(
 export function etiquetasEvidencia(
   item: Pick<
     EvidenciaVigente,
-    'estado_presentacion' | 'estado_confirmacion' | 'dias_para_vencer' | 'vencido' | 'estados_adicionales'
+    'codigo_estado' | 'estado_presentacion' | 'estado_confirmacion' | 'estados_adicionales'
   > & { propuesta_en_revision?: EvidenciaVigente['propuesta_en_revision'] },
 ): string[] {
   if (item.estado_presentacion === 'sin_documento') {
@@ -97,7 +87,10 @@ export function etiquetasEvidencia(
 
 /** @deprecated Preferir etiquetasEvidencia para mostrar vigencia y respaldo por separado. */
 export function etiquetaEvidencia(
-  item: Pick<EvidenciaVigente, 'estado_presentacion' | 'estado_confirmacion' | 'dias_para_vencer' | 'vencido' | 'estados_adicionales'>,
+  item: Pick<
+    EvidenciaVigente,
+    'codigo_estado' | 'estado_presentacion' | 'estado_confirmacion' | 'estados_adicionales'
+  >,
 ): string {
   return etiquetasEvidencia(item)[0] ?? '—';
 }
@@ -105,17 +98,17 @@ export function etiquetaEvidencia(
 export function tonoEvidencia(
   item: Pick<
     EvidenciaVigente,
-    'estado_presentacion' | 'estado_confirmacion' | 'dias_para_vencer' | 'vencido' | 'estados_adicionales' | 'propuesta_en_revision'
+    'codigo_estado' | 'estado_presentacion' | 'estados_adicionales' | 'propuesta_en_revision'
   >,
 ): 'warning' | 'accent' {
-  const codigoVig = codigoVigencia(item);
+  const codigo = codigoPresentacion(item);
   const codigos = [
     item.estado_presentacion,
     ...(item.estados_adicionales ?? []),
   ].filter(Boolean) as string[];
-  if (codigoVig === 'vencida' || codigos.some(c => c === 'evidencia_invalida') || item.vencido) return 'warning';
+  if (codigo === 'vencida' || codigos.some(c => c === 'evidencia_invalida')) return 'warning';
   if (
-    codigoVig === 'por_vencer'
+    codigo === 'por_vencer'
     || codigos.some(c => c === 'propuesta_en_revision' || c === 'archivo_en_revision' || c === 'sin_archivo_respaldo')
     || item.propuesta_en_revision
   ) {

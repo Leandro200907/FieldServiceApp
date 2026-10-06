@@ -14,7 +14,8 @@
     "generate:api": "openapi-typescript contracts/modulo1/openapi.json -o src/api/generated/modulo1.d.ts",
     "check:contract": "node scripts/check-contract.mjs",
     "test": "vitest run",
-    "check": "npm run check:contract && npm run typecheck && npm test && npm run build"
+    "check:regla-unica": "node scripts/check-regla-unica-frontend.mjs",
+    "check": "npm run check:contract && npm run check:regla-unica && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@tanstack/react-query": "5.103.2",

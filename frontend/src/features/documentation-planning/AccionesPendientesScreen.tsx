@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
-import { formatFecha, todayIso } from './dates';
+import { formatFecha } from './dates';
 import { OcsAfectadasLine } from '../../ui/OcsAfectadasLine';
 import type { OcAfectadaRef } from '../../ui/ocsAfectadasPresentacion';
 import { lineaPersonaConDni } from '../legajos/legajoDisplay';
@@ -24,8 +24,6 @@ export function AccionesPendientesScreen() {
   const mes = params.get('mes') || '';
   const operadoras = params.getAll('operadora_id');
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
-  const hoy = todayIso();
-
   const [reloadKey, setReloadKey] = useState(0);
 
   const catalogosQuery = usePrototypeRead(async () => {
@@ -62,16 +60,8 @@ export function AccionesPendientesScreen() {
     });
   };
 
-  const items = useMemo(() => {
-    const list = [...(query.data?.items ?? [])];
-    list.sort((a, b) => {
-      const aBloquea = a.fecha_limite < hoy ? 0 : 1;
-      const bBloquea = b.fecha_limite < hoy ? 0 : 1;
-      if (aBloquea !== bBloquea) return aBloquea - bBloquea;
-      return a.fecha_limite.localeCompare(b.fecha_limite);
-    });
-    return list;
-  }, [query.data?.items, hoy]);
+  const hoy = query.data?.hoy ?? '';
+  const items = query.data?.items ?? [];
 
   const cargaInicial = esCargaInicial(query) || esCargaInicial(catalogosQuery);
   if (cargaInicial) return <LoadingState />;
@@ -116,7 +106,7 @@ export function AccionesPendientesScreen() {
               </thead>
               <tbody>
                 {items.map((a: Accion, i) => (
-                  <tr key={`${a.legajo_id}-${a.requisito}-${i}`}>
+                  <tr key={`${a.legajo_id}-${a.requisito}-${i}`} className={a.accion_vencida ? 'accion-vencida' : undefined}>
                     <td>{lineaPersonaConDni({
                       tipo_sujeto: a.tipo_sujeto,
                       nombre_apellido: a.nombre_apellido ?? a.legajo_nombre,

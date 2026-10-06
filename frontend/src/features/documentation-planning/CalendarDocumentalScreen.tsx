@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import type { ItemCalendario, SubjectKind, VisualCalendarState } from './contracts';
 import { deriveVisualState } from './contracts';
 import { calendarAccess } from './access';
-import { addDays, dayPosition, formatFecha, todayIso } from './dates';
+import { addDays, dayPosition, formatFecha } from './dates';
 import { session } from '../../api';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
@@ -52,11 +52,29 @@ export function CalendarDocumentalScreen({ roles, embedded = false }: { roles: r
   const [kind, setKind] = useState<SubjectKind | 'all'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
-  const from = useMemo(() => addDays(todayIso(), -30), []);
-  const to = useMemo(() => addDays(todayIso(), 40), []);
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (iso: string) => formatFecha(iso, tz);
-  const calendar = usePrototypeRead(() => calendarAccess().readCalendar({ from, to, subjectKind: kind === 'all' ? undefined : kind, offset, limit: PAGE_SIZE }), [from, to, kind, offset]);
+  const bootstrapDesde = '2020-01-01';
+  const bootstrapHasta = '2035-12-31';
+  const [range, setRange] = useState({ from: bootstrapDesde, to: bootstrapHasta });
+  const calendar = usePrototypeRead(
+    () => calendarAccess().readCalendar({
+      from: range.from,
+      to: range.to,
+      subjectKind: kind === 'all' ? undefined : kind,
+      offset,
+      limit: PAGE_SIZE,
+    }),
+    [range.from, range.to, kind, offset],
+  );
+  useEffect(() => {
+    const h = calendar.data?.hoy;
+    if (!h) return;
+    const next = { from: addDays(h, -30), to: addDays(h, 40) };
+    if (range.from === bootstrapDesde && range.to === bootstrapHasta) setRange(next);
+  }, [calendar.data?.hoy, range.from, range.to]);
+  const from = range.from;
+  const to = range.to;
   const setKindAndResetPage = (value: SubjectKind | 'all') => { setKind(value); setOffset(0); };
   const companyAllowed = scope === 'responsible';
   if (!scope) return <Pending title="Sin rol reconocido para esta vista">Tu sesión no tiene un rol habilitado para esta vista.</Pending>;

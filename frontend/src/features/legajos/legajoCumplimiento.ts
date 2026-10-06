@@ -14,8 +14,8 @@ export function textoObservadosOperadora(data: LegajoCompuesto): string | null {
 }
 
 export function textoCumplimientoExigidos(data: LegajoCompuesto): string {
-  const exigidos = data.resumen.exigidos ?? data.resumen.total;
-  const enRegla = data.resumen.en_regla_exigidos ?? data.resumen.en_regla ?? 0;
+  const exigidos = data.resumen.exigidos ?? 0;
+  const enRegla = data.resumen.en_regla_exigidos ?? 0;
   const obs = textoObservadosOperadora(data);
   const core = `${enRegla} de ${exigidos} en regla`;
   return obs ? `${core} · ${obs}` : core;

@@ -15,6 +15,8 @@ const resumenBacklog = (base: { total: number; vigentes_hoy: number; por_vencer:
   exigidos_por_vencer: base.por_vencer,
   exigidos_vigentes: base.vigentes_hoy,
   exigidos_sin_documento: 0,
+  pendientes_revision: 0,
+  proximo_vencimiento: null,
 });
 
 const sujetos: SujetoItem[] = [

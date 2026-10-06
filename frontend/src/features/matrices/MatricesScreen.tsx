@@ -8,7 +8,7 @@ import { matricesAccess } from './access';
 import type { MatrizItem } from './contracts';
 import { ListDetailLayout } from '../../ui/ListDetailLayout';
 import { StatusDot } from '../../ui/StatusDot';
-import { formatFecha, todayIso } from '../documentation-planning/dates';
+import { formatFecha } from '../documentation-planning/dates';
 import { etiquetaCategoria } from '../../ui/categoriaLabels';
 import '../documentation-planning/planning.css';
 import './matrices.css';
@@ -20,9 +20,8 @@ function tituloMatriz(item: MatrizItem): string {
   return ctx || `${item.cliente_id}`;
 }
 
-function etiquetaVersion(item: MatrizItem, hoy: string, fmt: (iso: string) => string): string {
-  const vigente = !item.vigente_hasta || item.vigente_hasta >= hoy;
-  if (vigente) return `v${item.version} vigente`;
+function etiquetaVersion(item: MatrizItem, fmt: (iso: string) => string): string {
+  if (item.vigente_hoy) return `v${item.version} vigente`;
   return `Vigente del ${fmt(item.vigente_desde)} al ${fmt(item.vigente_hasta!)}`;
 }
 
@@ -33,7 +32,6 @@ export function MatricesScreen({ detailId }: { detailId?: string }) {
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<MatrizItem | null>(null);
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
-  const hoy = todayIso();
   const fmt = (iso: string) => formatFecha(iso, tz);
   const soloLectura = !session.getSnapshot().identity?.roles.includes('configuracion');
 
@@ -87,7 +85,7 @@ export function MatricesScreen({ detailId }: { detailId?: string }) {
                 <span className="list-item-primary">{tituloMatriz(item)}</span>
                 <span className="list-item-secondary">Versión {item.version} — vigente desde {fmt(item.vigente_desde)}</span>
               </span>
-              <StatusDot variant={!item.vigente_hasta || item.vigente_hasta >= hoy ? 'vigente' : 'neutral'}>{etiquetaVersion(item, hoy, fmt)}</StatusDot>
+              <StatusDot variant={item.vigente_hoy ? 'vigente' : 'neutral'}>{etiquetaVersion(item, fmt)}</StatusDot>
             </button>
           ))}
           {versiones.data?.items.length === 0 && <p className="empty-inline">Sin versiones que coincidan con el filtro.</p>}

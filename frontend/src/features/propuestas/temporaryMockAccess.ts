@@ -43,6 +43,7 @@ export const temporaryMockAccess: PropuestasAccess = {
       limit,
       pestana: query.pestana ?? 'todos',
       conteos: { todos: items.length, propuestas: items.length, archivos: 0 },
+      hoy: '2026-09-21',
     };
   },
   async abrirArchivo(_documentoId: string): Promise<UrlDeDescargaResponse> {
