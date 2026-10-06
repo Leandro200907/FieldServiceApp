@@ -12,10 +12,20 @@ from app.auth.alcance import alcance_de_sujetos
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import hoy_del_tenant
+from app.comun.vigencia_calendario import campos_vigencia_en_fecha
 
 ADVERTENCIA = "Información documental calculada con los datos registrados a la fecha. No implica planificación, disponibilidad ni asignación operativa."
 LIMITE_DIAS = 366
 ROLES_CALENDARIO = (Rol.RESPONSABLE_LEGAJOS, Rol.SUPERVISOR, Rol.TECNICO)
+
+
+def estado_visual_calendario(estado_confirmacion: str, dias_para_vencer: int | None) -> str:
+    """Misma regla que el calendario documental en front (declarada / verificada / vencida)."""
+    if estado_confirmacion == "declarado":
+        return "declarada"
+    if dias_para_vencer is not None and dias_para_vencer < 0:
+        return "vencida"
+    return "verificada"
 
 
 def _exigir_rango(desde: date, hasta: date, hoy: date, limite_pasado: date | None = None) -> None:
@@ -91,7 +101,13 @@ def calendario_vigencias(
         item["id"] = str(item["id"])
         if item["requisito_definicion_id"] is not None:
             item["requisito_definicion_id"] = str(item["requisito_definicion_id"])
-        item["dias_para_vencer"] = (item["vigente_hasta"] - hoy).days
+        vig = campos_vigencia_en_fecha(item["vigente_desde"], item["vigente_hasta"], hoy)
+        dias = vig["dias_para_vencer"]
+        item["dias_para_vencer"] = int(dias) if dias is not None else 0
+        item["estado_visual_calendario"] = estado_visual_calendario(
+            str(item["estado_confirmacion"]),
+            vig["dias_para_vencer"],
+        )
         item["referencia"] = f"evidencia:{item['categoria']}:{item['id']}"
         items.append(item)
     salida = envolver(items, int(total or 0), p)

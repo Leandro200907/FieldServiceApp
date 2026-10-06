@@ -78,6 +78,14 @@ class EvidenciaVigente(BaseModel):
     locacion_nombre: str | None = None
     ambito_nombre: str | None = None
     certificado_respaldo_documento_id: str | None = None
+    codigo_estado: str | None = Field(
+        None,
+        description="Código estable de presentación (mismo valor que estado_presentacion).",
+    )
+    tarjeta_exigido: Literal["vencidos", "por_vencer", "vigentes", "sin_documento"] | None = Field(
+        None,
+        description="Bucket E-101 para requisitos exigidos por backlog; null si no_exigido_backlog.",
+    )
 
 
 class ResumenLegajo(BaseModel):
@@ -85,7 +93,10 @@ class ResumenLegajo(BaseModel):
     vigentes_hoy: int
     por_vencer: int = 0
     vencidos: int
-    en_regla: int = Field(0, description="Obsoleto para cumplimiento backlog: ver en_regla_exigidos.")
+    en_regla: int = Field(
+        0,
+        description="LEGADO: conteo sobre ítems cargados. Pantallas deben usar en_regla_exigidos.",
+    )
     ocs_afectadas: int = 0
     exigidos: int = 0
     en_regla_exigidos: int = 0
@@ -95,6 +106,8 @@ class ResumenLegajo(BaseModel):
     exigidos_por_vencer: int = 0
     exigidos_vigentes: int = 0
     exigidos_sin_documento: int = 0
+    pendientes_revision: int = 0
+    proximo_vencimiento: str | None = None
 
 
 class LegajoDatos(BaseModel):
@@ -205,6 +218,7 @@ class OcBacklogItem(BaseModel):
 
 
 class BacklogOcResponse(BaseModel):
+    hoy: str
     items: list[OcBacklogItem]
     total: int
     offset: int
@@ -523,9 +537,11 @@ class AccionPendienteItem(BaseModel):
     ocs_afectadas: list[dict[str, Any]]
     efecto: str | None = None
     genera_alerta_cierta: bool = False
+    accion_vencida: bool = False
 
 
 class AccionesPendientesResponse(BaseModel):
+    hoy: str
     items: list[AccionPendienteItem]
     total: int
     offset: int
@@ -872,9 +888,11 @@ class MatrizItem(BaseModel):
     copiada_de_version: int | None
     creado_en: datetime
     lineas: int
+    vigente_hoy: bool = False
 
 
 class MatricesResponse(BaseModel):
+    hoy: str
     items: list[MatrizItem]
     total: int
     offset: int

@@ -1080,6 +1080,16 @@ cálculo se mueve al backend (en el lugar compartido de la regla) y el frontend 
 
 **Motivo.** Una sola fuente de verdad para Módulo 1 y coherencia entre pantallas.
 
+**Campos API (legajo y consultas).** `GET /v1/consultas/legajo`: por ítem `codigo_estado`
+(= `estado_presentacion`) y `tarjeta_exigido` (bucket E-101); en `resumen`,
+`pendientes_revision` y `proximo_vencimiento` solo sobre exigidos. **`resumen.en_regla` es
+legado** (ítems cargados); pantallas de cumplimiento usan **`en_regla_exigidos`**. Matrices,
+`backlog_oc`, `acciones_pendientes` y `calendario_vigencias` devuelven `hoy` del tenant; por
+fila: `vigente_hoy`, `accion_vencida`, `estado_visual_calendario`. Ficha y
+`timeline_recursos` usan el mismo `estado_vigencia_presentacion` (plazo tenant + override
+`definicion_requisito.plazo_aviso_dias`). `archivo_validacion_de_fila` vive solo en
+`app/core/resolucion_evidencia.py`.
+
 **Estado.** Decidida.
 
 #### E-10. Rechazo de la operadora (criterio de bloqueo)
