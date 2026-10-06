@@ -309,6 +309,7 @@ def estado_documental_de_oc(
 
 
 def resumen_legajo_con_en_regla(items: list[dict[str, Any]]) -> dict[str, int]:
+    """Conteos sobre ítems cargados. `en_regla` es LEGADO — UI debe usar `en_regla_exigidos`."""
     from app.modules.consultas.presentacion_evidencia import _cuenta_como_en_regla_hoy, resumen_desde_items
 
     base = resumen_desde_items(items)

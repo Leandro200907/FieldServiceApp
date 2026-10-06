@@ -30,11 +30,18 @@ def _id_documento(fila: dict[str, Any]) -> str:
 
 
 def archivo_validacion_de_fila(fila: Mapping[str, Any]) -> str:
-    """`sin_archivo` | `pendiente` | `valido` | `invalido` para una fila de modulo1.documento."""
+    """`sin_archivo` | `pendiente` | `valido` | `invalido` para una fila de modulo1.documento.
+
+    Fuente única (regla 15): presentación, ficha y dominio importan desde acá.
+    `purgado` y ausencia de clave sin confirmación → `sin_archivo`; confirmado sin columna
+    aún → `pendiente`.
+    """
     archivo_estado = fila.get("archivo_estado")
+    clave = fila.get("clave_storage")
     if archivo_estado in ("sin_archivo", "purgado"):
         return "sin_archivo"
-    clave = fila.get("clave_storage")
+    if archivo_estado == "sin_archivo" or (clave is None and archivo_estado != "confirmado"):
+        return "sin_archivo"
     if archivo_estado == "confirmado":
         if fila.get("archivo_validacion") is not None:
             return str(fila["archivo_validacion"])

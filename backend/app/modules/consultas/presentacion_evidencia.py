@@ -12,6 +12,8 @@ from typing import Any, Mapping
 from sqlalchemy.orm import Session
 
 from app.comun.reloj import hoy_del_tenant
+from app.comun.vigencia_calendario import campos_vigencia_en_fecha
+from app.core.resolucion_evidencia import archivo_validacion_de_fila
 
 ESTADOS_PRESENTACION = (
     "verificada",
@@ -35,20 +37,6 @@ EXPLICACION_ESTADO: dict[str, str] = {
     "propuesta_en_revision": "Un técnico propuso una renovación que espera confirmación; no reemplaza la versión vigente.",
     "sin_documento": "Requisito exigido por las OC del backlog sin evidencia cargada.",
 }
-
-
-def _archivo_validacion_de_fila(fila: Mapping[str, Any]) -> str:
-    archivo_estado = fila.get("archivo_estado")
-    clave = fila.get("clave_storage")
-    if archivo_estado == "sin_archivo" or (clave is None and archivo_estado != "confirmado"):
-        return "sin_archivo"
-    if archivo_estado == "confirmado":
-        if fila.get("archivo_validacion") is not None:
-            return str(fila["archivo_validacion"])
-        return "pendiente"
-    if clave is None:
-        return "sin_archivo"
-    return "pendiente"
 
 
 def _es_propuesta_pendiente(fila: Mapping[str, Any]) -> bool:
@@ -91,7 +79,7 @@ def enriquecer_fila_evidencia(
     *,
     archivo_validacion_override: str | None = None,
 ) -> dict[str, Any]:
-    archivo = archivo_validacion_override if archivo_validacion_override is not None else _archivo_validacion_de_fila(fila)
+    archivo = archivo_validacion_override if archivo_validacion_override is not None else archivo_validacion_de_fila(fila)
     plazo = _plazo_aviso(fila.get("plazo_aviso_dias"), plazo_tenant)
     hasta = fila.get("vigente_hasta")
     if isinstance(hasta, str):
@@ -285,9 +273,10 @@ def _fila_con_vigencia(fila: dict[str, Any], hoy: date) -> dict[str, Any]:
     desde: date = fila["vigente_desde"]
     hasta: date | None = fila["vigente_hasta"]
     salida = {k: _serializar_valor_fila(v) for k, v in fila.items()}
-    salida["vigente_hoy"] = desde <= hoy and (hasta is None or hoy <= hasta)
-    salida["dias_para_vencer"] = (hasta - hoy).days if hasta is not None else None
-    salida["vencido"] = hasta is not None and hasta < hoy
+    salida.update(campos_vigencia_en_fecha(desde, hasta, hoy))
+    salida["vigente_desde"] = _serializar_valor_fila(desde)
+    if hasta is not None:
+        salida["vigente_hasta"] = _serializar_valor_fila(hasta)
     salida["id"] = str(salida["id"])
     if salida.get("requisito_definicion_id") is not None:
         salida["requisito_definicion_id"] = str(salida["requisito_definicion_id"])

@@ -18,6 +18,11 @@
             ],
             "title": "Accion Sugerida Fecha"
           },
+          "accion_vencida": {
+            "default": false,
+            "title": "Accion Vencida",
+            "type": "boolean"
+          },
           "efecto": {
             "anyOf": [
               {
@@ -105,6 +110,10 @@
       },
       "AccionesPendientesResponse": {
         "properties": {
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/AccionPendienteItem"
@@ -126,6 +135,7 @@
           }
         },
         "required": [
+          "hoy",
           "items",
           "total",
           "offset",
@@ -1038,6 +1048,10 @@
       },
       "BacklogOcResponse": {
         "properties": {
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/OcBacklogItem"
@@ -1059,6 +1073,7 @@
           }
         },
         "required": [
+          "hoy",
           "items",
           "total",
           "offset",
@@ -4328,6 +4343,18 @@
             ],
             "title": "Certificado Respaldo Documento Id"
           },
+          "codigo_estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Código estable de presentación (mismo valor que estado_presentacion).",
+            "title": "Codigo Estado"
+          },
           "dias_para_vencer": {
             "anyOf": [
               {
@@ -4558,6 +4585,24 @@
           "sujeto_id": {
             "title": "Sujeto Id",
             "type": "string"
+          },
+          "tarjeta_exigido": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vencidos",
+                  "por_vencer",
+                  "vigentes",
+                  "sin_documento"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bucket E-101 para requisitos exigidos por backlog; null si no_exigido_backlog.",
+            "title": "Tarjeta Exigido"
           },
           "tipo": {
             "title": "Tipo",
@@ -5680,6 +5725,15 @@
             "title": "Estado Confirmacion",
             "type": "string"
           },
+          "estado_visual_calendario": {
+            "enum": [
+              "declarada",
+              "verificada",
+              "vencida"
+            ],
+            "title": "Estado Visual Calendario",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5753,6 +5807,7 @@
           "estado_confirmacion",
           "archivo_validacion",
           "dias_para_vencer",
+          "estado_visual_calendario",
           "referencia"
         ],
         "title": "ItemCalendario",
@@ -6312,6 +6367,10 @@
       },
       "MatricesResponse": {
         "properties": {
+          "hoy": {
+            "title": "Hoy",
+            "type": "string"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/MatrizItem"
@@ -6333,6 +6392,7 @@
           }
         },
         "required": [
+          "hoy",
           "items",
           "total",
           "offset",
@@ -6555,6 +6615,11 @@
               }
             ],
             "title": "Vigente Hasta"
+          },
+          "vigente_hoy": {
+            "default": false,
+            "title": "Vigente Hoy",
+            "type": "boolean"
           }
         },
         "required": [
@@ -8402,7 +8467,7 @@
         "properties": {
           "en_regla": {
             "default": 0,
-            "description": "Obsoleto para cumplimiento backlog: ver en_regla_exigidos.",
+            "description": "LEGADO: conteo sobre ítems cargados. Pantallas deben usar en_regla_exigidos.",
             "title": "En Regla",
             "type": "integer"
           },
@@ -8446,10 +8511,26 @@
             "title": "Ocs Afectadas",
             "type": "integer"
           },
+          "pendientes_revision": {
+            "default": 0,
+            "title": "Pendientes Revision",
+            "type": "integer"
+          },
           "por_vencer": {
             "default": 0,
             "title": "Por Vencer",
             "type": "integer"
+          },
+          "proximo_vencimiento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proximo Vencimiento"
           },
           "sin_documento": {
             "default": 0,

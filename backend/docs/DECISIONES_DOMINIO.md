@@ -1061,11 +1061,10 @@ dos capas distintas:
   fechas si el respaldo no alcanza.
 - **Por vencer** (tarjeta y filas) usa **`plazo_aviso_dias`**, no el **horizonte del backlog**
   de D23 (`horizonte_backlog_dias`, 60 por defecto): son parámetros y preguntas distintas.
-  En la ficha es el `plazo_aviso_dias` **del tenant** (`configuracion_alertas`, 30 por
-  defecto; `presentacion_evidencia.py::_cargar_plazo_tenant`), **sin** el override por
-  requisito (`definicion_requisito.plazo_aviso_dias`, §15 / P1), que sí aplican las alertas
-  (`app/modules/alertas/servicio.py`). Diferencia conocida: un requisito con override puede
-  estar «Por vencer» en alertas y no en la ficha (o al revés).
+  Ficha, `timeline_recursos` y alertas comparten la misma regla: plazo del tenant
+  (`configuracion_alertas`, 30 por defecto; `presentacion_evidencia.py::_cargar_plazo_tenant`)
+  con **override** por requisito (`definicion_requisito.plazo_aviso_dias`, §15 / P1) vía
+  `estado_vigencia_presentacion`.
 
 **Motivo.** Evitar que un documento vigente por fechas pero sin certificado propio o con archivo
 pendiente figure como «vencido», y separar aviso calendario del cumplimiento operativo del backlog.
@@ -1079,6 +1078,16 @@ muestra lo que devuelve el backend. Si un componente calculaba alguno de esos va
 cálculo se mueve al backend (en el lugar compartido de la regla) y el frontend lo consume.
 
 **Motivo.** Una sola fuente de verdad para Módulo 1 y coherencia entre pantallas.
+
+**Campos API (legajo y consultas).** `GET /v1/consultas/legajo`: por ítem `codigo_estado`
+(= `estado_presentacion`) y `tarjeta_exigido` (bucket E-101); en `resumen`,
+`pendientes_revision` y `proximo_vencimiento` solo sobre exigidos. **`resumen.en_regla` es
+legado** (ítems cargados); pantallas de cumplimiento usan **`en_regla_exigidos`**. Matrices,
+`backlog_oc`, `acciones_pendientes` y `calendario_vigencias` devuelven `hoy` del tenant; por
+fila: `vigente_hoy`, `accion_vencida`, `estado_visual_calendario`. Ficha y
+`timeline_recursos` usan el mismo `estado_vigencia_presentacion` (plazo tenant + override
+`definicion_requisito.plazo_aviso_dias`). `archivo_validacion_de_fila` vive solo en
+`app/core/resolucion_evidencia.py`.
 
 **Estado.** Decidida.
 

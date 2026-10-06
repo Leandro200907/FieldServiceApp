@@ -58,9 +58,9 @@ def _archivo_efectivo_fila(fila: dict[str, Any], soportes: list[dict[str, Any]] 
             categoria=fila.get("categoria"),
             soportes=soportes,
         )
-    from app.modules.consultas.presentacion_evidencia import _archivo_validacion_de_fila
+    from app.core.resolucion_evidencia import archivo_validacion_de_fila
 
-    return _archivo_validacion_de_fila(fila)
+    return archivo_validacion_de_fila(fila)
 
 
 def _bucket_calendario(hoy: date, *, vigente_hasta: date | None, vencido: bool, plazo_aviso: int) -> str:
@@ -186,6 +186,12 @@ def enriquecer_items_ficha_legajo(
         estado, obs = estado_fila_y_observacion(raw, hoy=hoy, plazo_aviso=plazo, archivo_efectivo=archivo_efectivo)
         raw["estado_fila"] = estado
         raw["observacion_ficha"] = obs
+        raw["codigo_estado"] = raw.get("estado_presentacion")
+        from app.modules.consultas.legajo_resumen_api import tarjeta_exigido_de_item
+
+        tarjeta = tarjeta_exigido_de_item(raw, hoy, plazo)
+        if tarjeta is not None:
+            raw["tarjeta_exigido"] = tarjeta
 
 
 def ofrece_registro_respaldo_responsable(item: dict[str, Any]) -> bool:

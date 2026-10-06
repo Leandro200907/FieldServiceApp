@@ -18,6 +18,7 @@ from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, envolver
 from app.comun.reloj import ahora_utc, hoy_del_tenant
+from app.comun.vigencia_calendario import campos_vigencia_en_fecha
 from app.auth.alcance import alcance_de_sujetos, filtro_decisiones_visibles
 from app.core.orquestacion import cobertura_de_oc
 from app.modules.consultas.backlog_documental import evaluar_oc_backlog
@@ -41,14 +42,11 @@ def _plano(fila: Any) -> dict[str, Any]:
 
 
 def _con_vigencia(fila: dict[str, Any], hoy: date) -> dict[str, Any]:
-    """Agrega `vigente_hoy` (inclusive en ambos bordes) y `dias_para_vencer` (negativo si
-    ya venció). `fila` trae las fechas crudas (date), no serializadas."""
+    """Agrega `vigente_hoy`, `dias_para_vencer` y `vencido` (`app.comun.vigencia_calendario`)."""
     desde: date = fila["vigente_desde"]
     hasta: date | None = fila["vigente_hasta"]
     salida = _plano(fila)
-    salida["vigente_hoy"] = desde <= hoy and (hasta is None or hoy <= hasta)
-    salida["dias_para_vencer"] = (hasta - hoy).days if hasta is not None else None
-    salida["vencido"] = hasta is not None and hasta < hoy
+    salida.update(campos_vigencia_en_fecha(desde, hasta, hoy))
     return salida
 
 
@@ -120,6 +118,9 @@ def legajo(session: Session, identidad: Identidad, sujeto_id: str) -> dict[str, 
     reaplicar_gestion_responsable_respaldo(items)
     resumen = resumen_legajo_con_en_regla(items)
     resumen.update(resumen_ex)
+    from app.modules.consultas.legajo_resumen_api import enriquecer_resumen_legajo_exigidos
+
+    enriquecer_resumen_legajo_exigidos(items, resumen)
     return {
         "hoy": hoy.isoformat(),
         "legajo": _plano(datos),
@@ -388,7 +389,9 @@ def backlog_oc(
             cursor += len(filas)
             if len(filas) < lote:
                 break
-        return envolver(items, total, p)
+        salida = envolver(items, total, p)
+        salida["hoy"] = hoy.isoformat()
+        return salida
 
     total = session.execute(text(f"SELECT count(*) FROM modulo1.oc o {where}"), params).scalar()
     filas = session.execute(
@@ -408,7 +411,9 @@ def backlog_oc(
         )
         for f in filas
     ]
-    return envolver(items, int(total or 0), p)
+    salida = envolver(items, int(total or 0), p)
+    salida["hoy"] = hoy.isoformat()
+    return salida
 
 
 def cobertura_oc(
@@ -637,7 +642,13 @@ def acciones_pendientes(
     )
     total = len(acciones)
     pagina = acciones[p.offset : p.offset + p.limit]
-    return envolver(pagina, total, p)
+    hoy_iso = hoy.isoformat()
+    for item in pagina:
+        fl = item.get("fecha_limite") or ""
+        item["accion_vencida"] = bool(fl and fl < hoy_iso)
+    salida = envolver(pagina, total, p)
+    salida["hoy"] = hoy_iso
+    return salida
 
 
 def _filas_decision(fila: Any) -> dict[str, Any]:

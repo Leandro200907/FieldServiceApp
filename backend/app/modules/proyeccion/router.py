@@ -34,6 +34,7 @@ class ItemCalendario(BaseModel):
     estado_confirmacion: str
     archivo_validacion: str | None
     dias_para_vencer: int
+    estado_visual_calendario: Literal["declarada", "verificada", "vencida"]
     referencia: str
 
 

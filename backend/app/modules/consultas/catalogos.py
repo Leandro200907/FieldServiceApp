@@ -154,8 +154,13 @@ def matrices(
         "LEFT JOIN modulo1.usuario u ON u.tenant_id = m.tenant_id AND u.usuario_id::text = m.autor "
         "WHERE m.tenant_id = :t"
     )
+    hoy = params["hoy"]
     pagina = _paginar(session, sql, cond, "m.cliente_id, m.locacion_id, m.tipo_servicio_id, m.version DESC", params, p)
+    pagina["hoy"] = hoy.isoformat()
     for item in pagina["items"]:
+        vdesde = item["vigente_desde"]
+        vhasta = item.get("vigente_hasta")
+        item["vigente_hoy"] = vdesde <= hoy and (vhasta is None or vhasta >= hoy)
         if not item.get("operadora_nombre"):
             item.update(
                 nombres_oc(

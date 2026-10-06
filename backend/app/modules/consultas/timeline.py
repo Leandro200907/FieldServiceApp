@@ -35,8 +35,16 @@ def _estado_visual(
     hasta: date | None,
     confirmacion: str,
     archivo_validacion: str,
+    *,
+    plazo_aviso_dias: int,
 ) -> str:
-    """Color del tramo: D19 — sin respaldo válido no se dibuja como cobertura (no verde)."""
+    """Color del tramo: D19 — sin respaldo válido no se dibuja como cobertura (no verde).
+
+    «Por vencer» usa `estado_vigencia_presentacion` con el plazo del tenant o el override
+    del requisito (`plazo_aviso_dias`), igual que la ficha de legajo.
+    """
+    from app.modules.consultas.presentacion_evidencia import estado_vigencia_presentacion
+
     if hasta is not None and hasta < hoy:
         return "vencido"
     if archivo_validacion != "valido":
@@ -47,9 +55,16 @@ def _estado_visual(
         if archivo_validacion == "pendiente":
             return "archivo_en_revision"
         return "sin_archivo_respaldo"
-    if hasta is None:
-        return "vigente"
-    if (hasta - hoy).days <= 30:
+    vencido = hasta is not None and hasta < hoy
+    est = estado_vigencia_presentacion(
+        hoy,
+        vigente_hasta=hasta,
+        vencido=vencido,
+        plazo_aviso_dias=plazo_aviso_dias,
+    )
+    if est == "vencida":
+        return "vencido"
+    if est == "por_vencer":
         return "por_vencer"
     return "vigente"
 
@@ -78,6 +93,9 @@ def timeline_recursos(
     identidad.exigir_rol(*ROLES)
     tenant_id = identidad.tenant_id
     hoy = hoy_del_tenant(session, tenant_id)
+    from app.modules.consultas.presentacion_evidencia import _cargar_plazo_tenant, _plazo_aviso
+
+    plazo_tenant = _cargar_plazo_tenant(session, tenant_id)
     _exigir_rango(desde, hasta, hoy)
     alcance = alcance_de_sujetos(session, identidad, hoy)
 
@@ -151,7 +169,7 @@ def timeline_recursos(
         sid = legajo["sujeto_id"]
         docs = session.execute(
             text(
-                "SELECT d.documento_id, d.requisito_definicion_id, r.nombre, r.categoria, "
+                "SELECT d.documento_id, d.requisito_definicion_id, r.nombre, r.categoria, r.plazo_aviso_dias, "
                 "d.vigente_desde, d.vigente_hasta, d.estado_confirmacion, d.estado_version, "
                 "CASE WHEN d.archivo_estado = 'confirmado' THEN d.archivo_validacion ELSE 'sin_archivo' END AS archivo_validacion "
                 "FROM modulo1.documento d "
@@ -177,6 +195,7 @@ def timeline_recursos(
                     d["vigente_hasta"],
                     d["estado_confirmacion"],
                     d["archivo_validacion"],
+                    plazo_aviso_dias=_plazo_aviso(d.get("plazo_aviso_dias"), plazo_tenant),
                 ),
             })
 
