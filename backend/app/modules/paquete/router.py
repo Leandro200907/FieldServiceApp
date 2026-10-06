@@ -11,6 +11,7 @@ from app.api.errores import ErrorDeDominio, NoEncontrado
 from app.auth.dependencies import identidad_actual
 from app.auth.identidad import Identidad, Rol
 from app.comun.red import origen_real
+from app.comun.reloj import ahora_utc
 from app.config import settings
 from app.db import platform_session, tenant_session
 from app.modules.legajos.infra import clave_idempotencia, ejecutar_comando
@@ -143,8 +144,14 @@ def paquete_publico(token: str, request: Request) -> VistaPublicaPaqueteResponse
 def paquete_qr(token: str, request: Request) -> Response:
     tenant_id, token_hash = _resolver(token, request)
     with tenant_session(tenant_id) as s:
-        vigente = s.execute(text("SELECT 1 FROM modulo1.paquete_entrega WHERE tenant_id = :t AND token_hash = :h AND revocado_en IS NULL AND expira_en > now()"),
-                            {"t": tenant_id, "h": token_hash}).first()
+        instante = ahora_utc()
+        vigente = s.execute(
+            text(
+                "SELECT 1 FROM modulo1.paquete_entrega WHERE tenant_id = :t AND token_hash = :h "
+                "AND revocado_en IS NULL AND expira_en > :ahora"
+            ),
+            {"t": tenant_id, "h": token_hash, "ahora": instante},
+        ).first()
     if vigente is None:
         raise NoEncontrado("Paquete inexistente o vencido")
     url = str(request.base_url).rstrip("/") + f"/v1/publico/paquete/{token}"
