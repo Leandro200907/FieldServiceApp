@@ -32,8 +32,22 @@ npm test
 npm run build
 ```
 
-`contracts/modulo1/openapi.json` corresponde al backend del radar documental definitivo. Los archivos de `src/api/generated/` se regeneran desde ese contrato y no se editan manualmente.
+`npm run check` corre todo junto (contrato + typecheck + tests + build); es lo que ejecuta CI.
 
-La sesión vive solo en memoria. Recargar la página exige volver a ingresar. Las capacidades bloqueadas están documentadas en `../docs/frontend/API_GAPS.md`.
+## Contrato con el backend
+
+`contracts/modulo1/openapi.json` es una copia fijada del contrato del backend (`../backend/docs/openapi.json`, generado por `backend/scripts/generar_openapi.py`). Los archivos de `src/api/generated/` se regeneran desde esa copia con `npm run generate:api` y no se editan manualmente.
+
+`npm run check:contract` (`scripts/check-contract.mjs`) verifica que la copia no cambió: compara su SHA-256 con el hash fijado en `expectedHash` y la cantidad de operaciones y paths (hoy 89 operaciones / 88 paths).
+
+> **Atención:** cuando cambia `backend/docs/openapi.json`, el frontend no se entera solo. Hay que sincronizar a mano, desde `frontend/`:
+>
+> 1. Revisar el diff del contrato del backend.
+> 2. Copiar `../backend/docs/openapi.json` a `contracts/modulo1/openapi.json` (copia byte a byte, sin reformatear).
+> 3. `npm run generate:api` para regenerar `src/api/generated/modulo1.d.ts`.
+> 4. Calcular el nuevo hash (`node -e "console.log(require('crypto').createHash('sha256').update(require('fs').readFileSync('contracts/modulo1/openapi.json')).digest('hex'))"`) y reemplazar `expectedHash` en `scripts/check-contract.mjs`; si cambió la cantidad de operaciones o paths, actualizar también esas cifras en el mismo script.
+> 5. `npm run check` y corregir lo que rompa por los tipos nuevos.
+
+La sesión vive solo en memoria. Recargar la página exige volver a ingresar. Las capacidades que el backend todavía no expone están en `../backend/docs/HANDOFF_FRONTEND.md` (sección 8).
 
 

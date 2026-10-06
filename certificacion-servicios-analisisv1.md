@@ -1,3 +1,5 @@
+> **OBSOLETO (06/10/2026):** reemplazado por certificacion-servicios-analisisv3.md. Se conserva como historia; contiene vocabulario y reglas superadas (p. ej. llama «certificado» al parte de la empresa) y una sección mal pegada dentro de la tabla de hechos. No usar como referencia.
+
 # Trazabilidad de certificación de servicios de campo
 
 **Análisis de dominio, actores, casos de uso y requisitos**

@@ -1,6 +1,6 @@
 # FLUJO E-97 — Respaldo de inducción y competencia
 
-Decisiones de referencia: **D1**, **D19**, **C1** (reglas de vigencia de incorporación/carga),
+Decisiones de referencia: **D1**, **D19**, **C1** (validación de fechas de vigencia, en «Convenciones transversales»),
 **regla general: el frontend no calcula estados** (ver `backend/docs/DECISIONES_DOMINIO.md`).
 
 **Supuesto de negocio (a confirmar con el cliente):** la inducción y la competencia se acreditan
@@ -48,14 +48,16 @@ intercambiable por otro requisito del legajo (apto, ART, licencia).
 1. Ficha del legajo → faltante exigido de **inducción** → **Registrar inducción**.
 2. **Locación / operadora** en solo lectura (`locacion_id` de la definición).
 3. El responsable sube el **certificado** (PDF/imagen) y completa **fecha de realización**
-   (`vigente_desde`, no futura) y **vencimiento** (`vigente_hasta`: posterior a `vigente_desde`,
-   tope **C1** ~10 años desde hoy del tenant).
+   (`vigente_desde`, no futura) y **vencimiento** (`vigente_hasta`: no anterior a `vigente_desde`,
+   tope **C1** `propuesta_max_anios_vigencia` = 10 años desde hoy del tenant).
 4. **API (etapa 1 backend):** `crear_certificado_respaldo` → subida estándar de evidencia →
    `registrar_induccion` con `certificado_documento_id` (no `evidencia` de legajo).
 5. El backend valida sujeto/tenant, que el certificado sea `origen = certificado_respaldo`, archivo
    confirmado, no reutilizado, y aplica **C1** en vigencias. **`estado_confirmacion` lo decide el
    backend** (`declarado` si el archivo sigue `pendiente`; `verificado` si ya es `valido`; tras
-   validar el worker, promoción automática del registro padre).
+   validar el worker, promoción automática del registro padre). En ambos casos de `verificado`
+   se emite `DocumentoVerificado`; en la promoción el actor es `sistema` y el payload lleva
+   `promovido_por = validacion_evidencia_worker` (E-107).
 6. **D1 (front, etapa posterior):** no habilitar **Registrar** hasta abrir la vista previa del
    archivo subido en la sesión.
 
@@ -68,7 +70,10 @@ en la misma rama.
 
 Alineado a **D19:** con `archivo_validacion = pendiente` en el certificado, el registro padre queda
 `declarado` y **no cuenta como en regla**. Cuando el worker marca el certificado `valido`, el
-backend promueve el padre a `verificado` si el enlace es `es_certificado_propio`.
+backend promueve el padre a `verificado` si el enlace es `es_certificado_propio` y emite
+`DocumentoVerificado` con actor `sistema` (E-107, `certificado_respaldo.py::promover_padres_si_certificado_valido`),
+que dispara la política de revaluación. Si el worker marca el certificado `invalido`, el padre
+queda `declarado` y hoy no se notifica (pendiente; ver §25 en `DECISIONES_DOMINIO.md`).
 
 ## Terminado cuando
 

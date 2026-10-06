@@ -11,7 +11,8 @@ sesiones en [BITACORA.md](BITACORA.md).
 
 ## Cifras (verificadas por `tests/test_docs_actualizados.py`)
 
-- **Rutas HTTP:** 89 operaciones sobre 88 paths bajo `/v1` (OpenAPI en `/docs`).
+- **Rutas HTTP:** 89 operaciones sobre 88 paths bajo `/v1` (OpenAPI en `GET /openapi.json`; Swagger en `/docs`
+  sólo con `API_DOCS_HABILITADA=true`, por defecto `false`).
 - **Migraciones:** 36 archivos en `migrations/versions/`, un solo head: `0033_certificado_respaldo_e97`.
 - Esquema documentado: [docs_schema_actual.sql](docs_schema_actual.sql) (generado, no editar).
 - Contrato HTTP versionado: [docs/openapi.json](docs/openapi.json) (generado por
@@ -51,12 +52,18 @@ app/
     drive/              # carpeta de Drive de solo lectura: proveedor, escaneo, extracción por confianza, bandeja
     oc/                 # importación/cancelación de OC (vista de compromiso)
     consultas/          # GET /consultas/* (read models con alcance por rol) + catálogos para operar sin ids (H-06) + mi_legajo (H-05)
+    evidencia/          # validación técnica de archivos (verificar_archivo)
+    proyeccion/         # cruce OC-legajos (radar documental del backlog)
   storage/              # contrato de storage, backend local firmado, subida/descarga
   worker/               # cola con leases, outbox, procesos de reloj, dead-letter
-migrations/             # Alembic (0001 … 0022, lineales, un head)
-scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py
+migrations/             # Alembic (0001 … 0033, lineales, un head)
+scripts/                # crear_roles.sql, crear_base.sql, administracion.py, precargar_plantillas.py, generar_schema.py, generar_openapi.py,
+                        # sembrar_demo.py + demo/ (sembrado de la base demo), informe_integridad.py (solo lectura),
+                        # empaquetar_auditoria.py, reconciliar_archivos_documento.py, actualizar_plantilla_operadoras.py
 tests/                  # suite completa (ver Cifras)
-docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, BRIEF_SUBAGENTES.md
+docs/                   # DECISIONES_DOMINIO.md, HANDOFF_FRONTEND.md, ESPEJO_OPERADORAS.md, openapi.json,
+                        # flujos/, plantillas/,
+                        # BRIEF_SUBAGENTES.md (histórico, OBSOLETO — no usar; reglas vigentes en .cursor/rules/reglas-proyecto.mdc)
 ```
 
 ## Bootstrap desde cero (local)
@@ -65,7 +72,7 @@ Requiere PostgreSQL 16 con un superusuario y `psql`/`pg_dump` en el PATH (o ruta
 
 ```bash
 # 1) Roles (contraseñas SOLO por variables de psql, mínimo 12 caracteres; nunca en el repo)
-psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v owner_password='…' -v app_password='…' -f scripts/crear_roles.sql
+psql -U postgres -h 127.0.0.1 -v ON_ERROR_STOP=1 -v owner_password='…' -v app_password='…' -f scripts/crear_roles.sql
 ```
 
 Roles de Postgres (ver `scripts/crear_roles.sql`):
@@ -77,10 +84,13 @@ Roles de Postgres (ver `scripts/crear_roles.sql`):
 | **modulo1_app** | `DATABASE_URL` — API, worker, scripts de aplicación | DML bajo RLS; **sin** owner ni `CREATEDB` |
 
 Precedencia de URLs en entorno: variables del proceso → archivo `ENV_FILE` → `.env`.
+**Todo comando de Alembic, tests, scripts y bootstrap de este README lleva `ENV_FILE`
+explícito**; no depender nunca del `.env` implícito (en PowerShell:
+`$env:ENV_FILE=".env"` antes del comando).
 
 ```bash
 # 2) Base con owner correcto
-psql -U postgres -h localhost -v ON_ERROR_STOP=1 -v db=modulo1 -f scripts/crear_base.sql
+psql -U postgres -h 127.0.0.1 -v ON_ERROR_STOP=1 -v db=modulo1 -f scripts/crear_base.sql
 ```
 
 ```bash
@@ -95,12 +105,20 @@ cp .env.example .env
 
 ```bash
 # 5) Migraciones (rol owner, vía DATABASE_URL_MIGRATIONS del ENV_FILE)
-ENV_FILE=.env .venv/Scripts/alembic upgrade head
+ENV_FILE=.env .venv/Scripts/python -m alembic upgrade head
+```
+
+```powershell
+$env:ENV_FILE=".env"; .\.venv\Scripts\python -m alembic upgrade head
 ```
 
 ```bash
 # 6) Catálogo global de industria (plantillas de definiciones y matrices por operadora; rol owner; idempotente)
 ENV_FILE=.env .venv/Scripts/python scripts/precargar_plantillas.py docs/plantillas/base_v1.json
+```
+
+```powershell
+$env:ENV_FILE=".env"; .\.venv\Scripts\python scripts/precargar_plantillas.py docs/plantillas/base_v1.json
 ```
 
 El contenido de `docs/plantillas/base_v1.json` es una **precarga base a validar con cada
@@ -115,30 +133,31 @@ muestra plantilla y copia lado a lado; `copiar_matriz_global` publica una versi�
 `scripts/administracion.py` corre con `DATABASE_URL` del archivo de entorno (rol de
 aplicación, respeta RLS). La contraseña entra por la variable `USUARIO_PASSWORD` o, si no
 está, por prompt seguro (`getpass`, dos veces, sin eco); **nunca** por argv ni stdout.
-Máximo 72 bytes UTF-8, sin truncar.
+Máximo 72 bytes UTF-8, sin truncar. En PowerShell: `$env:ENV_FILE=".env"; .\.venv\Scripts\python scripts/administracion.py …`
+(mismos argumentos).
 
 ```bash
 # 1) tenant (imprime el tenant_id)
-.venv/Scripts/python scripts/administracion.py crear-tenant --slug acme --nombre "ACME SRL"
+ENV_FILE=.env .venv/Scripts/python scripts/administracion.py crear-tenant --slug acme --nombre "ACME SRL"
 ```
 
 ```bash
 # 2) primer responsable de legajos (+ configuración para cargar definiciones y matrices)
-.venv/Scripts/python scripts/administracion.py crear-usuario --tenant-slug acme --email ana@acme.test --nombre Ana --rol responsable_legajos --rol configuracion
+ENV_FILE=.env .venv/Scripts/python scripts/administracion.py crear-usuario --tenant-slug acme --email ana@acme.test --nombre Ana --rol responsable_legajos --rol configuracion
 ```
 
 ```bash
 # 3) supervisor
-.venv/Scripts/python scripts/administracion.py crear-usuario --tenant-slug acme --email sup@acme.test --nombre Sup --rol supervisor
+ENV_FILE=.env .venv/Scripts/python scripts/administracion.py crear-usuario --tenant-slug acme --email sup@acme.test --nombre Sup --rol supervisor
 ```
 
 ```bash
 # 4) desactivar un usuario: efectivo de inmediato (cada request protegido comprueba `activo` en la base; login y refresh 401; refresh tokens revocados)
-.venv/Scripts/python scripts/administracion.py desactivar-usuario --tenant-slug acme --email sup@acme.test
+ENV_FILE=.env .venv/Scripts/python scripts/administracion.py desactivar-usuario --tenant-slug acme --email sup@acme.test
 ```
 
 ```bash
-.venv/Scripts/python scripts/administracion.py listar-usuarios --tenant-slug acme
+ENV_FILE=.env .venv/Scripts/python scripts/administracion.py listar-usuarios --tenant-slug acme
 ```
 
 Pendiente expresamente para después de v1: cambio y restablecimiento de contraseña,
@@ -150,15 +169,24 @@ que no revivan tokens emitidos antes de la desactivación) y gestión de usuario
 Base dedicada **`fsm_demo`** (el nombre debe terminar en `_demo`). El script aborta si
 `DATABASE_URL` y `DATABASE_URL_MIGRATIONS` no apuntan a la misma base con ese sufijo.
 
+> **Solo personas, con backup previo fuera del repo. Prohibido para agentes de IA.**
+> Los pasos 2 y 3 escriben, migran y (con `--reset`) borran y recrean `fsm_demo`. Usar un
+> archivo de entorno dedicado sólo a la demo local (el `.env` de esa máquina, gitignored) y
+> pasar siempre `ENV_FILE` explícito; nunca reutilizarlo para tests (`.env.test`).
+
 1. Crear la base (owner `modulo1_owner`), por ejemplo: `psql … -v db=fsm_demo -f scripts/crear_base.sql`
 2. En `.env`, apuntar `DATABASE_URL` y `DATABASE_URL_MIGRATIONS` a `fsm_demo`; definir
    **`DEMO_PASSWORD`** (o usar prompt al correr el script). Para **`--reset`**, definir también
-   **`DATABASE_URL_ADMIN`** (p. ej. `postgresql://postgres:…@localhost:5432/postgres`): el owner
+   **`DATABASE_URL_ADMIN`** (p. ej. `postgresql://postgres:…@127.0.0.1:5432/postgres`): el owner
    no tiene `CREATEDB` y el script aborta **antes** de borrar storage o la base si falta permiso.
 3. Sembrado completo:
 
 ```bash
 ENV_FILE=.env .venv/Scripts/python scripts/sembrar_demo.py --reset --importar-planillas
+```
+
+```powershell
+$env:ENV_FILE=".env"; .\.venv\Scripts\python scripts/sembrar_demo.py --reset --importar-planillas
 ```
 
 4. Levantar **tres procesos** en pestañas separadas (mismo `ENV_FILE=.env` que la API):
@@ -168,7 +196,7 @@ ENV_FILE=.env .venv/Scripts/python scripts/sembrar_demo.py --reset --importar-pl
    ```powershell
    cd backend
    $env:ENV_FILE = ".env"
-   .\.venv\Scripts\uvicorn app.main:app --host 0.0.0.0 --port 8000
+   .\.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000
    ```
 
    **PowerShell — worker** (obligatorio para validar archivos subidos; sin él, `archivo_validacion`
@@ -205,11 +233,31 @@ técnica** (no es un error de usuario). El escaneo antivirus está **pendiente d
 implementación** (`scan_estado = no_configurado`); no bloquea la validación hoy ni afirma
 «limpio» sin escanear.
 
+## Informe de integridad (solo lectura)
+
+`scripts/informe_integridad.py` revisa un tenant de la base demo (archivos y huérfanos en
+storage, versiones, matrices, OC, eventos, aislamiento intra-tenant). Sólo hace `SELECT` e
+inspección de storage: no escribe ni migra. Aborta (código 2) si `DATABASE_URL` no apunta a
+una base `*_demo`; sale con código **1** si algún control da «observación» (0 si todo OK).
+Imprime una tabla y el mismo resultado en JSON.
+
+```powershell
+cd backend; $env:ENV_FILE=".env"; .\.venv\Scripts\python -m scripts.informe_integridad --tenant-slug patagonia-demo
+```
+
+```bash
+ENV_FILE=.env .venv/Scripts/python -m scripts.informe_integridad --tenant-slug patagonia-demo
+```
+
 ## Correr
 
 ```bash
 # API
-.venv/Scripts/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ENV_FILE=.env .venv/Scripts/uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+```powershell
+$env:ENV_FILE=".env"; .\.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ```bash
@@ -217,10 +265,20 @@ implementación** (`scan_estado = no_configurado`); no bloquea la validación ho
 ENV_FILE=.env .venv/Scripts/python -m app.worker.main
 ```
 
+```powershell
+$env:ENV_FILE=".env"; .\.venv\Scripts\python -m app.worker.main
+```
+
 ```bash
 # Tests: base explícita modulo1_test (nunca fsm_demo ni el .env de demo manual)
-# Copiar .env.test.example → .env.test, crear modulo1_test, alembic upgrade head
+# Copiar .env.test.example → .env.test y crear modulo1_test; luego migrar y correr
+ENV_FILE=.env.test .venv/Scripts/python -m alembic upgrade head
 ENV_FILE=.env.test .venv/Scripts/python -m pytest -q --ignore=tests/test_sembrar_demo.py
+```
+
+```powershell
+$env:ENV_FILE=".env.test"; .\.venv\Scripts\python -m alembic upgrade head
+$env:ENV_FILE=".env.test"; .\.venv\Scripts\python -m pytest -q --ignore=tests/test_sembrar_demo.py
 ```
 
 `pytest` aborta si `DATABASE_URL` apunta a `fsm_demo`, a cualquier `*_demo` en la suite
@@ -252,6 +310,8 @@ comprueba que cada uno usa el suyo.
   tooling (constreñido por `requirements.lock`).
 - `requirements.lock` / `requirements-dev.lock`: versiones exactas **con hashes**; la
   instalación es `pip install --require-hashes -r requirements.lock [-r requirements-dev.lock]`.
+- El CI (`.github/workflows/ci.yml`) instala con `pip install -r requirements.lock -r requirements-dev.lock`,
+  sin `--require-hashes`; como los locks traen hashes, pip igual verifica en modo hash.
 - Regenerar (después de tocar un `.in`):
 
 ```bash
@@ -275,6 +335,11 @@ comprueba que cada uno usa el suyo.
 ```bash
 ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 ```
+
+`.env.boot` no tiene ejemplo versionado: copiar `.env.example` a `.env.boot` y apuntar
+`DATABASE_URL` / `DATABASE_URL_MIGRATIONS` a una base **vacía** creada con
+`scripts/crear_base.sql`, migrada con `ENV_FILE=.env.boot .venv/Scripts/python -m alembic upgrade head`
+(PowerShell: `$env:ENV_FILE=".env.boot"; …`). Queda gitignored por `.env.*`.
 
 ## Operación y diagnóstico
 
@@ -308,9 +373,10 @@ ENV_FILE=.env.boot .venv/Scripts/python scripts/generar_schema.py
 | Drive de solo lectura: carpeta por tenant, escaneo manual/programado, extracción tipo/sujeto/fecha por confianza en dos niveles (nombre de archivo, y texto embebido de PDF cuando el nombre no alcanza), bandeja de excepciones | Hecho (0018/nivel 2 sin migración; adaptador Google Drive por cuenta de servicio, probado con proveedor simulado) |
 | Motor de evaluación puro + 5 casos de oro + orquestación decisión/consulta | Hecho |
 | Auth JWT (login/refresh/logout), roles, universo del supervisor, contraseñas por bytes | Hecho |
-| Comandos (46) + consultas (32) + storage (3) + salud (2) + público (2) | Hecho |
+| Comandos (40) + consultas (38) + auth (4) + storage (3) + salud (2) + público (2) — operaciones contadas en `docs/openapi.json` | Hecho |
 | Idempotencia por actor con exclusión real; outbox con dedup; revaluación declarativa | Hecho |
 | Worker: leases, backoff, dead-letter, purga en dos fases, dos instancias | Hecho |
 | Validación técnica de evidencia: formato/tipo de contenido real/PDF no corrupto, malware (`no_configurado` sin scanner real), eje `archivo_validacion` independiente de `estado_confirmacion`, caso A (declarado→`RechazarPropuesta`) / caso B (verificado→notifica + revaluación, nunca toca `estado_confirmacion`), bloquea descarga, fencing por token, recuperación manual (reemplazo o `invalidar_evidencia`) | Hecho (0021) |
+| Espejo documental por operadora (+ movimientos append-only), documento habilitante unificado (certificados, competencias e inducciones en una sola entidad), integridad operativa y `vigente_hasta` NOT NULL, lote por entidad, catálogos de OC con nombre, nombre y apellido de persona, `estado_version` propuesta, horizonte del backlog/radar documental configurable (D23), certificado propio de respaldo para inducción/competencia (E-97) | Hecho (0022–0033) |
 | Transporte real a Módulo 2 (hoy `PublicadorEnLog`; el drenaje ya tiene backoff/tope de reintentos/alerta obligatoria — 0020), storage S3, lectura de contenido más allá de tipo/sujeto/fecha (OCR general) | Pendiente / segunda etapa (declarado, no silencioso) |
 | Gestión de usuarios por API (alta/cambio/reset de contraseña, reactivación) | Pendiente (CLI `scripts/administracion.py`: tenant, usuarios, desactivación) |

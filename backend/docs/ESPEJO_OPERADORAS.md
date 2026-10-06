@@ -6,6 +6,12 @@ El legajo interno y el estado conocido por una operadora son realidades independ
 El Módulo 1 conserva ambas y señala cualquier diferencia sin convertirla en una decisión
 de planificación o asignación.
 
+> **Actualización (E-10, 2026-10-06):** el **rechazo** de una operadora sobre la versión
+> vigente **bloquea** la habilitación documental del requisito en las OC de **esa**
+> operadora (`cliente_id` de la OC = operadora); `pendiente_envio` y `pendiente_aceptacion`
+> solo avisan, sin bloquear (`app/core/consulta_documental.py`, ver E-10 en
+> `DECISIONES_DOMINIO.md`).
+
 ## Modelo relacional
 
 No se crea una tabla `empleado` paralela: `legajo` es el maestro de sujetos y distingue
@@ -17,7 +23,9 @@ aislamiento por tenant sin duplicar relaciones.
 - `definicion_requisito`: catálogo equivalente a TipoDocumento, con categorías
   `documento`, `competencia` e `induccion`;
 - `documento`: hecho documental versionado y fuente canónica de vigencia;
-- `documento_soporte`: archivos/documentos que prueban una competencia o inducción;
+- `documento_soporte`: archivos/documentos que prueban una competencia o inducción; para
+  habilitar solo cuenta el soporte con `es_certificado_propio = true` (migración 0033,
+  D19 / E-97);
 - `operadora_documental`: catálogo de operadoras;
 - `operadora_legajo`: indica qué operadoras mantienen legajo del sujeto;
 - `entrega_documento_operadora`: hecho de exportación, envío, aceptación o rechazo de

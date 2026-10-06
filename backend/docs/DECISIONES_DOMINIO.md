@@ -2,8 +2,40 @@
 
 Reglas que la especificación deja implícitas o que el código tuvo que resolver, cerradas
 contra el texto de los documentos de diseño (`Escritorio/Ticketera/modulo1-*.md`).
-Cada una tiene su test de aceptación en `tests/test_reglas_cerradas.py`. Cambiar una de
-estas reglas exige releer la cita y justificar contra ella.
+Las reglas de las secciones numeradas (§1–§25) tienen su test de aceptación en
+`tests/test_reglas_cerradas.py` o en el test de su sección; las decisiones de producto
+(D*, E-*) se prueban en sus propios archivos (`tests/test_e20_*`, `test_e97_*`,
+`test_e101_*`, `test_backlog_m1_de.py`, etc.). Cambiar una de estas reglas exige releer la
+cita y justificar contra ella.
+
+## Convenciones transversales
+
+### C1 — Validación de fechas de vigencia
+
+Reglas que aplica el backend al recibir fechas de vigencia (el frontend puede anticiparlas,
+pero la fuente de verdad es la API; códigos de error tal como están en el código):
+
+- **Toda carga** (`cargar_documento`, `proponer_documento`, lotes): `vigente_desde ≤
+  vigente_hasta` (`_exigir_vigencia`; 422 con código genérico `regla_de_dominio`).
+- **Propuesta del técnico** (`proponer_documento`, D17 —
+  `legajos/servicio.py::_exigir_vigencia_propuesta`): `vigente_hasta` posterior a hoy del
+  tenant (`vigencia_no_futura`); no más allá de hoy + `propuesta_max_anios_vigencia` años
+  (`vigencia_propuesta_excede_plazo`); posterior al `vigente_hasta` de la versión vigente
+  del requisito (`vigencia_no_posterior_a_vigente`).
+- **Inducción / competencia con certificado propio** (E-97 —
+  `legajos/certificado_respaldo.py::_exigir_vigencia_registro_certificado`): `vigente_desde`
+  (fecha de realización) no futura (`vigencia_desde_futura`); `vigente_desde ≤ vigente_hasta`
+  (código genérico); `vigente_hasta` no más allá de hoy + `propuesta_max_anios_vigencia`
+  años (`vigencia_propuesta_excede_plazo`).
+- Tope configurable: `propuesta_max_anios_vigencia = 10` en `app/config.py` (debe ser ≥ 1).
+
+### Reloj
+
+La app obtiene la fecha y la hora **solo** vía `app/comun/reloj.py` (`ahora_utc`,
+`hoy_del_tenant` para la fecha civil del tenant). Los tests congelan el reloj en
+**2026-09-20T15:00Z** (`AHORA_PYTEST_DEFAULT` en `tests/conftest.py`, vía
+`congelar_reloj_utc`). Prohibido `datetime.now` / `datetime.utcnow` / `date.today` fuera
+de `reloj.py`: lo controla la guardia `tests/test_reloj_guardia.py` (E-106).
 
 ## 1. Propuesta del técnico (`ProponerDocumento` / `RechazarPropuesta`)
 
@@ -145,11 +177,19 @@ anteriores tenían la misma semántica (mismas condiciones, misma JOIN de custod
    operativamente incómoda. Está implementada tal cual; si se quiere "el anterior sigue
    probando hasta que se confirme o rechace la propuesta", es un cambio de dominio (dos
    vigentes por (sujeto, requisito) o un estado nuevo), no de implementación.
+   > **Superado (E-20 / §1, 2026-10-06):** se resolvió con un estado nuevo. La propuesta
+   > vive en `estado_version = 'propuesta'` y el vigente confirmado **no se toca** hasta que
+   > el responsable confirma; mientras tanto el vigente sigue siendo la fila evaluada
+   > (`app/core/resolucion_evidencia.py::fila_para_evaluacion`). Solo si no hay vigente la
+   > propuesta pendiente deja el requisito en *requiere revisión* (D16).
 3. **Excepción sobre un requisito de empresa.** 1.6 habla de excepciones del supervisor
    sobre documentos excepcionables sin distinguir familia de sujeto; modelo-dominio 2.4
    solo aclara que un bloqueante duro de empresa no admite excepción. Se implementa la
    regla general (excepcionable de empresa admite excepción). Confirmar si se desea
    restringir.
+   > **Superado (§7, 2026-10-06):** la excepción sobre requisitos de empresa quedó
+   > **deshabilitada** (`excepcion_de_empresa_deshabilitada`, ver §7); además las rutas de
+   > excepciones se retiraron de la API pública (D-A).
 4. **`requiere_revision` como decisión.** No existe un resultado de decisión "pendiente";
    se mapea a `no_puede_asignarse`. Si Módulo 2 necesita distinguir "bloqueado" de
    "falta confirmar un dato", debería leer `veredicto_de_cumplimiento`, no solo
@@ -205,6 +245,12 @@ habilitación (**modo consulta**, antes de asignar)"* → responsable y supervis
 *"cobertura del backlog"* → supervisor **"su universo"**. no-funcionales 2.3: el supervisor
 ve *"las Evaluaciones de habilitación … cuyo sujeto caiga dentro"* de su universo.
 
+> **Superado en la superficie HTTP (D-A, 2026-10-06):** `POST /comandos/evaluar_habilitacion`,
+> `decisiones_oc`, `decision`, `otorgar_excepcion` / `revocar_excepcion` y las consultas de
+> excepciones se retiraron de la API pública (`tests/test_superficie_modulo1.py::RUTAS_OPERATIVAS_RETIRADAS`);
+> la lógica sigue en servicios internos para Módulo 2. `cobertura_oc` sigue público como modo
+> consulta (D-A bis). La regla de dominio de esta sección se conserva como referencia.
+
 **Regla definitiva.**
 | | Decisión — `POST /comandos/evaluar_habilitacion` | Consulta — `GET /consultas/cobertura_oc` |
 |---|---|---|
@@ -224,6 +270,9 @@ que ser visible y el sujeto tiene que estar en el universo (403).
 supervisor se devuelve solo si es visible; si no, `null` — nunca se sustituye por una
 decisión anterior visible (se presentaría como "última" algo que no lo es).
 
+> **Superado (D-A bis, 2026-10-06):** el backlog público ya **no** expone `ultima_decision`
+> (el historial de evaluación es de Módulo 2).
+
 **Excepciones sobre la empresa — DESHABILITADAS (cierre seguro).** Una excepción sobre un
 requisito de la empresa afecta a toda la dotación y ningún rol tiene hoy ese alcance
 definido (la empresa nunca está en el universo de un supervisor, y solo el supervisor
@@ -231,7 +280,7 @@ otorga excepciones). `otorgar_excepcion` con un sujeto de tipo empresa responde 
 `excepcion_de_empresa_deshabilitada` antes de cualquier chequeo de alcance, para
 cualquier supervisor. Queda así hasta que el dominio defina qué rol puede afectar
 globalmente a la empresa (ver "Puntos que la especificación no permite decidir sola",
-ítem 3). Coherente con 2.4 de modelo-dominio ("para un bloqueante duro de empresa no
+ítem 3, que queda superado por esta regla). Coherente con 2.4 de modelo-dominio ("para un bloqueante duro de empresa no
 existe excepción").
 
 **`evaluacion_sujeto_propuesto.tipo_sujeto_al_proponer`** es un snapshot deliberado del
@@ -263,7 +312,7 @@ Implementación declarativa de la tabla 7.2 en `app/core/revaluacion.py::EVENTOS
 | Evento | HRR | Selector |
 |---|---|---|
 | DocumentoVerificado | sí | decisiones que proponen al sujeto; empresa → todas |
-| DocumentoCargado (cualquier estado) | **no** | el productor emite además `DocumentoVerificado` cuando la carga ya viene verificada (verificación implícita, evento canónico) |
+| DocumentoCargado (cualquier estado) | **no** | el productor (`_insertar_version_documento`) emite además `DocumentoVerificado` cuando la carga ya viene verificada (verificación implícita, evento canónico). Desde D19 `cargar_documento` rechaza `verificado` (`confirmacion_requiere_respaldo`): la carga verificada queda para inducción/competencia registradas con certificado propio ya `valido` (E-97) y para filas de lote que declaren `verificado` (`FilaDeLote` todavía lo admite) |
 | LoteRevertido | sí | sujetos de los documentos revertidos |
 | LegajoDadoDeBaja | sí | decisiones que proponen al sujeto |
 | MatrizVersionPublicada | sí | decisiones bajo la versión que se cierra (`version_anterior_id`) |
@@ -273,7 +322,7 @@ Implementación declarativa de la tabla 7.2 en `app/core/revaluacion.py::EVENTOS
 | CustodiaCambiada | **condicional** | solo decisiones con `origen_sujetos = custodia_por_defecto` que proponen el recurso; `explicito` nunca. `origen_sujetos` lo fija exclusivamente el servidor: el body público lo rechaza con 422 (`extra=forbid`) |
 | CompromisoModificado / CompromisoCancelado | sí | `referencias_afectadas` capturadas por el productor ANTES del cambio; payload con `tipo_cambio` — con `cancelacion` el consumidor **invalida**, nunca crea una decisión. `importar_lote_oc` emite UN `CompromisoModificado` por OC y transacción solo si cambia una entrada de la evaluación (`cliente_id`, `locacion_id`, `tipo_servicio_id`, `vigencia_desde`, `vigencia_hasta`); OC nueva, reimportación idéntica o cambio solo de `referencia` no emiten. El evento audita `campos_modificados`, `anterior` y `nuevo` |
 | Vencimiento de documento de empresa (reloj) | outbox `CumplimientoEmpresaAfectado` | `aviso_incumplimiento_empresa` (uno abierto por tenant) con causas normalizadas (una activa por requisito); payload flaco con `aviso_id`; el consumidor consulta `GET /consultas/incumplimiento_empresa`. Marca internamente las decisiones vigentes sin HRR (2.9). Se regulariza solo cuando la reevaluación de TODAS las causas activas no encuentra ninguna incumplida |
-| Resto de 7.2 (Cargado, Rechazado, Sucedido, Acreditación/Inducción, LoteAplicado, LegajoCreado, Supervisor*, Definicion*, EvaluacionRealizada, Tarea, CustodiaCorregida, ConstanciaReemplazada, Alerta*, ArchivoPurgado, Aviso*) | no | tests negativos uno por uno |
+| Resto de 7.2 (Cargado, Rechazado, Sucedido, Acreditación/Inducción *Registrada* — el `DocumentoVerificado` que las acompaña sí, ver nota abajo —, LoteAplicado, LegajoCreado, Supervisor*, Definicion*, EvaluacionRealizada, Tarea, CustodiaCorregida, ConstanciaReemplazada, Alerta*, ArchivoPurgado, Aviso*) | no | tests negativos uno por uno |
 
 `EvaluacionDeHabilitacionRealizada` no genera HRR pero cierra, en la misma transacción,
 los avisos abiertos de decisiones anteriores del mismo commitment (`AvisoDeRevaluacionCerrado`
@@ -282,6 +331,15 @@ por la vía interna), nunca de otra OC.
 Las competencias e inducciones también son entradas del snapshot pero la tabla 7.2 no les
 asigna HRR; se respeta la tabla. Desde la migración 0023 son categorías de la entidad
 canónica `documento`, no tablas de evidencia paralelas.
+
+> **Aclaración (E-97 / E-107, 2026-10-06):** los eventos `InduccionRegistrada` y
+> `AcreditacionDeCompetenciaRegistrada` siguen sin generar HRR, pero el `DocumentoVerificado`
+> que acompaña al registro **sí** lo genera (`app/core/revaluacion.py::EVENTOS_FUENTE`). Se
+> emite (a) en el mismo registro, cuando el certificado propio ya tiene archivo `valido`, y
+> (b) cuando el worker valida el certificado y promueve el registro padre de `declarado` a
+> `verificado` (E-107, `app/modules/legajos/certificado_respaldo.py::promover_padres_si_certificado_valido`):
+> actor `sistema` y payload con `promovido_por = validacion_evidencia_worker`,
+> `certificado_documento_id` y `validacion_certificado_evento_id`.
 
 ## 9. Semántica del borrado físico (A-05)
 
@@ -338,9 +396,15 @@ FKs (0011, sin CASCADE): `custodia_recurso (tenant, recurso_id) → legajo`,
 → custodia_recurso`. El recurso no se repite en `periodo_custodia`: vive en el agregado
 `custodia_recurso`, así que la FK compuesta por tenant lo cubre a través de la custodia.
 
+> **Superado (§19 / D-A, 2026-10-06):** (1) la restricción "solo el Supervisor" se amplió
+> en §19: hoy operan custodia Supervisor, Responsable de legajos y Configuración
+> (`app/modules/operacion/servicio.py::ROLES_CUSTODIA`); (2) `cambiar_custodia` /
+> `corregir_custodia` y la consulta `custodias` se retiraron de la API pública (D-A,
+> `tests/test_superficie_modulo1.py`); las validaciones siguen en el servicio interno.
+
 Antes de cambiar o corregir una custodia el servicio valida, en este orden: rol
-Supervisor (matriz 2.2 de no-funcionales: **solo** el Supervisor opera la custodia; el
-Responsable de legajos no, aunque tenga todo el tenant en lectura); recurso existente en
+autorizado (`ROLES_CUSTODIA`, ver nota; originalmente solo Supervisor por matriz 2.2 de
+no-funcionales); recurso existente en
 el tenant, del tipo declarado (`vehiculo`/`equipo`, coincidiendo con `tipo_sujeto` del
 legajo) y no dado de baja (`recurso_no_custodiable`, `legajo_dado_de_baja`); custodio
 existente, `persona`, no dado de baja y dentro del universo del supervisor que opera
@@ -388,7 +452,8 @@ función pura (fecha + parámetros → etapa); todo efecto es política del relo
 cambio de entrada del snapshot), `AlertaEscalada` al rol configurable, notificaciones
 pendientes por destinatario (técnico y supervisor resueltos a usuario; roles
 administrativos como broadcast) y entrega coalescida en un job por destinatario y corrida.
-Decisiones de implementación: (1) una fuente sucedida por una versión **declarada** no
+Decisiones de implementación: (1) una fuente con una **propuesta pendiente** (declarada,
+`estado_version = 'propuesta'`; desde E-20 el vigente ya no queda sucedido) no
 resuelve la alerta — sigue sobre la fecha original hasta `vencido` si no se verifica (1.10);
 sólo `DocumentoVerificado` que cubre el requisito resuelve (`verificacion`), y la ausencia
 total de fuente (anulada, revertida, legajo de baja) resuelve con motivo
@@ -405,6 +470,11 @@ vigente hoy y **verificada** (documento, acreditación, inducción) o constancia
 vigente. `score = cubiertos / exigidos × 100`, global, por tipo de sujeto y con los diez
 peores. Lo declarado no cuenta (1.10). Consulta con alcance por rol; snapshot diario por
 tenant vía la cola `score_documental` (idempotente por fecha).
+
+> **Nota (2026-10-06) — no comprobado si es intencional:** el score
+> (`app/modules/score/servicio.py`) cuenta como cubierto todo documento `vigente` no
+> `declarado` vigente hoy; **no** aplica respaldo válido ni certificado propio (D19 / E-97)
+> ni la ventana del backlog (D23). Puede diferir del Radar y de la ficha. Pendiente E-108.
 
 ## 17. Drive de solo lectura y extracción por confianza (H-01, migración 0018)
 
@@ -428,6 +498,11 @@ confirmada en transacción propia (M-07).
 
 ## 19. El Supervisor también es trabajador de campo (requisito de dominio nuevo, sin migración)
 
+> **Nota (D-A / D4, 2026-10-06):** las rutas de excepciones, custodia y asignación de
+> supervisor que se mencionan acá se retiraron de la API pública (D-A,
+> `tests/test_superficie_modulo1.py`); los bloqueos `conflicto_de_interes` siguen en los
+> servicios internos para Módulo 2.
+
 El rol Supervisor no exime del cumplimiento documental: un Supervisor puede tener un
 legajo de persona vinculado a su usuario (`usuario.sujeto_id`, ya previsto desde la 0002
 como "opcional para supervisor"), aparecer como sujeto propuesto en una evaluación, ser
@@ -450,6 +525,10 @@ Supervisor con alcance real sobre él también puede). Los tres bloqueos son dir
 blindados aunque alguna otra ruta futura deje a un Supervisor dentro de su propio alcance.
 
 ## 20. Corrección: alcance faltante en RevocarExcepcion
+
+> **Nota (D-A, 2026-10-06):** `otorgar_excepcion` / `revocar_excepcion` ya no están en la
+> API pública (`tests/test_superficie_modulo1.py`); la validación de alcance descripta abajo
+> vive en el servicio interno.
 
 `revocar_excepcion` tenía el chequeo de rol (Supervisor, matriz 2.2) y, desde §19, el
 bloqueo de auto-revocación, pero **no** validaba que el sujeto de la excepción estuviera
@@ -551,11 +630,18 @@ formato/tipo de contenido real/PDF no corrupto/malware (`no_configurado` sin sca
 y consolida con `UPDATE ... WHERE archivo_validacion_token = :token` — un job viejo cuyo
 archivo se reemplazó o se invalidó a mano no pisa nada (el `UPDATE` no toca ninguna fila).
 
-Dos casos al resultar inválido: **A** (`declarado`, propuesta vigente) reutiliza
+Dos casos al resultar inválido: **A** (`declarado`, propuesta pendiente) reutiliza
 exactamente `RechazarPropuesta`/`DocumentoRechazado`. **B** (`verificado` /
 `confirmado_en_fuente`) nunca toca `estado_confirmacion`; notifica a responsable_legajos y
 dispara la política de revaluación ya existente (`EvidenciaInvalidaPostVerificacion` en
 `EVENTOS_FUENTE`, mismo selector que `DocumentoVencido` — ningún mecanismo nuevo).
+
+> **Caso no cubierto (E-97, 2026-10-06):** si el archivo inválido es un **certificado
+> propio** (`origen = certificado_respaldo`) y el registro padre de inducción/competencia
+> sigue `declarado`, el certificado no es propuesta ni verificado: `_despachar_invalidez`
+> (`app/modules/evidencia/servicio.py`) solo deja la traza `EvidenciaInvalida`. El padre
+> queda `declarado` y **no en regla** (no se promueve), y hoy **no se notifica** a nadie.
+> Pendiente de decisión (notificar al responsable / rechazar el registro padre).
 
 Motor puro: `Documento.archivo_requiere_revision` (default `False`, no rompe ninguna
 construcción existente) — `True` SOLO cuando hay archivo real adjunto
@@ -564,6 +650,11 @@ construcción existente) — `True` SOLO cuando hay archivo real adjunto
 enum, sin usar — reservado exactamente para esto, mismo patrón que el `declarado` sin
 confirmar). Una competencia o inducción puede referenciar sus archivos probatorios por
 `documento_soporte`; si su propia fila no tiene archivo adjunto, no activa el gate.
+
+> **Superado (D19 / E-97, 2026-10-06):** una inducción o competencia `verificada` sin
+> respaldo válido —un `documento_soporte` con `es_certificado_propio = true` y archivo
+> `valido`— queda en *requiere revisión* aunque su propia fila no tenga archivo
+> (`app/core/resolucion_evidencia.py::archivo_requiere_revision` / `respaldo_valido`).
 
 Descarga (`firmar_descarga`) exige `archivo_validacion = 'valido'` — 409 si `pendiente`
 (reintentar), 422 si `invalido`. Documentos legado (confirmados antes de esta migración)
@@ -628,17 +719,18 @@ sigue vigente.
 
 **Decisión para savepoints (`begin_nested`) solo en secundarios:**
 
-| Handler | Líneas ~ | Rol |
+| Handler | Dónde (`app/modules/legajos/servicio.py`) | Rol |
 |---|---|---|
-| `DocumentoCargado` | 186–194 | **Obligatorio** — evento canónico del comando |
-| `DocumentoSucedido` | 207–213 | **Obligatorio** — invariante de cadena de versiones |
-| `_al_verificar` (evento `DocumentoVerificado`, regularización de excepciones `otorgada`) | 202–206 → 335+ | **Obligatorio** — semántica de carga ya verificada / confirmación |
-| `registrar_accion` (alertas vencimiento) | 198–201 | **Secundario** — pausa recordatorios; no debe abortar la carga |
-| `resolver_por_verificacion` (dentro de `_al_verificar`) | 347–352 | **Secundario** — cierre de alertas; best-effort |
-| `al_registrar_nueva_version` (operadoras) | 218–222 | **Secundario** — espejo operadoras; best-effort |
+| `DocumentoCargado` | `_insertar_version_documento` | **Obligatorio** — evento canónico del comando |
+| `DocumentoSucedido` | `_insertar_version_documento` | **Obligatorio** — invariante de cadena de versiones |
+| `_al_verificar` (evento `DocumentoVerificado`, regularización de excepciones `otorgada`) | `_insertar_version_documento` (carga ya verificada), `confirmar_documento`; también `certificado_respaldo.py::promover_padres_si_certificado_valido` | **Obligatorio** — semántica de carga ya verificada / confirmación |
+| `registrar_accion` (alertas vencimiento) | `_insertar_version_documento`, vía `_hook_secundario` | **Secundario** — pausa recordatorios; no debe abortar la carga |
+| `resolver_por_verificacion` (dentro de `_al_verificar`) | `_al_verificar`, vía `_hook_secundario` | **Secundario** — cierre de alertas; best-effort |
+| `al_registrar_nueva_version` (operadoras) | `_insertar_version_documento`, vía `_hook_secundario` | **Secundario** — espejo operadoras; best-effort |
 
 Los obligatorios comparten commit con el INSERT/UPDATE de `documento`. Los secundarios se
-envuelven en savepoint en la fase B-5 (fallo → rollback parcial, la versión documental queda).
+envuelven en savepoint en la fase B-5 (fallo → rollback parcial, la versión documental queda);
+implementado en `_hook_secundario` (`session.begin_nested()`).
 
 ### D-E. Backlog sin veredicto de cobertura — **Módulo 1 (2026-09-30)**
 
@@ -753,7 +845,9 @@ la deuda en BITACORA del 2026-10-01.
 **Motivo.** El supervisor opera custodia, excepciones y dotación en Módulo 2; exponerlo en
 M1 generaba alcance y pantallas inconsistentes con la frontera de módulos.
 
-**Estado.** Decidida.
+**Estado.** Decidida, **implementación parcial** (2026-10-06): el rol supervisor todavía se
+usa en el radar/backlog (alcance por universo, D-B / D-E, transitorias) y en las
+notificaciones del espejo de operadoras (`app/modules/operadoras/servicio.py`).
 
 #### D5. OC como compromiso del cliente y cambio informado
 
@@ -837,7 +931,8 @@ configuración real con clientes y no depender de la consola para la rotación d
 
 **Decisión.** Un documento sin confirmar (`estado_confirmacion = declarado`, incluida una
 propuesta del técnico) **nunca** habilita ni cuenta como requisito cumplido. Si existe una
-versión **confirmada** anterior (típicamente en `sucedida` enlazada por `sucede_a`), todas
+versión **confirmada** anterior (desde E-20 sigue en `vigente` mientras la propuesta está
+pendiente; pasa a `sucedida` recién al confirmar la propuesta), todas
 las evaluaciones de la app —Radar documental, vencimientos, acciones pendientes, motor de
 habilitación (`cargar_evidencias` / `evaluar_compromiso` / `decidir_habilitacion`) y
 consultas de cobertura— usan esa versión confirmada para el período que cubra. Si **solo**
@@ -891,6 +986,12 @@ acciones pendientes y el paquete de entrega público. La regla se centraliza en
 `app/core/resolucion_evidencia.py` y se aplica desde `cargar_evidencias`, el radar y el
 paquete.
 
+> **Precisión (E-97, 2026-10-06):** en inducción y competencia el respaldo válido es
+> exclusivamente un **certificado propio**: `documento_soporte.es_certificado_propio = true`
+> (migración 0033), cuyo documento tiene `origen = 'certificado_respaldo'` y archivo
+> `valido` (`resolucion_evidencia.py::respaldo_valido`). Un soporte que no es certificado
+> propio (p. ej. un apto médico enlazado) **no cuenta**, aunque su archivo sea válido.
+
 **Escrituras nuevas.** `cargar_documento` ingresa como `declarado`; la verificación pasa por
 `confirmar_documento`, que rechaza la confirmación sin respaldo válido. La importación por
 planilla (D15) sigue entrando como `declarado` por defecto.
@@ -900,7 +1001,10 @@ muestra «Sin archivo de respaldo» y, por esta decisión, no habilitan.
 
 **Precedencia del estado documental.** Si un requisito cumple varias condiciones a la vez,
 se exponen todas en el detalle, pero el estado general del requisito y del legajo lo define
-la más grave:
+la más grave. Alcance: veredicto del motor, Radar y cumplimiento del legajo. Las
+**tarjetas** de la ficha siguen otra regla («Ficha de legajo: tarjetas vs cumplimiento»):
+sin respaldo válido → *Sin documento* antes que el calendario
+(`app/modules/consultas/ficha_legajo.py`).
 
 1. **Vencido** (vencido antes del período o deja de cubrirlo) → alerta documental; no
    habilita, haya o no respaldo válido.
@@ -957,6 +1061,11 @@ dos capas distintas:
   fechas si el respaldo no alcanza.
 - **Por vencer** (tarjeta y filas) usa **`plazo_aviso_dias`**, no el **horizonte del backlog**
   de D23 (`horizonte_backlog_dias`, 60 por defecto): son parámetros y preguntas distintas.
+  En la ficha es el `plazo_aviso_dias` **del tenant** (`configuracion_alertas`, 30 por
+  defecto; `presentacion_evidencia.py::_cargar_plazo_tenant`), **sin** el override por
+  requisito (`definicion_requisito.plazo_aviso_dias`, §15 / P1), que sí aplican las alertas
+  (`app/modules/alertas/servicio.py`). Diferencia conocida: un requisito con override puede
+  estar «Por vencer» en alertas y no en la ficha (o al revés).
 
 **Motivo.** Evitar que un documento vigente por fechas pero sin certificado propio o con archivo
 pendiente figure como «vencido», y separar aviso calendario del cumplimiento operativo del backlog.

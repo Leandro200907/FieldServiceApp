@@ -16,7 +16,7 @@ Decisiones de referencia: **D1**, **D3**, **D17**, **D19**, **E-20** (ver `backe
 
 6. **Decisión del responsable**
    - **6a. CONFIRMA** → la propuesta pasa a vigente (verificada), la anterior a sucedida; se recalculan legajo, Radar, Acciones pendientes y Línea de tiempo; el técnico ve *Renovación aprobada*.
-   - **6b. RECHAZA** con motivo **obligatorio** → el técnico ve el motivo en su legajo y puede volver a enviar (la nueva propuesta reemplaza a la rechazada según E-20).
+   - **6b. RECHAZA** con motivo **obligatorio** → la propuesta queda `rechazada` (terminal) y el vigente no cambia; el técnico ve el motivo en su legajo y puede enviar una **nueva** propuesta. El reemplazo automático (E-20) aplica solo a una propuesta **pendiente**: una nueva propuesta rechaza a la pendiente anterior con el motivo *«Reemplazada por nueva propuesta del técnico»*.
 
 7. **Confirmar y seguir** / **Siguiente** lleva a la próxima propuesta de la bandeja sin volver a la lista.
 

@@ -1,7 +1,8 @@
 # Handoff al frontend — Módulo 1 (backend v1)
 
 Contrato HTTP del backend tal como está implementado. La fuente exacta de cada body y
-respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este documento
+respuesta es el OpenAPI vivo: `GET /openapi.json` (siempre servido) y `GET /docs` (Swagger,
+sólo con `API_DOCS_HABILITADA=true`; por defecto `false` → 404). Este documento
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
@@ -54,17 +55,19 @@ Regenerar (backend):
 
 Comprobar sin escribir: `scripts/generar_openapi.py --check` (sale 1 si difiere).
 
-Generar tipos TypeScript (frontend), con [openapi-typescript](https://openapi-ts.dev):
+Generar tipos TypeScript (frontend), con [openapi-typescript](https://openapi-ts.dev): el
+frontend fija su copia del contrato en `frontend/contracts/modulo1/openapi.json`
+(`npm run check:contract` verifica su hash) y genera los tipos desde ahí:
 
 ```bash
-npx openapi-typescript docs/openapi.json -o src/api/modulo1.d.ts
+npm run generate:api   # openapi-typescript contracts/modulo1/openapi.json -o src/api/generated/modulo1.d.ts
 ```
 
 y un cliente tipado con `openapi-fetch`:
 
 ```ts
 import createClient from "openapi-fetch";
-import type { paths } from "./api/modulo1";
+import type { paths } from "./api/generated/modulo1";
 const api = createClient<paths>({ baseUrl: "/v1", headers: { Authorization: `Bearer ${token}` } });
 const { data, error } = await api.GET("/v1/consultas/legajo", { params: { query: { sujeto_id: "p1" } } });
 ```
@@ -149,8 +152,8 @@ Todo error, de cualquier status, tiene esta forma exacta:
 | `POST /v1/comandos/registrar_induccion` | responsable_legajos | `{persona_id, locacion_id, requisito_definicion_id, vigente_desde, vigente_hasta, certificado_documento_id}` — idem |
 | `POST /v1/comandos/importar_lote` | responsable_legajos | `{lote_id, origen?, filas:[{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?, estado_confirmacion?}], hash_archivo?}` — las filas viajan crudas: una fila con UUID/fecha/campo inválido se rechaza sola (`fila_invalida` en `detalle_filas_rechazadas`) y las demás se aplican; el lote entero sólo es 422 si `filas` no es una lista o está vacía (ver `lote_contenido_distinto`) |
 | `POST /v1/comandos/revertir_lote` | responsable_legajos | `{lote_id}` |
-| `POST /v1/comandos/asignar_supervisor` | configuracion, responsable_legajos | `{sujeto_id, supervisor_usuario_id, desde?}` |
-| `POST /v1/comandos/reasignar_supervisor` | configuracion, responsable_legajos | `{sujeto_id, supervisor_usuario_id, desde?}` |
+| ~~`POST /v1/comandos/asignar_supervisor`~~ | — | **No expuesto en la API pública (D-A); lógica interna reservada para Módulo 2.** |
+| ~~`POST /v1/comandos/reasignar_supervisor`~~ | — | **No expuesto en la API pública (D-A); lógica interna reservada para Módulo 2.** |
 | `POST /v1/comandos/preparar_subida_de_evidencia` | responsable_legajos, tecnico | `{documento_id, nombre_archivo, content_type}` → `{url_subida, content_type, max_bytes, expira_en_seg}` |
 | `POST /v1/comandos/confirmar_subida_de_evidencia` | responsable_legajos, tecnico | `{documento_id}` → `{checksum_sha256, bytes, eventos[]}` |
 | `POST /v1/comandos/invalidar_evidencia` | responsable_legajos | `{documento_id, motivo}` → invalida a mano un archivo ya `confirmado` (Fase 2 punto 2); si el documento no tiene archivo, usar `RechazarPropuesta` en vez de esto para uno `declarado` |
@@ -317,7 +320,7 @@ El frontend debe consumir sólo estas rutas para el cruce OC-legajos. Los contra
 anteriores de proyección fueron retirados: no existe una capa de compatibilidad paralela.
 El calendario de vigencias continúa siendo una consulta documental independiente.
 
-### 4.4 Backlog de OC sin veredicto de cobertura (D-E)
+### 4.5 ter Backlog de OC sin veredicto de cobertura (D-E)
 
 Consultas de **solo lectura** (no sustituyen al radar ni a Módulo 2):
 
@@ -366,7 +369,8 @@ sujetos propuestos están en su universo; si uno no lo está, la decisión "no e
 El rol Supervisor no exime del cumplimiento documental. Con `usuario.sujeto_id` vinculado
 (ya lo permitía el esquema; ver `scripts/administracion.py crear-usuario --sujeto-id`), un
 Supervisor:
-- se ve a sí mismo y a sus recursos bajo custodia en `documentos`/`excepciones`/`sujetos`/etc.
+- se ve a sí mismo y a sus recursos bajo custodia en `documentos`/`sujetos`/etc. (la consulta
+  de `excepciones` **no está expuesta en la API pública (D-A)**; lógica interna reservada para Módulo 2);
   además de su universo de supervisión (ambos se suman, nunca de forma transitiva);
 - puede usar `mi_legajo` igual que un técnico;
 - recibe alertas de sus propios vencimientos por el mismo canal "titular" que un técnico
@@ -374,8 +378,10 @@ Supervisor:
   sin filtrar por rol — el nombre del canal quedó igual por compatibilidad del CHECK de la
   0017, pero no implica rol técnico).
 
-Separación de funciones — nuevo código de error **`conflicto_de_interes`** (403), directo e
-independiente del alcance:
+Separación de funciones — código de error **`conflicto_de_interes`** (403), directo e
+independiente del alcance. **Los comandos de esta lista no están expuestos en la API pública
+(D-A); la lógica interna queda reservada para Módulo 2** (ver §4.4); se documenta la regla para
+cuando se publiquen:
 - `otorgar_excepcion` / `revocar_excepcion`: un Supervisor no puede operar sobre su propio
   `sujeto_id`.
 - `asignar_supervisor` / `reasignar_supervisor`: un Supervisor no puede quedar asignado
@@ -415,6 +421,13 @@ un Supervisor operando sobre sí mismo — excepción, supervisión o custodia p
 corrió), `archivo_invalido` (422: la validación técnica dio inválido), `usar_rechazar_propuesta`
 (422: `invalidar_evidencia` sobre un documento todavía `declarado`).
 
+Los códigos de excepciones, constancias y custodia (`requisito_no_excepcionable`,
+`excepcion_de_empresa_deshabilitada`, `excepcion_activa_duplicada`, `constancia_activa_duplicada`,
+`recurso_no_custodiable`, `custodio_no_permitido`, `custodio_requerido`,
+`custodia_vigente_duplicada`) y `conflicto_de_interes` en esos comandos sólo los emiten
+servicios internos: **no expuestos en la API pública (D-A); lógica interna reservada para
+Módulo 2**. El frontend de Módulo 1 no debería recibirlos.
+
 ## 8. Lo que el frontend NO tiene todavía (deudas conocidas del backend v1)
 - No hay endpoints de gestión de usuarios (alta, desactivación, cambio ni restablecimiento
   de contraseña): tenant y usuarios se administran con `scripts/administracion.py`
@@ -423,8 +436,7 @@ corrió), `archivo_invalido` (422: la validación técnica dio inválido), `usar
   el request siguiente (cada request protegido comprueba `activo`).
 - Notificaciones: mail y Telegram reales dependen de que la plataforma tenga `SMTP_*` /
   `TELEGRAM_BOT_TOKEN` y de que el tenant habilite el canal; sin eso quedan en el log con
-  traza. WhatsApp está diseñado (misma interfaz) pero no activo. Cola `validacion_evidencia`
-  (lectura del contenido del archivo): segunda etapa.
+  traza. WhatsApp está diseñado (misma interfaz) pero no activo.
 - Publicación a Módulo 2: `PublicadorEnLog` (transporte real pendiente); el drenaje en sí ya
   tiene backoff, tope de reintentos y alerta obligatoria (notificación tipo
   `OutboxEstancado`, a `configuracion`, vía el mismo canal que cualquier otra alerta) si un
