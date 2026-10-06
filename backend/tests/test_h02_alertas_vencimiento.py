@@ -20,15 +20,15 @@ from app.worker.procesos_reloj import control_vencimientos
 from tests import apoyo
 from tests.test_comandos_legajos import _alta_def, _alta_persona, _cargar, _confirmar_con_respaldo, _ok, _post
 
-# Fechas relativas al "hoy" real del tenant: el reloj de control se controla por parámetro,
-# pero los comandos (reconocer, verificar) usan el hoy real; VENCE queda a 40 días.
+# Fechas relativas al hoy congelado de pytest (conftest AHORA_PYTEST_DEFAULT = 2026-09-20).
+VENCE = date(2026, 10, 30)
+
+
 def _hoy_real(t) -> date:
     from app.comun.reloj import hoy_del_tenant
+
     with tenant_session(t.tenant_id) as s:
         return hoy_del_tenant(s, t.tenant_id)
-
-
-VENCE = date.today() + timedelta(days=40)
 
 
 def _ahora(d: date) -> datetime:

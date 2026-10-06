@@ -239,7 +239,7 @@ def test_adversarial_entre_documentos_del_mismo_tenant(api, storage, tenant_de_p
 def test_firma_vencida_y_operacion_incorrecta(api, storage, tenant_de_prueba):
     t = tenant_de_prueba
     clave = storage.clave_para(t.tenant_id, str(uuid.uuid4()), "x.pdf")
-    vencida = storage.firmar(clave, "get", 60, ahora=datetime.now(timezone.utc) - timedelta(seconds=120))
+    vencida = storage.firmar(clave, "get", 60, ahora=ahora_utc() - timedelta(seconds=120))
     assert api.get(f"/v1/storage/{vencida}").status_code == 403
     put_como_get = storage.firmar(clave, "put", 60, content_type="application/pdf", max_bytes=10)
     assert api.get(f"/v1/storage/{put_como_get}").status_code == 403
