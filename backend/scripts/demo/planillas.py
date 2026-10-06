@@ -259,7 +259,7 @@ def generar_planillas(est: EstadoTenant) -> Path:
     oc_fut_desde, oc_fut_hasta = rango_oc_futura(hoy)
     oc_rows = [
         [
-            f"OC-PLAN-{est.spec.slug}-OK",
+            f"OC-PLAN-{est.spec.slug}",
             "ref",
             "YPF",
             loc_ypf,
