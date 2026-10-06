@@ -403,12 +403,29 @@ def control_eventos(s, tenant_id: str) -> Control:
             SELECT d.documento_id::text, d.origen
             FROM modulo1.documento d
             WHERE d.tenant_id = :t
+              AND d.origen IS DISTINCT FROM 'certificado_respaldo'
               AND NOT EXISTS (
                 SELECT 1 FROM modulo1.event_log e
                 WHERE e.tenant_id = d.tenant_id AND e.tipo = 'DocumentoCargado'
                   AND e.payload->>'documento_id' = d.documento_id::text
               )
             LIMIT 5000
+            """
+        ),
+        {"t": tenant_id},
+    ).mappings().all()
+
+    cert_sin_evento = s.execute(
+        text(
+            """
+            SELECT d.documento_id::text
+            FROM modulo1.documento d
+            WHERE d.tenant_id = :t AND d.origen = 'certificado_respaldo'
+              AND NOT EXISTS (
+                SELECT 1 FROM modulo1.event_log e
+                WHERE e.tenant_id = d.tenant_id AND e.tipo = 'CertificadoRespaldoCreado'
+                  AND e.payload->>'certificado_documento_id' = d.documento_id::text
+              )
             """
         ),
         {"t": tenant_id},
@@ -426,7 +443,13 @@ def control_eventos(s, tenant_id: str) -> Control:
                   AND e.tipo = 'EstadoDocumentoOperadoraRegistrado'
                   AND e.payload->>'documento_id' = m.documento_id::text
                   AND e.payload->>'estado' = m.estado
-                  AND e.ocurrido_en BETWEEN m.paso_en - interval '2 seconds' AND m.paso_en + interval '2 seconds'
+                  AND (
+                    (m.fuente_archivo IS NOT NULL AND m.fuente_fila IS NOT NULL
+                     AND e.payload->>'fuente_archivo' = m.fuente_archivo
+                     AND e.payload->>'fuente_fila' = m.fuente_fila::text
+                     AND (e.payload->>'fuente_hoja' IS NOT DISTINCT FROM m.fuente_hoja))
+                    OR e.payload->>'movimiento_id' = m.movimiento_id::text
+                  )
               )
             LIMIT 2000
             """
@@ -453,13 +476,20 @@ def control_eventos(s, tenant_id: str) -> Control:
         {"t": tenant_id},
     ).scalar()
 
-    cantidad = len(sin_verificar) + len(sin_rechazo) + len(sin_carga) + len(mov_sin_evento) + int(outbox_pendiente or 0) + int(
-        outbox_estancado or 0
+    cantidad = (
+        len(sin_verificar)
+        + len(sin_rechazo)
+        + len(sin_carga)
+        + len(cert_sin_evento)
+        + len(mov_sin_evento)
+        + int(outbox_pendiente or 0)
+        + int(outbox_estancado or 0)
     )
     detalle = (
         f"confirmados_sin_DocumentoVerificado={len(sin_verificar)}; "
         f"rechazos_sin_DocumentoRechazado={len(sin_rechazo)}; "
         f"documentos_sin_DocumentoCargado={len(sin_carga)}; "
+        f"certificado_respaldo_sin_CertificadoRespaldoCreado={len(cert_sin_evento)}; "
         f"mov_operadora_sin_evento={len(mov_sin_evento)}; "
         f"outbox_pendiente={outbox_pendiente}; outbox_estancado={outbox_estancado}"
     )
