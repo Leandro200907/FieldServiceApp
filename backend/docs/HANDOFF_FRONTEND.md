@@ -5,7 +5,7 @@ respuesta es el OpenAPI vivo: `GET /docs` (Swagger) y `GET /openapi.json`. Este 
 explica lo que el OpenAPI no dice: autenticación, envelope de error, idempotencia,
 semántica de concurrencia, roles y flujos.
 
-Versión del backend: `app/version.py` (`VERSION`), migración esperada `0032_horizonte_backlog_dias`.
+Versión del backend: `app/version.py` (`VERSION`), migración esperada `0033_certificado_respaldo_e97`.
 
 Internamente existe una sola entidad `documento` para certificados, competencias e
 inducciones. La categoría la define el tipo de requisito. Las rutas históricas de
@@ -144,8 +144,9 @@ Todo error, de cualquier status, tiene esta forma exacta:
 | `POST /v1/comandos/proponer_documento` | tecnico (sobre su propio legajo) | `{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?}` |
 | `POST /v1/comandos/confirmar_documento` | responsable_legajos | `{documento_id}` |
 | `POST /v1/comandos/rechazar_propuesta` | responsable_legajos | `{documento_id, motivo?}` |
-| `POST /v1/comandos/registrar_acreditacion_de_competencia` | responsable_legajos | `{persona_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencias[]}` |
-| `POST /v1/comandos/registrar_induccion` | responsable_legajos | `{persona_id, locacion_id, requisito_definicion_id, vigente_desde, vigente_hasta, evidencia (documento_id)}` |
+| `POST /v1/comandos/crear_certificado_respaldo` | responsable_legajos | `{persona_id}` → `{certificado_documento_id, eventos[]}`; shell para subir el PDF/imagen vía `preparar_subida_de_evidencia` / `confirmar_subida_de_evidencia` |
+| `POST /v1/comandos/registrar_acreditacion_de_competencia` | responsable_legajos | `{persona_id, requisito_definicion_id, vigente_desde, vigente_hasta, certificado_documento_id}` — el backend fija `estado_confirmacion` |
+| `POST /v1/comandos/registrar_induccion` | responsable_legajos | `{persona_id, locacion_id, requisito_definicion_id, vigente_desde, vigente_hasta, certificado_documento_id}` — idem |
 | `POST /v1/comandos/importar_lote` | responsable_legajos | `{lote_id, origen?, filas:[{sujeto_id, requisito_definicion_id, vigente_desde, vigente_hasta, numero?, estado_confirmacion?}], hash_archivo?}` — las filas viajan crudas: una fila con UUID/fecha/campo inválido se rechaza sola (`fila_invalida` en `detalle_filas_rechazadas`) y las demás se aplican; el lote entero sólo es 422 si `filas` no es una lista o está vacía (ver `lote_contenido_distinto`) |
 | `POST /v1/comandos/revertir_lote` | responsable_legajos | `{lote_id}` |
 | `POST /v1/comandos/asignar_supervisor` | configuracion, responsable_legajos | `{sujeto_id, supervisor_usuario_id, desde?}` |

@@ -48,6 +48,10 @@ def _categoria_respaldo(categoria: str | None) -> str:
     return (categoria or "documento").lower()
 
 
+def _soporte_certificado_propio(soporte: Mapping[str, Any]) -> bool:
+    return bool(soporte.get("es_certificado_propio"))
+
+
 def respaldo_valido(
     fila: Mapping[str, Any],
     *,
@@ -57,6 +61,8 @@ def respaldo_valido(
     cat = _categoria_respaldo(categoria)
     if cat in ("competencia", "induccion"):
         for soporte in soportes or ():
+            if not _soporte_certificado_propio(soporte):
+                continue
             if archivo_validacion_de_fila(soporte) == "valido":
                 return True
         return False
@@ -86,12 +92,13 @@ def archivo_validacion_para_evaluacion_documental(
     """Archivo efectivo para radar / estado documental (misma regla de respaldo que D19)."""
     cat = _categoria_respaldo(categoria)
     if cat in ("competencia", "induccion"):
-        validos = [s for s in (soportes or ()) if archivo_validacion_de_fila(s) == "valido"]
+        certificados = [s for s in (soportes or ()) if _soporte_certificado_propio(s)]
+        validos = [s for s in certificados if archivo_validacion_de_fila(s) == "valido"]
         if validos:
             return "valido"
-        soportes_list = list(soportes or ())
-        if not soportes_list:
+        if not certificados:
             return "sin_archivo"
+        soportes_list = certificados
         peor = archivo_validacion_de_fila(soportes_list[0])
         for s in soportes_list[1:]:
             v = archivo_validacion_de_fila(s)

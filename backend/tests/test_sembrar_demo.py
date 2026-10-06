@@ -469,12 +469,16 @@ def test_espejo_operadora_con_filas_tras_importar(demo_sembrado):
 
 
 def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
-    """En OC en curso: técnico 3 limpio; empresa, vehículo y equipo con alertas por vencidos."""
+    """En OC en curso (Vista|Slickline): recursos con alertas; Lucía según matriz del tenant.
+
+    semilla_tenant publica Vista sin inducción solo en patagonia-demo (copiar_globales);
+    anelo/neuquen incluyen Inducción operadora → Lucía sin registro alerta solo por eso.
+    """
     _exigir_base_demo_tests()
     from app.comun.paginacion import Pagina
     from app.db import platform_session
     from app.modules.proyeccion import radar as radar_mod
-    from scripts.demo.config import dni_tecnico
+    from scripts.demo.config import TENANTS, dni_tecnico
     from scripts.demo.contexto import identidad_de
 
     with platform_session() as ps:
@@ -520,17 +524,20 @@ def test_radar_demo_tecnico3_sin_alertas_y_recursos_con_alertas(demo_sembrado):
                     None,
                 )
                 assert t3, f"{slug}: técnico 3 no está en el radar de la OC en curso"
-                if t3["estado_documental"] != "sin_alertas_documentales":
-                    leg = radar_mod.detalle_legajo(s, idn, oc_id, t3["sujeto_id"])["legajo"]
-                    pendientes = [
-                        r["nombre"]
-                        for r in leg.get("requisitos", [])
-                        if r.get("estado") in ("pendiente_revision", "no_evaluable", "faltante")
-                    ]
-                    pytest.fail(
-                        f"{slug}: técnico 3 debería estar sin alertas, tiene {t3['estado_documental']}; "
-                        f"requisitos pendientes: {pendientes}"
-                    )
+                leg = radar_mod.detalle_legajo(s, idn, oc_id, t3["sujeto_id"])["legajo"]
+                pendientes = [
+                    r["nombre"]
+                    for r in leg.get("requisitos", [])
+                    if r.get("estado") in ("pendiente_revision", "no_evaluable", "faltante")
+                ]
+                spec = next(t for t in TENANTS if t.slug == slug)
+                exige_induccion_en_curso = not spec.copiar_globales
+                if exige_induccion_en_curso:
+                    assert t3["estado_documental"] == "con_alertas_documentales", slug
+                    assert pendientes == ["Inducción operadora"], slug
+                else:
+                    assert t3["estado_documental"] == "sin_alertas_documentales", slug
+                    assert pendientes == [], slug
                 assert por_tipo["persona"]["total"] >= 3
 
 
@@ -584,6 +591,68 @@ def test_historial_operadora_rechazo_reenvio_aceptado(demo_sembrado):
             assert "rechazado" in pasos
             assert "enviado" in pasos
             assert "aceptado" in pasos
+
+
+def test_demo_induccion_competencia_certificado_propio_y_lucia_sin_induccion(demo_sembrado):
+    """E-97 en semilla: certificado propio en inducción/competencia; Lucía (t3) sin inducción."""
+    _exigir_base_demo_tests()
+    from app.db import platform_session
+    from scripts.demo.config import dni_tecnico
+
+    slug = "patagonia-demo"
+    with platform_session() as ps:
+        tid = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": slug}).scalar()
+        assert tid is not None
+        tid = str(tid)
+        with tenant_session(tid) as s:
+            suj1 = s.execute(
+                text("SELECT sujeto_id FROM modulo1.legajo WHERE tenant_id = :t AND identificador_natural = :d"),
+                {"t": tid, "d": dni_tecnico(slug, 1)},
+            ).scalar()
+            suj3 = s.execute(
+                text("SELECT sujeto_id FROM modulo1.legajo WHERE tenant_id = :t AND identificador_natural = :d"),
+                {"t": tid, "d": dni_tecnico(slug, 3)},
+            ).scalar()
+            assert suj1 and suj3
+            legado_apto = s.execute(
+                text(
+                    "SELECT count(*) FROM modulo1.documento_soporte ds "
+                    "JOIN modulo1.documento padre ON padre.tenant_id = ds.tenant_id AND padre.documento_id = ds.documento_id "
+                    "JOIN modulo1.definicion_requisito r ON r.tenant_id = padre.tenant_id "
+                    "AND r.requisito_definicion_id = padre.requisito_definicion_id "
+                    "JOIN modulo1.documento sop ON sop.tenant_id = ds.tenant_id AND sop.documento_id = ds.soporte_documento_id "
+                    "JOIN modulo1.definicion_requisito rs ON rs.tenant_id = sop.tenant_id "
+                    "AND rs.requisito_definicion_id = sop.requisito_definicion_id "
+                    "WHERE ds.tenant_id = :t AND r.categoria IN ('induccion', 'competencia') "
+                    "AND NOT ds.es_certificado_propio AND rs.nombre = 'Apto médico'"
+                ),
+                {"t": tid},
+            ).scalar()
+            assert legado_apto == 0, "inducción/competencia demo no deben usar apto como soporte"
+            propios = s.execute(
+                text(
+                    "SELECT count(*) FROM modulo1.documento_soporte ds "
+                    "JOIN modulo1.documento sop ON sop.tenant_id = ds.tenant_id AND sop.documento_id = ds.soporte_documento_id "
+                    "JOIN modulo1.documento padre ON padre.tenant_id = ds.tenant_id AND padre.documento_id = ds.documento_id "
+                    "JOIN modulo1.definicion_requisito r ON r.tenant_id = padre.tenant_id "
+                    "AND r.requisito_definicion_id = padre.requisito_definicion_id "
+                    "WHERE ds.tenant_id = :t AND ds.es_certificado_propio AND sop.origen = 'certificado_respaldo' "
+                    "AND sop.archivo_validacion = 'valido' AND r.categoria IN ('induccion', 'competencia')"
+                ),
+                {"t": tid},
+            ).scalar()
+            assert propios >= 3, "María/Juan/Lucía deben tener respaldo propio válido en inducción/competencia"
+            n_ind_t3 = s.execute(
+                text(
+                    "SELECT count(*) FROM modulo1.documento d "
+                    "JOIN modulo1.definicion_requisito r ON r.tenant_id = d.tenant_id "
+                    "AND r.requisito_definicion_id = d.requisito_definicion_id "
+                    "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.estado_version = 'vigente' "
+                    "AND r.categoria = 'induccion'"
+                ),
+                {"t": tid, "s": suj3},
+            ).scalar()
+            assert n_ind_t3 == 0, "Lucía (t3) debe quedar sin inducción registrada (E-91 demo)"
 
 
 def test_tecnico3_todo_vigente(demo_sembrado):

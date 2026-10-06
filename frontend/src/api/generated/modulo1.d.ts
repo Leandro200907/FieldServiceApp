@@ -349,6 +349,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/comandos/crear_certificado_respaldo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Crear Certificado Respaldo */
+        post: operations["crear_certificado_respaldo_v1_comandos_crear_certificado_respaldo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/comandos/dar_de_alta_definicion_de_requisito": {
         parameters: {
             query?: never;
@@ -1956,7 +1973,7 @@ export interface components {
              * @default carga_manual
              * @enum {string}
              */
-            origen: "planilla" | "carga_manual" | "drive";
+            origen: "planilla" | "carga_manual" | "drive" | "certificado_respaldo";
             /**
              * Requisito Definicion Id
              * Format: uuid
@@ -2420,6 +2437,18 @@ export interface components {
             nombre_apellido: string;
             /** Sujeto Id */
             sujeto_id: string;
+        };
+        /** CrearCertificadoRespaldo */
+        CrearCertificadoRespaldo: {
+            /** Persona Id */
+            persona_id: string;
+        };
+        /** CrearCertificadoRespaldoResponse */
+        CrearCertificadoRespaldoResponse: {
+            /** Certificado Documento Id */
+            certificado_documento_id: string;
+            /** Eventos */
+            eventos: string[];
         };
         /** CruceOcTimeline */
         CruceOcTimeline: {
@@ -2980,6 +3009,12 @@ export interface components {
             estados_adicionales_explicacion?: {
                 [key: string]: string;
             } | null;
+            /** Ambito Nombre */
+            ambito_nombre?: string | null;
+            /** Certificado Respaldo Documento Id */
+            certificado_respaldo_documento_id?: string | null;
+            /** Estado Fila */
+            estado_fila?: string | null;
             /** Evaluacion Backlog Estado */
             evaluacion_backlog_estado?: string | null;
             /**
@@ -3002,6 +3037,8 @@ export interface components {
             identificador_natural?: string | null;
             /** Locacion Id */
             locacion_id: string | null;
+            /** Locacion Nombre */
+            locacion_nombre?: string | null;
             /** Motivo Archivo Invalido */
             motivo_archivo_invalido?: string | null;
             /**
@@ -3013,6 +3050,8 @@ export interface components {
             nombre_apellido?: string | null;
             /** Observacion Operadora */
             observacion_operadora?: string | null;
+            /** Observacion Ficha */
+            observacion_ficha?: string | null;
             /** Ocs Afectadas */
             ocs_afectadas?: components["schemas"]["OcAfectadaRef"][];
             /** Origen Propuesta */
@@ -3929,7 +3968,7 @@ export interface components {
              * @default carga_manual
              * @enum {string}
              */
-            origen: "planilla" | "carga_manual" | "drive";
+            origen: "planilla" | "carga_manual" | "drive" | "certificado_respaldo";
             /**
              * Requisito Definicion Id
              * Format: uuid
@@ -4149,13 +4188,10 @@ export interface components {
         /** RegistrarAcreditacionDeCompetencia */
         RegistrarAcreditacionDeCompetencia: {
             /**
-             * Estado Confirmacion
-             * @default verificado
-             * @enum {string}
+             * Certificado Documento Id
+             * Format: uuid
              */
-            estado_confirmacion: "declarado" | "verificado" | "confirmado_en_fuente";
-            /** Evidencias */
-            evidencias: string[];
+            certificado_documento_id: string;
             /** Persona Id */
             persona_id: string;
             /**
@@ -4229,16 +4265,10 @@ export interface components {
         /** RegistrarInduccion */
         RegistrarInduccion: {
             /**
-             * Estado Confirmacion
-             * @default verificado
-             * @enum {string}
-             */
-            estado_confirmacion: "declarado" | "verificado" | "confirmado_en_fuente";
-            /**
-             * Evidencia
+             * Certificado Documento Id
              * Format: uuid
              */
-            evidencia: string;
+            certificado_documento_id: string;
             /**
              * Locacion Id
              * Format: uuid
@@ -6248,6 +6278,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["app__modules__legajos__router__LegajoResponse"];
+                };
+            };
+            /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rol insuficiente o fuera de alcance */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recurso inexistente o no visible para el rol */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflicto de dominio, idempotencia o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validación o regla de dominio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Error interno; informar request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    crear_certificado_respaldo_v1_comandos_crear_certificado_respaldo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearCertificadoRespaldo"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrearCertificadoRespaldoResponse"];
                 };
             };
             /** @description No autenticado (sin token, vencido, usuario inexistente o inactivo) */

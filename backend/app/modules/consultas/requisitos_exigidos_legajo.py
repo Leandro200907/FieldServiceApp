@@ -194,18 +194,19 @@ def _vigente_hasta_date(ag: AgregadoRequisitoExigido) -> date | None:
 
 
 def _bucket_tarjeta_exigido(ag: AgregadoRequisitoExigido, hoy: date, plazo_aviso: int) -> str:
-    """Tarjetas E-94: calendario del papel si hay evidencia; sin cobertura no define la tarjeta."""
-    if not ag.evidencia_id:
-        return "sin_documento"
-    arch = ag.archivo_validacion
-    if arch is not None and arch != "valido":
-        return "vencidos"
+    """Tarjetas E-101: sin respaldo válido → Sin documento; pendiente → calendario."""
+    from app.modules.consultas.ficha_legajo import bucket_tarjeta_exigido_desde_agregado
+
     vh = _vigente_hasta_date(ag)
-    if vh is None or vh < hoy:
-        return "vencidos"
-    if (vh - hoy).days <= plazo_aviso:
-        return "por_vencer"
-    return "vigentes"
+    vencido = vh is not None and vh < hoy
+    return bucket_tarjeta_exigido_desde_agregado(
+        evidencia_id=ag.evidencia_id,
+        archivo_validacion=ag.archivo_validacion,
+        vigente_hasta=vh,
+        hoy=hoy,
+        plazo_aviso=plazo_aviso,
+        vencido_calendario=vencido,
+    )
 
 
 def resumen_exigidos_backlog(

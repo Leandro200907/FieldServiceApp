@@ -473,7 +473,10 @@ def test_competencia_se_lee_del_documento_unificado(tenant_de_prueba, sesion):
         {"t": t, "r": req, "a": anterior},
     ).scalar_one()
     sesion.execute(
-        text("INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) VALUES (:t, :d, :s)"),
+        text(
+            "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id, es_certificado_propio) "
+            "VALUES (:t, :d, :s, true)"
+        ),
         {"t": t, "d": actual, "s": evidencia},
     )
     r = evaluar_compromiso(sesion, t, "OC-comp", AHORA, None)

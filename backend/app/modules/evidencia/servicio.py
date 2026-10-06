@@ -172,6 +172,9 @@ def _marcar_resultado(session: Session, tenant_id: str, documento_id: str, token
         return
     if valido:
         registrar_evento_interno(session, tenant_id, "EvidenciaValidada", {"documento_id": documento_id, **detalles}, None)
+        from app.modules.legajos.certificado_respaldo import promover_padres_si_certificado_valido
+
+        promover_padres_si_certificado_valido(session, tenant_id, documento_id)
         return
     registrar_evento_interno(session, tenant_id, "EvidenciaInvalida", {"documento_id": documento_id, "motivo": motivo, **detalles}, None)
     _despachar_invalidez(session, tenant_id, documento_id, motivo or "sin motivo", dict(fila))

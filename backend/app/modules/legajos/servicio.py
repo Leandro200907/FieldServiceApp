@@ -524,7 +524,7 @@ def baja_de_sujeto(s: Session, identidad: Identidad, body: e.BajaDeSujeto) -> di
 def _soportes_archivo(s: Session, tenant_id: str, documento_id: str) -> list[dict[str, Any]]:
     filas = s.execute(
         text(
-            "SELECT s.archivo_estado, s.archivo_validacion, s.clave_storage "
+            "SELECT s.archivo_estado, s.archivo_validacion, s.clave_storage, ds.es_certificado_propio "
             "FROM modulo1.documento_soporte ds "
             "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
             "WHERE ds.tenant_id = :t AND ds.documento_id = :d"
@@ -827,9 +827,34 @@ def _restaurar_sucedido(s: Session, tenant_id: str, sucede_a: Any) -> str | None
 # --------------------------------------------------------------------------- competencias / inducciones
 
 
+def crear_certificado_respaldo(s: Session, identidad: Identidad, body: e.CrearCertificadoRespaldo) -> dict[str, Any]:
+    from app.modules.legajos.certificado_respaldo import insertar_shell_certificado_respaldo
+
+    t = identidad.tenant_id
+    legajo = _legajo_activo(s, t, body.persona_id)
+    if legajo["tipo_sujeto"] != "persona":
+        raise ErrorDeDominio(
+            "El certificado de respaldo solo aplica a personas",
+            {"tipo_sujeto": legajo["tipo_sujeto"]},
+        )
+    doc_id = insertar_shell_certificado_respaldo(s, t, body.persona_id)
+    registrar_evento(
+        s, t, "CertificadoRespaldoCreado",
+        {"certificado_documento_id": doc_id, "persona_id": body.persona_id},
+        identidad.usuario_id,
+    )
+    return {"certificado_documento_id": doc_id, "eventos": ["CertificadoRespaldoCreado"]}
+
+
 def registrar_acreditacion_de_competencia(
     s: Session, identidad: Identidad, body: e.RegistrarAcreditacionDeCompetencia
 ) -> dict[str, Any]:
+    from app.modules.legajos.certificado_respaldo import (
+        _estado_confirmacion_desde_certificado,
+        _exigir_y_preparar_certificado,
+        enlazar_certificado_propio,
+    )
+
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.persona_id)
     if legajo["tipo_sujeto"] != "persona":
@@ -838,37 +863,36 @@ def registrar_acreditacion_de_competencia(
     if definicion["categoria"] != "competencia":
         raise ErrorDeDominio("El requisito no es de categoría competencia", {"categoria": definicion["categoria"]})
     _exigir_aplicable(definicion, legajo)
-    _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
-    evidencias = [str(x) for x in body.evidencias]
-    _exigir_documentos_del_sujeto(s, t, body.persona_id, evidencias)
+    cert_id = str(body.certificado_documento_id)
+    cert = _exigir_y_preparar_certificado(s, t, body.persona_id, cert_id, body.vigente_desde, body.vigente_hasta)
+    estado = _estado_confirmacion_desde_certificado(cert.get("archivo_validacion"))
 
     eventos: list[str] = []
     creada = _insertar_version_documento(
         s, identidad, sujeto_id=body.persona_id,
         requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta,
-        numero=None, origen="carga_manual", estado_confirmacion=body.estado_confirmacion,
+        numero=None, origen="carga_manual", estado_confirmacion=estado,
         eventos=eventos,
     )
     acreditacion_id = creada["documento_id"]
-    for evidencia in evidencias:
-        s.execute(
-            text(
-                "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) "
-                "VALUES (:t, :d, :e)"
-            ),
-            {"t": t, "d": acreditacion_id, "e": evidencia},
-        )
+    enlazar_certificado_propio(s, t, acreditacion_id, cert_id)
     registrar_evento(
         s, t, "AcreditacionDeCompetenciaRegistrada",
         {"acreditacion_id": acreditacion_id, "persona_id": body.persona_id, "requisito_definicion_id": str(body.requisito_definicion_id),
-         "vigente_desde": body.vigente_desde, "vigente_hasta": body.vigente_hasta, "evidencias": evidencias},
+         "vigente_desde": body.vigente_desde, "vigente_hasta": body.vigente_hasta, "certificado_documento_id": cert_id},
         identidad.usuario_id,
     )
     return {"acreditacion_id": acreditacion_id, "eventos": ["AcreditacionDeCompetenciaRegistrada"]}
 
 
 def registrar_induccion(s: Session, identidad: Identidad, body: e.RegistrarInduccion) -> dict[str, Any]:
+    from app.modules.legajos.certificado_respaldo import (
+        _estado_confirmacion_desde_certificado,
+        _exigir_y_preparar_certificado,
+        enlazar_certificado_propio,
+    )
+
     t = identidad.tenant_id
     legajo = _legajo_activo(s, t, body.persona_id)
     if legajo["tipo_sujeto"] != "persona":
@@ -882,30 +906,25 @@ def registrar_induccion(s: Session, identidad: Identidad, body: e.RegistrarInduc
             {"locacion_id": str(body.locacion_id), "locacion_de_la_definicion": str(definicion["locacion_id"])},
         )
     _exigir_aplicable(definicion, legajo)
-    _exigir_vigencia(body.vigente_desde, body.vigente_hasta)
-    _exigir_documentos_del_sujeto(s, t, body.persona_id, [str(body.evidencia)])
+    cert_id = str(body.certificado_documento_id)
+    cert = _exigir_y_preparar_certificado(s, t, body.persona_id, cert_id, body.vigente_desde, body.vigente_hasta)
+    estado = _estado_confirmacion_desde_certificado(cert.get("archivo_validacion"))
 
     eventos: list[str] = []
     creada = _insertar_version_documento(
         s, identidad, sujeto_id=body.persona_id,
         requisito_definicion_id=str(body.requisito_definicion_id),
         vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta,
-        numero=None, origen="carga_manual", estado_confirmacion=body.estado_confirmacion,
+        numero=None, origen="carga_manual", estado_confirmacion=estado,
         locacion_id=str(body.locacion_id), eventos=eventos,
     )
     induccion_id = creada["documento_id"]
-    s.execute(
-        text(
-            "INSERT INTO modulo1.documento_soporte (tenant_id, documento_id, soporte_documento_id) "
-            "VALUES (:t, :d, :e)"
-        ),
-        {"t": t, "d": induccion_id, "e": str(body.evidencia)},
-    )
+    enlazar_certificado_propio(s, t, induccion_id, cert_id)
     registrar_evento(
         s, t, "InduccionRegistrada",
         {"induccion_id": induccion_id, "persona_id": body.persona_id, "locacion_id": str(body.locacion_id),
          "requisito_definicion_id": str(body.requisito_definicion_id), "vigente_desde": body.vigente_desde,
-         "vigente_hasta": body.vigente_hasta, "evidencia": str(body.evidencia)},
+         "vigente_hasta": body.vigente_hasta, "certificado_documento_id": cert_id},
         identidad.usuario_id,
     )
     return {"induccion_id": induccion_id, "eventos": ["InduccionRegistrada"]}

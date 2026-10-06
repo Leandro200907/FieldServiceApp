@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 TipoSujeto = Literal["empresa", "persona", "vehiculo", "equipo"]
-OrigenDocumento = Literal["planilla", "carga_manual", "drive"]
+OrigenDocumento = Literal["planilla", "carga_manual", "drive", "certificado_respaldo"]
 OrigenLote = Literal["planilla", "drive"]
 EstadoConfirmacion = Literal["declarado", "verificado", "confirmado_en_fuente"]
 Confianza = Literal["alta", "media", "baja"]
@@ -93,13 +93,16 @@ class RechazarPropuesta(BaseModel):
         return texto
 
 
+class CrearCertificadoRespaldo(BaseModel):
+    persona_id: str = Field(min_length=1)
+
+
 class RegistrarAcreditacionDeCompetencia(BaseModel):
     persona_id: str = Field(min_length=1)
     requisito_definicion_id: UUID
     vigente_desde: date
     vigente_hasta: date
-    evidencias: list[UUID] = Field(min_length=1)
-    estado_confirmacion: EstadoConfirmacion = "verificado"
+    certificado_documento_id: UUID
 
 
 class RegistrarInduccion(BaseModel):
@@ -108,8 +111,7 @@ class RegistrarInduccion(BaseModel):
     requisito_definicion_id: UUID
     vigente_desde: date
     vigente_hasta: date
-    evidencia: UUID
-    estado_confirmacion: EstadoConfirmacion = "verificado"
+    certificado_documento_id: UUID
 
 
 class FilaDeLote(BaseModel):

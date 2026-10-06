@@ -222,7 +222,7 @@ def _evidencias(session: Session, tenant_id: str, sujeto_id: str | None = None) 
         sop_filas = session.execute(
             text(
                 "SELECT ds.documento_id::text AS documento_padre_id, "
-                "s.archivo_estado, s.archivo_validacion, s.clave_storage "
+                "s.archivo_estado, s.archivo_validacion, s.clave_storage, ds.es_certificado_propio "
                 "FROM modulo1.documento_soporte ds "
                 "JOIN modulo1.documento s ON s.tenant_id = ds.tenant_id AND s.documento_id = ds.soporte_documento_id "
                 "WHERE ds.tenant_id = :t AND ds.documento_id = ANY(CAST(:ids AS uuid[]))"

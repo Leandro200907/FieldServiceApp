@@ -90,7 +90,8 @@ def test_evidencia_invalida_sigue_en_tarjeta_vencidos():
         ),
     }
     res = resumen_exigidos_backlog(mapa, hoy, 30)
-    assert res["exigidos_vencidos"] == 1
+    assert res["exigidos_sin_documento"] == 1
+    assert res["exigidos_vencidos"] == 0
 
 
 def test_legajo_integracion_rechazo_vista_tarjetas_por_calendario(cliente_api, tenant_de_prueba, sesion):

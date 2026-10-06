@@ -73,6 +73,11 @@ class EvidenciaVigente(BaseModel):
     gestion_tecnico: str | None = None
     gestion_responsable: str | None = None
     evaluacion_backlog_estado: str | None = None
+    estado_fila: str | None = None
+    observacion_ficha: str | None = None
+    locacion_nombre: str | None = None
+    ambito_nombre: str | None = None
+    certificado_respaldo_documento_id: str | None = None
 
 
 class ResumenLegajo(BaseModel):

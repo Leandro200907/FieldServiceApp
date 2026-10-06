@@ -83,15 +83,14 @@ def test_d19_verificado_sin_archivo_no_habilita_en_motor_radar_acciones_y_paquet
     assert fila["estado"] == "pendiente_de_revision"
 
 
-def test_d19_competencia_con_soporte_valido_habilita(cliente_api, tenant_de_prueba, sesion):
+def test_d19_competencia_con_soporte_valido_habilita(cliente_api, tenant_de_prueba, sesion, storage):
     t = tenant_de_prueba
     loc = str(uuid.uuid4())
-    req_cert = _alta_def(cliente_api, t, "Cert D19", categoria="documento")
     req_comp = _alta_def(cliente_api, t, "Altura D19", categoria="competencia")
     persona = _alta_persona(cliente_api, t, "DNI-D19-B", t.sujeto_tecnico)
-    cert_id = _cargar(cliente_api, t, persona, req_cert, hasta="2027-12-31")["documento_id"]
-    with tenant_session(t.tenant_id) as s:
-        apoyo.respaldo_valido_en_documento(s, t.tenant_id, cert_id)
+    from tests.apoyo_e97 import certificado_subido
+
+    cert_id = certificado_subido(cliente_api, storage, t, persona)
     acr = _ok(
         _post(
             cliente_api,
@@ -103,7 +102,7 @@ def test_d19_competencia_con_soporte_valido_habilita(cliente_api, tenant_de_prue
                 "requisito_definicion_id": req_comp,
                 "vigente_desde": "2026-01-01",
                 "vigente_hasta": "2027-12-31",
-                "evidencias": [cert_id],
+                "certificado_documento_id": cert_id,
             },
         )
     )

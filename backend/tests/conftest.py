@@ -220,3 +220,12 @@ def cliente_api():
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
+
+@pytest.fixture
+def storage(tmp_path, monkeypatch):
+    from app.config import settings
+    from app.storage.local import StorageLocal
+
+    monkeypatch.setattr(settings, "storage_local_dir", str(tmp_path))
+    return StorageLocal()
+
