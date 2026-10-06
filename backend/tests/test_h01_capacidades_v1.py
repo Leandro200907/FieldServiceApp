@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from sqlalchemy import text
 
+from app.comun.reloj import ahora_utc
 from app.db import tenant_session
 from app.modules.drive.proveedor import ArchivoRemoto, ProveedorEnMemoria
 from app.modules.notificaciones import servicio as notif
@@ -218,7 +219,10 @@ def test_paquete_publico_firmado_con_qr_vencimiento_y_revocacion(cliente_api, pe
     # vencido → 404
     r2 = _ok(_post(cliente_api, t, "responsable_legajos", "generar_paquete_entrega", {"sujeto_id": p, "dias_validez": 1}))
     with tenant_session(t.tenant_id) as s:
-        s.execute(text("UPDATE modulo1.paquete_entrega SET expira_en = now() - interval '1 minute' WHERE paquete_id = :p"), {"p": r2["paquete_id"]})
+        s.execute(
+            text("UPDATE modulo1.paquete_entrega SET expira_en = :e WHERE paquete_id = :p"),
+            {"e": ahora_utc() - timedelta(minutes=1), "p": r2["paquete_id"]},
+        )
     assert cliente_api.get(f"/v1/publico/paquete/{r2['url'].rsplit('/', 1)[1]}").status_code == 404
 
 
