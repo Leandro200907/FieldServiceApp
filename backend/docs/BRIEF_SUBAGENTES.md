@@ -1,3 +1,5 @@
+> OBSOLETO (06/10/2026): documento histórico. NO seguir estas instrucciones. Las reglas vigentes están en .cursor/rules/reglas-proyecto.mdc; ante cualquier diferencia, valen esas.
+
 # Brief común para las piezas paralelas de Módulo 1
 
 Leer completo antes de tocar código. Esto NO es diseño: el diseño está cerrado. Es el

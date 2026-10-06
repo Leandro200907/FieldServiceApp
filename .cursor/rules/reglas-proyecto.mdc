@@ -1,0 +1,35 @@
+---
+description: Reglas obligatorias del proyecto FieldServiceApp
+alwaysApply: true
+---
+
+# Reglas obligatorias del proyecto FieldServiceApp
+
+## Seguridad de datos
+1. fsm_demo es la demo del usuario: SOLO LECTURA. Prohibido escribir, migrar (alembic), sembrar o correr pytest contra fsm_demo, salvo pedido explícito del usuario en ese mensaje. Antes de cualquier escritura autorizada: backup en C:\Users\roxan\OneDrive\Escritorio\Ticketera\backups_fsm\ (nunca dentro del repo).
+2. Los tests corren solo con ENV_FILE=.env.test. Nunca correr sembrar_demo ni test_sembrar_demo localmente.
+3. Cualquier consulta con el superusuario postgres filtra por tenant. Host siempre 127.0.0.1.
+4. No usar el navegador con los datos del usuario sin avisar antes.
+
+## Forma de trabajar
+5. Si algo falla (test, CI, comando, migración), LISTALO Y PARÁ, aunque sepas arreglarlo. El usuario decide.
+6. No hacer cambios que no se pidieron. Si ves algo para mejorar, reportalo aparte.
+7. Nunca dejar nada sin commitear. Al terminar: git status limpio, y reportarlo.
+8. No mergear sin el OK explícito del usuario en el mensaje actual.
+9. Una sola tarea por vez. No arrancar la siguiente sin pedido.
+10. No afirmar causas sin comprobarlas ("probablemente es del seed" no alcanza): verificá o decí "no comprobado".
+
+## Tests
+11. Prohibido aflojar un test para que pase: no borrar asserts, no cambiar valores esperados, no agregar skip o xfail, no aceptar "uno u otro resultado". Si un valor esperado debe cambiar, mostrá el antes y el después, con la razón de dominio.
+12. Todo arreglo de algo visible en pantalla lleva un test POR EL CAMINO REAL: datos creados con los comandos o la API reales y lectura por el endpoint que usa la pantalla. No armar agregados a mano.
+13. Los tests no dependen de la fecha real: usar el reloj congelado.
+14. Reportar siempre el resumen de pytest completo (passed, failed, skipped, errors) y compararlo con la corrida anterior. Si baja la cantidad de tests, explicarlo.
+
+## Diseño
+15. Una sola regla: los estados, conteos y textos de estado los calcula el BACKEND. El frontend solo muestra. Si encontrás una regla duplicada, reportala.
+16. Todo dato entra por los comandos del dominio, que emiten sus eventos de auditoría. Ni el seed ni los scripts escriben en la base salteando comandos.
+17. Todo problema que la app muestra tiene una acción para resolverlo (o dice quién lo resuelve). No dejar callejones sin salida.
+18. Valores por defecto: no inicializar con un valor "de negocio" (como "faltante"). Usar un valor explícito de "sin dato".
+
+## Reportes
+19. Cada reporte incluye: commits, tests agregados o modificados (con antes y después si cambió alguno), resumen de pytest, estado de CI sobre el ÚLTIMO commit, git status y qué debería ver el usuario en pantalla.
