@@ -424,19 +424,24 @@ def _subir(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg: bool = Fal
     confirmar_subida(s, idn, doc_id, storage=storage)
 
 
-def _marcar_archivo_valido(s, doc_id: str) -> None:
-    s.execute(
-        text(
-            "UPDATE modulo1.documento SET archivo_validacion = 'valido', archivo_scan_estado = 'limpio' "
-            "WHERE documento_id = CAST(:d AS uuid) AND archivo_estado = 'confirmado'"
-        ),
-        {"d": doc_id},
+def _drenar_validacion_evidencia(tenant_id: str, storage, max_jobs: int = 200) -> None:
+    """Misma cola que el worker: validación técnica tras confirmar_subida (sin UPDATE directo)."""
+    from app.comun.reloj import ahora_utc
+    from app.worker import main as worker_main
+
+    worker_main.procesar_cola(
+        tenant_id,
+        "validacion_evidencia",
+        worker_main.HANDLERS["validacion_evidencia"],
+        {"storage": storage},
+        ahora=ahora_utc(),
+        max_jobs=max_jobs,
     )
 
 
-def _confirmar_tras_archivo(s, idn, doc_id: str) -> None:
-    """D19: tras subida confirmada, marcar archivo válido y verificar si sigue declarado."""
-    _marcar_archivo_valido(s, doc_id)
+def _confirmar_tras_archivo(s, idn, doc_id: str, storage) -> None:
+    """D19: tras subida confirmada, validar archivo (worker) y confirmar si sigue declarado."""
+    _drenar_validacion_evidencia(idn.tenant_id, storage)
     estado = s.execute(
         text("SELECT estado_confirmacion FROM modulo1.documento WHERE documento_id = CAST(:d AS uuid)"),
         {"d": doc_id},
@@ -454,7 +459,7 @@ def _subir_y_verificar(storage, s, idn, doc_id: str, sujeto: str, req: str, jpeg
     if version != "vigente":
         return
     _subir(storage, s, idn, doc_id, sujeto, req, jpeg=jpeg)
-    _confirmar_tras_archivo(s, idn, doc_id)
+    _confirmar_tras_archivo(s, idn, doc_id, storage)
 
 
 def _sujeto_para_clave_doc(est: EstadoTenant, key: str) -> str:
@@ -628,29 +633,9 @@ def _certificado_respaldo_valido(storage, s, idn, persona_id: str, etiqueta: str
     return cert_id
 
 
-def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant) -> None:
-    """Marca archivos del técnico 3 como validados (radar sin información incompleta)."""
-    with tenant_session(est.tenant_id) as s:
-        s.execute(
-            text(
-                "UPDATE modulo1.documento SET archivo_validacion = 'valido', "
-                "archivo_validacion_motivo = 'Validación demo técnico 3', archivo_scan_estado = 'limpio' "
-                "WHERE tenant_id = :t AND sujeto_id = :s "
-                "AND archivo_validacion IS DISTINCT FROM 'valido'"
-            ),
-            {"t": est.tenant_id, "s": est.sujetos["tecnico3"]},
-        )
-        s.execute(
-            text(
-                "UPDATE modulo1.documento d SET archivo_validacion = 'valido', "
-                "archivo_validacion_motivo = 'Validación demo técnico 3 (inducción)', archivo_scan_estado = 'limpio' "
-                "FROM modulo1.definicion_requisito r "
-                "WHERE d.tenant_id = :t AND d.sujeto_id = :s AND d.tenant_id = r.tenant_id "
-                "AND d.requisito_definicion_id = r.requisito_definicion_id AND r.categoria = 'induccion' "
-                "AND d.archivo_validacion IS DISTINCT FROM 'valido'"
-            ),
-            {"t": est.tenant_id, "s": est.sujetos["tecnico3"]},
-        )
+def consolidar_evidencias_tecnico3_post_worker(est: EstadoTenant, storage) -> None:
+    """Drena validación pendiente del técnico 3 (mismo handler que el worker en CI)."""
+    _drenar_validacion_evidencia(est.tenant_id, storage, max_jobs=300)
 
 
 def sembrar_bandeja_pendiente_post_worker(est: EstadoTenant, storage) -> None:
@@ -717,7 +702,7 @@ def cargar_lotes_competencias(est: EstadoTenant, storage, ctx: SemillaContext) -
             if not doc_id:
                 continue
             if _exigir_archivo_confirmado(s, est.tenant_id, doc_id):
-                _marcar_archivo_valido(s, doc_id)
+                _drenar_validacion_evidencia(est.tenant_id, storage)
                 continue
             _subir_y_verificar(storage, s, idn, doc_id, suj, etiqueta)
         if doc_t1:

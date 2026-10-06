@@ -31,11 +31,37 @@ from app.storage import obtener_storage  # noqa: E402
 class Control:
     numero: int
     nombre: str
-    resultado: str  # OK | observación
+    severidad: str  # OK | ERROR | AVISO
     cantidad: int = 0
     detalle: str = ""
     ejemplos: list[Any] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
+    errores: int = 0
+    avisos: int = 0
+
+
+def _armar_control(
+    numero: int,
+    nombre: str,
+    *,
+    errores: int,
+    avisos: int,
+    detalle: str,
+    ejemplos: list[Any],
+    extra: dict[str, Any] | None = None,
+) -> Control:
+    severidad = "ERROR" if errores else ("AVISO" if avisos else "OK")
+    return Control(
+        numero=numero,
+        nombre=nombre,
+        severidad=severidad,
+        cantidad=errores + avisos,
+        detalle=detalle,
+        ejemplos=ejemplos,
+        extra=extra or {},
+        errores=errores,
+        avisos=avisos,
+    )
 
 
 def _nombre_base(url: str) -> str:
@@ -61,14 +87,6 @@ def resolver_tenant(slug: str) -> tuple[str, str]:
         print(f"Tenant inexistente: {slug}", file=sys.stderr)
         raise SystemExit(2)
     return str(tenant_id), slug
-
-
-def _ok(control: Control) -> Control:
-    if control.cantidad == 0 and control.resultado != "OK":
-        control.resultado = "OK"
-    elif control.cantidad > 0 and control.resultado == "OK":
-        control.resultado = "observación"
-    return control
 
 
 def control_archivos(s, tenant_id: str, storage) -> Control:
@@ -123,7 +141,6 @@ def control_archivos(s, tenant_id: str, storage) -> Control:
                     {"documento_id": doc_id, "creado_en": creado.isoformat(), "clave_storage": clave}
                 )
 
-    cantidad = len(incoherentes) + len(pendientes_viejas)
     detalle = (
         f"documentos_con_archivo={len(filas)}; "
         f"archivo_validacion={dict(dist)}; "
@@ -131,9 +148,15 @@ def control_archivos(s, tenant_id: str, storage) -> Control:
         f"pendiente_validacion_mas_1h={len(pendientes_viejas)}"
     )
     ejemplos = (incoherentes[:3] + pendientes_viejas[: max(0, 5 - min(3, len(incoherentes)))])[:5]
-    c = Control(1, "Archivos (storage vs BD + validación)", "OK" if cantidad == 0 else "observación", cantidad, detalle, ejemplos)
-    c.extra = {"distribucion_archivo_validacion": dict(dist)}
-    return _ok(c)
+    return _armar_control(
+        1,
+        "Archivos (storage vs BD + validación)",
+        errores=len(incoherentes),
+        avisos=len(pendientes_viejas),
+        detalle=detalle,
+        ejemplos=ejemplos,
+        extra={"distribucion_archivo_validacion": dict(dist)},
+    )
 
 
 def control_huerfanos(s, tenant_id: str, storage, tenant_prefix: Path) -> Control:
@@ -180,7 +203,7 @@ def control_huerfanos(s, tenant_id: str, storage, tenant_prefix: Path) -> Contro
         {"t": tenant_id},
     ).mappings().all()
 
-    cantidad = len(huerfanos_storage) + len(cert_sin_soporte) + len(docs_sin_sujeto)
+    errores = len(huerfanos_storage) + len(cert_sin_soporte) + len(docs_sin_sujeto)
     detalle = (
         f"storage_huerfanos={len(huerfanos_storage)}; "
         f"certificado_respaldo_sin_documento_soporte={len(cert_sin_soporte)}; "
@@ -190,7 +213,7 @@ def control_huerfanos(s, tenant_id: str, storage, tenant_prefix: Path) -> Contro
     ejemplos.extend([{"tipo": "storage_huerfano", "clave": k} for k in huerfanos_storage[:2]])
     ejemplos.extend([{"tipo": "cert_sin_soporte", **dict(r)} for r in cert_sin_soporte[:2]])
     ejemplos.extend([{"tipo": "doc_sin_sujeto", **dict(r)} for r in docs_sin_sujeto[:2]])
-    return _ok(Control(2, "Huérfanos", "OK" if cantidad == 0 else "observación", cantidad, detalle, ejemplos[:5]))
+    return _armar_control(2, "Huérfanos", errores=errores, avisos=0, detalle=detalle, ejemplos=ejemplos[:5])
 
 
 def control_versiones(s, tenant_id: str) -> Control:
@@ -227,11 +250,17 @@ def control_versiones(s, tenant_id: str) -> Control:
         if c and ahora - c > timedelta(days=7):
             antiguas.append({**dict(p), "creado_en": c.isoformat(), "dias": round((ahora - c).total_seconds / 86400, 1)})
 
-    cantidad = len(multiples_vigentes) + len(antiguas)
     detalle = f"multiples_vigentes={len(multiples_vigentes)}; propuestas_pendientes={len(propuestas)}; propuestas_antiguas_7d={len(antiguas)}"
     ejemplos: list[Any] = [dict(m) for m in multiples_vigentes[:3]]
     ejemplos.extend(list(antiguas)[: max(0, 5 - len(ejemplos))])
-    return _ok(Control(3, "Versiones documentales", "OK" if cantidad == 0 else "observación", cantidad, detalle, ejemplos[:5]))
+    return _armar_control(
+        3,
+        "Versiones documentales",
+        errores=len(multiples_vigentes),
+        avisos=len(antiguas),
+        detalle=detalle,
+        ejemplos=ejemplos[:5],
+    )
 
 
 def control_matrices(s, tenant_id: str) -> Control:
@@ -280,13 +309,18 @@ def control_matrices(s, tenant_id: str) -> Control:
         {"t": tenant_id},
     ).mappings().all()
 
-    cantidad = len(superpuestas) + len(oc_sin_matriz)
     detalle = f"pares_matrices_superpuestas={len(superpuestas)}; oc_activas_sin_matriz_al_ingreso={len(oc_sin_matriz)}"
     ejemplos: list[Any] = [dict(x) for x in superpuestas[:2]]
     ejemplos.extend([dict(x) for x in oc_sin_matriz[: max(0, 5 - len(ejemplos))]])
-    c = Control(4, "Matrices y cobertura OC", "OK" if cantidad == 0 else "observación", cantidad, detalle, ejemplos[:5])
-    c.extra = {"lista_oc_sin_matriz": [r["clave_origen"] for r in oc_sin_matriz]}
-    return _ok(c)
+    return _armar_control(
+        4,
+        "Matrices y cobertura OC",
+        errores=len(superpuestas),
+        avisos=len(oc_sin_matriz),
+        detalle=detalle,
+        ejemplos=ejemplos[:5],
+        extra={"lista_oc_sin_matriz": [r["clave_origen"] for r in oc_sin_matriz]},
+    )
 
 
 def control_oc(s, tenant_id: str) -> Control:
@@ -351,7 +385,7 @@ def control_oc(s, tenant_id: str) -> Control:
                 }
             )
 
-    cantidad = len(vigencia_invertida) + len(claves_dup) + len(rep_fallas)
+    errores = len(vigencia_invertida) + len(claves_dup) + len(rep_fallas)
     detalle = (
         f"vigencia_invertida={len(vigencia_invertida)}; claves_duplicadas={len(claves_dup)}; "
         f"reprogramaciones_inconsistentes_E82={len(rep_fallas)} (total_eventos_vigencia={len(reprogramaciones)})"
@@ -359,7 +393,7 @@ def control_oc(s, tenant_id: str) -> Control:
     ejemplos: list[Any] = [dict(x) for x in vigencia_invertida[:2]]
     ejemplos.extend([dict(x) for x in claves_dup[:2]])
     ejemplos.extend(rep_fallas[: max(0, 5 - len(ejemplos))])
-    return _ok(Control(5, "OC (vigencia, claves, reprogramación E-82)", "OK" if cantidad == 0 else "observación", cantidad, detalle, ejemplos[:5]))
+    return _armar_control(5, "OC (vigencia, claves, reprogramación E-82)", errores=errores, avisos=0, detalle=detalle, ejemplos=ejemplos[:5])
 
 
 def control_eventos(s, tenant_id: str) -> Control:
@@ -476,15 +510,15 @@ def control_eventos(s, tenant_id: str) -> Control:
         {"t": tenant_id},
     ).scalar()
 
-    cantidad = (
+    errores = (
         len(sin_verificar)
         + len(sin_rechazo)
         + len(sin_carga)
         + len(cert_sin_evento)
         + len(mov_sin_evento)
-        + int(outbox_pendiente or 0)
         + int(outbox_estancado or 0)
     )
+    avisos = int(outbox_pendiente or 0)
     detalle = (
         f"confirmados_sin_DocumentoVerificado={len(sin_verificar)}; "
         f"rechazos_sin_DocumentoRechazado={len(sin_rechazo)}; "
@@ -506,9 +540,15 @@ def control_eventos(s, tenant_id: str) -> Control:
             {"t": tenant_id},
         ).mappings().all()
         ejemplos.extend([{"tipo": "outbox_pendiente", **dict(f)} for f in filas_ob])
-    c = Control(6, "Eventos de auditoría y outbox", "OK" if cantidad == 0 else "observación", cantidad, detalle, ejemplos[:5])
-    c.extra = {"outbox_pendiente": int(outbox_pendiente or 0), "outbox_estancado": int(outbox_estancado or 0)}
-    return _ok(c)
+    return _armar_control(
+        6,
+        "Eventos de auditoría y outbox",
+        errores=errores,
+        avisos=avisos,
+        detalle=detalle,
+        ejemplos=ejemplos[:5],
+        extra={"outbox_pendiente": int(outbox_pendiente or 0), "outbox_estancado": int(outbox_estancado or 0)},
+    )
 
 
 def control_aislamiento(s, tenant_id: str) -> Control:
@@ -561,7 +601,7 @@ def control_aislamiento(s, tenant_id: str) -> Control:
         {"t": tenant_id},
     ).mappings().all()
 
-    cantidad = len(prefijo_malo) + len(soporte_cruzado) + len(oc_catalogo) + len(matriz_loc)
+    errores = len(prefijo_malo) + len(soporte_cruzado) + len(oc_catalogo) + len(matriz_loc)
     detalle = (
         f"clave_storage_fuera_de_tenant={len(prefijo_malo)}; "
         f"documento_soporte_huérfano/cruzado={len(soporte_cruzado)}; "
@@ -570,7 +610,7 @@ def control_aislamiento(s, tenant_id: str) -> Control:
     ejemplos: list[Any] = [dict(x) for x in prefijo_malo[:2]]
     ejemplos.extend([dict(x) for x in soporte_cruzado[:2]])
     ejemplos.extend([dict(x) for x in oc_catalogo[:1]])
-    return _ok(Control(7, "Aislamiento / coherencia intra-tenant", "OK" if cantidad == 0 else "observación", cantidad, detalle, ejemplos[:5]))
+    return _armar_control(7, "Aislamiento / coherencia intra-tenant", errores=errores, avisos=0, detalle=detalle, ejemplos=ejemplos[:5])
 
 
 def ejecutar(slug: str) -> list[Control]:
@@ -596,10 +636,13 @@ def ejecutar(slug: str) -> list[Control]:
 
 def imprimir(controles: list[Control]) -> None:
     print("\n=== Informe de integridad ===")
-    print(f"{'#':<3} {'Control':<42} {'Resultado':<12} {'Cant.':<6} Detalle")
+    print(f"{'#':<3} {'Control':<42} {'Severidad':<10} {'Cant.':<6} Detalle")
     print("-" * 120)
     for c in controles:
-        print(f"{c.numero:<3} {c.nombre:<42} {c.resultado:<12} {c.cantidad:<6} {c.detalle}")
+        print(f"{c.numero:<3} {c.nombre:<42} {c.severidad:<10} {c.cantidad:<6} {c.detalle}")
+    resumen_errores = sum(c.errores for c in controles)
+    resumen_avisos = sum(c.avisos for c in controles)
+    print(f"\nResumen: ERROR={resumen_errores} AVISO={resumen_avisos}")
         if c.ejemplos:
             for ej in c.ejemplos[:5]:
                 print(f"    · {json.dumps(ej, ensure_ascii=False, default=str)}")
@@ -610,7 +653,9 @@ def imprimir(controles: list[Control]) -> None:
                 {
                     "numero": c.numero,
                     "nombre": c.nombre,
-                    "resultado": c.resultado,
+                    "severidad": c.severidad,
+                    "errores": c.errores,
+                    "avisos": c.avisos,
                     "cantidad": c.cantidad,
                     "detalle": c.detalle,
                     "ejemplos": c.ejemplos[:5],
@@ -631,7 +676,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     controles = ejecutar(args.tenant_slug)
     imprimir(controles)
-    return 1 if any(c.resultado == "observación" for c in controles) else 0
+    return 1 if any(c.severidad == "ERROR" for c in controles) else 0
 
 
 if __name__ == "__main__":

@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for est in estados:
         try:
-            consolidar_evidencias_tecnico3_post_worker(est)
+            consolidar_evidencias_tecnico3_post_worker(est, storage)
         except Exception as e:  # noqa: BLE001
             ctx.fallas.append(f"consolidar_tecnico3 {est.spec.slug}: {e}")
 

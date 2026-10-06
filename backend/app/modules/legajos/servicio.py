@@ -1032,6 +1032,16 @@ def importar_lote(s: Session, identidad: Identidad, body: e.ImportarLote) -> dic
                 "detalles": [{"campo": ".".join(str(x) for x in er["loc"]), "tipo": er["type"], "mensaje": er["msg"]} for er in err.errors()],
             })
             continue
+        if fila.estado_confirmacion in ("verificado", "confirmado_en_fuente"):
+            rechazadas.append({
+                "fila": i,
+                "sujeto_id": fila.sujeto_id,
+                "requisito_definicion_id": str(fila.requisito_definicion_id),
+                "codigo": "lote_no_admite_verificado",
+                "motivo": "Un documento importado por lote no puede entrar como verificado; use declarado y confirme por el camino normal",
+                "detalles": {"estado_confirmacion": fila.estado_confirmacion},
+            })
+            continue
         # 1b) Dominio.
         try:
             legajo = _legajo_activo(s, t, fila.sujeto_id)
