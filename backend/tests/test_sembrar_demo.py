@@ -826,32 +826,37 @@ def test_reset_aborta_sin_admin_si_owner_sin_createdb(demo_sembrado, tmp_path):
     marcador = storage_base / tid_s / "no_debe_borrarse_reset_abort.txt"
     marcador.parent.mkdir(parents=True, exist_ok=True)
     marcador.write_text("ok", encoding="utf-8")
-
-    env_file = tmp_path / "sin_admin.env"
-    env_file.write_text(
-        "\n".join(
-            [
-                f"DATABASE_URL={os.environ['DATABASE_URL']}",
-                f"DATABASE_URL_MIGRATIONS={os.environ['DATABASE_URL_MIGRATIONS']}",
-                "DEMO_PASSWORD=demo-secreto-12",
-            ]
+    try:
+        env_file = tmp_path / "sin_admin.env"
+        env_file.write_text(
+            "\n".join(
+                [
+                    f"DATABASE_URL={os.environ['DATABASE_URL']}",
+                    f"DATABASE_URL_MIGRATIONS={os.environ['DATABASE_URL_MIGRATIONS']}",
+                    "DEMO_PASSWORD=demo-secreto-12",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    env = _env_sembrado(ENV_FILE=str(env_file))
-    env.pop("DATABASE_URL_ADMIN", None)
+        env = _env_sembrado(ENV_FILE=str(env_file))
+        env.pop("DATABASE_URL_ADMIN", None)
 
-    with platform_session() as ps:
-        rev_antes = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert rev_antes
+        with platform_session() as ps:
+            rev_antes = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            assert rev_antes
 
-    r = _correr_sembrado("--reset", env=env)
-    assert r.returncode == 2, r.stdout
-    assert "DATABASE_URL_ADMIN" in (r.stderr or r.stdout)
-    assert marcador.is_file(), "storage no debía borrarse al abortar"
-    with platform_session() as ps:
-        rev_despues = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert rev_despues == rev_antes
-        tid_despues = ps.execute(text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}).scalar()
-        assert tid_despues is not None
+        r = _correr_sembrado("--reset", env=env)
+        assert r.returncode == 2, r.stdout
+        assert "DATABASE_URL_ADMIN" in (r.stderr or r.stdout)
+        assert marcador.is_file(), "storage no debía borrarse al abortar"
+        with platform_session() as ps:
+            rev_despues = ps.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            assert rev_despues == rev_antes
+            tid_despues = ps.execute(
+                text("SELECT modulo1.resolver_tenant_por_slug(:s)"), {"s": "patagonia-demo"}
+            ).scalar()
+            assert tid_despues is not None
+    finally:
+        if marcador.is_file():
+            marcador.unlink()

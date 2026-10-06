@@ -79,6 +79,17 @@ jobs:
           DATABASE_URL_ADMIN: postgresql://postgres:postgres@localhost:5432/postgres
           DEMO_PASSWORD: demo-secreto-12
         run: python -m pytest tests/test_sembrar_demo.py -q
+      - name: Informe de integridad (tenants demo sembrados)
+        env:
+          DATABASE_URL: postgresql+psycopg://modulo1_app:modulo1_app_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DATABASE_URL_MIGRATIONS: postgresql+psycopg://modulo1_owner:modulo1_owner_ci_secret_12@localhost:5432/modulo1_ci_demo
+          DATABASE_URL_ADMIN: postgresql://postgres:postgres@localhost:5432/postgres
+          DEMO_PASSWORD: demo-secreto-12
+        run: |
+          for slug in patagonia-demo anelo-demo neuquen-demo; do
+            echo "=== Informe integridad: $slug ==="
+            python -m scripts.informe_integridad --tenant-slug "$slug" || exit 1
+          done
 
   frontend:
     runs-on: ubuntu-24.04

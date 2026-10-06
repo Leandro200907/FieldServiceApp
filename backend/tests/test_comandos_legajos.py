@@ -374,13 +374,17 @@ def test_importar_lote_idempotente_por_lote_id(cliente_api, tenant_de_prueba):
     assert _post(cliente_api, t, "supervisor", "importar_lote", body).status_code == 403
 
     r1 = _ok(_post(cliente_api, t, "responsable_legajos", "importar_lote", body))
-    assert (r1["filas_totales"], r1["filas_aceptadas"], r1["filas_rechazadas"]) == (4, 2, 2)
-    assert [f["fila"] for f in r1["detalle_filas_rechazadas"]] == [2, 3]
-    assert r1["detalle_filas_rechazadas"][0]["codigo"] == "no_encontrado"
-    # fila 1 viene verificada → emite también el canónico DocumentoVerificado (A-07)
-    assert r1["eventos"] == ["DocumentoCargado", "DocumentoCargado", "DocumentoVerificado", "LoteAplicado"]
+    # E-109: fila con verificado se rechaza (antes se aceptaba y emitía DocumentoVerificado).
+    assert (r1["filas_totales"], r1["filas_aceptadas"], r1["filas_rechazadas"]) == (4, 1, 3)
+    assert [f["fila"] for f in r1["detalle_filas_rechazadas"]] == [1, 2, 3]
+    assert {f["codigo"] for f in r1["detalle_filas_rechazadas"]} == {
+        "lote_no_admite_verificado",
+        "no_encontrado",
+        "no_encontrado",
+    }
+    assert r1["eventos"] == ["DocumentoCargado", "LoteAplicado"]
     assert _docs(t, s1, req)[0]["estado_confirmacion"] == "declarado"  # default del lote
-    assert _docs(t, s2, req)[0]["estado_confirmacion"] == "verificado"
+    assert not _docs(t, s2, req)
     assert _docs(t, s1, req)[0]["lote_id"] == lote_id
 
     # Mismo lote_id con filas distintas: 409 (A-03), nada nuevo. Mismo contenido: replay exacto.
@@ -389,16 +393,16 @@ def test_importar_lote_idempotente_por_lote_id(cliente_api, tenant_de_prueba):
     r2 = _ok(_post(cliente_api, t, "responsable_legajos", "importar_lote", body))
     assert r2 == r1
     with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.documento")).scalar() == 2
+        assert s.execute(text("SELECT count(*) FROM modulo1.documento")).scalar() == 1
         assert s.execute(text("SELECT count(*) FROM modulo1.lote_importacion")).scalar() == 1
         lote = s.execute(text("SELECT estado, filas_totales, filas_aceptadas, filas_rechazadas FROM modulo1.lote_importacion")).first()
-        assert tuple(lote) == ("aplicado", 4, 2, 2)
+        assert tuple(lote) == ("aplicado", 4, 1, 3)
         # aunque venza el registro de idempotencia, el lote existente no se re-aplica
         s.execute(text("DELETE FROM modulo1.idempotency_keys"))
     r3 = _ok(_post(cliente_api, t, "responsable_legajos", "importar_lote", body))
-    assert r3["ya_aplicado"] is True and r3["filas_aceptadas"] == 2
+    assert r3["ya_aplicado"] is True and r3["filas_aceptadas"] == 1
     with tenant_session(t.tenant_id) as s:
-        assert s.execute(text("SELECT count(*) FROM modulo1.documento")).scalar() == 2
+        assert s.execute(text("SELECT count(*) FROM modulo1.documento")).scalar() == 1
     assert _eventos(t, "LoteAplicado") == 1
 
 def test_revertir_lote_restaura_los_vigentes_anteriores(cliente_api, tenant_de_prueba):
