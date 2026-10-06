@@ -35,7 +35,11 @@ AHORA_PYTEST_DEFAULT = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 
 
 @pytest.fixture(autouse=True)
-def reloj_congelado_en_tests():
+def reloj_congelado_en_tests(request):
+    # Sembrado demo: fechas del script y del tenant demo; no congelar (CI job aparte).
+    if request.node.path.name == "test_sembrar_demo.py":
+        yield None
+        return
     with congelar_reloj_utc(AHORA_PYTEST_DEFAULT):
         yield AHORA_PYTEST_DEFAULT
 
