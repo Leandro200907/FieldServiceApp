@@ -1061,11 +1061,10 @@ dos capas distintas:
   fechas si el respaldo no alcanza.
 - **Por vencer** (tarjeta y filas) usa **`plazo_aviso_dias`**, no el **horizonte del backlog**
   de D23 (`horizonte_backlog_dias`, 60 por defecto): son parámetros y preguntas distintas.
-  En la ficha es el `plazo_aviso_dias` **del tenant** (`configuracion_alertas`, 30 por
-  defecto; `presentacion_evidencia.py::_cargar_plazo_tenant`), **sin** el override por
-  requisito (`definicion_requisito.plazo_aviso_dias`, §15 / P1), que sí aplican las alertas
-  (`app/modules/alertas/servicio.py`). Diferencia conocida: un requisito con override puede
-  estar «Por vencer» en alertas y no en la ficha (o al revés).
+  Ficha, `timeline_recursos` y alertas comparten la misma regla: plazo del tenant
+  (`configuracion_alertas`, 30 por defecto; `presentacion_evidencia.py::_cargar_plazo_tenant`)
+  con **override** por requisito (`definicion_requisito.plazo_aviso_dias`, §15 / P1) vía
+  `estado_vigencia_presentacion`.
 
 **Motivo.** Evitar que un documento vigente por fechas pero sin certificado propio o con archivo
 pendiente figure como «vencido», y separar aviso calendario del cumplimiento operativo del backlog.
