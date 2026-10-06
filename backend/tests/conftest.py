@@ -17,14 +17,52 @@ from tests.guardia_base import validar_base_para_pytest
 
 def pytest_configure(config: pytest.Config) -> None:
     validar_base_para_pytest(config)
+
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import jwt
 from sqlalchemy import text
 
+from app.comun.reloj import ahora_utc, congelar_reloj_utc
 from app.config import settings
 from app.db import tenant_session
+
+# E-106: hoy civil del tenant alineado con OC de prueba (vigencia_hasta ~ 2026-10-05) y
+# constantes AHORA de la suite (2026-09-18 … 2026-09-21). 15:00 UTC ≈ mediodía AR.
+AHORA_PYTEST_DEFAULT = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def reloj_congelado_en_tests(request):
+    # Sembrado demo: fechas del script y del tenant demo; no congelar (CI job aparte).
+    if request.node.path.name == "test_sembrar_demo.py":
+        yield None
+        return
+    with congelar_reloj_utc(AHORA_PYTEST_DEFAULT):
+        yield AHORA_PYTEST_DEFAULT
+
+
+@pytest.fixture
+def reloj_en():
+    """Pisa el reloj autouse dentro de un test (p. ej. otro día civil)."""
+    return congelar_reloj_utc
+
+
+@pytest.fixture
+def reloj_desde_env():
+    """Override puntual vía FSM_TEST_AHORA_UTC (ISO-8601). No lo usa el autouse."""
+    import os
+
+    raw = os.environ.get("FSM_TEST_AHORA_UTC")
+    if not raw:
+        pytest.skip("FSM_TEST_AHORA_UTC no definida")
+    instante = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    if instante.tzinfo is None:
+        instante = instante.replace(tzinfo=timezone.utc)
+    with congelar_reloj_utc(instante):
+        yield instante
 
 ROLES = ("configuracion", "responsable_legajos", "supervisor", "tecnico")
 
@@ -87,7 +125,7 @@ def token_para(
     sujeto_id: str | None = None,
     minutos: int = 30,
 ) -> str:
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_utc()
     claims = {
         "sub": usuario_id,
         "tenant_id": tenant_id,

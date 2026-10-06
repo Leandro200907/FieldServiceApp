@@ -11,14 +11,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
-from app.comun.reloj import zona_horaria_del_tenant
+from app.comun.reloj import ahora_utc, hoy_del_tenant, zona_horaria_del_tenant
 
 from app.api.errores import ErrorDeDominio, NoEncontrado, Prohibido
 from app.auth.alcance import alcance_de_sujetos
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento_interno
 from app.comun.paginacion import Pagina, envolver
-from app.comun.reloj import hoy_del_tenant
 from app.modules.oc.catalogos_maestros import resolver_operadora
 from app.comun.importacion_filas import ordenar_por_fila
 from app.modules.operadoras.esquemas import validar_campos_planilla
@@ -170,7 +169,7 @@ def _instante_paso(
     valor = por_estado.get(estado)
     if valor is not None:
         return valor
-    return datetime.now(timezone.utc)
+    return ahora_utc()
 
 
 def _entrega_sin_cambios(

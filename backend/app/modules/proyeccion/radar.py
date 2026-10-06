@@ -16,7 +16,7 @@ from app.api.errores import ErrorDeDominio, NoEncontrado
 from app.auth.alcance import alcance_de_sujetos, sujeto_en_alcance
 from app.auth.identidad import Identidad, Rol
 from app.comun.paginacion import Pagina, envolver
-from app.comun.reloj import hoy_del_tenant
+from app.comun.reloj import ahora_utc, hoy_del_tenant
 from app.core.estado_documental import (
     EstadoConfirmacionDocumental,
     EstadoValidacionArchivo,
@@ -522,7 +522,7 @@ def radar_backlog(session: Session, identidad: Identidad, p: Pagina, *, desde: d
             if len(lote) < tamano_lote:
                 break
     salida = envolver(items, total, p)
-    salida.update({"calculado_en": datetime.now(timezone.utc), "desde": desde, "hasta": hasta,
+    salida.update({"calculado_en": ahora_utc(), "desde": desde, "hasta": hasta,
                    "advertencia": ADVERTENCIA})
     return salida
 
