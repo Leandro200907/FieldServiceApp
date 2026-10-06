@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt as pyjwt
 from sqlalchemy import text
@@ -149,12 +149,14 @@ def decodificar(token: str, tipo_esperado: str) -> dict:
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
-            options={"require": ["sub", "tenant_id", "exp", "iat"]},
+            options={"require": ["sub", "tenant_id", "exp", "iat"], "verify_exp": False},
         )
-    except pyjwt.ExpiredSignatureError:
-        raise NoAutenticado("Token vencido")
     except pyjwt.PyJWTError:
         raise NoAutenticado("Token inválido")
+    instante = ahora_utc()
+    exp = datetime.fromtimestamp(int(claims["exp"]), tz=timezone.utc)
+    if exp <= instante:
+        raise NoAutenticado("Token vencido")
     if claims.get("tipo") != tipo_esperado:
         raise NoAutenticado("Tipo de token incorrecto")
     return claims
