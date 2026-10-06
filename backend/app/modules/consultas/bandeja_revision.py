@@ -240,4 +240,5 @@ def bandeja_revision(
     salida = envolver(paginados, total, p)
     salida["pestana"] = pestana
     salida["conteos"] = {"todos": len({i["documento_id"] for i in propuestas + archivos}), "propuestas": len(propuestas), "archivos": len(archivos)}
+    salida["hoy"] = hoy.isoformat()
     return salida

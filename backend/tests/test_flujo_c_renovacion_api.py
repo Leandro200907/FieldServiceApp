@@ -169,7 +169,7 @@ def test_flujo_c_rechazo_motivo_visible_en_mi_legajo(cliente_api, tenant_de_prue
     assert doc["ultimo_rechazo_propuesta"]["motivo"] == motivo
 
 
-def test_bandeja_revision_unifica_propuestas_y_archivos(cliente_api, storage, tenant_de_prueba):
+def test_bandeja_revision_unifica_propuestas_y_archivos(cliente_api, storage, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     req = _alta_def(cliente_api, t, "Bandeja unificada C")
     persona = _alta_persona(cliente_api, t, "FLUJO-C-BAND", t.sujeto_tecnico)
@@ -197,6 +197,7 @@ def test_bandeja_revision_unifica_propuestas_y_archivos(cliente_api, storage, te
     )
     assert r.status_code == 200, r.text
     body = r.json()
+    assert body["hoy"] == hoy_del_tenant(sesion, t.tenant_id).isoformat()
     assert body["conteos"]["propuestas"] >= 1
     prop_item = next(i for i in body["items"] if i["documento_id"] == prop["documento_id"])
     assert prop_item["tipo_item"] == "propuesta"

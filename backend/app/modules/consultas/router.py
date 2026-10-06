@@ -483,6 +483,7 @@ class BandejaRevisionResponse(BaseModel):
     limit: int
     pestana: Literal["todos", "propuestas", "archivos"]
     conteos: ConteosBandejaRevision
+    hoy: date
 
 
 @router.get("/consultas/bandeja_revision", response_model=BandejaRevisionResponse)
