@@ -9,7 +9,8 @@ solo la bitácora del código.
 ### Entorno
 - Código extraído de `Escritorio/Ticketera/modulo1-app.zip` a `Apps/Designer/modulo1-app/`.
 - `git init` + commit inicial `1ccc316` con el contenido tal cual llegó.
-- `.venv` con Python 3.13.5, dependencias de `requirements.txt` instaladas.
+- `.venv` con Python 3.13.5, dependencias de `requirements.txt` instaladas (reemplazado por
+  `requirements.in` / `requirements.lock` con hashes, M-08).
 - PostgreSQL 16.15 nativo en Windows (Docker Desktop no levantaba el motor WSL;
   winget/curl contra EDB daban 403 de CloudFront — el usuario instaló a mano).
 - Base `modulo1` + roles `modulo1_owner` (owner de tablas) y `modulo1_app` (NOBYPASSRLS).
@@ -55,7 +56,8 @@ solo la bitácora del código.
 - `app/main.py`: `/v1`, monta routers tolerante a módulos aún inexistentes.
 - `tests/conftest.py`: fixture `tenant_de_prueba` (tenant + 4 usuarios, limpieza por RLS)
   y `cliente_api`; `token_para` firma JWT con el secreto de la app.
-- `docs/BRIEF_SUBAGENTES.md`: contrato común de las 5 piezas paralelas (reglas duras,
+- `docs/BRIEF_SUBAGENTES.md` (histórico, **OBSOLETO** — no usar; reglas vigentes en
+  `.cursor/rules/reglas-proyecto.mdc`): contrato común de las 5 piezas paralelas (reglas duras,
   matriz de permisos, invariantes, catálogo de eventos, reparto de archivos disjunto,
   interfaz de orquestación).
 
@@ -188,7 +190,8 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
 
 - **M-06 (`11320fb`)**: contraseñas medidas en bytes UTF-8 (72, límite de bcrypt), nunca
   truncadas: `PasswordDemasiadoLarga`, validador de bytes en login (422 estable sin echo),
-  `scripts/crear_usuario.py` (única vía de alta en v1; contraseña por `USUARIO_PASSWORD`).
+  `scripts/crear_usuario.py` (reemplazado por `scripts/administracion.py crear-usuario`;
+  única vía de alta en v1; contraseña por `USUARIO_PASSWORD`).
   v1 no tiene endpoints de cambio/reset. 12 tests (límite exacto, +1 byte, multibyte,
   no equivalencia por prefijo, CLI).
 - **Salud y diagnóstico (`89cb07a`)**: `/v1/salud/vivo` y `/v1/salud/listo` (DB, migración ==
@@ -272,3 +275,30 @@ leases con `lease_token`, 0008) · A-05 (purga en dos fases, at-least-once físi
   visualmente a esa OC (ambigüedad de lectura).
 - **Contrato vs implementación:** `POST /v1/comandos/asignar_supervisor` documentado en
   HANDOFF §4.2 pero **no expuesto** en el backend — pendiente decisión del dueño del producto.
+
+## 2026-10-02 a 2026-10-06 — PRs #13 a #16 mergeados en `main`
+
+- **E-91 (PR #13)**: requisitos exigidos sin documento en la ficha y en Mi legajo
+  (incorporar documento faltante, filas exigidas); tarjetas de exigidos vs. cumplimiento
+  (D23); horizonte del backlog configurable por tenant (migración `0032_horizonte_backlog_dias`).
+  E-93: estado de la versión actual separado de la renovación en revisión.
+- **E-94/E-95/E-96/E-98**: tarjetas de exigidos sólo por calendario si hay evidencia
+  (rechazo de operadora no es vencido), plural «órdenes» en OC afectadas, resumen de ficha
+  desde los conteos exigidos del API, `estado_peor` real en el agregado multi-OC del backlog.
+- **E-97 (PR #15)**: certificado propio de respaldo para inducción y competencia
+  (`crear_certificado_respaldo`, migración `0033_certificado_respaldo_e97`); certificados
+  huérfanos ocultos en la consulta; semilla demo actualizada; flujo en
+  `docs/flujos/FLUJO_E97_INDUCCION_COMPETENCIA.md`.
+- **E-101 / E-105 (ficha)**: tarjetas, `estado_fila`, «Ver certificado», ámbito legible y
+  textos de observación de operadora calculados por el backend. E-100: CI fijado a
+  `ubuntu-24.04`.
+- **E-106 (PR #14)**: reloj congelable en pytest (`ahora_utc` / `hoy_del_tenant`, autouse en
+  2026-09-20, guardia contra reloj real); JWT y QR validan contra `ahora_utc`.
+  `test_sembrar_demo.py` no congela el reloj (job de CI demo aparte).
+- **E-107 (PR #16)**: se emite `DocumentoVerificado` (auditoría) cuando la validación del
+  certificado promueve el registro padre.
+- **Informe de integridad** (`scripts/informe_integridad.py`): solo lectura, exige base
+  `*_demo`, 7 controles por tenant; control 6 corregido para `certificado_respaldo` y
+  coincidencia de operadora.
+- Deuda del 2026-10-01 sobre `asignar_supervisor`: cerrada en documentación — HANDOFF lo
+  marca como no expuesto en la API pública (D-A; D4), lógica interna reservada para Módulo 2.

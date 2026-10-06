@@ -1,3 +1,5 @@
+> **SUPERADO:** contrato candidato histórico (85 operaciones / 84 paths). El contrato vigente es `contracts/modulo1/openapi.json` (89 operaciones / 88 paths, head de migraciones `0033_certificado_respaldo_e97`).
+
 # Contrato candidato db400e6
 
 Commit: db400e60975f132ac783640ce33214e645d36876.
