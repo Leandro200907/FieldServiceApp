@@ -307,7 +307,8 @@ def test_oc_sin_matriz_avisa_una_vez_a_configuracion(esc):
     with tenant_session(t.tenant_id) as s:
         assert s.execute(text("SELECT count(*) FROM modulo1.event_log WHERE tenant_id = :t AND tipo = 'OcSinMatriz'"), {"t": t.tenant_id}).scalar() == 1
         job = s.execute(text("SELECT payload FROM modulo1.job_queue WHERE tenant_id = :t AND payload->>'tipo' = 'OcSinMatriz'"), {"t": t.tenant_id}).scalar()
-    assert job["destinatario_rol"] == "configuracion" and job["clave_origen"] == "OC-SIN-MATRIZ"
+        roles = {row[0] for row in s.execute(text("SELECT payload->>'destinatario_rol' FROM modulo1.job_queue WHERE tenant_id = :t AND payload->>'tipo' = 'OcSinMatriz'"), {"t": t.tenant_id}).all()}
+    assert roles == {"configuracion", "responsable_legajos"} and job["clave_origen"] == "OC-SIN-MATRIZ"
 
 
 def test_vencimiento_dispara_revaluacion_de_decision_vigente(cliente_api, esc):

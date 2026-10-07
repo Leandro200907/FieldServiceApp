@@ -208,6 +208,7 @@ class OcBacklogItem(BaseModel):
     actualizado_en: str
     modo: str
     reprogramada: bool = False
+    tiene_matriz: bool = True
     estado_documental: str | None = None
     primer_quiebre_documental: str | None = None
     tiene_alertas: bool
@@ -740,6 +741,18 @@ class LineaMatrizCopiaLocal(BaseModel):
     bloqueante_durante_ejecucion: bool
 
 
+class CambioPlantillaMatriz(BaseModel):
+    tipo: Literal["agregado", "quitado", "pasa_a_bloquear", "deja_de_bloquear"]
+    grupo: str
+    nombre: str
+    version_origen: int
+    version_destino: int
+    definicion_global_id: str | None = None
+    requisito_definicion_id: str | None = None
+    clasificacion_destino: str | None = None
+    bloqueante_durante_ejecucion_destino: bool | None = None
+
+
 class CopiaLocalMatriz(BaseModel):
     matriz_version_id: str
     cliente_id: str
@@ -751,6 +764,7 @@ class CopiaLocalMatriz(BaseModel):
     copiada_de_version: int | None
     estado: str
     lineas: list[LineaMatrizCopiaLocal]
+    cambios: list[CambioPlantillaMatriz] = []
 
 
 class MatrizGlobalConCopias(BaseModel):

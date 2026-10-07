@@ -225,6 +225,7 @@ def test_backlog_alerta_sin_matriz(cliente_api, tenant_de_prueba, sesion):
     insertar_oc(sesion, t.tenant_id, "OC-SIN-MAT", clave, date(2026, 10, 1), date(2026, 10, 5))
     sesion.commit()
     item = cliente_api.get("/v1/consultas/backlog_oc", params={"q": "OC-SIN-MAT"}, headers=t.headers("responsable_legajos")).json()["items"][0]
+    assert item["tiene_matriz"] is False
     assert any(a["codigo"] == "sin_matriz" for a in item["alertas_ciertas"])
 
 

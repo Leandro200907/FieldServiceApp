@@ -1,2 +1,18 @@
 .checkbox-field{display:flex;align-items:flex-end}
 .checkbox-field label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#3b5768}
+.matrices-toolbar{margin-bottom:12px}
+.matriz-arranque-cards{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.matriz-arranque-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:12px 14px;border:1px solid #c5d5de;border-radius:10px;background:#fff;cursor:pointer;min-width:160px}
+.matriz-arranque-card.selected{border-color:#0b6e99;box-shadow:0 0 0 1px #0b6e99}
+.matriz-arranque-icon{font-size:1.25rem}
+.matriz-actions{display:flex;gap:10px;margin-top:16px}
+.matriz-editor-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.matriz-editor-col{border:1px solid #e2ebf0;border-radius:8px;padding:10px}
+.matriz-editor-lineas{list-style:none;margin:0;padding:0}
+.matriz-editor-lineas li{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.matriz-candado{border:none;background:transparent;font-size:1.1rem;cursor:pointer}
+.matriz-candado.bloqueante{filter:none}
+.matriz-aviso-plantilla{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:12px;background:#fff8e6;border-radius:8px}
+.matriz-cambios-list{list-style:none;padding:0}
+.matriz-cambios-list li{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.pill-danger{display:inline-block;padding:2px 8px;border-radius:999px;background:#fde8e8;color:#9b1c1c;font-size:12px;font-weight:600}

@@ -27,6 +27,7 @@ from app.api.errores import Conflicto, ErrorDeDominio, NoEncontrado
 from app.auth.identidad import Identidad, Rol
 from app.comun.eventos import registrar_evento, registrar_evento_interno
 from app.modules.requisitos import esquemas as e
+from app.modules.requisitos.cambios_plantilla import calcular_cambios_matriz
 from app.modules.requisitos.servicio import publicar_version_de_matriz
 
 # --------------------------------------------------------------------------- lectura del catálogo global
@@ -112,7 +113,7 @@ def _insertar_copia_definicion(s: Session, identidad: Identidad, g: dict[str, An
 
 
 def copiar_definicion_global(s: Session, identidad: Identidad, body: e.CopiarDefinicionGlobal) -> dict[str, Any]:
-    identidad.exigir_rol(Rol.CONFIGURACION)
+    identidad.exigir_rol(Rol.CONFIGURACION, Rol.RESPONSABLE_LEGAJOS)
     g = _definicion_global(s, str(body.definicion_global_id))
     rid = _insertar_copia_definicion(s, identidad, g, str(body.locacion_id) if body.locacion_id else None)
     return {"requisito_definicion_id": rid, "definicion_global_id": str(g["definicion_global_id"]), "copiada_de_version": g["version"],
@@ -123,7 +124,7 @@ def copiar_matriz_global(s: Session, identidad: Identidad, body: e.CopiarMatrizG
     """Publica una versión local de Matriz a partir de la plantilla: reutiliza copias
     locales existentes de cada definición global (misma locación para inducciones) y crea
     las que falten. La locación de las inducciones es la de la matriz."""
-    identidad.exigir_rol(Rol.CONFIGURACION)
+    identidad.exigir_rol(Rol.CONFIGURACION, Rol.RESPONSABLE_LEGAJOS)
     t = identidad.tenant_id
     m = _matriz_global(s, str(body.matriz_global_id))
     if not m["activa"]:
@@ -208,13 +209,27 @@ def plantillas_globales(s: Session, identidad: Identidad) -> dict[str, Any]:
             "WHERE tenant_id = :t AND matriz_global_id = :m ORDER BY cliente_id, locacion_id, tipo_servicio_id, version DESC"),
             {"t": t, "m": str(m["matriz_global_id"])}).mappings():
             lineas_locales = [dict(x) for x in s.execute(text(
-                "SELECT l.requisito_definicion_id, d.nombre, d.definicion_global_id, l.clasificacion, l.bloqueante_durante_ejecucion "
+                "SELECT l.requisito_definicion_id, d.nombre, d.definicion_global_id, d.tipo_sujeto_aplicable, d.copiada_de_version, "
+                "l.clasificacion, l.bloqueante_durante_ejecucion "
                 "FROM modulo1.linea_requisito l JOIN modulo1.definicion_requisito d ON d.requisito_definicion_id = l.requisito_definicion_id AND d.tenant_id = l.tenant_id "
                 "WHERE l.tenant_id = :t AND l.matriz_version_id = :m ORDER BY d.nombre"), {"t": t, "m": str(c["matriz_version_id"])}).mappings()]
+            lineas_fmt = [{**x, "requisito_definicion_id": str(x["requisito_definicion_id"]),
+                           "definicion_global_id": str(x["definicion_global_id"]) if x["definicion_global_id"] else None} for x in lineas_locales]
+            estado_copia = _estado(c["copiada_de_version"], m["version"])
+            versiones_loc = {str(x["requisito_definicion_id"]): int(x["copiada_de_version"] or 0) for x in lineas_locales}
+            cambios = (
+                calcular_cambios_matriz(
+                    [{**lg, "definicion_global_id": str(lg["definicion_global_id"])} for lg in _lineas_globales(s, str(m["matriz_global_id"]))],
+                    lineas_fmt,
+                    versiones_definicion_local=versiones_loc,
+                )
+                if estado_copia == "actualizacion_disponible"
+                else []
+            )
             copias.append({**{k: (str(v) if isinstance(v, uuid.UUID) else v) for k, v in dict(c).items()},
-                           "estado": _estado(c["copiada_de_version"], m["version"]),
-                           "lineas": [{**x, "requisito_definicion_id": str(x["requisito_definicion_id"]),
-                                       "definicion_global_id": str(x["definicion_global_id"]) if x["definicion_global_id"] else None} for x in lineas_locales]})
+                           "estado": estado_copia,
+                           "lineas": lineas_fmt,
+                           "cambios": cambios})
         matrices.append({
             **dict(m), "matriz_global_id": str(m["matriz_global_id"]),
             "lineas": [{**lg, "definicion_global_id": str(lg["definicion_global_id"])} for lg in _lineas_globales(s, str(m["matriz_global_id"]))],

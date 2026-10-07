@@ -530,7 +530,7 @@ def test_contrato_http_codigos_y_serializacion(cliente_api, tenant_de_prueba):
         (c.post("/v1/comandos/publicar_version_de_matriz", json={"cliente_id": str(uuid.uuid4()),
                 "locacion_id": str(uuid.uuid4()), "tipo_servicio_id": str(uuid.uuid4()),
                 "vigente_desde": "2026-01-01", "lineas": [{"requisito_definicion_id": str(uuid.uuid4()),
-                "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": True}]}, headers=h), 403, "prohibido"),
+                "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": True}]}, headers=t.headers("supervisor")), 403, "prohibido"),
         # la validación del body corre antes que la autorización: body inválido + rol incorrecto = 422
         (c.post("/v1/comandos/alta_de_sujeto", json={}, headers=h), 422, "validacion"),
         (c.post("/v1/comandos/alta_de_sujeto", json={"tipo_sujeto": "marciano", "identificador_natural": "x"}, headers=h), 422, "validacion"),

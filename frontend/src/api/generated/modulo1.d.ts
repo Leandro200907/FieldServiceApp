@@ -1943,6 +1943,30 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** CambioPlantillaMatriz */
+        CambioPlantillaMatriz: {
+            /** Bloqueante Durante Ejecucion Destino */
+            bloqueante_durante_ejecucion_destino?: boolean | null;
+            /** Clasificacion Destino */
+            clasificacion_destino?: string | null;
+            /** Definicion Global Id */
+            definicion_global_id?: string | null;
+            /** Grupo */
+            grupo: string;
+            /** Nombre */
+            nombre: string;
+            /** Requisito Definicion Id */
+            requisito_definicion_id?: string | null;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "agregado" | "quitado" | "pasa_a_bloquear" | "deja_de_bloquear";
+            /** Version Destino */
+            version_destino: number;
+            /** Version Origen */
+            version_origen: number;
+        };
         /** CancelarOC */
         CancelarOC: {
             /** Clave Origen */
@@ -2349,6 +2373,11 @@ export interface components {
         };
         /** CopiaLocalMatriz */
         CopiaLocalMatriz: {
+            /**
+             * Cambios
+             * @default []
+             */
+            cambios: components["schemas"]["CambioPlantillaMatriz"][];
             /** Cliente Id */
             cliente_id: string;
             /** Copiada De Version */
@@ -3846,6 +3875,11 @@ export interface components {
             reprogramada: boolean;
             /** Tiene Alertas */
             tiene_alertas: boolean;
+            /**
+             * Tiene Matriz
+             * @default true
+             */
+            tiene_matriz: boolean;
             /** Tipo Servicio Id */
             tipo_servicio_id: string;
             /** Tipo Servicio Nombre */

@@ -26,7 +26,7 @@ export const pages: Page[] = [
   { id: 'acciones-pendientes', label: 'Acciones pendientes', description: 'Renovaciones y regularizaciones que afectan OCs activas.', roles: ['responsable_legajos', 'supervisor'], gaps: [] },
   { id: 'timeline-recursos', label: 'Línea de tiempo', description: 'Vigencias por recurso y cruces con ventanas de OC.', roles: ['responsable_legajos', 'supervisor', 'configuracion', 'tecnico'], gaps: [] },
   { id: 'catalogos-oc', label: 'Catálogos OC', description: 'Operadoras, locaciones y tipos de servicio para planillas de OC.', roles: ['responsable_legajos', 'configuracion'], gaps: [] },
-  { id: 'matrices', label: 'Matrices', description: 'Requisitos por cliente, locación y tipo de servicio.', roles: ['configuracion', 'responsable_legajos'], gaps: ['SEL-09', 'SEL-10', 'SEL-11'] },
+  { id: 'matrices', label: 'Matrices', description: 'Requisitos por cliente, locación y tipo de servicio.', roles: ['configuracion', 'responsable_legajos'], gaps: [] },
   { id: 'auditoria', label: 'Auditoría', description: 'Consulta de eventos del módulo.', roles: ['configuracion', 'responsable_legajos'], gaps: [] },
   { id: 'perfil', label: 'Mi sesión', description: 'Identidad y permisos de la sesión actual.', roles: ['configuracion', 'responsable_legajos', 'supervisor', 'tecnico'], gaps: [] },
 ];

@@ -95,10 +95,11 @@ def test_precarga_base_v1_es_idempotente_y_completa():
 def test_copiar_definicion_global_crea_copia_local_con_version(cliente_api, catalogo, tenant_de_prueba):
     t = tenant_de_prueba
     gid = catalogo["defs"][f"Apto {catalogo['sufijo']}"]
-    assert cliente_api.post(f"{CMD}/copiar_definicion_global", json={"definicion_global_id": gid}, headers=t.headers("responsable_legajos")).status_code == 403
-    r = cliente_api.post(f"{CMD}/copiar_definicion_global", json={"definicion_global_id": gid}, headers=t.headers("configuracion"))
+    r = cliente_api.post(f"{CMD}/copiar_definicion_global", json={"definicion_global_id": gid}, headers=t.headers("responsable_legajos"))
     assert r.status_code == 200, r.text
     assert r.json()["copiada_de_version"] == 1 and r.json()["definicion_global_id"] == gid
+    dup = cliente_api.post(f"{CMD}/copiar_definicion_global", json={"definicion_global_id": gid}, headers=t.headers("configuracion"))
+    assert dup.status_code == 409 and dup.json()["error"]["codigo"] == "definicion_duplicada"
     with tenant_session(t.tenant_id) as s:
         fila = s.execute(text("SELECT nombre, categoria, definicion_global_id, copiada_de_version, activa FROM modulo1.definicion_requisito "
                               "WHERE requisito_definicion_id = :r"), {"r": r.json()["requisito_definicion_id"]}).one()
@@ -121,9 +122,9 @@ def test_copiar_matriz_global_publica_version_local_y_reutiliza_copias(cliente_a
     # una definición ya copiada a mano se reutiliza; las demás se crean
     gid = catalogo["defs"][f"Apto {catalogo['sufijo']}"]
     previa = cliente_api.post(f"{CMD}/copiar_definicion_global", json={"definicion_global_id": gid}, headers=t.headers("configuracion")).json()["requisito_definicion_id"]
+    assert _copiar_matriz(cliente_api, t, catalogo, rol="supervisor")[0].status_code == 403
     r, body = _copiar_matriz(cliente_api, t, catalogo, rol="responsable_legajos")
-    assert r.status_code == 403
-    r, body = _copiar_matriz(cliente_api, t, catalogo)
+    assert r.status_code == 200, r.text
     assert r.status_code == 200, r.text
     c = r.json()
     assert c["version"] == 1 and c["matriz_global_id"] == catalogo["matriz"] and c["copiada_de_version"] == 1
