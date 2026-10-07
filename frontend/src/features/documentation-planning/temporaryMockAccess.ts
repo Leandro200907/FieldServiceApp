@@ -96,9 +96,11 @@ function withinRange(item: ItemCalendario, from: string, to: string) {
 
 export const temporaryMockAccess: DocumentationPlanningAccess = {
   async readCalendar(query: CalendarQuery): Promise<CalendarioVigenciasResponse> {
-    const filtered = calendarItems.filter(item => withinRange(item, query.from, query.to) && (!query.subjectKind || item.tipo_sujeto === query.subjectKind) && (!query.q || item.identificador_natural?.toLowerCase().includes(query.q.toLowerCase())));
+    const desde = query.from ?? HOY;
+    const hasta = query.to ?? HOY;
+    const filtered = calendarItems.filter(item => withinRange(item, desde, hasta) && (!query.subjectKind || item.tipo_sujeto === query.subjectKind) && (!query.q || item.identificador_natural?.toLowerCase().includes(query.q.toLowerCase())));
     const offset = query.offset ?? 0; const limit = query.limit ?? 50;
-    return { hoy: HOY, desde: query.from, hasta: query.to, items: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit, advertencia: ADVERTENCIA };
+    return { hoy: HOY, desde, hasta, items: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit, advertencia: ADVERTENCIA };
   },
   async readRadarBacklog(query: BacklogQuery): Promise<RadarBacklogResponse> {
     const filtered = radarItems.filter(item =>

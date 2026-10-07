@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import type { components } from '../../api/generated/modulo1';
@@ -31,50 +31,30 @@ function fmtDate(value: string, timeZone?: string) {
   return formatFecha(value, timeZone || 'America/Argentina/Buenos_Aires');
 }
 
-export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const vista = searchParams.get('vista') === 'documentos' ? 'documentos' : 'recursos';
-  const ocId = searchParams.get('oc_id') || undefined;
-  const [offset, setOffset] = useState(0);
-  const bootstrapDesde = '2020-01-01';
-  const bootstrapHasta = '2035-12-31';
-  const [desde, setDesde] = useState(searchParams.get('desde') || bootstrapDesde);
-  const [hasta, setHasta] = useState(searchParams.get('hasta') || bootstrapHasta);
-  const [soloQuiebres, setSoloQuiebres] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
-
-  const [reloadKey, setReloadKey] = useState(0);
-  const query = usePrototypeRead(async () => {
-    const { data, error, response } = await session.client.GET('/v1/consultas/timeline_recursos', {
-      params: {
-        query: {
-          desde, hasta, offset, limit: PAGE_SIZE,
-          ...(ocId ? { oc_id: ocId } : {}),
-          ...(soloQuiebres ? { solo_quiebres: true } : {}),
-        },
-      },
-    });
-    if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
-    return data as Timeline;
-  }, [desde, hasta, offset, ocId, soloQuiebres, reloadKey]);
-
-  const hoy = query.data?.hoy ?? '';
-  useEffect(() => {
-    const anchor = query.data?.hoy;
-    if (!anchor || searchParams.get('desde')) return;
-    if (desde === bootstrapDesde && hasta === bootstrapHasta) {
-      setDesde(addDays(anchor, -30));
-      setHasta(addDays(anchor, 90));
-    }
-  }, [query.data?.hoy, desde, hasta, searchParams]);
-  const rows = query.data?.items ?? [];
-
+function TimelineGanttBody({
+  hoy,
+  desde,
+  hasta,
+  rows,
+  expanded,
+  setExpanded,
+  ocId,
+  tz,
+}: {
+  hoy: string;
+  desde: string;
+  hasta: string;
+  rows: Recurso[];
+  expanded: Record<string, boolean>;
+  setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>;
+  ocId?: string;
+  tz: string;
+}) {
   const gantt = useGanttViewport({ hoy, autoDesde: desde, autoHasta: hasta });
 
   const ganttRows: GanttOcRow[] = useMemo(() => {
     const out: GanttOcRow[] = [];
-    for (const recurso of rows as Recurso[]) {
+    for (const recurso of rows) {
       const sid = recurso.sujeto_id;
       const etiquetaLegajo = lineaPersonaConDni({
         tipo_sujeto: recurso.tipo_sujeto,
@@ -177,6 +157,101 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
     return out;
   }, [rows, expanded, desde, hasta, ocId, tz]);
 
+  return (
+    <>
+      <OcGanttNav
+        zoom={gantt.zoom}
+        onZoomChange={gantt.setZoom}
+        onAnterior={gantt.anterior}
+        onSiguiente={gantt.siguiente}
+        onHoy={gantt.irHoy}
+        modoAuto={gantt.modoAuto}
+        onRestaurarAuto={gantt.usarRangoAutomatico}
+      />
+      <div className="timeline-gantt-list">
+        {rows.map((recurso: Recurso) => (
+          <div key={recurso.sujeto_id} className="timeline-expand-row">
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setExpanded(e => ({ ...e, [recurso.sujeto_id]: !(e[recurso.sujeto_id] ?? true) }))}
+            >
+              {(expanded[recurso.sujeto_id] ?? true) ? '▾' : '▸'}{' '}
+              {lineaPersonaConDni({
+                tipo_sujeto: recurso.tipo_sujeto,
+                nombre_apellido: recurso.nombre_apellido ?? null,
+                identificador_natural: recurso.identificador,
+                sujeto_id: recurso.sujeto_id,
+              })}
+            </button>
+          </div>
+        ))}
+      </div>
+      <OcGanttChart
+        filas={ganttRows}
+        vistaDesde={gantt.vistaDesde}
+        vistaHasta={gantt.vistaHasta}
+        hoy={hoy}
+        onSelect={id => {
+          if (!id.includes('-')) setExpanded(e => ({ ...e, [id]: !(e[id] ?? true) }));
+        }}
+      />
+    </>
+  );
+}
+
+export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const vista = searchParams.get('vista') === 'documentos' ? 'documentos' : 'recursos';
+  const ocId = searchParams.get('oc_id') || undefined;
+  const [offset, setOffset] = useState(0);
+  const paramDesde = searchParams.get('desde');
+  const paramHasta = searchParams.get('hasta');
+  const [desde, setDesde] = useState(paramDesde ?? '');
+  const [hasta, setHasta] = useState(paramHasta ?? '');
+  const [soloQuiebres, setSoloQuiebres] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
+
+  const [reloadKey, setReloadKey] = useState(0);
+  const query = usePrototypeRead(async () => {
+    const rangeQuery: { desde?: string; hasta?: string } = {};
+    if (desde) rangeQuery.desde = desde;
+    if (hasta) rangeQuery.hasta = hasta;
+    const { data, error, response } = await session.client.GET('/v1/consultas/timeline_recursos', {
+      params: {
+        query: {
+          ...rangeQuery,
+          offset,
+          limit: PAGE_SIZE,
+          ...(ocId ? { oc_id: ocId } : {}),
+          ...(soloQuiebres ? { solo_quiebres: true } : {}),
+        },
+      },
+    });
+    if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
+    return data as Timeline;
+  }, [desde, hasta, offset, ocId, soloQuiebres, reloadKey]);
+
+  const hoy = query.data?.hoy ?? '';
+  const desdeVista = desde || query.data?.desde || '';
+  const hastaVista = hasta || query.data?.hasta || '';
+  const rangoListo = Boolean(desdeVista && hastaVista);
+
+  useEffect(() => {
+    const anchor = query.data?.hoy;
+    const apiDesde = query.data?.desde;
+    const apiHasta = query.data?.hasta;
+    if (!anchor || !apiDesde || !apiHasta) return;
+    if (paramDesde || paramHasta) return;
+    if (!desde && !hasta) {
+      setDesde(apiDesde);
+      setHasta(apiHasta);
+    }
+  }, [query.data?.hoy, query.data?.desde, query.data?.hasta, desde, hasta, paramDesde, paramHasta]);
+
+  const rows = query.data?.items ?? [];
+
   const applyRange = () => {
     const next = new URLSearchParams(searchParams);
     next.set('desde', desde);
@@ -204,7 +279,7 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
     );
   }
 
-  if (esCargaInicial(query)) return <LoadingState />;
+  if (esCargaInicial(query) || !query.data?.hoy || !rangoListo) return <LoadingState />;
   if (query.error && !query.data) return <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
 
   return (
@@ -215,12 +290,12 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
       </div>
       <header className="panel">
         <div className="form-grid timeline-range-form">
-          <label className="form-field">Desde<input type="date" value={desde} onChange={e => setDesde(e.target.value)} /></label>
-          <label className="form-field">Hasta<input type="date" value={hasta} onChange={e => setHasta(e.target.value)} /></label>
+          <label className="form-field">Desde<input type="date" value={desdeVista} onChange={e => setDesde(e.target.value)} /></label>
+          <label className="form-field">Hasta<input type="date" value={hastaVista} onChange={e => setHasta(e.target.value)} /></label>
           <label className="form-field checkbox-inline"><input type="checkbox" checked={soloQuiebres} onChange={e => setSoloQuiebres(e.target.checked)} /> Con quiebres en el período</label>
           <button type="button" className="button button-primary timeline-range-submit" onClick={applyRange}>Actualizar rango</button>
         </div>
-        {hoy && <p className="muted">Hoy: {fmtDate(hoy, tz)}</p>}
+        <p className="muted">Hoy: {fmtDate(hoy, tz)}</p>
       </header>
 
       <div className="planning-legend gantt-legend">
@@ -236,42 +311,15 @@ export function TimelineRecursosScreen({ roles }: { roles: readonly string[] }) 
         <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />
       ) : (
         <>
-          <OcGanttNav
-            zoom={gantt.zoom}
-            onZoomChange={gantt.setZoom}
-            onAnterior={gantt.anterior}
-            onSiguiente={gantt.siguiente}
-            onHoy={gantt.irHoy}
-            modoAuto={gantt.modoAuto}
-            onRestaurarAuto={gantt.usarRangoAutomatico}
-          />
-          <div className="timeline-gantt-list">
-            {rows.map((recurso: Recurso) => (
-              <div key={recurso.sujeto_id} className="timeline-expand-row">
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => setExpanded(e => ({ ...e, [recurso.sujeto_id]: !(e[recurso.sujeto_id] ?? true) }))}
-                >
-                  {(expanded[recurso.sujeto_id] ?? true) ? '▾' : '▸'}{' '}
-                  {lineaPersonaConDni({
-                    tipo_sujeto: recurso.tipo_sujeto,
-                    nombre_apellido: recurso.nombre_apellido ?? null,
-                    identificador_natural: recurso.identificador,
-                    sujeto_id: recurso.sujeto_id,
-                  })}
-                </button>
-              </div>
-            ))}
-          </div>
-          <OcGanttChart
-            filas={ganttRows}
-            vistaDesde={gantt.vistaDesde}
-            vistaHasta={gantt.vistaHasta}
+          <TimelineGanttBody
             hoy={hoy}
-            onSelect={id => {
-              if (!id.includes('-')) setExpanded(e => ({ ...e, [id]: !(e[id] ?? true) }));
-            }}
+            desde={desdeVista}
+            hasta={hastaVista}
+            rows={rows}
+            expanded={expanded}
+            setExpanded={setExpanded}
+            ocId={ocId}
+            tz={tz}
           />
           <PaginationControls offset={offset} limit={PAGE_SIZE} total={query.data?.total ?? 0} onOffsetChange={setOffset} />
         </>

@@ -6,11 +6,9 @@ import type { components } from '../../api/generated/modulo1';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { esCargaInicial, usePrototypeRead } from '../../hooks/usePrototypeRead';
-import { OcGanttChart, type GanttOcRow } from './OcGanttChart';
-import { OcGanttNav } from './OcGanttNav';
-import { useGanttViewport } from './useGanttViewport';
 import { formatFecha } from './dates';
-import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, tituloQuiebreMapa, vigenciaReprogramacion } from './ocDetail';
+import { lineasDisponibilidad, resumenDocumental, textoAlertaCierta, textoHistorial, vigenciaReprogramacion } from './ocDetail';
+import { BacklogOcGanttPanel } from './BacklogOcGanttPanel';
 import { ListDetailLayout, FichaEncabezado } from '../../ui/ListDetailLayout';
 import { StatusDot } from '../../ui/StatusDot';
 import { labelEstadoDocumentalOcConMatriz, variantEstadoDocumentalOc } from '../../ui/documentalLabels';
@@ -50,30 +48,6 @@ function contarAlertasBacklog(row: BacklogItem): number {
   const ciertas = row.alertas_ciertas?.length ?? 0;
   const caidas = (row.disponibilidad_por_tipo || []).reduce((t, d) => t + (d.se_cae_en_ventana?.length ?? 0), 0);
   return ciertas + caidas;
-}
-
-function buildGanttRows(items: BacklogItem[]): GanttOcRow[] {
-  return items.map(row => ({
-    id: row.clave_origen,
-    label: row.clave_origen,
-    sublabel: etiquetaOcContexto(row),
-    desde: row.vigencia_desde,
-    hasta: row.vigencia_hasta,
-    reprogramada: row.reprogramada,
-    tramosAlerta: (row.alertas_ciertas || []).flatMap(a => (a.tramos as { desde: string; hasta: string }[] | undefined) || []).concat(
-      (row.alertas_ciertas || []).filter(a => a.desde && a.hasta).map(a => ({ desde: a.desde!, hasta: a.hasta! })),
-    ),
-    alertas: (row.disponibilidad_por_tipo || []).flatMap(d =>
-      (d.se_cae_en_ventana || []).map(s => {
-        const raw = s as { fecha?: string; requisito?: string; nombre?: string };
-        const fecha = typeof raw.fecha === 'string' ? raw.fecha : row.vigencia_hasta;
-        return {
-          fecha,
-          titulo: tituloQuiebreMapa({ ...raw, fecha }, d.etiqueta, tenantTz()),
-        };
-      }),
-    ),
-  }));
 }
 
 type FichaDetalleProps = {
@@ -253,6 +227,7 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
 
   const items = backlogQuery.data?.items ?? [];
   const hoy = backlogQuery.data?.hoy ?? '';
+  const hoyListo = Boolean(backlogQuery.data?.hoy);
 
   useEffect(() => {
     const legacyOc = params.get('oc');
@@ -269,24 +244,6 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
     [items, selectedId],
   );
 
-  const autoDesde = useMemo(() => {
-    if (mes) return `${mes}-01`;
-    if (!items.length) return hoy;
-    return items.reduce((acc, i) => (i.vigencia_desde < acc ? i.vigencia_desde : acc), items[0].vigencia_desde);
-  }, [items, mes, hoy]);
-
-  const autoHasta = useMemo(() => {
-    if (mes) {
-      const [y, m] = mes.split('-').map(Number);
-      const last = new Date(y, m, 0).getDate();
-      return `${mes}-${String(last).padStart(2, '0')}`;
-    }
-    if (!items.length) return hoy;
-    return items.reduce((acc, i) => (i.vigencia_hasta > acc ? i.vigencia_hasta : acc), items[0].vigencia_hasta);
-  }, [items, mes, hoy]);
-
-  const gantt = useGanttViewport({ hoy, autoDesde, autoHasta });
-  const ganttRows = useMemo(() => buildGanttRows(items), [items]);
   const ganttSelectedClave = selectedItem?.clave_origen ?? null;
 
   const searchSinOc = useMemo(() => {
@@ -392,36 +349,19 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
   };
 
   const cargaInicial = esCargaInicial(backlogQuery) || esCargaInicial(catalogosQuery);
-  if (cargaInicial) return <LoadingState />;
+  if (cargaInicial || !hoyListo) return <LoadingState />;
   if (backlogQuery.error && !backlogQuery.data) return <ErrorState message={backlogQuery.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
 
   const operadoraOpts = catalogosQuery.data?.operadoras ?? [];
 
   const ganttBlock = (
-    <>
-      <div className="planning-legend gantt-legend">
-        <span><i className="legend-dot status-vigente" />Vigente</span>
-        <span><i className="legend-dot status-por_vencer" />Por vencer</span>
-        <span><i className="legend-dot status-vencido" />Sin cobertura</span>
-      </div>
-      <OcGanttNav
-        zoom={gantt.zoom}
-        onZoomChange={gantt.setZoom}
-        onAnterior={gantt.anterior}
-        onSiguiente={gantt.siguiente}
-        onHoy={gantt.irHoy}
-        modoAuto={gantt.modoAuto}
-        onRestaurarAuto={gantt.usarRangoAutomatico}
-      />
-      <OcGanttChart
-        filas={ganttRows}
-        vistaDesde={gantt.vistaDesde}
-        vistaHasta={gantt.vistaHasta}
-        hoy={hoy}
-        selectedId={ganttSelectedClave}
-        onSelect={abrirDesdeGantt}
-      />
-    </>
+    <BacklogOcGanttPanel
+      hoy={hoy}
+      items={items}
+      mes={mes}
+      selectedClave={ganttSelectedClave}
+      onSelect={abrirDesdeGantt}
+    />
   );
 
   const list = (

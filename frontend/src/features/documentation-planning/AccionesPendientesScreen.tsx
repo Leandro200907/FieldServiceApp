@@ -64,7 +64,7 @@ export function AccionesPendientesScreen() {
   const items = query.data?.items ?? [];
 
   const cargaInicial = esCargaInicial(query) || esCargaInicial(catalogosQuery);
-  if (cargaInicial) return <LoadingState />;
+  if (cargaInicial || !query.data?.hoy) return <LoadingState />;
   if (query.error && !query.data) return <ErrorState message={query.error.message} onRetry={() => setReloadKey(k => k + 1)} />;
 
   return (

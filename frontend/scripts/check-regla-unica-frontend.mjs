@@ -12,6 +12,7 @@ const allowNewDate = new Set([
   path.normalize('features/documentation-planning/dates.ts'),
   path.normalize('features/documentation-planning/useGanttViewport.ts'),
   path.normalize('features/documentation-planning/BacklogOcScreen.tsx'),
+  path.normalize('features/documentation-planning/BacklogOcGanttPanel.tsx'),
   path.normalize('features/mi-legajo/validarRenovacion.ts'),
   path.normalize('features/mi-legajo/validarIncorporacion.ts'),
   path.normalize('features/legajos/validarRegistroRespaldo.ts'),

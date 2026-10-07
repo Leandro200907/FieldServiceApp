@@ -32,8 +32,8 @@ export function deriveVisualState(
 }
 
 export interface CalendarQuery {
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
   subjectKind?: SubjectKind;
   q?: string;
   offset?: number;

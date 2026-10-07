@@ -55,8 +55,8 @@ export const realDocumentationPlanningAccess: DocumentationPlanningAccess = {
       session.client.GET('/v1/consultas/calendario_vigencias', {
         params: {
           query: {
-            desde: query.from,
-            hasta: query.to,
+            ...(query.from ? { desde: query.from } : {}),
+            ...(query.to ? { hasta: query.to } : {}),
             tipo_sujeto: query.subjectKind,
             q: query.q,
             offset: query.offset,

@@ -54,30 +54,40 @@ export function CalendarDocumentalScreen({ roles, embedded = false }: { roles: r
   const [offset, setOffset] = useState(0);
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (iso: string) => formatFecha(iso, tz);
-  const bootstrapDesde = '2020-01-01';
-  const bootstrapHasta = '2035-12-31';
-  const [range, setRange] = useState({ from: bootstrapDesde, to: bootstrapHasta });
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const calendar = usePrototypeRead(
     () => calendarAccess().readCalendar({
-      from: range.from,
-      to: range.to,
+      ...(range ? { from: range.from, to: range.to } : {}),
       subjectKind: kind === 'all' ? undefined : kind,
       offset,
       limit: PAGE_SIZE,
     }),
-    [range.from, range.to, kind, offset],
+    [range?.from, range?.to, kind, offset],
   );
   useEffect(() => {
-    const h = calendar.data?.hoy;
-    if (!h) return;
-    const next = { from: addDays(h, -30), to: addDays(h, 40) };
-    if (range.from === bootstrapDesde && range.to === bootstrapHasta) setRange(next);
-  }, [calendar.data?.hoy, range.from, range.to]);
-  const from = range.from;
-  const to = range.to;
+    const data = calendar.data;
+    if (!data?.hoy || range) return;
+    const desdeApi = (data as { desde?: string }).desde;
+    const hastaApi = (data as { hasta?: string }).hasta;
+    if (desdeApi && hastaApi) {
+      setRange({ from: desdeApi, to: hastaApi });
+    } else {
+      setRange({ from: addDays(data.hoy, -30), to: addDays(data.hoy, 40) });
+    }
+  }, [calendar.data, range]);
+  const hoyApi = calendar.data?.hoy;
+  const desdeApi = (calendar.data as { desde?: string } | undefined)?.desde;
+  const hastaApi = (calendar.data as { hasta?: string } | undefined)?.hasta;
+  const effectiveRange =
+    range
+    ?? (hoyApi && desdeApi && hastaApi ? { from: desdeApi, to: hastaApi } : null)
+    ?? (hoyApi ? { from: addDays(hoyApi, -30), to: addDays(hoyApi, 40) } : null);
+  const from = effectiveRange?.from ?? '';
+  const to = effectiveRange?.to ?? '';
   const setKindAndResetPage = (value: SubjectKind | 'all') => { setKind(value); setOffset(0); };
   const companyAllowed = scope === 'responsible';
   if (!scope) return <Pending title="Sin rol reconocido para esta vista">Tu sesión no tiene un rol habilitado para esta vista.</Pending>;
+  if ((calendar.loading && !hoyApi) || !hoyApi || !effectiveRange) return <LoadingState />;
   const selected = calendar.data?.items.find(item => item.id === selectedId) ?? null;
   // F-01: la marca de "hoy" se ubica con el `hoy` que devuelve el backend (autoridad real
   // sobre la fecha del tenant — F-03), nunca con una posición fija.

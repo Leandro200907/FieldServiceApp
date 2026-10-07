@@ -11122,9 +11122,9 @@ export interface operations {
     };
     timeline_recursos_v1_consultas_timeline_recursos_get: {
         parameters: {
-            query: {
-                desde: string;
-                hasta: string;
+            query?: {
+                desde?: string | null;
+                hasta?: string | null;
                 tipo_sujeto?: ("persona" | "vehiculo" | "equipo" | "empresa") | null;
                 oc_id?: string | null;
                 q?: string | null;
