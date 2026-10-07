@@ -4113,6 +4113,8 @@ export interface components {
              * Format: uuid
              */
             locacion_id: string;
+            /** Matriz Global Id */
+            matriz_global_id?: string | null;
             /**
              * Tipo Servicio Id
              * Format: uuid

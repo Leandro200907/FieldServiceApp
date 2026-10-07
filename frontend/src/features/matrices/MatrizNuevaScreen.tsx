@@ -5,6 +5,8 @@ import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { ErrorState, LoadingState } from '../../ui/States';
 import type { ModoArranque, MatrizDraft } from './matrizDraft';
 import { lineaFromVigente, saveMatrizDraft } from './matrizDraft';
+import { copiarDefinicionGlobal } from './matrizApi';
+import { prepararLineasDesdePlantilla } from './matrizPlantillaPrep';
 import type { components } from '../../api/generated/modulo1';
 
 type Plantillas = components['schemas']['PlantillasGlobalesResponse'];
@@ -57,12 +59,20 @@ export function MatrizNuevaScreen() {
   );
   const servicios = (catalogos.data?.tipos_servicio || []) as Ts[];
   const plantilla = findPlantilla(plantillas.data ?? null, operadora?.nombre || '', servicios.find(s => s.tipo_servicio_id === tipoServicioId)?.nombre || '');
-  const hoy = matrices.data?.hoy || '2026-09-18';
+  const hoy = matrices.data?.hoy;
 
   const seguir = async () => {
     setError(null);
     if (!clienteId || !locacionId || !tipoServicioId) {
       setError('Elegí operadora, locación y servicio');
+      return;
+    }
+    if (!hoy) {
+      setError('No se pudo obtener la fecha de hoy del servidor');
+      return;
+    }
+    if (modo === 'plantilla' && !plantilla) {
+      setError('No hay plantilla para esta operadora y servicio');
       return;
     }
     const draft: MatrizDraft = {
@@ -74,6 +84,9 @@ export function MatrizNuevaScreen() {
       lineas: [],
     };
     try {
+      const post = (path: string, init: { body: unknown; headers: Record<string, string> }) =>
+        session.client.POST(path as '/v1/comandos/copiar_definicion_global', init as never);
+
       if (modo === 'copiar') {
         const item = matrices.data?.items.find(m => m.matriz_version_id === copiarId);
         if (!item) throw new Error('Elegí una matriz para copiar');
@@ -81,17 +94,25 @@ export function MatrizNuevaScreen() {
         const mv = await session.client.GET('/v1/consultas/matriz_vigente', {
           params: { query: { cliente_id: item.cliente_id, locacion_id: item.locacion_id, tipo_servicio_id: item.tipo_servicio_id, fecha: hoy.slice(0, 10) } },
         });
-        if (mv.error || !mv.response.ok) throw new Error('No se pudo leer la matriz origen');
+        if (mv.error || !mv.response.ok) {
+          throw new ApiFailure(parseApiError(mv.error, mv.response, crypto.randomUUID()));
+        }
         draft.lineas = (mv.data?.lineas || []).map(lineaFromVigente);
-      } else if (modo === 'cero') {
-        draft.lineas = [];
-      } else {
-        draft.lineas = [];
+      } else if (modo === 'plantilla' && plantilla) {
+        draft.lineas = await prepararLineasDesdePlantilla(
+          plantilla.lineas,
+          locacionId,
+          plantillas.data?.definiciones || [],
+          (definicionGlobalId, categoria) => copiarDefinicionGlobal(post, {
+            definicion_global_id: definicionGlobalId,
+            locacion_id: categoria === 'induccion' ? locacionId : null,
+          }),
+        );
       }
       saveMatrizDraft(draft);
       navigate('/matrices/editor');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al continuar');
+      setError(e instanceof ApiFailure ? e.message : e instanceof Error ? e.message : 'Error al continuar');
     }
   };
 

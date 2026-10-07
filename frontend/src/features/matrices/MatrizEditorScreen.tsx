@@ -16,6 +16,8 @@ function toggleClasificacion(linea: EditorLinea): EditorLinea {
 
 export function MatrizEditorScreen() {
   const navigate = useNavigate();
+  const roles = session.getSnapshot().identity?.roles ?? [];
+  const puedeEditar = roles.includes('responsable_legajos') || roles.includes('configuracion');
   const [draft, setDraft] = useState(loadMatrizDraft());
   const [publicando, setPublicando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export function MatrizEditorScreen() {
       clearMatrizDraft();
       navigate('/matrices');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo publicar');
+      setError(e instanceof ApiFailure ? e.message : e instanceof Error ? e.message : 'No se pudo publicar');
     } finally {
       setPublicando(false);
     }
@@ -140,9 +142,11 @@ export function MatrizEditorScreen() {
           <input id="me-desde" type="date" value={draft.vigenteDesde} onChange={e => update({ ...draft, vigenteDesde: e.target.value })} />
         </div>
         {error && <p className="field-error">{error}</p>}
-        <button type="button" className="button button-primary" disabled={publicando} onClick={() => void publicar()}>
-          {publicando ? 'Publicando…' : 'Publicar'}
-        </button>
+        {puedeEditar && (
+          <button type="button" className="button button-primary" disabled={publicando} onClick={() => void publicar()}>
+            {publicando ? 'Publicando…' : 'Publicar'}
+          </button>
+        )}
       </div>
     </section>
   );

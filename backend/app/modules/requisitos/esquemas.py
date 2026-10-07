@@ -41,6 +41,7 @@ class PublicarVersionDeMatriz(BaseModel):
     vigente_desde: date
     vigente_hasta: date | None = None
     lineas: list[LineaDeMatriz]
+    matriz_global_id: UUID | None = None
     fuente: str | None = None
     archivo_de_respaldo: str | None = None
     autor: str | None = None

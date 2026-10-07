@@ -7719,6 +7719,18 @@
             "title": "Locacion Id",
             "type": "string"
           },
+          "matriz_global_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matriz Global Id"
+          },
           "tipo_servicio_id": {
             "format": "uuid",
             "title": "Tipo Servicio Id",

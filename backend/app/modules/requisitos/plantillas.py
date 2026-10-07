@@ -120,6 +120,22 @@ def copiar_definicion_global(s: Session, identidad: Identidad, body: e.CopiarDef
             "eventos": ["DefinicionDeRequisitoDadaDeAlta"]}
 
 
+def enlazar_matriz_a_plantilla(s: Session, tenant_id: str, matriz_version_id: str, matriz_global_id: str) -> int:
+    """Registra en la versión local el vínculo con la plantilla global (versión copiada)."""
+    version = s.execute(
+        text("SELECT version FROM plataforma.matriz_global WHERE matriz_global_id = :g AND activa"),
+        {"g": matriz_global_id},
+    ).scalar()
+    if version is None:
+        raise NoEncontrado("Matriz global inexistente", {"matriz_global_id": matriz_global_id})
+    s.execute(
+        text("UPDATE modulo1.matriz_requisitos SET matriz_global_id = :g, copiada_de_version = :v "
+             "WHERE tenant_id = :t AND matriz_version_id = :m"),
+        {"g": matriz_global_id, "v": version, "t": tenant_id, "m": matriz_version_id},
+    )
+    return int(version)
+
+
 def copiar_matriz_global(s: Session, identidad: Identidad, body: e.CopiarMatrizGlobal) -> dict[str, Any]:
     """Publica una versión local de Matriz a partir de la plantilla: reutiliza copias
     locales existentes de cada definición global (misma locación para inducciones) y crea
@@ -154,13 +170,10 @@ def copiar_matriz_global(s: Session, identidad: Identidad, body: e.CopiarMatrizG
         e.PublicarVersionDeMatriz(
             cliente_id=body.cliente_id, locacion_id=body.locacion_id, tipo_servicio_id=body.tipo_servicio_id,
             vigente_desde=body.vigente_desde, vigente_hasta=body.vigente_hasta, lineas=lineas,
+            matriz_global_id=body.matriz_global_id,
             fuente=f"plantilla global {m['operadora']} / {m['tipo_servicio']} v{m['version']}",
             autor=identidad.usuario_id,
         ),
-    )
-    s.execute(
-        text("UPDATE modulo1.matriz_requisitos SET matriz_global_id = :g, copiada_de_version = :v WHERE tenant_id = :t AND matriz_version_id = :m"),
-        {"g": str(m["matriz_global_id"]), "v": m["version"], "t": t, "m": publicada["matriz_version_id"]},
     )
     registrar_evento_interno(
         s, t, "MatrizCopiadaDePlantilla",

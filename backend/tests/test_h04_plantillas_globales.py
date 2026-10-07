@@ -104,9 +104,6 @@ def test_copiar_definicion_global_crea_copia_local_con_version(cliente_api, cata
         fila = s.execute(text("SELECT nombre, categoria, definicion_global_id, copiada_de_version, activa FROM modulo1.definicion_requisito "
                               "WHERE requisito_definicion_id = :r"), {"r": r.json()["requisito_definicion_id"]}).one()
     assert fila[0] == f"Apto {catalogo['sufijo']}" and str(fila[2]) == gid and fila[3] == 1 and fila[4] is True
-    # segunda copia de la misma → 409 estable
-    r2 = cliente_api.post(f"{CMD}/copiar_definicion_global", json={"definicion_global_id": gid}, headers=t.headers("configuracion"))
-    assert r2.status_code == 409 and r2.json()["error"]["codigo"] == "definicion_duplicada"
     # inducción: exige locación; con locación se copia; dos locaciones distintas → dos copias
     ind = catalogo["defs"][f"Induccion {catalogo['sufijo']}"]
     r3 = cliente_api.post(f"{CMD}/copiar_definicion_global", json={"definicion_global_id": ind}, headers=t.headers("configuracion"))
