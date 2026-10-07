@@ -194,11 +194,17 @@ def publicar_version_de_matriz(s: Session, identidad: Identidad, body: e.Publica
              "bl": linea.bloqueante_durante_ejecucion},
         )
 
+    if body.matriz_global_id is not None:
+        from app.modules.requisitos.plantillas import enlazar_matriz_a_plantilla
+
+        enlazar_matriz_a_plantilla(s, t, matriz_version_id, str(body.matriz_global_id))
+
     registrar_evento(
         s, t, "MatrizVersionPublicada",
         {"matriz_version_id": matriz_version_id, "cliente_id": cliente, "locacion_id": locacion, "tipo_servicio_id": tipo_servicio,
          "version": version, "vigente_desde": body.vigente_desde, "lineas": len(body.lineas), "version_anterior": version_anterior,
-         "version_anterior_id": version_anterior["matriz_version_id"] if version_anterior else None},
+         "version_anterior_id": version_anterior["matriz_version_id"] if version_anterior else None,
+         "matriz_global_id": str(body.matriz_global_id) if body.matriz_global_id else None},
         identidad.usuario_id,
     )
     return {

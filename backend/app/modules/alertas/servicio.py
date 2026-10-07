@@ -363,22 +363,29 @@ def entregar_notificaciones(session: Session, tenant_id: str, ahora: datetime) -
 
 def avisar_oc_sin_matriz(session: Session, tenant_id: str, ahora: datetime) -> dict[str, int]:
     """Flujo 3.6 / 2.5: OC activa cuya clave (cliente, locación, tipo de servicio) no tiene
-    matriz vigente hoy → `OcSinMatriz` + notificación a configuración, una vez por OC."""
+    matriz vigente hoy → `OcSinMatriz` + notificación a responsable y configuración, una vez por OC."""
+    from app.modules.requisitos.vigencia_matriz import tiene_matriz_vigente
+
     hoy = hoy_del_tenant(session, tenant_id, ahora)
-    filas = session.execute(text(
+    candidatas = session.execute(text(
         "SELECT o.oc_id, o.clave_origen, o.cliente_id, o.locacion_id, o.tipo_servicio_id FROM modulo1.oc o "
-        "WHERE o.tenant_id = :t AND o.estado = 'activo' AND NOT EXISTS (SELECT 1 FROM modulo1.matriz_requisitos m "
-        "  WHERE m.tenant_id = o.tenant_id AND m.cliente_id = o.cliente_id AND m.locacion_id = o.locacion_id AND m.tipo_servicio_id = o.tipo_servicio_id "
-        "  AND m.vigente_desde <= :hoy AND (m.vigente_hasta IS NULL OR m.vigente_hasta >= :hoy)) "
+        "WHERE o.tenant_id = :t AND o.estado = 'activo' "
         "AND NOT EXISTS (SELECT 1 FROM modulo1.aviso_oc_sin_matriz s WHERE s.tenant_id = o.tenant_id AND s.oc_id = o.oc_id)"),
-        {"t": tenant_id, "hoy": hoy}).mappings().all()
+        {"t": tenant_id}).mappings().all()
+    filas = [
+        f for f in candidatas
+        if not tiene_matriz_vigente(
+            session, tenant_id, str(f["cliente_id"]), str(f["locacion_id"]), str(f["tipo_servicio_id"]), hoy,
+        )
+    ]
     for f in filas:
         payload = {"oc_id": str(f["oc_id"]), "clave_origen": f["clave_origen"], "cliente_id": str(f["cliente_id"]), "locacion_id": str(f["locacion_id"]),
                    "tipo_servicio_id": str(f["tipo_servicio_id"]), "fecha": hoy.isoformat()}
         evento_id = registrar_evento_interno(session, tenant_id, "OcSinMatriz", payload, None)
         session.execute(text("INSERT INTO modulo1.aviso_oc_sin_matriz (tenant_id, oc_id, notificado_en, evento_id) VALUES (:t, :o, :ahora, :e) ON CONFLICT DO NOTHING"),
                         {"t": tenant_id, "o": str(f["oc_id"]), "ahora": ahora, "e": evento_id})
-        encolar(session, "notificaciones", {"tipo": "OcSinMatriz", "destinatario_rol": "configuracion", **payload}, tenant_id=tenant_id, disponible_en=ahora)
+        for rol in ("responsable_legajos", "configuracion"):
+            encolar(session, "notificaciones", {"tipo": "OcSinMatriz", "destinatario_rol": rol, **payload}, tenant_id=tenant_id, disponible_en=ahora)
     return {"oc_sin_matriz": len(filas)}
 
 

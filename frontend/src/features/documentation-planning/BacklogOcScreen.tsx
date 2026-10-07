@@ -16,7 +16,7 @@ import { NotaAnalisisInformativo } from '../../ui/InformativoFooter';
 import './planning.css';
 import './timeline.css';
 
-type BacklogItem = components['schemas']['OcBacklogItem'] & { estado_documental?: string | null };
+type BacklogItem = components['schemas']['OcBacklogItem'];
 type Cobertura = components['schemas']['CoberturaOcResponse'];
 type Catalogos = components['schemas']['CatalogosOcResponse'];
 type FilaRechazada = components['schemas']['FilaRechazada'];
@@ -156,6 +156,7 @@ function FichaDetalleCobertura({
 }
 
 export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[]; detailId?: string }) {
+  const puedeCrearMatriz = roles.includes('responsable_legajos') || roles.includes('configuracion');
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const offset = Number(params.get('offset') || 0);
@@ -402,9 +403,23 @@ export function BacklogOcScreen({ roles, detailId }: { roles: readonly string[];
                 {contarAlertasBacklog(row) > 0 && (
                   <span className="list-item-secondary">{contarAlertasBacklog(row)} alerta{contarAlertasBacklog(row) === 1 ? '' : 's'}</span>
                 )}
+                {row.tiene_matriz === false && (
+                  <span className="list-item-secondary backlog-sin-matriz">
+                    <span className="pill-danger">Sin matriz</span>
+                    {puedeCrearMatriz && (
+                      <Link
+                        className="button button-secondary button-compact"
+                        to={`/matrices/nueva?cliente_id=${row.cliente_id}&locacion_id=${row.locacion_id}&tipo_servicio_id=${row.tipo_servicio_id}`}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        Crear matriz
+                      </Link>
+                    )}
+                  </span>
+                )}
               </span>
-              <StatusDot variant={variantEstadoDocumentalOc((row as BacklogItem).estado_documental || '')}>
-                {labelEstadoDocumentalOcConMatriz((row as BacklogItem).estado_documental || '', row)}
+              <StatusDot variant={variantEstadoDocumentalOc(row.estado_documental || '')}>
+                {labelEstadoDocumentalOcConMatriz(row.estado_documental || '', row)}
               </StatusDot>
             </button>
           ))}

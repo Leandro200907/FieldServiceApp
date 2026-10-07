@@ -130,8 +130,9 @@ describe('regla única — pantallas consumen campos del backend', () => {
 
   it('MatricesScreen: vigente_hoy del ítem (v2 vigente)', () => {
     reads.push({ operadoras: [] });
+    reads.push({ definiciones: [], matrices: [] });
     reads.push(matricesFixture);
-    const html = renderToStaticMarkup(createElement(MatricesScreen, {}));
+    const html = renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ['/matrices'] }, createElement(MatricesScreen, {})));
     expect(html).toContain('v2 vigente');
   });
 

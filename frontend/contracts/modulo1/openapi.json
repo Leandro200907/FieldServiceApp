@@ -1263,6 +1263,89 @@
         "title": "CalendarioVigenciasResponse",
         "type": "object"
       },
+      "CambioPlantillaMatriz": {
+        "properties": {
+          "bloqueante_durante_ejecucion_destino": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bloqueante Durante Ejecucion Destino"
+          },
+          "clasificacion_destino": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clasificacion Destino"
+          },
+          "definicion_global_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definicion Global Id"
+          },
+          "grupo": {
+            "title": "Grupo",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "requisito_definicion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requisito Definicion Id"
+          },
+          "tipo": {
+            "enum": [
+              "agregado",
+              "quitado",
+              "pasa_a_bloquear",
+              "deja_de_bloquear"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "version_destino": {
+            "title": "Version Destino",
+            "type": "integer"
+          },
+          "version_origen": {
+            "title": "Version Origen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tipo",
+          "grupo",
+          "nombre",
+          "version_origen",
+          "version_destino"
+        ],
+        "title": "CambioPlantillaMatriz",
+        "type": "object"
+      },
       "CancelarOC": {
         "properties": {
           "clave_origen": {
@@ -2410,6 +2493,14 @@
       },
       "CopiaLocalMatriz": {
         "properties": {
+          "cambios": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CambioPlantillaMatriz"
+            },
+            "title": "Cambios",
+            "type": "array"
+          },
           "cliente_id": {
             "title": "Cliente Id",
             "type": "string"
@@ -6949,6 +7040,11 @@
             "title": "Tiene Alertas",
             "type": "boolean"
           },
+          "tiene_matriz": {
+            "default": true,
+            "title": "Tiene Matriz",
+            "type": "boolean"
+          },
           "tipo_servicio_id": {
             "title": "Tipo Servicio Id",
             "type": "string"
@@ -7622,6 +7718,18 @@
             "format": "uuid",
             "title": "Locacion Id",
             "type": "string"
+          },
+          "matriz_global_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matriz Global Id"
           },
           "tipo_servicio_id": {
             "format": "uuid",

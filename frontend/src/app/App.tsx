@@ -221,6 +221,9 @@ export function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/legajos/:detailId" element={<Workspace />} />
         <Route path="/radar-documental/:detailId" element={<Workspace />} />
+        <Route path="/matrices/nueva" element={<Workspace />} />
+        <Route path="/matrices/editor" element={<Workspace />} />
+        <Route path="/matrices/plantilla/:matrizGlobalId/:copiaId" element={<Workspace />} />
         <Route path="/matrices/:detailId" element={<Workspace />} />
         <Route path="/backlog-oc/:detailId" element={<Workspace />} />
         <Route path="*" element={<Workspace />} />

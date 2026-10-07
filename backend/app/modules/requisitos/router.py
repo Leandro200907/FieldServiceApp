@@ -13,6 +13,7 @@ from app.modules.requisitos import plantillas, servicio
 router = APIRouter(tags=["requisitos"])
 
 CONFIGURACION = (Rol.CONFIGURACION,)
+CONFIG_O_RESPONSABLE = (Rol.CONFIGURACION, Rol.RESPONSABLE_LEGAJOS)
 RESPONSABLE = (Rol.RESPONSABLE_LEGAJOS,)
 
 
@@ -102,7 +103,7 @@ _ruta(
     "publicar_version_de_matriz",
     e.PublicarVersionDeMatriz,
     servicio.publicar_version_de_matriz,
-    CONFIGURACION,
+    CONFIG_O_RESPONSABLE,
     PublicarVersionDeMatrizResponse,
 )
 _ruta(
@@ -116,13 +117,13 @@ _ruta(
     "copiar_definicion_global",
     e.CopiarDefinicionGlobal,
     plantillas.copiar_definicion_global,
-    CONFIGURACION,
+    CONFIG_O_RESPONSABLE,
     CopiarDefinicionGlobalResponse,
 )
 _ruta(
     "copiar_matriz_global",
     e.CopiarMatrizGlobal,
     plantillas.copiar_matriz_global,
-    CONFIGURACION,
+    CONFIG_O_RESPONSABLE,
     CopiarMatrizGlobalResponse,
 )

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ApiFailure, parseApiError, session } from '../../api';
 import { ErrorState, LoadingState } from '../../ui/States';
 import { PAGE_SIZE, PaginationControls } from '../documentation-planning/PaginationControls';
@@ -10,6 +10,9 @@ import { ListDetailLayout } from '../../ui/ListDetailLayout';
 import { StatusDot } from '../../ui/StatusDot';
 import { formatFecha } from '../documentation-planning/dates';
 import { etiquetaCategoria } from '../../ui/categoriaLabels';
+import { MatrizNuevaScreen } from './MatrizNuevaScreen';
+import { MatrizEditorScreen } from './MatrizEditorScreen';
+import { PlantillaActualizacionScreen } from './PlantillaActualizacionScreen';
 import '../documentation-planning/planning.css';
 import './matrices.css';
 
@@ -25,21 +28,38 @@ function etiquetaVersion(item: MatrizItem, fmt: (iso: string) => string): string
   return `Vigente del ${fmt(item.vigente_desde)} al ${fmt(item.vigente_hasta!)}`;
 }
 
-export function MatricesScreen({ detailId }: { detailId?: string }) {
+function MatricesListado({ detailId }: { detailId?: string }) {
   const navigate = useNavigate();
   const [clienteId, setClienteId] = useState('');
   const [soloVigentes, setSoloVigentes] = useState(false);
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<MatrizItem | null>(null);
+  const roles = session.getSnapshot().identity?.roles ?? [];
+  const puedeEditar = roles.includes('responsable_legajos') || roles.includes('configuracion');
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (iso: string) => formatFecha(iso, tz);
-  const soloLectura = !session.getSnapshot().identity?.roles.includes('configuracion');
 
   const catalogos = usePrototypeRead(async () => {
     const { data, error, response } = await session.client.GET('/v1/consultas/catalogos_oc');
     if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
     return data;
   }, []);
+
+  const plantillas = usePrototypeRead(async () => {
+    if (!puedeEditar) return null;
+    const { data, error, response } = await session.client.GET('/v1/consultas/plantillas_globales');
+    if (error || !response.ok) throw new ApiFailure(parseApiError(error, response, response.headers.get('X-Request-ID') || crypto.randomUUID()));
+    return data;
+  }, [puedeEditar]);
+
+  const actualizaciones = useMemo(() => {
+    if (!plantillas.data) return [];
+    return plantillas.data.matrices.flatMap(m =>
+      m.copias_locales
+        .filter(c => c.estado === 'actualizacion_disponible' && (c.cambios?.length ?? 0) > 0)
+        .map(c => ({ matriz: m, copia: c })),
+    );
+  }, [plantillas.data]);
 
   const versiones = usePrototypeRead(() => matricesAccess().readMatrices({ clienteId: clienteId || undefined, soloVigentes, offset, limit: PAGE_SIZE }), [clienteId, soloVigentes, offset]);
   const detalle = usePrototypeRead(
@@ -63,7 +83,20 @@ export function MatricesScreen({ detailId }: { detailId?: string }) {
 
   const list = (
     <>
-      {soloLectura && <p className="muted" role="note">Solo lectura: la edición de matrices corresponde al rol Configuración.</p>}
+      {puedeEditar && (
+        <div className="matrices-toolbar">
+          <Link className="button button-primary" to="/matrices/nueva">Nueva matriz</Link>
+        </div>
+      )}
+      {actualizaciones.length > 0 && (
+        <div className="matriz-aviso-plantilla" role="status">
+          <span aria-hidden>📢</span>
+          <span>Hay actualizaciones de plantilla disponibles.</span>
+          <Link className="button button-secondary" to={`/matrices/plantilla/${actualizaciones[0].matriz.matriz_global_id}/${actualizaciones[0].copia.matriz_version_id}`}>
+            Ver cambios
+          </Link>
+        </div>
+      )}
       <div className="form-field">
         <label htmlFor="matriz-operadora">Operadora</label>
         <select id="matriz-operadora" value={clienteId} onChange={event => { setClienteId(event.target.value); setOffset(0); }}>
@@ -117,4 +150,12 @@ export function MatricesScreen({ detailId }: { detailId?: string }) {
   ));
 
   return <ListDetailLayout listTitle="Matrices" list={list} detail={detail} onCloseDetail={cerrar} />;
+}
+
+export function MatricesScreen({ detailId }: { detailId?: string }) {
+  const { pathname } = useLocation();
+  if (pathname.includes('/matrices/nueva')) return <MatrizNuevaScreen />;
+  if (pathname.includes('/matrices/editor')) return <MatrizEditorScreen />;
+  if (pathname.includes('/matrices/plantilla/')) return <PlantillaActualizacionScreen />;
+  return <MatricesListado detailId={detailId} />;
 }

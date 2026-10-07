@@ -274,8 +274,13 @@ def _enriquecer_backlog(
     fila: Any,
     *,
     hasta_eval: date | None = None,
+    hoy: date | None = None,
 ) -> dict[str, Any]:
+    from app.modules.requisitos.vigencia_matriz import tiene_matriz_vigente
+
     d = _plano(fila)
+    if hoy is None:
+        hoy = hoy_del_tenant(session, identidad.tenant_id)
     oc_datos = {
         "clave_origen": fila["clave_origen"],
         "cliente_id": str(fila["cliente_id"]),
@@ -290,6 +295,9 @@ def _enriquecer_backlog(
         evaluacion = {**evaluacion, "primer_quiebre_documental": pq.isoformat()}
     d.update(nombres_oc(session, identidad.tenant_id, d["cliente_id"], d["locacion_id"], d["tipo_servicio_id"]))
     d.update(evaluacion)
+    d["tiene_matriz"] = tiene_matriz_vigente(
+        session, identidad.tenant_id, d["cliente_id"], d["locacion_id"], d["tipo_servicio_id"], hoy,
+    )
     d["modo"] = "consulta"
     d["reprogramada"] = _oc_reprogramada(session, d["oc_id"])
     if "origen_oc" in fila.keys():
@@ -383,7 +391,7 @@ def backlog_oc(
                 break
             for f in filas:
                 fin_oc = min(f["vigencia_hasta"], eval_hasta)
-                item = _enriquecer_backlog(session, identidad, f, hasta_eval=fin_oc)
+                item = _enriquecer_backlog(session, identidad, f, hasta_eval=fin_oc, hoy=hoy)
                 if not _filtrar_post(item):
                     continue
                 if total >= p.offset and len(items) < p.limit:
@@ -411,6 +419,7 @@ def backlog_oc(
             identidad,
             f,
             hasta_eval=min(f["vigencia_hasta"], eval_hasta),
+            hoy=hoy,
         )
         for f in filas
     ]

@@ -66,7 +66,7 @@ def test_baja_definicion(cliente_api, tenant_de_prueba):
     assert otra_vez.status_code == 409
 
 
-def test_permisos_solo_configuracion_publica_matriz(cliente_api, tenant_de_prueba):
+def test_permisos_config_o_responsable_publica_matriz(cliente_api, tenant_de_prueba):
     t = tenant_de_prueba
     rid = _alta_def(cliente_api, t, "Apto médico")
     body = {
@@ -74,9 +74,10 @@ def test_permisos_solo_configuracion_publica_matriz(cliente_api, tenant_de_prueb
         "vigente_desde": "2026-06-01",
         "lineas": [{"requisito_definicion_id": rid, "clasificacion": "bloqueante_duro", "bloqueante_durante_ejecucion": True}],
     }
-    for rol in ("responsable_legajos", "supervisor", "tecnico"):
+    for rol in ("supervisor", "tecnico"):
         r = cliente_api.post(f"{CMD}/publicar_version_de_matriz", json=body, headers=t.headers(rol))
         assert r.status_code == 403 and r.json()["error"]["codigo"] == "prohibido", rol
+    assert cliente_api.post(f"{CMD}/publicar_version_de_matriz", json=body, headers=t.headers("responsable_legajos")).status_code == 200
     sin_token = cliente_api.post(f"{CMD}/publicar_version_de_matriz", json=body)
     assert sin_token.status_code == 401
 
