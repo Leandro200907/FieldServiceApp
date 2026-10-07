@@ -1,44 +1,33 @@
 import type { EvidenciaVigente } from '../mi-legajo/contracts';
-import type { LegajoCompuesto } from '../mi-legajo/contracts';
-import { etiquetasEvidencia } from '../../ui/evidenciaPresentacion';
+import type { LegajoCompuesto, ResumenLegajo } from '../mi-legajo/contracts';
 
-export type BucketDocumento = 'vencidos' | 'por_vencer' | 'en_revision' | 'vigentes';
+export type BucketDocumento = 'vencidos' | 'por_vencer' | 'vigentes' | 'sin_documento';
 
 export function todosLosDocumentos(data: LegajoCompuesto): EvidenciaVigente[] {
   return [...data.documentos, ...data.acreditaciones, ...data.inducciones];
 }
 
-function enRevision(item: EvidenciaVigente): boolean {
-  if (item.propuesta_en_revision) return true;
-  const codigos = [item.estado_presentacion, ...(item.estados_adicionales ?? [])].filter(Boolean) as string[];
-  if (codigos.some(c => c === 'propuesta_en_revision' || c === 'archivo_en_revision')) return true;
-  const labels = etiquetasEvidencia(item).map(l => l.toLowerCase());
-  return labels.some(l => l.includes('revisión') || l.includes('revision') || l.includes('propuesta'));
+/** Conteos de tarjetas E-101: solo `resumen.exigidos_*` del backend. */
+type ResumenTarjetas = Pick<
+  ResumenLegajo,
+  'exigidos_vencidos' | 'exigidos_por_vencer' | 'exigidos_vigentes' | 'exigidos_sin_documento'
+>;
+
+export function conteosTarjetasExigidos(resumen: ResumenTarjetas): Record<BucketDocumento, number> {
+  return {
+    vencidos: resumen.exigidos_vencidos ?? 0,
+    por_vencer: resumen.exigidos_por_vencer ?? 0,
+    vigentes: resumen.exigidos_vigentes ?? 0,
+    sin_documento: resumen.exigidos_sin_documento ?? 0,
+  };
 }
 
-function bucketDeItem(item: EvidenciaVigente): BucketDocumento {
-  const labels = etiquetasEvidencia(item).map(l => l.toLowerCase());
-  if (labels.some(l => l.includes('vencid'))) return 'vencidos';
-  if (labels.some(l => l.includes('por vencer'))) return 'por_vencer';
-  if (enRevision(item)) return 'en_revision';
-  return 'vigentes';
+export function pendientesRevisionDesdeResumen(resumen: Pick<ResumenLegajo, 'pendientes_revision'>): number {
+  return resumen.pendientes_revision ?? 0;
 }
 
-export function contarPendientesRevision(items: EvidenciaVigente[]): number {
-  return items.filter(enRevision).length;
-}
-
-export function contarBuckets(items: EvidenciaVigente[]): Record<BucketDocumento, number> {
-  const out: Record<BucketDocumento, number> = { vencidos: 0, por_vencer: 0, en_revision: 0, vigentes: 0 };
-  for (const item of items) out[bucketDeItem(item)] += 1;
-  return out;
-}
-
-export function proximoVencimientoIso(items: EvidenciaVigente[]): string | null {
-  const futuros = items
-    .filter(i => (i.dias_para_vencer ?? 0) >= 0 && !i.vencido)
-    .sort((a, b) => (a.dias_para_vencer ?? 9999) - (b.dias_para_vencer ?? 9999));
-  return futuros[0]?.vigente_hasta ?? null;
+export function proximoVencimientoDesdeResumen(resumen: Pick<ResumenLegajo, 'proximo_vencimiento'>): string | null {
+  return resumen.proximo_vencimiento ?? null;
 }
 
 export function ocsAfectadasUnicas(items: EvidenciaVigente[]): number {

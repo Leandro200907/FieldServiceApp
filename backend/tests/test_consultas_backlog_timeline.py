@@ -15,6 +15,20 @@ from tests.test_orquestacion import (
 )
 
 
+def test_timeline_sin_rango_usa_ventana_por_defecto(cliente_api, tenant_de_prueba, sesion):
+    t = tenant_de_prueba
+    from app.comun.reloj import hoy_del_tenant
+
+    hoy = hoy_del_tenant(sesion, t.tenant_id)
+    r = cliente_api.get("/v1/consultas/timeline_recursos", headers=t.headers("responsable_legajos"))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["hoy"] == hoy.isoformat()
+    assert body["desde"]
+    assert body["hasta"]
+    assert (date.fromisoformat(body["hasta"]) - date.fromisoformat(body["desde"])).days <= 366
+
+
 def test_timeline_quiebre_dentro_de_oc(cliente_api, tenant_de_prueba, sesion):
     t = tenant_de_prueba
     clave = clave_de_matriz()

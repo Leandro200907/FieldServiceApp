@@ -16,10 +16,10 @@ const HOY = '2026-09-26';
 const ADVERTENCIA = 'Resultado informativo calculado con los datos registrados. No garantiza disponibilidad ni asignación operativa.';
 
 const calendarItems: ItemCalendario[] = [
-  { categoria: 'documento', id: 'cal-emp-01', referencia: 'evidencia:documento:cal-emp-01', sujeto_id: 'empresa-001', tipo_sujeto: 'empresa', identificador_natural: 'Empresa de servicios', requisito_definicion_id: 'req-registro-proveedor', requisito: 'Registro de proveedor', vigente_desde: '2026-09-01', vigente_hasta: '2026-10-18', estado_confirmacion: 'verificado', archivo_validacion: 'valido', dias_para_vencer: 22 },
-  { categoria: 'documento', id: 'cal-per-01', referencia: 'evidencia:documento:cal-per-01', sujeto_id: 'persona-marina', tipo_sujeto: 'persona', identificador_natural: 'Marina López', requisito_definicion_id: 'req-apto-medico', requisito: 'Apto médico', vigente_desde: '2026-08-01', vigente_hasta: '2026-09-27', estado_confirmacion: 'verificado', archivo_validacion: 'valido', dias_para_vencer: 1 },
-  { categoria: 'induccion', id: 'cal-per-02', referencia: 'evidencia:induccion:cal-per-02', sujeto_id: 'persona-diego', tipo_sujeto: 'persona', identificador_natural: 'Diego Suárez', requisito_definicion_id: 'req-induccion-locacion', requisito: 'Inducción de locación', vigente_desde: '2026-08-18', vigente_hasta: '2026-09-17', estado_confirmacion: 'verificado', archivo_validacion: null, dias_para_vencer: -9 },
-  { categoria: 'competencia', id: 'cal-eqp-01', referencia: 'evidencia:competencia:cal-eqp-01', sujeto_id: 'equipo-eq144', tipo_sujeto: 'equipo', identificador_natural: 'Detector multigás EQ-144', requisito_definicion_id: 'req-calibracion', requisito: 'Calibración', vigente_desde: '2026-09-15', vigente_hasta: '2026-10-12', estado_confirmacion: 'declarado', archivo_validacion: null, dias_para_vencer: 16 },
+  { categoria: 'documento', id: 'cal-emp-01', referencia: 'evidencia:documento:cal-emp-01', sujeto_id: 'empresa-001', tipo_sujeto: 'empresa', identificador_natural: 'Empresa de servicios', requisito_definicion_id: 'req-registro-proveedor', requisito: 'Registro de proveedor', vigente_desde: '2026-09-01', vigente_hasta: '2026-10-18', estado_confirmacion: 'verificado', archivo_validacion: 'valido', dias_para_vencer: 22, estado_visual_calendario: 'verificada' },
+  { categoria: 'documento', id: 'cal-per-01', referencia: 'evidencia:documento:cal-per-01', sujeto_id: 'persona-marina', tipo_sujeto: 'persona', identificador_natural: 'Marina López', requisito_definicion_id: 'req-apto-medico', requisito: 'Apto médico', vigente_desde: '2026-08-01', vigente_hasta: '2026-09-27', estado_confirmacion: 'verificado', archivo_validacion: 'valido', dias_para_vencer: 1, estado_visual_calendario: 'verificada' },
+  { categoria: 'induccion', id: 'cal-per-02', referencia: 'evidencia:induccion:cal-per-02', sujeto_id: 'persona-diego', tipo_sujeto: 'persona', identificador_natural: 'Diego Suárez', requisito_definicion_id: 'req-induccion-locacion', requisito: 'Inducción de locación', vigente_desde: '2026-08-18', vigente_hasta: '2026-09-17', estado_confirmacion: 'verificado', archivo_validacion: null, dias_para_vencer: -9, estado_visual_calendario: 'vencida' },
+  { categoria: 'competencia', id: 'cal-eqp-01', referencia: 'evidencia:competencia:cal-eqp-01', sujeto_id: 'equipo-eq144', tipo_sujeto: 'equipo', identificador_natural: 'Detector multigás EQ-144', requisito_definicion_id: 'req-calibracion', requisito: 'Calibración', vigente_desde: '2026-09-15', vigente_hasta: '2026-10-12', estado_confirmacion: 'declarado', archivo_validacion: null, dias_para_vencer: 16, estado_visual_calendario: 'declarada' },
 ];
 
 const radarItems: ItemRadar[] = [
@@ -96,9 +96,11 @@ function withinRange(item: ItemCalendario, from: string, to: string) {
 
 export const temporaryMockAccess: DocumentationPlanningAccess = {
   async readCalendar(query: CalendarQuery): Promise<CalendarioVigenciasResponse> {
-    const filtered = calendarItems.filter(item => withinRange(item, query.from, query.to) && (!query.subjectKind || item.tipo_sujeto === query.subjectKind) && (!query.q || item.identificador_natural?.toLowerCase().includes(query.q.toLowerCase())));
+    const desde = query.from ?? HOY;
+    const hasta = query.to ?? HOY;
+    const filtered = calendarItems.filter(item => withinRange(item, desde, hasta) && (!query.subjectKind || item.tipo_sujeto === query.subjectKind) && (!query.q || item.identificador_natural?.toLowerCase().includes(query.q.toLowerCase())));
     const offset = query.offset ?? 0; const limit = query.limit ?? 50;
-    return { hoy: HOY, desde: query.from, hasta: query.to, items: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit, advertencia: ADVERTENCIA };
+    return { hoy: HOY, desde, hasta, items: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit, advertencia: ADVERTENCIA };
   },
   async readRadarBacklog(query: BacklogQuery): Promise<RadarBacklogResponse> {
     const filtered = radarItems.filter(item =>

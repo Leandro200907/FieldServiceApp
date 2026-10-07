@@ -193,11 +193,11 @@ export function VencimientosScreen() {
     {tablero.loading ? <LoadingState /> : tablero.error ? <ErrorState message={tablero.error.message} requestId={tablero.error instanceof ApiFailure && tablero.error.detail.referenceSource === 'server' ? tablero.error.detail.requestId : undefined} /> : <>
       <div className="projection-table-wrap"><table className="projection-table"><thead><tr><th>Sujeto</th><th>Requisito</th><th>Categoría</th><th>Vence el</th><th>Estado</th><th>Días</th></tr></thead><tbody>
         {tablero.data?.items.map(item => <tr key={item.id}>
-            <td><strong>{lineaPersonaConDni({ tipo_sujeto: 'persona', nombre_apellido: null, identificador_natural: item.identificador_natural ?? item.sujeto_id, sujeto_id: item.sujeto_id })}</strong></td>
+            <td><strong>{lineaPersonaConDni({ tipo_sujeto: (item.tipo_sujeto as 'persona' | 'vehiculo' | 'equipo' | 'empresa') ?? 'persona', nombre_apellido: item.nombre_apellido ?? null, identificador_natural: item.identificador_natural ?? item.sujeto_id, sujeto_id: item.sujeto_id })}</strong></td>
             <td>{item.requisito || 'Requisito sin nombre'}</td>
             <td>{etiquetaCategoria(item.categoria)}</td>
             <td>{formatFecha(item.vigente_hasta, timeZone)}</td>
-            <td><span className="estado-tags">{etiquetasEvidencia(item).map(label => <StatusDot key={label} variant={variantFromEtiquetaVigencia(label)}>{label}</StatusDot>)}</span></td>
+            <td><span className="estado-tags">{(item.estado_fila ? [item.estado_fila] : etiquetasEvidencia(item)).map(label => <StatusDot key={label} variant={variantFromEtiquetaVigencia(label)}>{label}</StatusDot>)}</span></td>
             <td>{formatDaysToExpiry(item.dias_para_vencer)}</td>
           </tr>)}
       </tbody></table></div>

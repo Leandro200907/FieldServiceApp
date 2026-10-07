@@ -78,13 +78,26 @@ def _exigir_rango(desde: date, hasta: date, hoy: date) -> None:
         raise ErrorDeDominio("`desde` demasiado en el pasado", codigo="rango_temporal_excedido")
 
 
+def _rango_timeline_default(hoy: date, desde: date | None, hasta: date | None) -> tuple[date, date]:
+    """Ventana inicial alrededor del hoy del tenant (máx. 366 días)."""
+    if desde is None and hasta is None:
+        return hoy - timedelta(days=30), hoy + timedelta(days=90)
+    if desde is None:
+        assert hasta is not None
+        desde = hasta - timedelta(days=120)
+    if hasta is None:
+        assert desde is not None
+        hasta = desde + timedelta(days=120)
+    return desde, hasta
+
+
 def timeline_recursos(
     session: Session,
     identidad: Identidad,
     p: Pagina,
     *,
-    desde: date,
-    hasta: date,
+    desde: date | None,
+    hasta: date | None,
     tipo_sujeto: str | None = None,
     oc_id: str | None = None,
     q: str | None = None,
@@ -96,6 +109,7 @@ def timeline_recursos(
     from app.modules.consultas.presentacion_evidencia import _cargar_plazo_tenant, _plazo_aviso
 
     plazo_tenant = _cargar_plazo_tenant(session, tenant_id)
+    desde, hasta = _rango_timeline_default(hoy, desde, hasta)
     _exigir_rango(desde, hasta, hoy)
     alcance = alcance_de_sujetos(session, identidad, hoy)
 

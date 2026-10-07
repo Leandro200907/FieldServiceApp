@@ -35,6 +35,7 @@ function DetalleBandeja({
   onArchivoAbierto,
   onAccionExitosa,
   haySiguiente,
+  hoyIso,
 }: {
   item: ItemBandejaRevision;
   access: PropuestasAccess;
@@ -43,6 +44,7 @@ function DetalleBandeja({
   onArchivoAbierto: () => void;
   onAccionExitosa: (mensaje: string, avanzar: boolean) => void;
   haySiguiente: boolean;
+  hoyIso: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +157,7 @@ function DetalleBandeja({
       </div>
 
       {(item.ocs_afectadas?.length ?? 0) > 0 && (
-        <p><OcsAfectadasLine ocs={item.ocs_afectadas as never} hoyIso={new Date().toISOString().slice(0, 10)} timeZone={tz} /></p>
+        <p><OcsAfectadasLine ocs={item.ocs_afectadas as never} hoyIso={hoyIso} timeZone={tz} /></p>
       )}
 
       <div className="bandeja-archivo">
@@ -304,6 +306,7 @@ export function PropuestasScreen({ accessOverride, readOnly = false }: { accessO
               onArchivoAbierto={() => setArchivosAbiertos(prev => ({ ...prev, [selected.documento_id]: true }))}
               onAccionExitosa={onAccionExitosa}
               haySiguiente={selectedIndex >= 0 && selectedIndex < items.length - 1}
+              hoyIso={bandeja.data?.hoy ?? ''}
             />
           ) : (
             <p className="empty-inline bandeja-detalle panel">Elegí un ítem de la lista.</p>

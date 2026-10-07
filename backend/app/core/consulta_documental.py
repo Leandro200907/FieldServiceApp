@@ -202,14 +202,14 @@ def etiqueta_tipo_problema_accion(hoy: date, req: Mapping[str, Any]) -> str:
         return "Rechazado por operadora"
     estado = req.get("estado")
     if estado == EstadoRequisitoDocumental.PENDIENTE_REVISION.value:
-        return "Sin respaldo validado"
+        return "Sin respaldo válido"
     arch = req.get("archivo_validacion")
     if arch in ("sin_archivo", "pendiente", "invalido") and estado in (
         EstadoRequisitoDocumental.FALTANTE.value,
         EstadoRequisitoDocumental.EVIDENCIA_INVALIDA.value,
         EstadoRequisitoDocumental.PENDIENTE_REVISION.value,
     ):
-        return "Sin respaldo validado"
+        return "Sin respaldo válido"
     vh = _as_date(req.get("vigente_hasta"))
     if estado in (
         EstadoRequisitoDocumental.VENCE_DURANTE_PERIODO.value,
@@ -233,6 +233,29 @@ def efecto_accion_documental(hoy: date, oc: Mapping[str, Any], req: Mapping[str,
     return " · ".join(p for p in (etiqueta_tipo, etiqueta_bloqueo_desde(hoy, fb)) if p)
 
 
+def _accion_registro_por_categoria(categoria: str | None) -> str | None:
+    if categoria == "induccion":
+        return "Registrar inducción"
+    if categoria == "competencia":
+        return "Registrar competencia"
+    return None
+
+
+def _requiere_registro_induccion_competencia(req: Mapping[str, Any]) -> bool:
+    categoria = (req.get("categoria") or "").lower()
+    if categoria not in ("induccion", "competencia"):
+        return False
+    estado = req.get("estado")
+    arch = req.get("archivo_validacion")
+    if estado == EstadoRequisitoDocumental.PENDIENTE_REVISION.value:
+        return True
+    if arch in ("sin_archivo", "pendiente", "invalido"):
+        return True
+    if estado == EstadoRequisitoDocumental.FALTANTE.value:
+        return True
+    return False
+
+
 def accion_sugerida_para_req(
     req: Mapping[str, Any],
     *,
@@ -240,7 +263,12 @@ def accion_sugerida_para_req(
     sujeto_id: str,
     requisito_definicion_id: str,
 ) -> str | None:
-    """E-35 / E-70: acción corta sin fecha ni nombre de requisito."""
+    """E-35 / E-70 / E-110: acción corta sin fecha ni nombre de requisito."""
+    categoria = (req.get("categoria") or "").lower() or None
+    if _requiere_registro_induccion_competencia(req):
+        registro = _accion_registro_por_categoria(categoria)
+        if registro:
+            return registro
     if (sujeto_id, requisito_definicion_id) in propuestas_pendientes:
         return "Revisar propuesta"
     accion = req.get("accion_sugerida")
@@ -248,7 +276,8 @@ def accion_sugerida_para_req(
         return str(accion)
     problema = clasificar_problema_documental(req)
     if problema == "sin_documento":
-        return "Incorporar documento"
+        registro = _accion_registro_por_categoria(categoria)
+        return registro or "Incorporar documento"
     if problema == "rechazo_operadora" and accion:
         return str(accion)
     if req.get("accion_sugerida"):

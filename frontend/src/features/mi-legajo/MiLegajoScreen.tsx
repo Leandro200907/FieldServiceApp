@@ -24,11 +24,12 @@ function LegajoCard({ title, legajoNombre, sujetoId, documentos, acreditaciones,
   onRenovado: () => void;
 }) {
   const items = [...documentos, ...acreditaciones, ...inducciones];
-  const cumplimiento = (resumen.exigidos ?? 0) > 0
-    ? `${resumen.en_regla_exigidos ?? 0} de ${resumen.exigidos} en regla (exigidos por OC)`
-    : null;
+  const exigidos = resumen.exigidos ?? 0;
+  const cumplimiento = exigidos > 0
+    ? `${resumen.en_regla_exigidos ?? 0} de ${exigidos} en regla (exigidos por OC)`
+    : 'Sin requisitos exigidos por OC';
   return <section className="panel resource-panel">
-    <div className="panel-top"><Badge tone={(resumen.exigidos_vencidos ?? resumen.vencidos) > 0 ? 'warning' : 'accent'}>{cumplimiento || (resumen.vencidos > 0 ? `${resumen.vencidos} vencido${resumen.vencidos > 1 ? 's' : ''}` : 'Todo vigente')}</Badge></div>
+    <div className="panel-top"><Badge tone={(resumen.exigidos_vencidos ?? 0) > 0 ? 'warning' : 'accent'}>{cumplimiento}</Badge></div>
     <h3 className="mi-legajo-card-title">{title}</h3>
     <p className="muted">{legajoNombre}</p>
     {items.length === 0

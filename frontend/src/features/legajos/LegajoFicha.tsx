@@ -12,8 +12,9 @@ import type { LegajoCompuesto } from '../mi-legajo/contracts';
 import { formatDniIdentificador, subtituloLegajoPersona, tituloLegajoPersona } from './legajoDisplay';
 import { textoCumplimientoExigidos } from './legajoCumplimiento';
 import {
-  contarPendientesRevision,
-  proximoVencimientoIso,
+  conteosTarjetasExigidos,
+  pendientesRevisionDesdeResumen,
+  proximoVencimientoDesdeResumen,
   resumenExigidosTexto,
   todosLosDocumentos,
 } from './legajoResumen';
@@ -56,14 +57,9 @@ export function LegajoFicha({ data, sujetoId, onRefresh }: { data: LegajoCompues
   const esResponsable = roles.includes('responsable_legajos') || roles.includes('configuracion');
   const fmt = (iso: string) => formatFecha(iso, tz);
   const items = todosLosDocumentos(data) as ItemExt[];
-  const pendientesRevision = contarPendientesRevision(items);
-  const buckets = {
-    vencidos: data.resumen.exigidos_vencidos ?? data.resumen.vencidos,
-    por_vencer: data.resumen.exigidos_por_vencer ?? data.resumen.por_vencer ?? 0,
-    vigentes: data.resumen.exigidos_vigentes ?? data.resumen.vigentes_hoy,
-    sin_documento: data.resumen.exigidos_sin_documento ?? data.resumen.sin_documento ?? 0,
-  };
-  const proximo = proximoVencimientoIso(items.filter(i => i.estado_presentacion !== 'sin_documento'));
+  const pendientesRevision = pendientesRevisionDesdeResumen(data.resumen);
+  const buckets = conteosTarjetasExigidos(data.resumen);
+  const proximo = proximoVencimientoDesdeResumen(data.resumen);
   const ocsCount = data.resumen.ocs_afectadas ?? 0;
   const tipo = data.legajo.tipo_sujeto;
   const espejo = usePrototypeRead(() => legajosAccess().readEspejoOperadora(sujetoId), [sujetoId]);

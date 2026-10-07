@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiFailure } from '../../api';
 import { Badge, ErrorState, LoadingState, Pending } from '../../ui/States';
 import { formatDaysToExpiry } from '../../ui/formatDaysToExpiry';
 import type { ItemCalendario, SubjectKind, VisualCalendarState } from './contracts';
 import { deriveVisualState } from './contracts';
 import { calendarAccess } from './access';
-import { addDays, dayPosition, formatFecha, todayIso } from './dates';
+import { addDays, dayPosition, formatFecha } from './dates';
 import { session } from '../../api';
 import { PAGE_SIZE, PaginationControls } from './PaginationControls';
 import { documentationScopeFor } from './scope';
@@ -52,14 +52,42 @@ export function CalendarDocumentalScreen({ roles, embedded = false }: { roles: r
   const [kind, setKind] = useState<SubjectKind | 'all'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
-  const from = useMemo(() => addDays(todayIso(), -30), []);
-  const to = useMemo(() => addDays(todayIso(), 40), []);
   const tz = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const fmt = (iso: string) => formatFecha(iso, tz);
-  const calendar = usePrototypeRead(() => calendarAccess().readCalendar({ from, to, subjectKind: kind === 'all' ? undefined : kind, offset, limit: PAGE_SIZE }), [from, to, kind, offset]);
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
+  const calendar = usePrototypeRead(
+    () => calendarAccess().readCalendar({
+      ...(range ? { from: range.from, to: range.to } : {}),
+      subjectKind: kind === 'all' ? undefined : kind,
+      offset,
+      limit: PAGE_SIZE,
+    }),
+    [range?.from, range?.to, kind, offset],
+  );
+  useEffect(() => {
+    const data = calendar.data;
+    if (!data?.hoy || range) return;
+    const desdeApi = (data as { desde?: string }).desde;
+    const hastaApi = (data as { hasta?: string }).hasta;
+    if (desdeApi && hastaApi) {
+      setRange({ from: desdeApi, to: hastaApi });
+    } else {
+      setRange({ from: addDays(data.hoy, -30), to: addDays(data.hoy, 40) });
+    }
+  }, [calendar.data, range]);
+  const hoyApi = calendar.data?.hoy;
+  const desdeApi = (calendar.data as { desde?: string } | undefined)?.desde;
+  const hastaApi = (calendar.data as { hasta?: string } | undefined)?.hasta;
+  const effectiveRange =
+    range
+    ?? (hoyApi && desdeApi && hastaApi ? { from: desdeApi, to: hastaApi } : null)
+    ?? (hoyApi ? { from: addDays(hoyApi, -30), to: addDays(hoyApi, 40) } : null);
+  const from = effectiveRange?.from ?? '';
+  const to = effectiveRange?.to ?? '';
   const setKindAndResetPage = (value: SubjectKind | 'all') => { setKind(value); setOffset(0); };
   const companyAllowed = scope === 'responsible';
   if (!scope) return <Pending title="Sin rol reconocido para esta vista">Tu sesión no tiene un rol habilitado para esta vista.</Pending>;
+  if ((calendar.loading && !hoyApi) || !hoyApi || !effectiveRange) return <LoadingState />;
   const selected = calendar.data?.items.find(item => item.id === selectedId) ?? null;
   // F-01: la marca de "hoy" se ubica con el `hoy` que devuelve el backend (autoridad real
   // sobre la fecha del tenant — F-03), nunca con una posición fija.

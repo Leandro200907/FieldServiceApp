@@ -12,5 +12,4 @@ export {
   formatFechaHora,
   formatTick,
   inVista,
-  todayIso,
 } from '../features/documentation-planning/dates';

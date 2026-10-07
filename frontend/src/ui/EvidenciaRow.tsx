@@ -1,6 +1,5 @@
 import { session } from '../api';
 import type { EvidenciaVigente } from '../features/mi-legajo/contracts';
-import { todayIso } from '../features/documentation-planning/dates';
 import { etiquetasEvidencia } from './evidenciaPresentacion';
 import { lineasVersionYRenovacion } from './lineasEstadoEvidencia';
 import { StatusDot, variantFromEtiquetaVigencia } from './StatusDot';
@@ -23,13 +22,13 @@ export function EvidenciaRow({
   onIncorporar,
 }: {
   item: ItemLegajo;
-  hoyIso?: string;
+  hoyIso: string;
   onRenovar?: (item: EvidenciaVigente) => void;
   onIncorporar?: (item: EvidenciaVigente) => void;
 }) {
   const lineasRenov = lineasVersionYRenovacion(item);
   const etiquetas = lineasRenov.actual ? [] : etiquetasEvidencia(item);
-  const hoy = hoyIso ?? todayIso();
+  const hoy = hoyIso;
   const timeZone = session.getSnapshot().identity?.zona_horaria || 'America/Argentina/Buenos_Aires';
   const ocs = (item.ocs_afectadas ?? []) as OcAfectadaRef[];
   return (

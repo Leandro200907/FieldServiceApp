@@ -1536,6 +1536,11 @@ export interface components {
             accion_sugerida: string;
             /** Accion Sugerida Fecha */
             accion_sugerida_fecha?: string | null;
+            /**
+             * Accion Vencida
+             * @default false
+             */
+            accion_vencida: boolean;
             /** Efecto */
             efecto?: string | null;
             /** Fecha Limite */
@@ -1564,6 +1569,8 @@ export interface components {
         };
         /** AccionesPendientesResponse */
         AccionesPendientesResponse: {
+            /** Hoy */
+            hoy: string;
             /** Items */
             items: components["schemas"]["AccionPendienteItem"][];
             /** Limit */
@@ -1848,6 +1855,8 @@ export interface components {
         };
         /** BacklogOcResponse */
         BacklogOcResponse: {
+            /** Hoy */
+            hoy: string;
             /** Items */
             items: components["schemas"]["OcBacklogItem"][];
             /** Limit */
@@ -1876,6 +1885,11 @@ export interface components {
         /** BandejaRevisionResponse */
         BandejaRevisionResponse: {
             conteos: components["schemas"]["ConteosBandejaRevision"];
+            /**
+             * Hoy
+             * Format: date
+             */
+            hoy: string;
             /** Items */
             items: components["schemas"]["ItemBandejaRevision"][];
             /** Limit */
@@ -2991,14 +3005,25 @@ export interface components {
         };
         /** EvidenciaVigente */
         EvidenciaVigente: {
+            /** Ambito Nombre */
+            ambito_nombre?: string | null;
             /** Archivo Validacion */
             archivo_validacion?: string | null;
             /** Categoria */
             categoria: string | null;
+            /** Certificado Respaldo Documento Id */
+            certificado_respaldo_documento_id?: string | null;
+            /**
+             * Codigo Estado
+             * @description Código estable de presentación (mismo valor que estado_presentacion).
+             */
+            codigo_estado?: string | null;
             /** Dias Para Vencer */
             dias_para_vencer: number | null;
             /** Estado Confirmacion */
             estado_confirmacion: string;
+            /** Estado Fila */
+            estado_fila?: string | null;
             /** Estado Presentacion */
             estado_presentacion: string;
             /** Estado Presentacion Explicacion */
@@ -3009,12 +3034,6 @@ export interface components {
             estados_adicionales_explicacion?: {
                 [key: string]: string;
             } | null;
-            /** Ambito Nombre */
-            ambito_nombre?: string | null;
-            /** Certificado Respaldo Documento Id */
-            certificado_respaldo_documento_id?: string | null;
-            /** Estado Fila */
-            estado_fila?: string | null;
             /** Evaluacion Backlog Estado */
             evaluacion_backlog_estado?: string | null;
             /**
@@ -3048,10 +3067,10 @@ export interface components {
             no_exigido_backlog: boolean;
             /** Nombre Apellido */
             nombre_apellido?: string | null;
-            /** Observacion Operadora */
-            observacion_operadora?: string | null;
             /** Observacion Ficha */
             observacion_ficha?: string | null;
+            /** Observacion Operadora */
+            observacion_operadora?: string | null;
             /** Ocs Afectadas */
             ocs_afectadas?: components["schemas"]["OcAfectadaRef"][];
             /** Origen Propuesta */
@@ -3063,6 +3082,11 @@ export interface components {
             requisito_definicion_id: string;
             /** Sujeto Id */
             sujeto_id: string;
+            /**
+             * Tarjeta Exigido
+             * @description Bucket E-101 para requisitos exigidos por backlog; null si no_exigido_backlog.
+             */
+            tarjeta_exigido?: ("vencidos" | "por_vencer" | "vigentes" | "sin_documento") | null;
             /** Tipo */
             tipo: string;
             /** Tipo Sujeto */
@@ -3408,6 +3432,11 @@ export interface components {
             dias_para_vencer: number;
             /** Estado Confirmacion */
             estado_confirmacion: string;
+            /**
+             * Estado Visual Calendario
+             * @enum {string}
+             */
+            estado_visual_calendario: "declarada" | "verificada" | "vencida";
             /** Id */
             id: string;
             /** Identificador Natural */
@@ -3636,6 +3665,8 @@ export interface components {
         };
         /** MatricesResponse */
         MatricesResponse: {
+            /** Hoy */
+            hoy: string;
             /** Items */
             items: components["schemas"]["MatrizItem"][];
             /** Limit */
@@ -3713,6 +3744,11 @@ export interface components {
             vigente_desde: string;
             /** Vigente Hasta */
             vigente_hasta: string | null;
+            /**
+             * Vigente Hoy
+             * @default false
+             */
+            vigente_hoy: boolean;
         };
         /** MatrizVigenteResponse */
         MatrizVigenteResponse: {
@@ -4373,7 +4409,7 @@ export interface components {
         ResumenLegajo: {
             /**
              * En Regla
-             * @description Obsoleto para cumplimiento backlog: ver en_regla_exigidos.
+             * @description LEGADO: conteo sobre ítems cargados. Pantallas deben usar en_regla_exigidos.
              * @default 0
              */
             en_regla: number;
@@ -4418,10 +4454,17 @@ export interface components {
              */
             ocs_afectadas: number;
             /**
+             * Pendientes Revision
+             * @default 0
+             */
+            pendientes_revision: number;
+            /**
              * Por Vencer
              * @default 0
              */
             por_vencer: number;
+            /** Proximo Vencimiento */
+            proximo_vencimiento?: string | null;
             /**
              * Sin Documento
              * @default 0
@@ -11079,9 +11122,9 @@ export interface operations {
     };
     timeline_recursos_v1_consultas_timeline_recursos_get: {
         parameters: {
-            query: {
-                desde: string;
-                hasta: string;
+            query?: {
+                desde?: string | null;
+                hasta?: string | null;
                 tipo_sujeto?: ("persona" | "vehiculo" | "equipo" | "empresa") | null;
                 oc_id?: string | null;
                 q?: string | null;

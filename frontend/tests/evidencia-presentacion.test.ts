@@ -6,8 +6,6 @@ describe('evidenciaPresentacion', () => {
     const labels = etiquetasEvidencia({
       estado_presentacion: 'verificada',
       estado_confirmacion: 'verificado',
-      dias_para_vencer: 100,
-      vencido: false,
       estados_adicionales: ['sin_archivo_respaldo'],
     });
     expect(labels).toEqual(['Vigente', 'Sin archivo de respaldo']);
@@ -17,8 +15,6 @@ describe('evidenciaPresentacion', () => {
     const labels = etiquetasEvidencia({
       estado_presentacion: 'por_vencer',
       estado_confirmacion: 'verificado',
-      dias_para_vencer: 20,
-      vencido: false,
       estados_adicionales: ['archivo_en_revision'],
     });
     expect(labels).toEqual(['Por vencer', 'Archivo en revisión']);
@@ -28,8 +24,6 @@ describe('evidenciaPresentacion', () => {
     const labels = etiquetasEvidencia({
       estado_presentacion: 'vencida',
       estado_confirmacion: 'verificado',
-      dias_para_vencer: -5,
-      vencido: true,
       estados_adicionales: ['evidencia_invalida'],
     });
     expect(labels).toEqual(['Vencida', 'Evidencia inválida']);

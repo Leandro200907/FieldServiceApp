@@ -198,6 +198,9 @@ def tablero_vencimientos(session: Session, identidad: Identidad, dias: int, p: P
     items.sort(key=lambda i: (i["vigente_hasta"], i["sujeto_id"], i.get("tipo") or ""))
     total = len(items)
     paginados = items[p.offset : p.offset + p.limit]
+    from app.modules.consultas.ficha_legajo import enriquecer_items_ficha_legajo
+
+    enriquecer_items_ficha_legajo(session, identidad.tenant_id, paginados, hoy)
     salida = envolver(paginados, total, p)
     salida["hoy"] = hoy.isoformat()
     salida["hasta"] = limite.isoformat()

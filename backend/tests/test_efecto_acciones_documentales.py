@@ -42,4 +42,4 @@ def test_e81_pendiente_revision_sin_respaldo():
         "archivo_validacion": "pendiente",
         "evidencia_id": "doc-juan",
     }
-    assert efecto_accion_documental(hoy, _oc(), req, date(2026, 9, 1)) == "Sin respaldo validado · Ya bloquea"
+    assert efecto_accion_documental(hoy, _oc(), req, date(2026, 9, 1)) == "Sin respaldo válido · Ya bloquea"

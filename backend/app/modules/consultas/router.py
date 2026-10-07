@@ -483,6 +483,7 @@ class BandejaRevisionResponse(BaseModel):
     limit: int
     pestana: Literal["todos", "propuestas", "archivos"]
     conteos: ConteosBandejaRevision
+    hoy: date
 
 
 @router.get("/consultas/bandeja_revision", response_model=BandejaRevisionResponse)
@@ -636,8 +637,8 @@ class TimelineRecursosResponse(BaseModel):
 @router.get("/consultas/timeline_recursos", response_model=TimelineRecursosResponse)
 def timeline_recursos(
     response: Response,
-    desde: date = Query(...),
-    hasta: date = Query(...),
+    desde: date | None = Query(None),
+    hasta: date | None = Query(None),
     tipo_sujeto: Literal["empresa", "persona", "vehiculo", "equipo"] | None = Query(None),
     oc_id: UUID | None = Query(None),
     q: str | None = Query(None, max_length=200),

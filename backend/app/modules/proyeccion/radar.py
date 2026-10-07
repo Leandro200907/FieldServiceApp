@@ -329,6 +329,7 @@ def _evaluar_oc(
                     "matriz_version_id": tramo["matriz_version_id"], "version_matriz": tramo["version"],
                     "periodo_desde": tramo["desde"], "periodo_hasta": tramo["hasta"],
                     "requisito_definicion_id": req.requisito_definicion_id, "nombre": req.nombre,
+                    "categoria": req.categoria,
                     "estado": resultado.estado.value, "primer_quiebre": resultado.primer_quiebre,
                     "evidencia_id": resultado.evidencia_id, "motivo": resultado.motivo,
                     "accion_sugerida": accion_espejo or resultado.accion_sugerida,
