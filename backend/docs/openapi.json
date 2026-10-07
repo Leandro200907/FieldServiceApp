@@ -19303,21 +19303,35 @@
           {
             "in": "query",
             "name": "desde",
-            "required": true,
+            "required": false,
             "schema": {
-              "format": "date",
-              "title": "Desde",
-              "type": "string"
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desde"
             }
           },
           {
             "in": "query",
             "name": "hasta",
-            "required": true,
+            "required": false,
             "schema": {
-              "format": "date",
-              "title": "Hasta",
-              "type": "string"
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
             }
           },
           {
