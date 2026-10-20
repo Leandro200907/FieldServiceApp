@@ -6,6 +6,7 @@ import type { VisualCalendarState } from '../documentation-planning/contracts';
 import { usePrototypeRead } from '../../hooks/usePrototypeRead';
 import { isLegajosIntegrated, legajosAccess } from './access';
 import type { EvidenciaVigente, SubjectKind } from './contracts';
+import { session } from '../../api';
 import '../documentation-planning/planning.css';
 import '../mi-legajo/mi-legajo.css';
 
@@ -22,17 +23,69 @@ function EvidenceRow({ item }: { item: EvidenciaVigente }) {
   </li>;
 }
 
+function AltaLegajoForm({ onCreated }: { onCreated: (sujetoId: string) => void }) {
+  const [tipo, setTipo] = useState<SubjectKind>('persona');
+  const [identificador, setIdentificador] = useState('');
+  const [nombreApellido, setNombreApellido] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiFailure | null>(null);
+
+  async function crear() {
+    const identificadorNatural = identificador.trim();
+    const nombre = nombreApellido.trim();
+    if (!identificadorNatural || (tipo === 'persona' && !nombre)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { altaDeSujeto } = await import('./altaSujetoApi');
+      const creado = await altaDeSujeto({
+        tipo_sujeto: tipo,
+        identificador_natural: identificadorNatural,
+        ...(tipo === 'persona' ? { nombre_apellido: nombre } : {}),
+      });
+      setIdentificador('');
+      setNombreApellido('');
+      onCreated(creado.sujeto_id);
+    } catch (caught) {
+      setError(caught instanceof ApiFailure ? caught : new ApiFailure({
+        message: caught instanceof Error ? caught.message : 'No se pudo crear el legajo.',
+        code: 'TRANSPORT_ERROR',
+        status: 0,
+        requestId: crypto.randomUUID(),
+        referenceSource: 'local',
+      }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <section className="panel">
+    <h2>Dar de alta un legajo</h2>
+    <p className="muted">Crear un legajo no crea una cuenta de acceso ni una contraseña.</p>
+    <div className="form-grid">
+      <div className="form-field"><label htmlFor="alta-tipo">Tipo</label><select id="alta-tipo" value={tipo} disabled={busy} onChange={event => setTipo(event.target.value as SubjectKind)}>{TIPO_OPTIONS.map(item => <option key={item} value={item}>{tipoLabels[item]}</option>)}</select></div>
+      <div className="form-field"><label htmlFor="alta-identificador">Identificador</label><input id="alta-identificador" value={identificador} disabled={busy} onChange={event => setIdentificador(event.target.value)} placeholder="Nombre, patente o código" required /></div>
+      {tipo === 'persona' && <div className="form-field"><label htmlFor="alta-nombre">Nombre y apellido</label><input id="alta-nombre" value={nombreApellido} disabled={busy} onChange={event => setNombreApellido(event.target.value)} required /></div>}
+    </div>
+    {error && <ErrorState message={error.message} requestId={error.detail.referenceSource === 'server' ? error.detail.requestId : undefined} />}
+    <div className="proposal-actions"><button type="button" className="button button-primary" disabled={busy || !identificador.trim() || (tipo === 'persona' && !nombreApellido.trim())} onClick={() => void crear()}>{busy ? 'Creando…' : 'Crear legajo'}</button></div>
+  </section>;
+}
+
 export function LegajosScreen() {
   const [q, setQ] = useState('');
   const [tipoSujeto, setTipoSujeto] = useState<SubjectKind | ''>('');
   const [selected, setSelected] = useState<string | null>(null);
-  const search = usePrototypeRead(() => legajosAccess().searchSujetos({ q: q || undefined, tipoSujeto: tipoSujeto || undefined, limit: 20 }), [q, tipoSujeto]);
-  const legajo = usePrototypeRead(() => selected ? legajosAccess().readLegajo(selected) : Promise.resolve(null), [selected]);
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const canCreate = session.getSnapshot().identity?.roles.includes('responsable_legajos') ?? false;
+  const search = usePrototypeRead(() => legajosAccess().searchSujetos({ q: q || undefined, tipoSujeto: tipoSujeto || undefined, limit: 20 }), [q, tipoSujeto, reloadVersion]);
+  const legajo = usePrototypeRead(() => selected ? legajosAccess().readLegajo(selected) : Promise.resolve(null), [selected, reloadVersion]);
   const integrated = isLegajosIntegrated();
   return <>
     {integrated
       ? <div className="prototype-banner"><Badge tone="accent">Conectado al backend</Badge><div><strong>Legajos en tu alcance</strong><p>Buscá un sujeto para ver su documentación.</p></div></div>
       : <div className="prototype-banner"><Badge tone="warning">Mock contractual temporal</Badge><div><strong>Diseño no integrado</strong><p>Sujetos y documentación son ejemplos temporales. El contrato de forma ya es el real; el dato todavía no viene del backend.</p></div></div>}
+    {canCreate && <AltaLegajoForm onCreated={sujetoId => { setSelected(sujetoId); setReloadVersion(version => version + 1); }} />}
     <section className="panel">
       <div className="form-grid">
         <div className="form-field"><label htmlFor="legajo-search">Buscar sujeto</label><input id="legajo-search" type="search" value={q} onChange={event => setQ(event.target.value)} placeholder="Nombre o identificador" /></div>
